@@ -12,6 +12,8 @@ This is a space for readers, built and maintained with care, where the goal is n
 
 ## Support Dogeared
 
+If you find Dogeared useful and want to help it grow, this is a simple way to do that.
+
 <a href="https://www.buymeacoffee.com/wylie">
   <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="60">
 </a>
