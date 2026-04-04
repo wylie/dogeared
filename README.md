@@ -1,46 +1,17 @@
-# Astro Starter Kit: Basics
+# Dogeared
 
-```sh
-npm create astro@latest -- --template basics
-```
+Dogeared exists to create a better place for readers.
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+It is built for people who love books, who want to track what they read, discover what’s next, and share those experiences with others.
 
-## 🚀 Project Structure
+Dogeared is not driven by ads, algorithms, or profit. It is free to use, supported by optional donations, and designed with a focus on simplicity, usefulness, and respect for its users.
 
-Inside of your Astro project, you'll see the following folders and files:
+We believe books are for everyone. No book should be hidden, restricted, or left behind because of trends, systems, or gatekeeping.
 
-```text
-/
-├── public/
-│   └── favicon.svg
-├── src
-│   ├── assets
-│   │   └── astro.svg
-│   ├── components
-│   │   └── Welcome.astro
-│   ├── layouts
-│   │   └── Layout.astro
-│   └── pages
-│       └── index.astro
-└── package.json
-```
+This is a space for readers, built and maintained with care, where the goal is not growth at all costs, but something better, a tool that stays useful, thoughtful, and true to the people who use it.
 
-To learn more about the folder structure of an Astro project, refer to [our guide on project structure](https://docs.astro.build/en/basics/project-structure/).
+## Support Dogeared
 
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+<a href="https://www.buymeacoffee.com/wylie">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="60">
+</a>
