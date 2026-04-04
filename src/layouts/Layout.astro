@@ -1,6 +1,23 @@
 <!doctype html>
 <html lang="en">
 	<head>
+		<!-- Google Analytics: Only load in production -->
+		<script async src="https://www.googletagmanager.com/gtag/js?id=G-RT7DKML8JY"></script>
+		<script is:inline>
+			if (
+				typeof window !== "undefined" &&
+				!['localhost', '127.0.0.1'].includes(window.location.hostname)
+			) {
+				// @ts-ignore
+				window.dataLayer = window.dataLayer || [];
+				// @ts-ignore
+				function gtag(){dataLayer.push(arguments);}
+				// @ts-ignore
+				gtag('js', new Date());
+				// @ts-ignore
+				gtag('config', 'G-RT7DKML8JY');
+			}
+		</script>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
