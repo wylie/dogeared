@@ -1,44 +1,51 @@
 ---
-
+const { current = "/" } = Astro.props;
+const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
+const isActive = (href: string) => normalize(current) === normalize(href);
 ---
 
-<navigation>
+<nav aria-label="Primary">
   <ul>
-    <li><a href="/">DogEared</a></li>
-    <li><a href="#" class="hover">My Reads</a></li>
-    <li><a href="#" class="hover">Browse</a></li>
+    <li><a href="/" class="special-font">DogEared</a></li>
+    <li><a href={isActive('/myreads') ? undefined : '/myreads'} class={isActive('/myreads') ? 'active' : 'hover'} aria-current={isActive('/myreads') ? 'page' : undefined}>My Reads</a></li>
+    <li><a href={isActive('/browse') ? undefined : '/browse'} class={isActive('/browse') ? 'active' : 'hover'} aria-current={isActive('/browse') ? 'page' : undefined}>Browse</a></li>
     <li><input type="search" /></li>
     <li class="material-icons"><a href="#" class="hover">notifications</a></li>
-    <li class="material-icons"><a href="#" class="hover">person</a></li>
+    <li class="material-icons"><a href={isActive('/profile') ? undefined : '/profile'} class={isActive('/profile') ? 'active' : 'hover'} aria-current={isActive('/profile') ? 'page' : undefined}>person</a></li>
   </ul>
-</navigation>
+</nav>
 
 <style>
-  navigation {
+  nav {
     padding: 1rem;
   }
-  navigation ul {
+  nav ul {
     list-style-type: none;
     display: flex;
     margin: 0;
     padding: 0;
     justify-content: space-between;
   }
-  navigation li {
+  nav li {
     justify-content: center;
     display: flex;
     width: 100%;
   }
-  navigation a {
+  nav a {
     text-decoration: none;
     color: black;
     padding: .75rem;
+    border-radius: 5px;
   }
-  navigation .hover:hover {
+  nav a.active {
+    background-color: #ddd;
+    cursor: default;
+  }
+  nav .hover:hover {
     background-color: black;
     color: white;
   }
-  navigation input[type="search"] {
+  nav input[type="search"] {
     font-size: 16px;
   }
 </style>

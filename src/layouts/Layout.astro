@@ -1,5 +1,7 @@
 ---
 import Navigation from '../components/Navigation.astro';
+const { title = "Dogeared" } = Astro.props;
+const currentPath = Astro.url.pathname;
 ---
 
 <!doctype html>
@@ -27,16 +29,15 @@ import Navigation from '../components/Navigation.astro';
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="icon" href="/favicon.ico" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Dogeared</title>
+		<title>{title} | Dogeared</title>
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-		<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-		<link rel="stylesheet" href="/assets/global.css" />
+		<link href="https://fonts.googleapis.com/css2?family=Chewy&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Permanent+Marker&display=swap" rel="stylesheet">		<link rel="stylesheet" href="/assets/global.css" />
 		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 	</head>
 	<body>
 		<div class="container">
-			<Navigation />
+			<Navigation current={currentPath} />
 			<slot />
 		</div>
 	</body>

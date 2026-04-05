@@ -1,19 +1,15 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Widget from '../components/Widget.astro';
-import CurrentlyReading from '../components/widgets/CurrentlyReading.astro';
-import ReadingGoal from '../components/widgets/ReadingGoal.astro';
-import Updates from '../components/widgets/Updates.astro';
 ---
 
-<Layout title="Home">
+<Layout title="My Reads">
   <div class="home">
 		<div class="column">
-			<CurrentlyReading />
-			<ReadingGoal />
+			<Widget>filters and whatnot</Widget>
 		</div>
 		<div class="column">
-			<Updates />
+			<Widget>books read</Widget>
 		</div>
   </div>
 </Layout>
@@ -28,8 +24,5 @@ import Updates from '../components/widgets/Updates.astro';
 	.home {
 		display: grid;
 		grid-template-columns: 25% auto;
-	}
-	.column {
-		padding: 1rem;
 	}
 </style>

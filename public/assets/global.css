@@ -11,3 +11,11 @@ body {
   font-variation-settings: "wdth" 100;
   background-color: var(--background-color);
 }
+
+.special-font {
+  font-family: "Chewy", system-ui;
+  font-weight: 400;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+}
