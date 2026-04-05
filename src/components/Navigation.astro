@@ -1,0 +1,44 @@
+---
+
+---
+
+<navigation>
+  <ul>
+    <li><a href="/">DogEared</a></li>
+    <li><a href="#" class="hover">My Reads</a></li>
+    <li><a href="#" class="hover">Browse</a></li>
+    <li><input type="search" /></li>
+    <li class="material-icons"><a href="#" class="hover">notifications</a></li>
+    <li class="material-icons"><a href="#" class="hover">person</a></li>
+  </ul>
+</navigation>
+
+<style>
+  navigation {
+    padding: 1rem;
+  }
+  navigation ul {
+    list-style-type: none;
+    display: flex;
+    margin: 0;
+    padding: 0;
+    justify-content: space-between;
+  }
+  navigation li {
+    justify-content: center;
+    display: flex;
+    width: 100%;
+  }
+  navigation a {
+    text-decoration: none;
+    color: black;
+    padding: .75rem;
+  }
+  navigation .hover:hover {
+    background-color: black;
+    color: white;
+  }
+  navigation input[type="search"] {
+    font-size: 16px;
+  }
+</style>

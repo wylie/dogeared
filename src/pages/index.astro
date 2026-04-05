@@ -1,11 +1,35 @@
 ---
-import Welcome from '../components/Welcome.astro';
 import Layout from '../layouts/Layout.astro';
+import Widget from '../components/Widget.astro';
 
 // Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
 // Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
 ---
 
 <Layout>
-	<Welcome />
+  <div class="home">
+		<div class="column">
+			<Widget>Left Column Widget</Widget>
+			<Widget>Left Column Widget</Widget>
+		</div>
+		<div class="column">
+			<Widget>Center Column Widget</Widget>
+		</div>
+		<div class="column">
+			<Widget>Right Column Widget</Widget>
+		</div>
+  </div>
 </Layout>
+
+<style>
+	.home,
+	.column {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	.home {
+		display: grid;
+		grid-template-columns: 25% auto 25%;
+	}
+</style>
