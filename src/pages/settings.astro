@@ -4,25 +4,9 @@ import Widget from '../components/Widget.astro';
 ---
 
 <Layout title="Settings">
-  <div class="home">
-		<div class="column">
-			<Widget>filters and whatnot</Widget>
-		</div>
-		<div class="column">
-			<Widget>books read</Widget>
-		</div>
-  </div>
+	<Widget slot="right">settings</Widget>
 </Layout>
 
 <style>
-	.home,
-	.column {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-	.home {
-		display: grid;
-		grid-template-columns: 25% auto;
-	}
+
 </style>

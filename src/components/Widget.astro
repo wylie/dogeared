@@ -1,7 +1,8 @@
 ---
+const { style } = Astro.props;
 ---
 
-<div class="widget">
+<div class="widget" style={style}>
   <slot />
 </div>
 
