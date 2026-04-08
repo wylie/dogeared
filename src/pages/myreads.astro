@@ -3,26 +3,10 @@ import Layout from '../layouts/Layout.astro';
 import Widget from '../components/Widget.astro';
 ---
 
-<Layout title="My Reads">
-  <div class="home">
-		<div class="column">
-			<Widget>filters and whatnot</Widget>
-		</div>
-		<div class="column">
-			<Widget>books read</Widget>
-		</div>
-  </div>
+<Layout title="MyReads">
+	<Widget slot="right">books read</Widget>
 </Layout>
 
 <style>
-	.home,
-	.column {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-	.home {
-		display: grid;
-		grid-template-columns: 25% auto;
-	}
+
 </style>

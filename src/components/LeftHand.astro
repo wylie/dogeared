@@ -1,0 +1,64 @@
+---
+import Widget from "./Widget.astro"
+const { current = "/" } = Astro.props;
+const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
+const isActive = (href: string) => normalize(current) === normalize(href);
+---
+
+<Widget>
+  <h2><a href="/" class="special-font">DogEared</a></h2>
+  <input type="search" placeholder="Search" />
+  <ul>
+    <li><a href={isActive('/myreads') ? undefined : '/myreads'} class={isActive('/myreads') ? 'active' : 'hover'} aria-current={isActive('/myreads') ? 'page' : undefined}>My Reads</a></li>
+    <li><a href={isActive('/browse') ? undefined : '/browse'} class={isActive('/browse') ? 'active' : 'hover'} aria-current={isActive('/browse') ? 'page' : undefined}>Browse</a></li>
+    <li><a href="#" class="hover">Notifications</a></li>
+    <li><a href={isActive('/profile') ? undefined : '/profile'} class={isActive('/profile') ? 'active' : 'hover'} aria-current={isActive('/profile') ? 'page' : undefined}>Person</a></li>
+  </ul>
+</Widget>
+
+<style>
+  ul {
+    list-style-type: none;
+    margin: 1rem 0 0;
+    padding: 1rem 0 0;
+    border-top: 1px solid #999;
+  }
+  li {
+    text-align: left;
+    width: 100%;
+    gap: .25rem;
+  }
+  a {
+    text-decoration: none;
+    color: black;
+    border-radius: 5px;
+  }
+  a.active {
+    background-color: #ddd;
+    cursor: default;
+  }
+  .hover:hover {
+    text-decoration: underline;
+    /* background-color: black;
+    color: white; */
+  }
+  input[type="search"] {
+    font-size: 16px;
+    width: 100%;
+    border: 1px solid #999;
+    border-radius: 50px;
+    padding: .5rem 1rem;
+    margin-top: 1rem;
+  }
+  h2 {
+    width: 100%;
+    margin: 0 0 0.75rem 0;
+    container-type: inline-size;
+  }
+  h2 a.special-font {
+    display: block;
+    width: 100%;
+    font-size: clamp(0rem, 22cqw, 4rem);
+    line-height: 1;
+  }
+</style>

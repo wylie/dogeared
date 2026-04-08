@@ -1,35 +1,12 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import Widget from '../components/Widget.astro';
-import CurrentlyReading from '../components/widgets/CurrentlyReading.astro';
-import ReadingGoal from '../components/widgets/ReadingGoal.astro';
 import Updates from '../components/widgets/Updates.astro';
 ---
 
 <Layout title="Home">
-  <div class="home">
-		<div class="column">
-			<CurrentlyReading />
-			<ReadingGoal />
-		</div>
-		<div class="column">
-			<Updates />
-		</div>
-  </div>
+	<Updates slot="right" />
 </Layout>
 
 <style>
-	.home,
-	.column {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-	.home {
-		display: grid;
-		grid-template-columns: 25% auto;
-	}
-	.column {
-		padding: 1rem;
-	}
+
 </style>
