@@ -5,7 +5,7 @@ const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") 
 const isActive = (href: string) => normalize(current) === normalize(href);
 ---
 
-<Widget style="height: 100%">
+<Widget style="height: 100%" background={true}>
   <h2><a href="/" class="special-font">DogEared</a></h2>
   <input type="search" placeholder="Search" />
   <ul>

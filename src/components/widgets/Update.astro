@@ -2,10 +2,50 @@
 import Widget from "../Widget.astro"
 ---
 
-<Widget>
-  <h2>Updates</h2>
+<Widget border={true}>
+  <div class="update">
+    <img src="https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/users/1730086314i/7199856._UX60_CR0,0,60,60_.jpg" alt="profile picture" class="profile-picture" />
+    <span style="flex: 2">
+      <a href="/profile" class="text-link"><strong>Wylie</strong></a>&nbsp;started reading
+    </span>
+    <span class="date">Mar 28, 26 at 10:29 PM</span>
+  </div>
+  <div class="outer">
+    <img src="https://ia600505.us.archive.org/view_archive.php?archive=/5/items/m_covers_0012/m_covers_0012_66.zip&file=0012667428-M.jpg" alt="book cover" class="book-cover" />
+    <div>
+      <h3>Crooked Kingdom</h3>
+      <p>By Leigh Bardugo</p>
+      <p>Kaz Brekker and his crew of deadly outcasts have just pulled off a heist so daring even they didn't think they'd survive. But instead of divvying up a fat reward, they're right back to fighting for their lives.</p>
+    </div>
+  </div>
 </Widget>
 
 <style>
-
+  .update {
+    height: 50px;
+    display: flex;
+    align-items: center;
+    margin-bottom: .5rem;
+  }
+  .date {
+    font-size: 12px;
+    color: #666;
+  }
+  .outer {
+    display: flex;
+    gap: 1rem;
+  }
+  .book-cover {
+    max-width: 100px;
+  }
+  .profile-picture {
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    margin-right: .5rem;
+  }
+  h3,
+  p {
+    margin: 0;
+  }
 </style>

@@ -1,19 +1,25 @@
 ---
-const { style } = Astro.props;
+const { border, background, style } = Astro.props;
 ---
 
-<div class="widget" style={style}>
+<div class:list={['widget', { border: border }, {background: background}]} style={style}>
   <slot />
 </div>
 
 <style>
   .widget {
-    background-color: #fff;
     padding: 1rem;
-    border-radius: 4px;
-    text-align: center;
+    overflow: hidden;
   }
-  .widget:not(:last-child) {
+  .border {
+    border-bottom: 2px solid #fff;
     margin-bottom: 1rem;
+    padding-bottom: 2rem;
+  }
+  .background {
+    background-color: #fff;
+  }
+  .border:last-child {
+    border-bottom: 0;
   }
 </style>
