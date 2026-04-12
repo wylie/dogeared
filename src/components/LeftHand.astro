@@ -3,11 +3,14 @@ import Widget from "./Widget.astro"
 const { current = "/" } = Astro.props;
 const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
 const isActive = (href: string) => normalize(current) === normalize(href);
+const query = Astro.url.searchParams.get("q") ?? "";
 ---
 
 <Widget style="height: 100%" background={true}>
   <h2><a href="/" class="special-font">DogEared</a></h2>
-  <input type="search" placeholder="Search" />
+  <form action="/search" method="get">
+    <input type="search" name="q" placeholder="Search" value={query} />
+  </form>
   <ul>
     <li><a href={isActive('/myreads') ? undefined : '/myreads'} class={isActive('/myreads') ? 'active' : 'hover'} aria-current={isActive('/myreads') ? 'page' : undefined}>My Reads</a></li>
     <li><a href={isActive('/browse') ? undefined : '/browse'} class={isActive('/browse') ? 'active' : 'hover'} aria-current={isActive('/browse') ? 'page' : undefined}>Browse</a></li>
@@ -50,6 +53,9 @@ const isActive = (href: string) => normalize(current) === normalize(href);
     border-radius: 50px;
     padding: .5rem 1rem;
     margin-top: 1rem;
+  }
+  form {
+    width: 100%;
   }
   h2 {
     width: 100%;
