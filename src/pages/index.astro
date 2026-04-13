@@ -1,14 +1,171 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import Update from '../components/widgets/Update.astro';
 ---
 
 <Layout title="Home">
-	<Update slot="right" />
-	<Update slot="right" />
-	<Update slot="right" />
+	<div slot="right" class="home-feed">
+		<h1>Recent Updates</h1>
+		<div id="updates-list"></div>
+	</div>
 </Layout>
 
+<script>
+	const UPDATES_KEY = "dogeared:updates";
+	const updatesList = document.getElementById("updates-list");
+
+	function escapeHtml(value) {
+		return String(value || "")
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#39;");
+	}
+
+	function formatWhen(timestamp) {
+		const date = new Date(Number(timestamp) || Date.now());
+		return date.toLocaleString(undefined, {
+			year: "numeric",
+			month: "short",
+			day: "numeric",
+			hour: "numeric",
+			minute: "2-digit"
+		});
+	}
+
+	function statusLine(update) {
+		if (update?.status === "reading") return "started reading";
+		if (update?.status === "finished") return "marked as read";
+		return "added to want to read";
+	}
+
+	function loadUpdates() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(UPDATES_KEY) || "[]");
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function renderUpdate(update) {
+		const cover = update.coverUrl
+			? `<img class="book-cover" src="${escapeHtml(update.coverUrl)}" alt="" loading="lazy" />`
+			: `<div class="book-cover book-cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>`;
+		const author = update.author ? `<p>By ${escapeHtml(update.author)}</p>` : "";
+		const format = update.format ? `<p>${escapeHtml(update.format)}${update.language ? ` • ${escapeHtml(String(update.language).toUpperCase())}` : ""}</p>` : "";
+
+		return `
+			<div class="update-card">
+				<div class="update-header">
+					<span><strong>Wylie</strong> ${statusLine(update)}</span>
+					<span class="date">${formatWhen(update.timestamp)}</span>
+				</div>
+				<div class="update-body">
+					${cover}
+					<div>
+						<h3>${escapeHtml(update.title || "Untitled")}</h3>
+						${author}
+						${format}
+					</div>
+				</div>
+			</div>
+		`;
+	}
+
+	function renderFeed() {
+		const updates = loadUpdates()
+			.filter((update) => update && update.title)
+			.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))
+			.slice(0, 50);
+
+		if (updates.length === 0) {
+			updatesList.innerHTML = `<div class="empty-state">No updates yet. Add books to a shelf to see activity here.</div>`;
+			return;
+		}
+
+		updatesList.innerHTML = updates.map(renderUpdate).join("");
+	}
+
+	window.addEventListener("storage", (event) => {
+		if (event.key === UPDATES_KEY) renderFeed();
+	});
+
+	renderFeed();
+</script>
+
 <style>
+	.home-feed {
+		max-width: 860px;
+	}
+
+	.home-feed h1 {
+		margin: 0 0 1rem;
+	}
+
+	#updates-list {
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.update-card {
+		border: 1px solid #d8d8d8;
+		border-radius: 12px;
+		padding: 0.75rem;
+		background: #fff;
+	}
+
+	.update-header {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.75rem;
+		font-size: 0.95rem;
+		margin-bottom: 0.55rem;
+	}
+
+	.date {
+		font-size: 0.8rem;
+		color: #666;
+		white-space: nowrap;
+	}
+
+	.update-body {
+		display: grid;
+		grid-template-columns: 52px auto;
+		gap: 0.7rem;
+	}
+
+	.book-cover {
+		width: 52px;
+		height: 78px;
+		border-radius: 6px;
+		object-fit: cover;
+		background: #f2f2f2;
+	}
+
+	.book-cover-placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #8a8a8a;
+		border: 1px solid #d6d6d6;
+	}
+
+	.update-body h3,
+	.update-body p {
+		margin: 0;
+	}
+
+	.update-body p {
+		color: #4a4a4a;
+		font-size: 0.9rem;
+	}
+
+	.empty-state {
+		border: 1px dashed #c5c5c5;
+		padding: 0.8rem;
+		border-radius: 10px;
+		background: #fafafa;
+	}
 
 </style>

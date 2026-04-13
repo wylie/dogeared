@@ -1,12 +1,370 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import Widget from '../components/Widget.astro';
+
+export const prerender = false;
+
+type BrowseBook = {
+	id: string;
+	title: string;
+	authors: string[];
+	thumbnail: string;
+	publishedDate: string;
+	description: string;
+};
+
+type BrowseSection = {
+	id: string;
+	title: string;
+	subtitle: string;
+	queries: string[];
+	orderBy?: "relevance" | "newest";
+	minYear?: number;
+	books: BrowseBook[];
+};
+
+function toHttps(value: unknown) {
+	const input = String(value || "").trim();
+	if (!input) return "";
+	if (input.startsWith("http://")) return `https://${input.slice(7)}`;
+	return input;
+}
+
+function trimDescription(value: unknown, max = 180) {
+	const text = String(value || "").replace(/\s+/g, " ").trim();
+	if (!text) return "";
+	if (text.length <= max) return text;
+	return `${text.slice(0, max).trim()}...`;
+}
+
+async function fetchShelf(query: string, options: { orderBy?: "relevance" | "newest"; maxResults?: number; apiKey: string }) {
+	const endpoint = new URL("https://www.googleapis.com/books/v1/volumes");
+	endpoint.searchParams.set("q", query);
+	endpoint.searchParams.set("printType", "books");
+	endpoint.searchParams.set("langRestrict", "en");
+	endpoint.searchParams.set("maxResults", String(options.maxResults || 12));
+	endpoint.searchParams.set("orderBy", options.orderBy || "relevance");
+	endpoint.searchParams.set("key", options.apiKey);
+
+	const response = await fetch(endpoint.toString(), {
+		headers: { Accept: "application/json" }
+	});
+	if (!response.ok) return [];
+
+	const data = await response.json();
+	const items = Array.isArray(data?.items) ? data.items : [];
+	const dedupe = new Set<string>();
+	const books: BrowseBook[] = [];
+
+	for (const item of items) {
+		const info = item?.volumeInfo || {};
+		const title = String(info?.title || "").trim();
+		if (!title) continue;
+		const authors = Array.isArray(info?.authors) ? info.authors.map((a: unknown) => String(a || "").trim()).filter(Boolean) : [];
+		const key = `${title.toLowerCase()}|${(authors[0] || "").toLowerCase()}`;
+		if (dedupe.has(key)) continue;
+		dedupe.add(key);
+		books.push({
+			id: String(item?.id || `${title}-${authors[0] || "unknown"}`),
+			title,
+			authors,
+			thumbnail: toHttps(info?.imageLinks?.thumbnail || info?.imageLinks?.smallThumbnail || ""),
+			publishedDate: String(info?.publishedDate || "").trim(),
+			description: trimDescription(info?.description)
+		});
+	}
+
+	return books;
+}
+
+function extractYear(value: string) {
+	const match = String(value || "").match(/\d{4}/);
+	return match ? Number(match[0]) : 0;
+}
+
+function dateScore(value: string) {
+	const text = String(value || "").trim();
+	if (!text) return 0;
+	const safe = /^\d{4}$/.test(text) ? `${text}-01-01` : text;
+	const ts = new Date(safe).getTime();
+	if (Number.isFinite(ts) && ts > 0) return ts;
+	return extractYear(text) * 10000;
+}
+
+async function fetchShelfFromQueries(
+	queries: string[],
+	options: { orderBy?: "relevance" | "newest"; maxResults?: number; apiKey: string; minYear?: number }
+) {
+	const all = await Promise.all(
+		queries.map((query) => fetchShelf(query, {
+			orderBy: options.orderBy,
+			maxResults: options.maxResults,
+			apiKey: options.apiKey
+		}))
+	);
+
+	const dedupe = new Set<string>();
+	let merged = all.flat().filter((book) => {
+		const key = `${book.title.toLowerCase()}|${(book.authors[0] || "").toLowerCase()}`;
+		if (dedupe.has(key)) return false;
+		dedupe.add(key);
+		return true;
+	});
+
+	if (options.minYear) {
+		const strict = merged.filter((book) => extractYear(book.publishedDate) >= options.minYear!);
+		if (strict.length > 0) {
+			merged = strict;
+		} else {
+			const relaxed = merged.filter((book) => extractYear(book.publishedDate) >= (options.minYear! - 3));
+			merged = relaxed.length > 0 ? relaxed : merged;
+		}
+	}
+
+	merged.sort((a, b) => dateScore(b.publishedDate) - dateScore(a.publishedDate));
+	return merged.slice(0, options.maxResults || 12);
+}
+
+const apiKey = String(import.meta.env.GOOGLE_BOOKS_API_KEY || "").trim();
+const currentYear = new Date().getFullYear();
+const sectionsConfig: Omit<BrowseSection, "books">[] = [
+	{
+		id: "new-releases",
+		title: "New Releases",
+		subtitle: "Published in the last 2 years.",
+		queries: [
+			"subject:fiction",
+			"subject:thriller",
+			"subject:romance",
+			"subject:young adult fiction",
+			"subject:science fiction"
+		],
+		orderBy: "newest",
+		minYear: currentYear - 1
+	},
+	{
+		id: "fantasy",
+		title: "Fantasy",
+		subtitle: "Epic worlds, magic systems, and legendary quests.",
+		queries: ["subject:fantasy"]
+	},
+	{
+		id: "mystery-thriller",
+		title: "Mystery & Thriller",
+		subtitle: "Detective stories, suspense, and page-turners.",
+		queries: ["subject:mystery", "subject:thriller"]
+	},
+	{
+		id: "romance",
+		title: "Romance",
+		subtitle: "Character-driven love stories and relationship arcs.",
+		queries: ["subject:romance"]
+	},
+	{
+		id: "science-fiction",
+		title: "Science Fiction",
+		subtitle: "Future tech, space, and speculative ideas.",
+		queries: ["subject:science fiction"]
+	}
+];
+
+let sections: BrowseSection[] = [];
+let errorMessage = "";
+
+if (apiKey) {
+	try {
+		const results = await Promise.all(
+			sectionsConfig.map((section) => fetchShelfFromQueries(section.queries, {
+				orderBy: section.orderBy,
+				minYear: section.minYear,
+				maxResults: 12,
+				apiKey
+			}))
+		);
+
+		sections = sectionsConfig.map((section, index) => ({
+			...section,
+			books: results[index] || []
+		}));
+	} catch (error) {
+		errorMessage = error instanceof Error ? error.message : "Failed to load browse shelves.";
+	}
+} else {
+	errorMessage = "Missing Google Books API key.";
+}
 ---
 
 <Layout title="Browse">
-	<Widget slot="right">browse books</Widget>
+	<div slot="right" class="browse-page">
+		<h1>Browse</h1>
+		<p class="subhead">Explore books by genre and discover newer releases.</p>
+
+		{errorMessage && <p class="error">Browse unavailable: {errorMessage}</p>}
+
+		{!errorMessage && sections.length > 0 && (
+			<>
+				<div class="genre-row" aria-label="Browse genres">
+					{sections.map((section) => (
+						<a class="genre-chip" href={`#${section.id}`}>{section.title}</a>
+					))}
+				</div>
+
+				{sections.map((section) => (
+					<section id={section.id} class="browse-section">
+						<div class="section-head">
+							<h2>{section.title}</h2>
+							<p>{section.subtitle}</p>
+						</div>
+						{section.books.length === 0 && <p class="empty">No books found for this shelf yet.</p>}
+						{section.books.length > 0 && (
+							<ul class="book-grid">
+								{section.books.map((book) => (
+									<li class="book-card">
+										<div class="cover-wrap">
+											{book.thumbnail
+												? <img class="cover" src={book.thumbnail} alt={`${book.title} cover`} loading="lazy" />
+												: <div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>}
+										</div>
+										<div class="card-body">
+											<h3>{book.title}</h3>
+											<p class="meta">{book.authors.length > 0 ? book.authors.join(", ") : "Unknown author"}</p>
+											{book.publishedDate && <p class="meta">Published: {book.publishedDate}</p>}
+											{book.description && <p class="description">{book.description}</p>}
+										</div>
+									</li>
+								))}
+							</ul>
+						)}
+					</section>
+				))}
+			</>
+		)}
+	</div>
 </Layout>
 
 <style>
+	.browse-page {
+		max-width: 920px;
+	}
+
+	.browse-page h1 {
+		margin: 0;
+	}
+
+	.subhead {
+		margin: 0.5rem 0 1rem;
+		color: #4d4d4d;
+	}
+
+	.error {
+		background: #fff1f2;
+		color: #9f1239;
+		border: 1px solid #fecdd3;
+		padding: 0.7rem 0.8rem;
+		border-radius: 10px;
+	}
+
+	.genre-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+		margin-bottom: 1rem;
+	}
+
+	.genre-chip {
+		text-decoration: none;
+		color: #222;
+		background: #fff;
+		border: 1px solid #cecece;
+		border-radius: 999px;
+		padding: 0.35rem 0.65rem;
+		font-size: 0.88rem;
+	}
+
+	.genre-chip:hover {
+		background: #f5f5f5;
+	}
+
+	.browse-section {
+		margin-top: 1.35rem;
+	}
+
+	.section-head h2 {
+		margin: 0;
+	}
+
+	.section-head p {
+		margin: 0.25rem 0 0.7rem;
+		color: #4d4d4d;
+		font-size: 0.92rem;
+	}
+
+	.book-grid {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.75rem;
+	}
+
+	.book-card {
+		border: 1px solid #d7d7d7;
+		border-radius: 12px;
+		background: #fff;
+		padding: 0.65rem;
+		display: grid;
+		grid-template-columns: 56px auto;
+		gap: 0.65rem;
+	}
+
+	.cover-wrap {
+		width: 56px;
+		height: 84px;
+	}
+
+	.cover {
+		width: 56px;
+		height: 84px;
+		object-fit: cover;
+		border-radius: 6px;
+		background: #f1f1f1;
+	}
+
+	.cover-placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #8a8a8a;
+		border: 1px solid #d7d7d7;
+	}
+
+	.card-body h3 {
+		margin: 0;
+		font-size: 1rem;
+	}
+
+	.meta {
+		margin: 0.2rem 0;
+		font-size: 0.87rem;
+		color: #4d4d4d;
+	}
+
+	.description {
+		margin: 0.25rem 0 0;
+		font-size: 0.85rem;
+		color: #575757;
+	}
+
+	.empty {
+		margin: 0;
+		font-size: 0.9rem;
+		color: #666;
+	}
+
+	@media (max-width: 860px) {
+		.book-grid {
+			grid-template-columns: 1fr;
+		}
+	}
 
 </style>

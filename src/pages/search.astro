@@ -10,11 +10,177 @@ type SearchResult = {
 	description: string;
 	publisher: string;
 	publishedDate: string;
+	printType: string;
 	pageCount: number | null;
 	categories: string[];
 	language: string;
 	thumbnail: string;
+	isbn10: string;
+	isbn13: string;
+	variantCount?: number;
+	variants?: Array<{
+		title: string;
+		author: string;
+		pageCount: number;
+		thumbnail: string;
+		language: string;
+		publishedDate: string;
+		publisher: string;
+		isbn10: string;
+		isbn13: string;
+		format: string;
+		optionLabel: string;
+		detailLabel: string;
+	}>;
 };
+
+function normalizeText(value: string) {
+	return String(value || "")
+		.toLowerCase()
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/[^a-z0-9\s:]/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+function canonicalizeTitle(value: string) {
+	let text = normalizeText(value);
+	text = text.replace(/\([^)]*\)/g, " ");
+	text = text.replace(/\b(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition|spanish edition|french edition|german edition)\b/g, " ");
+	text = text.split(":")[0] || text;
+	text = text.replace(/^(the|a|an)\s+/g, "");
+	return text.replace(/\s+/g, " ").trim();
+}
+
+function canonicalizeAuthor(value: string) {
+	return normalizeText(value).replace(/^(by\s+)/, "").trim();
+}
+
+function detectFormat(input: {
+	title?: string;
+	subtitle?: string;
+	description?: string;
+	categories?: string[];
+}): string {
+	const haystack = normalizeText([
+		input.title || "",
+		input.subtitle || "",
+		input.description || "",
+		Array.isArray(input.categories) ? input.categories.join(" ") : ""
+	].join(" "));
+	if (/\b(audiobook|audio book|audio cd|audible)\b/.test(haystack)) return "Audiobook";
+	if (/\b(ebook|e-book|kindle|digital edition)\b/.test(haystack)) return "Ebook";
+	if (/\bpaperback\b/.test(haystack)) return "Paperback";
+	if (/\b(hardcover|hardback)\b/.test(haystack)) return "Hardcover";
+	return "Book";
+}
+
+function toVariant(result: SearchResult) {
+	const language = String(result.language || "").trim().toUpperCase();
+	const year = String(result.publishedDate || "").match(/\d{4}/)?.[0] || "";
+	const format = detectFormat({
+		title: result.title,
+		subtitle: result.subtitle,
+		description: result.description,
+		categories: result.categories
+	});
+	const summaryParts = [
+		format,
+		language || "Unknown language",
+		year || "Unknown year"
+	].filter(Boolean);
+	const detailParts = [
+		result.publisher ? `Publisher: ${result.publisher}` : "",
+		result.pageCount && result.pageCount > 0 ? `${result.pageCount} pages` : "",
+		result.isbn13 ? `ISBN-13 ${result.isbn13}` : (result.isbn10 ? `ISBN-10 ${result.isbn10}` : ""),
+		String(result.publishedDate || "").trim() ? `Published ${String(result.publishedDate || "").trim()}` : ""
+	].filter(Boolean);
+	return {
+		title: result.title,
+		author: result.authors[0] || "",
+		pageCount: Math.max(0, Number(result.pageCount) || 0),
+		thumbnail: result.thumbnail || "",
+		language: String(result.language || "").trim(),
+		publishedDate: String(result.publishedDate || "").trim(),
+		publisher: String(result.publisher || "").trim(),
+		isbn10: String(result.isbn10 || "").trim(),
+		isbn13: String(result.isbn13 || "").trim(),
+		format,
+		optionLabel: summaryParts.join(" • "),
+		detailLabel: [format, ...detailParts].join(" • ")
+	};
+}
+
+function scoreResult(result: SearchResult, queryText: string) {
+	let score = 0;
+	const q = normalizeText(queryText);
+	const title = normalizeText(result.title);
+	if (q && title.includes(q)) score += 140;
+	if (q && title.startsWith(q)) score += 120;
+	if (result.thumbnail) score += 50;
+	if (result.pageCount && result.pageCount > 0) score += 20;
+	if (String(result.language || "").toLowerCase() === "en") score += 10;
+	return score;
+}
+
+function tokenizeQuery(queryText: string) {
+	return normalizeText(queryText)
+		.split(" ")
+		.filter((token) => token.length >= 2);
+}
+
+function isLikelyMatch(result: SearchResult, queryText: string) {
+	const tokens = tokenizeQuery(queryText);
+	if (tokens.length === 0) return true;
+	const haystack = normalizeText([
+		result.title,
+		result.subtitle,
+		...(Array.isArray(result.authors) ? result.authors : [])
+	].join(" "));
+	const strongTokens = tokens.filter((token) => token.length >= 4);
+	if (strongTokens.length > 0) {
+		return strongTokens.some((token) => haystack.includes(token));
+	}
+	return tokens.some((token) => haystack.includes(token));
+}
+
+function dedupeVariants(input: SearchResult[], queryText: string) {
+	const grouped = new Map<string, SearchResult[]>();
+	for (const [index, result] of input.entries()) {
+		const primaryAuthor = result.authors[0] || "";
+		const canonicalTitle = canonicalizeTitle(result.title);
+		const canonicalAuthor = canonicalizeAuthor(primaryAuthor);
+		const key = canonicalTitle
+			? `${canonicalTitle}|${canonicalAuthor}`
+			: `ungrouped_${index}`;
+		const existing = grouped.get(key) || [];
+		existing.push(result);
+		grouped.set(key, existing);
+	}
+
+	const deduped: SearchResult[] = [];
+	for (const items of grouped.values()) {
+		const sorted = [...items].sort((a, b) => scoreResult(b, queryText) - scoreResult(a, queryText));
+		const seenVariantKeys = new Set<string>();
+		const variants = sorted.map((item) => toVariant(item)).filter((variant) => {
+			const key = [
+				canonicalizeTitle(variant.title),
+				canonicalizeAuthor(variant.author),
+				normalizeText(variant.format),
+				normalizeText(variant.language),
+				normalizeText(variant.publishedDate)
+			].join("|");
+			if (seenVariantKeys.has(key)) return false;
+			seenVariantKeys.add(key);
+			return true;
+		});
+		const best = { ...sorted[0], variantCount: variants.length, variants };
+		deduped.push(best);
+	}
+
+	return deduped.sort((a, b) => scoreResult(b, queryText) - scoreResult(a, queryText));
+}
 
 const query = Astro.url.searchParams.get("q")?.trim() ?? "";
 const apiKey = import.meta.env.GOOGLE_BOOKS_API_KEY ?? "";
@@ -24,22 +190,42 @@ let errorMessage = "";
 
 if (query && apiKey) {
 	try {
-		const params = new URLSearchParams({
-			q: query,
-			key: apiKey,
-			maxResults: "10",
-		});
-		const response = await fetch(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
+		const fetchItems = async (q: string) => {
+			const params = new URLSearchParams({
+				q,
+				key: apiKey,
+				maxResults: "20",
+				printType: "books",
+				orderBy: "relevance",
+				langRestrict: "en",
+			});
+			const response = await fetch(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
+			if (!response.ok) return [];
+			const data = await response.json();
+			return Array.isArray(data.items) ? data.items : [];
+		};
 
-		if (!response.ok) {
-			throw new Error(`Request failed with status ${response.status}`);
+		const [baseItems, audiobookItems] = await Promise.all([
+			fetchItems(query),
+			fetchItems(`${query} audiobook`)
+		]);
+		const byId = new Map<string, any>();
+		for (const item of [...baseItems, ...audiobookItems]) {
+			const id = String(item?.id || "");
+			if (!id) continue;
+			if (!byId.has(id)) byId.set(id, item);
 		}
+		const items = Array.from(byId.values());
 
-		const data = await response.json();
-		const items = Array.isArray(data.items) ? data.items : [];
-
-		results = items.map((item) => {
+		const mapped = items.map((item) => {
 			const info = item.volumeInfo ?? {};
+			const identifiers = Array.isArray(info.industryIdentifiers) ? info.industryIdentifiers : [];
+			const isbn13 = String(
+				(identifiers.find((entry) => String(entry?.type || "") === "ISBN_13")?.identifier || "")
+			).replace(/[^0-9Xx]/g, "").toUpperCase();
+			const isbn10 = String(
+				(identifiers.find((entry) => String(entry?.type || "") === "ISBN_10")?.identifier || "")
+			).replace(/[^0-9Xx]/g, "").toUpperCase();
 
 			return {
 				title: info.title ?? "Untitled",
@@ -48,12 +234,16 @@ if (query && apiKey) {
 				description: info.description ?? "",
 				publisher: info.publisher ?? "",
 				publishedDate: info.publishedDate ?? "",
+				printType: info.printType ?? "",
 				pageCount: typeof info.pageCount === "number" ? info.pageCount : null,
 				categories: Array.isArray(info.categories) ? info.categories : [],
 				language: info.language ?? "",
 				thumbnail: info.imageLinks?.thumbnail ?? "",
+				isbn10,
+				isbn13
 			};
-		});
+		}).filter((result) => isLikelyMatch(result, query));
+		results = dedupeVariants(mapped, query);
 	} catch (error) {
 		errorMessage = error instanceof Error ? error.message : "Unknown error";
 	}
@@ -63,31 +253,630 @@ if (query && apiKey) {
 ---
 
 <Layout title="Search">
-	<div slot="right">
+	<div slot="right" class="search-page" id="search-page" data-query={query}>
 		<h1>Search</h1>
 		{!query && <p>Enter a search term to find books.</p>}
 		{query && errorMessage && <p>Search failed: {errorMessage}</p>}
 		{query && !errorMessage && results.length === 0 && <p>No results for "{query}".</p>}
-		{query && !errorMessage && results.length > 0 && <p>Results for "{query}"</p>}
+		{query && !errorMessage && results.length > 0 && <p>Results for "{query}". Use the shelf dropdown to save to <a href="/profile">Profile</a>.</p>}
 
-		<ul>
+		<ul class="search-results" id="search-results">
 			{results.map((result) => (
-				<li>
-					<h2>{result.title}</h2>
-					{result.thumbnail && <img src={result.thumbnail} alt={`${result.title} cover`} />}
-					{result.subtitle && <p>Subtitle: {result.subtitle}</p>}
-					<p>{result.authors.length > 0 ? result.authors.join(", ") : "Unknown author"}</p>
-					{result.description && <p>Description: {result.description}</p>}
-					{result.publisher && <p>Publisher: {result.publisher}</p>}
-					{result.publishedDate && <p>Published: {result.publishedDate}</p>}
-					{result.pageCount !== null && <p>Pages: {result.pageCount}</p>}
-					{result.categories.length > 0 && <p>Categories: {result.categories.join(", ")}</p>}
-					{result.language && <p>Language: {result.language}</p>}
-				</li>
-			))}
+				<li class="search-result">
+						<div class="search-cover-frame">
+							{result.thumbnail
+								? <img class="search-cover" src={result.thumbnail} alt={`${result.title} cover`} />
+								: <div class="search-cover search-cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></div>}
+						</div>
+						<div class="search-content">
+							<h2>{result.title}</h2>
+							<p class="meta">{result.authors.length > 0 ? result.authors.join(", ") : "Unknown author"}</p>
+							{result.pageCount !== null && <p class="meta">{result.pageCount} pages</p>}
+							{(result.variantCount ?? 1) > 1 && <p class="meta">{result.variantCount} editions/formats combined</p>}
+							<div class="variant-picker">
+								<div class="variant-dropdown" aria-label={`Edition and format for ${result.title}`}>
+									<button type="button" class="variant-trigger" data-action="toggle-variant" aria-expanded="false">
+										<span class="variant-selected-label">Editions/Formats ({result.variantCount ?? (result.variants?.length ?? 0)})</span>
+										<span class="material-icons shelf-icon" aria-hidden="true">arrow_drop_down</span>
+									</button>
+									<div class="variant-menu" hidden>
+										{(result.variants ?? []).map((variant) => (
+											<button
+												type="button"
+												class="variant-option"
+												data-action="set-variant"
+												data-label={variant.optionLabel}
+												data-title={variant.title}
+												data-author={variant.author}
+												data-pages={String(variant.pageCount)}
+												data-cover={variant.thumbnail}
+												data-language={variant.language}
+												data-format={variant.format}
+												data-publisher={variant.publisher}
+												data-published-date={variant.publishedDate}
+												data-isbn10={variant.isbn10}
+												data-isbn13={variant.isbn13}
+												data-detail-label={variant.detailLabel}
+											>
+												<span class="variant-option-title">{variant.optionLabel}</span>
+												<span class="variant-option-sub">{variant.detailLabel}</span>
+											</button>
+										))}
+									</div>
+								</div>
+								<p class="variant-meta"></p>
+							</div>
+							<div
+								class="shelf-dropdown"
+								data-title={result.title}
+								data-author={result.authors[0] ?? ""}
+								data-pages={String(result.pageCount ?? 0)}
+								data-cover={result.thumbnail}
+							>
+								<button type="button" class="shelf-trigger" data-action="toggle-shelf" aria-expanded="false">
+									<span class="material-icons shelf-check" aria-hidden="true">check</span>
+									<span class="shelf-label">Want to Read</span>
+									<span class="material-icons shelf-icon" aria-hidden="true">arrow_drop_down</span>
+								</button>
+								<div class="shelf-menu" hidden>
+									<button type="button" class="shelf-option" data-action="set-shelf" data-status="want_to_read">Want to Read</button>
+									<button type="button" class="shelf-option" data-action="set-shelf" data-status="reading">Currently Reading</button>
+									<button type="button" class="shelf-option" data-action="set-shelf" data-status="finished">Read</button>
+								</div>
+								<p class="shelf-feedback" hidden></p>
+							</div>
+						</div>
+					</li>
+				))}
 		</ul>
+		{query && !errorMessage && results.length > 0 && (
+			<div id="search-sentinel-wrap">
+				<div id="search-sentinel" aria-hidden="true"></div>
+				<p id="search-loading" class="meta" hidden>Loading more results...</p>
+			</div>
+		)}
 	</div>
 </Layout>
 
 <style>
+	.search-page {
+		max-width: 900px;
+	}
+
+	.search-results {
+		list-style: none;
+		margin: 1rem 0 0;
+		padding: 0;
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	#search-sentinel-wrap {
+		padding: 0.75rem 0 0.25rem;
+	}
+
+	#search-sentinel {
+		height: 1px;
+	}
+
+	.search-result {
+		display: grid;
+		grid-template-columns: 60px auto;
+		gap: 0.8rem;
+		padding: 0.75rem;
+		border: 1px solid #d8d8d8;
+		border-radius: 12px;
+		background: #fff;
+	}
+
+	.search-cover {
+		width: 60px;
+		height: 90px;
+		object-fit: cover;
+		border-radius: 6px;
+		background: #f1f1f1;
+	}
+
+	.search-cover-frame {
+		width: 60px;
+		height: 90px;
+	}
+
+	.search-cover-placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #8a8a8a;
+		border: 1px solid #d6d6d6;
+	}
+
+	.search-content h2 {
+		margin: 0;
+		font-size: 1.05rem;
+	}
+
+	.meta {
+		margin: 0.2rem 0;
+		color: #4a4a4a;
+		font-size: 0.92rem;
+	}
+
+	.variant-picker {
+		margin-top: 0.35rem;
+		display: grid;
+		gap: 0.25rem;
+		max-width: 380px;
+	}
+
+	.variant-dropdown {
+		position: relative;
+		max-width: 100%;
+	}
+
+	.variant-trigger {
+		width: 100%;
+		max-width: 100%;
+		border: 1px solid #c8c8c8;
+		border-radius: 8px;
+		padding: 0.45rem 0.55rem;
+		font-size: 0.9rem;
+		background: #fff;
+		color: #1a1a1a;
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 0.4rem;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.variant-selected-label {
+		white-space: normal;
+		word-break: break-word;
+		line-height: 1.25;
+	}
+
+	.variant-menu {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 0;
+		right: 0;
+		max-height: 280px;
+		overflow-y: auto;
+		background: #fff;
+		border: 1px solid #c9c9c9;
+		border-radius: 8px;
+		box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+		padding: 0.2rem 0;
+		z-index: 30;
+	}
+
+	.variant-option {
+		display: block;
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: transparent;
+		padding: 0.45rem 0.65rem;
+		cursor: pointer;
+		color: #222;
+		white-space: normal;
+	}
+
+	.variant-option:hover {
+		background: #f2f2f2;
+	}
+
+	.variant-option-title {
+		display: block;
+		font-size: 0.9rem;
+		line-height: 1.25;
+	}
+
+	.variant-option-sub {
+		display: block;
+		font-size: 0.78rem;
+		line-height: 1.25;
+		color: #666;
+		margin-top: 0.2rem;
+	}
+
+	.variant-meta {
+		margin: 0;
+		color: #5a5a5a;
+		font-size: 0.84rem;
+	}
+
+	.shelf-dropdown {
+		position: relative;
+		display: inline-flex;
+		flex-direction: column;
+		align-items: flex-start;
+		margin-top: 0.4rem;
+	}
+
+	.shelf-trigger {
+		border: none;
+		border-radius: 8px;
+		padding: 0.55rem 0.85rem;
+		font-size: 0.95rem;
+		background: #2f8f57;
+		color: #fff;
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.shelf-icon {
+		font-size: 1.15rem;
+		line-height: 1;
+	}
+
+	.shelf-check {
+		font-size: 1rem;
+		line-height: 1;
+		opacity: 0;
+		transition: opacity 120ms ease-in-out;
+	}
+
+	.shelf-dropdown.is-shelved .shelf-check {
+		opacity: 1;
+	}
+
+	.shelf-trigger:hover {
+		background: #267647;
+	}
+
+	.shelf-menu {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 0;
+		min-width: 180px;
+		background: #fff;
+		border: 1px solid #c9c9c9;
+		border-radius: 8px;
+		box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+		padding: 0.25rem 0;
+		z-index: 25;
+	}
+
+	.shelf-option {
+		display: block;
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: transparent;
+		padding: 0.5rem 0.75rem;
+		font-size: 0.92rem;
+		cursor: pointer;
+		color: #222;
+	}
+
+	.shelf-option:hover {
+		background: #f2f2f2;
+	}
+
+	.shelf-feedback {
+		margin-top: 0.25rem;
+		font-size: 0.82rem;
+		color: #1f7a45;
+		line-height: 1.25;
+	}
 </style>
+
+<script>
+	const STORAGE_KEY = "dogeared:myreads";
+	const UPDATES_KEY = "dogeared:updates";
+	const feedbackTimers = new WeakMap();
+	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
+	const variantDropdowns = Array.from(document.querySelectorAll(".variant-dropdown"));
+	const STATUS_LABELS = {
+		want_to_read: "Want to Read",
+		reading: "Currently Reading",
+		finished: "Read"
+	};
+
+	function normalizeText(value) {
+		return String(value || "").trim().toLowerCase();
+	}
+
+	function canonicalizeTitle(value) {
+		return normalizeText(value)
+			.normalize("NFKD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/\([^)]*\)/g, " ")
+			.replace(/\b(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition)\b/g, " ")
+			.split(":")[0]
+			.replace(/^(the|a|an)\s+/g, "")
+			.replace(/[^a-z0-9\s]/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+	}
+
+	function canonicalizeAuthor(value) {
+		return normalizeText(value)
+			.normalize("NFKD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/^(by\s+)/, "")
+			.replace(/[^a-z0-9\s]/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+	}
+
+	function loadEntries() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function saveEntries(entries) {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+	}
+
+	function loadUpdates() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(UPDATES_KEY) || "[]");
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function saveUpdates(updates) {
+		localStorage.setItem(UPDATES_KEY, JSON.stringify(updates.slice(0, 200)));
+	}
+
+	function logShelfUpdate(entry, status) {
+		if (!entry?.title) return;
+		const updates = loadUpdates();
+		updates.unshift({
+			id: `upd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+			timestamp: Date.now(),
+			status: status || entry.status || "want_to_read",
+			title: entry.title,
+			author: entry.author || "",
+			coverUrl: entry.coverUrl || "",
+			format: entry.format || "",
+			language: entry.language || ""
+		});
+		saveUpdates(updates);
+	}
+
+	function findEntry(entries, title, author) {
+		const t = canonicalizeTitle(title);
+		const a = canonicalizeAuthor(author);
+		return entries.find((entry) => (
+			canonicalizeTitle(entry.title) === t && canonicalizeAuthor(entry.author) === a
+		));
+	}
+
+	function statusLabel(status) {
+		return STATUS_LABELS[status] || STATUS_LABELS.want_to_read;
+	}
+
+	function setDropdownLabel(dropdown, status) {
+		const label = dropdown.querySelector(".shelf-label");
+		if (label) label.textContent = statusLabel(status);
+	}
+
+	function setShelvedState(dropdown, isShelved) {
+		if (isShelved) {
+			dropdown.classList.add("is-shelved");
+		} else {
+			dropdown.classList.remove("is-shelved");
+		}
+	}
+
+	function showShelfFeedback(dropdown, message) {
+		const feedback = dropdown.querySelector(".shelf-feedback");
+		if (!feedback) return;
+		feedback.textContent = message;
+		feedback.hidden = false;
+		const existingTimer = feedbackTimers.get(dropdown);
+		if (existingTimer) clearTimeout(existingTimer);
+		const timer = setTimeout(() => {
+			feedback.hidden = true;
+		}, 1800);
+		feedbackTimers.set(dropdown, timer);
+	}
+
+	function updateVariantMeta(card) {
+		if (!card) return;
+		const variantDropdown = card.querySelector(".variant-dropdown");
+		const meta = card.querySelector(".variant-meta");
+		if (!variantDropdown || !meta) return;
+		const detailLabel = String(variantDropdown.dataset.detailLabel || "").trim();
+		meta.textContent = detailLabel;
+	}
+
+	function closeShelfMenus() {
+		for (const dropdown of shelfDropdowns) {
+			const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
+			const menu = dropdown.querySelector(".shelf-menu");
+			if (menu) menu.hidden = true;
+			if (trigger) trigger.setAttribute("aria-expanded", "false");
+		}
+	}
+
+	function closeVariantMenus() {
+		for (const dropdown of variantDropdowns) {
+			const trigger = dropdown.querySelector('[data-action="toggle-variant"]');
+			const menu = dropdown.querySelector(".variant-menu");
+			if (menu) menu.hidden = true;
+			if (trigger) trigger.setAttribute("aria-expanded", "false");
+		}
+	}
+
+	function closeAllMenus() {
+		closeShelfMenus();
+		closeVariantMenus();
+	}
+
+	function toggleMenu(dropdown) {
+		const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
+		const menu = dropdown.querySelector(".shelf-menu");
+		if (!trigger || !menu) return;
+		const willOpen = menu.hidden;
+		closeShelfMenus();
+		menu.hidden = !willOpen;
+		trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+	}
+
+	function toggleVariantMenu(dropdown) {
+		const trigger = dropdown.querySelector('[data-action="toggle-variant"]');
+		const menu = dropdown.querySelector(".variant-menu");
+		if (!trigger || !menu) return;
+		const willOpen = menu.hidden;
+		closeVariantMenus();
+		menu.hidden = !willOpen;
+		trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+	}
+
+	function setVariantSelection(dropdown, optionButton) {
+		dropdown.dataset.title = String(optionButton.dataset.title || "").trim();
+		dropdown.dataset.author = String(optionButton.dataset.author || "").trim();
+		dropdown.dataset.pages = String(optionButton.dataset.pages || "").trim();
+		dropdown.dataset.cover = String(optionButton.dataset.cover || "").trim();
+		dropdown.dataset.language = String(optionButton.dataset.language || "").trim();
+		dropdown.dataset.format = String(optionButton.dataset.format || "").trim();
+		dropdown.dataset.detailLabel = String(optionButton.dataset.detailLabel || "").trim();
+
+		const card = dropdown.closest(".search-content");
+		updateVariantMeta(card);
+	}
+
+	function applyStatus(entry, selectedStatus, totalPages) {
+		entry.status = selectedStatus;
+		if (selectedStatus === "finished") {
+			if (totalPages > 0) {
+				entry.currentPage = totalPages;
+			}
+			entry.finishedDate = entry.finishedDate || new Date().toISOString().slice(0, 10);
+			return;
+		}
+		if (selectedStatus === "reading") {
+			entry.currentPage = Math.max(0, Number(entry.currentPage) || 0);
+		}
+		if (selectedStatus === "want_to_read") {
+			entry.currentPage = 0;
+		}
+		entry.finishedDate = "";
+	}
+
+	function setShelf(dropdown, selectedStatus) {
+		const resultCard = dropdown.closest(".search-content");
+		const variantDropdown = resultCard?.querySelector(".variant-dropdown");
+		const title = String(variantDropdown?.dataset?.title || dropdown.dataset.title || "").trim();
+		if (!title) return;
+		const author = String(variantDropdown?.dataset?.author || dropdown.dataset.author || "").trim();
+		const totalPages = Math.max(0, Number(variantDropdown?.dataset?.pages || dropdown.dataset.pages || 0) || 0);
+		const coverUrl = String(variantDropdown?.dataset?.cover || dropdown.dataset.cover || "").trim();
+		const format = String(variantDropdown?.dataset?.format || "").trim();
+		const language = String(variantDropdown?.dataset?.language || "").trim();
+
+		const entries = loadEntries();
+		const existing = findEntry(entries, title, author);
+		if (existing) {
+			const previousStatus = existing.status;
+			if (!existing.totalPages && totalPages > 0) existing.totalPages = totalPages;
+			if (!existing.coverUrl && coverUrl) existing.coverUrl = coverUrl;
+			if (format) existing.format = format;
+			if (language) existing.language = language;
+			applyStatus(existing, selectedStatus, totalPages || Number(existing.totalPages) || 0);
+			existing.updatedAt = Date.now();
+			saveEntries(entries);
+			if (previousStatus !== selectedStatus) {
+				logShelfUpdate(existing, selectedStatus);
+				showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`);
+			} else {
+				showShelfFeedback(dropdown, `Already on ${statusLabel(selectedStatus)}.`);
+			}
+			setDropdownLabel(dropdown, selectedStatus);
+			setShelvedState(dropdown, true);
+			return;
+		}
+
+		const next = {
+			id: `book_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+			title,
+			author,
+			totalPages,
+			currentPage: 0,
+			status: selectedStatus,
+			finishedDate: "",
+			coverUrl,
+			format,
+			language,
+			updatedAt: Date.now()
+		};
+		applyStatus(next, selectedStatus, totalPages);
+		entries.unshift(next);
+		saveEntries(entries);
+		logShelfUpdate(next, selectedStatus);
+		setDropdownLabel(dropdown, selectedStatus);
+		setShelvedState(dropdown, true);
+		showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`);
+	}
+
+	function syncExistingState() {
+		const entries = loadEntries();
+		for (const dropdown of shelfDropdowns) {
+			const title = dropdown.dataset.title || "";
+			const author = dropdown.dataset.author || "";
+			const existing = findEntry(entries, title, author);
+			if (existing) {
+				setDropdownLabel(dropdown, existing.status || "want_to_read");
+				setShelvedState(dropdown, true);
+			} else {
+				setDropdownLabel(dropdown, "want_to_read");
+				setShelvedState(dropdown, false);
+			}
+		}
+	}
+
+	for (const dropdown of variantDropdowns) {
+		const trigger = dropdown.querySelector('[data-action="toggle-variant"]');
+		const options = Array.from(dropdown.querySelectorAll('[data-action="set-variant"]'));
+		if (trigger) {
+			trigger.addEventListener("click", () => toggleVariantMenu(dropdown));
+		}
+		if (options.length > 0) {
+			setVariantSelection(dropdown, options[0]);
+		}
+		for (const option of options) {
+			option.addEventListener("click", () => {
+				setVariantSelection(dropdown, option);
+				closeVariantMenus();
+			});
+		}
+	}
+
+	for (const dropdown of shelfDropdowns) {
+		const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
+		const options = Array.from(dropdown.querySelectorAll('[data-action="set-shelf"]'));
+		if (trigger) {
+			trigger.addEventListener("click", () => toggleMenu(dropdown));
+		}
+		for (const option of options) {
+			option.addEventListener("click", () => {
+				const status = option.dataset.status || "want_to_read";
+				setShelf(dropdown, status);
+				closeShelfMenus();
+			});
+		}
+	}
+
+	document.addEventListener("click", (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		if (target.closest(".shelf-dropdown")) return;
+		if (target.closest(".variant-dropdown")) return;
+		closeAllMenus();
+	});
+
+	syncExistingState();
+</script>

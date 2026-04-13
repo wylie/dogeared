@@ -1,12 +1,379 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import Widget from '../components/Widget.astro';
 ---
 
 <Layout title="Profile">
-	<Widget slot="right">profile details</Widget>
+	<div slot="right" class="reads-page">
+		<h1>Profile</h1>
+		<p class="subhead">Your reading history, shelves, and progress.</p>
+
+		<div class="shelf-tabs" role="tablist" aria-label="My Reads Shelves">
+			<button type="button" class="shelf-tab active" role="tab" aria-selected="true" data-tab="want_to_read" id="tab-want-to-read">Want to Read</button>
+			<button type="button" class="shelf-tab" role="tab" aria-selected="false" data-tab="reading" id="tab-reading">Currently Reading</button>
+			<button type="button" class="shelf-tab" role="tab" aria-selected="false" data-tab="finished" id="tab-finished">Read</button>
+		</div>
+
+		<section class="list-section" data-panel="want_to_read" aria-labelledby="tab-want-to-read">
+			<h2>Want to Read</h2>
+			<div id="want-to-read-list" class="entry-list"></div>
+		</section>
+
+		<section class="list-section" data-panel="reading" aria-labelledby="tab-reading" hidden>
+			<h2>Currently Reading</h2>
+			<div id="currently-reading-list" class="entry-list"></div>
+		</section>
+
+		<section class="list-section" data-panel="finished" aria-labelledby="tab-finished" hidden>
+			<h2>Finished</h2>
+			<div id="finished-list" class="entry-list"></div>
+		</section>
+	</div>
 </Layout>
 
-<style>
+<script>
+	const STORAGE_KEY = "dogeared:myreads";
+	const UPDATES_KEY = "dogeared:updates";
+	let entries = [];
 
+	const wantToReadList = document.getElementById("want-to-read-list");
+	const currentlyReadingList = document.getElementById("currently-reading-list");
+	const finishedList = document.getElementById("finished-list");
+	const shelfTabs = Array.from(document.querySelectorAll(".shelf-tab"));
+	const shelfPanels = Array.from(document.querySelectorAll("[data-panel]"));
+	let activeTab = "want_to_read";
+
+	function loadEntries() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+			entries = Array.isArray(parsed) ? parsed : [];
+		} catch {
+			entries = [];
+		}
+	}
+
+	function saveEntries() {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+	}
+
+	function loadUpdates() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(UPDATES_KEY) || "[]");
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function saveUpdates(updates) {
+		localStorage.setItem(UPDATES_KEY, JSON.stringify(updates.slice(0, 200)));
+	}
+
+	function logShelfUpdate(entry, status) {
+		if (!entry?.title) return;
+		const updates = loadUpdates();
+		updates.unshift({
+			id: `upd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+			timestamp: Date.now(),
+			status: status || entry.status || "want_to_read",
+			title: entry.title,
+			author: entry.author || "",
+			coverUrl: entry.coverUrl || "",
+			format: entry.format || "",
+			language: entry.language || ""
+		});
+		saveUpdates(updates);
+	}
+
+	function normalizeNumber(value) {
+		const n = Number(value);
+		if (!Number.isFinite(n) || n < 0) return 0;
+		return Math.floor(n);
+	}
+
+	function progressPercent(entry) {
+		const total = normalizeNumber(entry.totalPages);
+		if (total <= 0) return 0;
+		const current = normalizeNumber(entry.currentPage);
+		return Math.max(0, Math.min(100, Math.round((current / total) * 100)));
+	}
+
+	function escapeHtml(value) {
+		return String(value || "")
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#39;");
+	}
+
+	function renderEntryCard(entry) {
+		const author = entry.author ? `<p class="meta">${escapeHtml(entry.author)}</p>` : "";
+		const formatMeta = entry.format ? `<p class="meta">${escapeHtml(entry.format)}${entry.language ? ` • ${escapeHtml(String(entry.language).toUpperCase())}` : ""}</p>` : "";
+		const total = normalizeNumber(entry.totalPages);
+		const current = normalizeNumber(entry.currentPage);
+		const percent = progressPercent(entry);
+		const progress = (entry.status !== "want_to_read" && total > 0)
+			? `<div class="progress-wrap"><div class="progress-bar" style="width:${percent}%"></div></div><p class="meta">${current}/${total} pages (${percent}%)</p>`
+			: "";
+		const finishedDate = entry.finishedDate
+			? `<p class="meta">Finished: ${escapeHtml(entry.finishedDate)}</p>`
+			: "";
+		const cover = entry.coverUrl
+			? `<img class="cover" src="${escapeHtml(entry.coverUrl)}" alt="" loading="lazy" />`
+			: "";
+
+		return `
+			<article class="entry-card" data-id="${escapeHtml(entry.id)}">
+				${cover}
+				<div class="entry-content">
+					<h3>${escapeHtml(entry.title)}</h3>
+					${author}
+					${formatMeta}
+					${progress}
+					${finishedDate}
+					<div class="entry-actions">
+						<button type="button" data-action="delete" class="danger">Delete</button>
+						${entry.status === "want_to_read" ? `<button type="button" data-action="start" class="secondary">Start Reading</button>` : ""}
+						${entry.status === "reading" ? `<button type="button" data-action="finish" class="secondary">Mark Finished</button>` : ""}
+					</div>
+				</div>
+			</article>
+		`;
+	}
+
+	function renderEmptyState(message) {
+		return `<p class="empty-state">${escapeHtml(message)}</p>`;
+	}
+
+	function renderLists() {
+		const wantToRead = entries
+			.filter((entry) => entry.status === "want_to_read")
+			.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+		const reading = entries
+			.filter((entry) => entry.status === "reading")
+			.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+		const finished = entries
+			.filter((entry) => entry.status === "finished")
+			.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+		wantToReadList.innerHTML = wantToRead.length
+			? wantToRead.map(renderEntryCard).join("")
+			: renderEmptyState("No books queued yet.");
+
+		currentlyReadingList.innerHTML = reading.length
+			? reading.map(renderEntryCard).join("")
+			: renderEmptyState("No active books yet.");
+
+		finishedList.innerHTML = finished.length
+			? finished.map(renderEntryCard).join("")
+			: renderEmptyState("No finished books yet.");
+
+		for (const tab of shelfTabs) {
+			const tabName = tab.dataset.tab;
+			if (tabName === "want_to_read") tab.textContent = `Want to Read (${wantToRead.length})`;
+			if (tabName === "reading") tab.textContent = `Currently Reading (${reading.length})`;
+			if (tabName === "finished") tab.textContent = `Read (${finished.length})`;
+		}
+	}
+
+	function setActiveTab(nextTab) {
+		activeTab = nextTab;
+		for (const tab of shelfTabs) {
+			const isActive = tab.dataset.tab === nextTab;
+			tab.classList.toggle("active", isActive);
+			tab.setAttribute("aria-selected", isActive ? "true" : "false");
+		}
+		for (const panel of shelfPanels) {
+			panel.hidden = panel.dataset.panel !== nextTab;
+		}
+	}
+
+	function deleteEntry(entryId) {
+		entries = entries.filter((entry) => entry.id !== entryId);
+		saveEntries();
+		renderLists();
+	}
+
+	function finishEntry(entryId) {
+		const entry = entries.find((item) => item.id === entryId);
+		if (!entry) return;
+		const previousStatus = entry.status;
+		entry.status = "finished";
+		if (normalizeNumber(entry.totalPages) > 0) {
+			entry.currentPage = normalizeNumber(entry.totalPages);
+		}
+		entry.finishedDate = entry.finishedDate || new Date().toISOString().slice(0, 10);
+		entry.updatedAt = Date.now();
+		saveEntries();
+		if (previousStatus !== "finished") {
+			logShelfUpdate(entry, "finished");
+		}
+		renderLists();
+	}
+
+	function startReading(entryId) {
+		const entry = entries.find((item) => item.id === entryId);
+		if (!entry) return;
+		const previousStatus = entry.status;
+		entry.status = "reading";
+		entry.finishedDate = "";
+		entry.updatedAt = Date.now();
+		saveEntries();
+		if (previousStatus !== "reading") {
+			logShelfUpdate(entry, "reading");
+		}
+		renderLists();
+	}
+
+	function handleListClick(event) {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		const action = target.dataset.action;
+		if (!action) return;
+		const card = target.closest(".entry-card");
+		if (!card) return;
+		const entryId = card.getAttribute("data-id");
+		if (!entryId) return;
+
+		if (action === "delete") deleteEntry(entryId);
+		if (action === "finish") finishEntry(entryId);
+		if (action === "start") startReading(entryId);
+	}
+
+	for (const tab of shelfTabs) {
+		tab.addEventListener("click", () => setActiveTab(tab.dataset.tab || "want_to_read"));
+	}
+
+	wantToReadList.addEventListener("click", handleListClick);
+	currentlyReadingList.addEventListener("click", handleListClick);
+	finishedList.addEventListener("click", handleListClick);
+
+	loadEntries();
+	renderLists();
+	setActiveTab(activeTab);
+</script>
+
+<style>
+	.reads-page {
+		max-width: 860px;
+	}
+
+	h1 {
+		margin: 0;
+	}
+
+	.subhead {
+		margin: 0.5rem 0 1.25rem;
+		color: #444;
+	}
+
+	.list-section {
+		margin-top: 1.5rem;
+	}
+
+	.shelf-tabs {
+		margin-top: 1rem;
+		display: flex;
+		gap: 0.45rem;
+		flex-wrap: wrap;
+	}
+
+	.shelf-tab {
+		border: 1px solid #c8c8c8;
+		background: #fff;
+		color: #222;
+		border-radius: 999px;
+		padding: 0.45rem 0.75rem;
+		font-size: 0.9rem;
+	}
+
+	.shelf-tab.active {
+		background: #111;
+		color: #fff;
+		border-color: #111;
+	}
+
+	.list-section h2 {
+		margin: 0 0 0.65rem;
+	}
+
+	.entry-list {
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.entry-card {
+		border: 1px solid #d8d8d8;
+		border-radius: 12px;
+		padding: 0.75rem;
+		display: grid;
+		grid-template-columns: 52px auto;
+		gap: 0.75rem;
+		background: #fff;
+	}
+
+	.cover {
+		width: 52px;
+		height: 78px;
+		object-fit: cover;
+		border-radius: 6px;
+		background: #f2f2f2;
+	}
+
+	.entry-content h3 {
+		margin: 0;
+		font-size: 1.05rem;
+	}
+
+	.meta {
+		margin: 0.2rem 0;
+		font-size: 0.9rem;
+		color: #4a4a4a;
+	}
+
+	.progress-wrap {
+		height: 10px;
+		background: #ececec;
+		border-radius: 999px;
+		overflow: hidden;
+		margin-top: 0.3rem;
+	}
+
+	.progress-bar {
+		height: 100%;
+		background: #0f766e;
+	}
+
+	.entry-actions {
+		display: flex;
+		gap: 0.45rem;
+		margin-top: 0.45rem;
+	}
+
+	button {
+		border: none;
+		border-radius: 8px;
+		padding: 0.55rem 0.85rem;
+		font-size: 0.95rem;
+		background: #111;
+		color: #fff;
+		cursor: pointer;
+	}
+
+	button.secondary {
+		background: #efefef;
+		color: #222;
+	}
+
+	button.danger {
+		background: #9b1c1c;
+	}
+
+	.empty-state {
+		margin: 0;
+		border: 1px dashed #c5c5c5;
+		padding: 0.8rem;
+		border-radius: 10px;
+		background: #fafafa;
+	}
 </style>

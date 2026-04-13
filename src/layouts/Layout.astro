@@ -66,6 +66,7 @@ import '../assets/global.css';
 		display: grid;
 		grid-template-columns: 25% auto;
 		min-height: 100vh;
+		align-items: start;
 	}
 	.column {
 		display: flex;
@@ -73,5 +74,12 @@ import '../assets/global.css';
 	}
 	.column {
 		padding: 1rem;
+	}
+	.container > .column:first-child {
+		position: sticky;
+		top: 0;
+		align-self: start;
+		height: 100vh;
+		overflow-y: auto;
 	}
 </style>
