@@ -1,6 +1,7 @@
 ---
 import Widget from "./Widget.astro"
-const { current = "/" } = Astro.props;
+type SectionLink = { id: string; label: string };
+const { current = "/", sectionLinks = [] } = Astro.props as { current?: string; sectionLinks?: SectionLink[] };
 const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
 const isActive = (href: string) => normalize(current) === normalize(href);
 const query = Astro.url.searchParams.get("q") ?? "";
@@ -16,6 +17,13 @@ const query = Astro.url.searchParams.get("q") ?? "";
     <li><a href={isActive('/profile') ? undefined : '/profile'} class={isActive('/profile') ? 'active' : 'hover'} aria-current={isActive('/profile') ? 'page' : undefined}>Profile</a></li>
     <li><a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a></li>
   </ul>
+  {sectionLinks.length > 0 && (
+    <ul class="quick-links">
+      {sectionLinks.map((link) => (
+        <li><a href={`#${link.id}`} class="hover">{link.label}</a></li>
+      ))}
+    </ul>
+  )}
 </Widget>
 
 <style>
@@ -24,6 +32,11 @@ const query = Astro.url.searchParams.get("q") ?? "";
     margin: 1rem 0 0;
     padding: 1rem 0 0;
     border-top: 1px solid #999;
+  }
+  .quick-links {
+    margin-top: 1rem;
+    max-height: calc(100vh - 340px);
+    overflow: auto;
   }
   li {
     text-align: left;

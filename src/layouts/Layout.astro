@@ -1,6 +1,7 @@
 ---
 import LeftHand from '../components/LeftHand.astro';
-const { title = "DogEared" } = Astro.props;
+type SectionLink = { id: string; label: string };
+const { title = "DogEared", sectionLinks = [] } = Astro.props as { title?: string; sectionLinks?: SectionLink[] };
 const currentPath = Astro.url.pathname;
 import '../assets/global.css';
 ---
@@ -40,7 +41,7 @@ import '../assets/global.css';
 			<div class="container">
 				<div class="column" style="padding-bottom: 0;">
 					<slot name="left">
-						<LeftHand />
+						<LeftHand current={currentPath} sectionLinks={sectionLinks} />
 					</slot>
 				</div>
 				<div class="column">

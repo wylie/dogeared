@@ -10,15 +10,25 @@ type BrowseBook = {
 	thumbnail: string;
 	publishedDate: string;
 	description: string;
+	pageCount: number;
+	format: string;
+	language: string;
 };
 
 type BrowseSection = {
 	id: string;
 	title: string;
 	subtitle: string;
-	queries: string[];
+	source: "google" | "nyt" | "openlibrary";
+	listDate: string;
+	listDateNote: string;
+	queries?: string[];
+	listName?: string;
+	subjectKey?: string;
+	subjectQuery?: string;
 	orderBy?: "relevance" | "newest";
 	minYear?: number;
+	minPublishedDate?: string;
 	books: BrowseBook[];
 };
 
@@ -34,6 +44,45 @@ function trimDescription(value: unknown, max = 180) {
 	if (!text) return "";
 	if (text.length <= max) return text;
 	return `${text.slice(0, max).trim()}...`;
+}
+
+function formatDate(value: string) {
+	const text = String(value || "").trim();
+	if (!text) return "";
+	const parsed = new Date(text);
+	if (!Number.isFinite(parsed.getTime())) return text;
+	return parsed.toLocaleDateString("en-US", {
+		year: "numeric",
+		month: "short",
+		day: "numeric"
+	});
+}
+
+function formatPublishedLabel(value: string) {
+	const text = String(value || "").trim();
+	if (!text) return "";
+	if (/^\d{4}$/.test(text)) return text;
+	if (/^\d{4}-\d{2}$/.test(text)) {
+		const parsed = new Date(`${text}-01`);
+		if (!Number.isFinite(parsed.getTime())) return text;
+		return parsed.toLocaleDateString("en-US", {
+			month: "long",
+			year: "numeric"
+		});
+	}
+	const parsed = new Date(text);
+	if (!Number.isFinite(parsed.getTime())) return text;
+	return parsed.toLocaleDateString("en-US", {
+		month: "long",
+		day: "numeric",
+		year: "numeric"
+	});
+}
+
+function openLibraryCoverUrl(coverId: unknown) {
+	const id = Number(coverId || 0);
+	if (!id || !Number.isFinite(id)) return "";
+	return `https://covers.openlibrary.org/b/id/${id}-M.jpg`;
 }
 
 async function fetchShelf(query: string, options: { orderBy?: "relevance" | "newest"; maxResults?: number; apiKey: string }) {
@@ -69,16 +118,218 @@ async function fetchShelf(query: string, options: { orderBy?: "relevance" | "new
 			authors,
 			thumbnail: toHttps(info?.imageLinks?.thumbnail || info?.imageLinks?.smallThumbnail || ""),
 			publishedDate: String(info?.publishedDate || "").trim(),
-			description: trimDescription(info?.description)
+			description: trimDescription(info?.description),
+			pageCount: Math.max(0, Number(info?.pageCount || 0) || 0),
+			format: "Book",
+			language: String(info?.language || "").trim().toUpperCase()
 		});
 	}
 
 	return books;
 }
 
+async function fetchOpenLibrarySubject(
+	subjectKey: string,
+	options: { maxResults?: number; minPublishedDate?: string; subjectQuery?: string }
+) {
+	const maxResults = options.maxResults || 12;
+	const candidateLimit = maxResults * 8;
+	const minTs = options.minPublishedDate ? publishedDateToTimestamp(options.minPublishedDate) : 0;
+	const dedupe = new Set<string>();
+	const recentBooks: BrowseBook[] = [];
+	const subjectSearch = String(options.subjectQuery || subjectKey).trim().replace(/_/g, " ");
+
+	// First pass: try Open Library search sorted by new to get fresh titles in this genre.
+	const searchEndpoint = new URL("https://openlibrary.org/search.json");
+	searchEndpoint.searchParams.set("subject", subjectSearch);
+	searchEndpoint.searchParams.set("sort", "new");
+	searchEndpoint.searchParams.set("language", "eng");
+	searchEndpoint.searchParams.set("limit", String(candidateLimit));
+
+	try {
+		const searchResponse = await fetch(searchEndpoint.toString(), {
+			headers: { Accept: "application/json" }
+		});
+		if (searchResponse.ok) {
+			const searchData = await searchResponse.json();
+			const docs = Array.isArray(searchData?.docs) ? searchData.docs : [];
+			for (const doc of docs) {
+				const title = String(doc?.title || "").trim();
+				if (!title) continue;
+				const author = Array.isArray(doc?.author_name) ? String(doc.author_name[0] || "").trim() : "";
+				const authors = author ? [author] : [];
+				const key = `${title.toLowerCase()}|${author.toLowerCase()}`;
+				if (dedupe.has(key)) continue;
+				dedupe.add(key);
+
+				const pubYear = Array.isArray(doc?.publish_year)
+					? Math.max(...doc.publish_year.filter((year: unknown) => Number.isFinite(Number(year))).map((year: unknown) => Number(year)))
+					: Number(doc?.first_publish_year || 0);
+				const publishedDate = Number.isFinite(pubYear) && pubYear > 0 ? String(pubYear) : "";
+				const publishedTs = publishedDateToTimestamp(publishedDate);
+				if (minTs > 0 && (!publishedTs || publishedTs < minTs)) continue;
+				const rawSynopsis = Array.isArray(doc?.first_sentence)
+					? String(doc.first_sentence[0] || "").trim()
+					: typeof doc?.first_sentence === "string"
+						? doc.first_sentence.trim()
+						: typeof doc?.subtitle === "string"
+							? doc.subtitle.trim()
+							: "";
+
+				recentBooks.push({
+					id: String(doc?.key || key),
+					title,
+					authors,
+					thumbnail: openLibraryCoverUrl(doc?.cover_i),
+					publishedDate,
+					description: trimDescription(rawSynopsis),
+					pageCount: 0,
+					format: "Book",
+					language: "EN"
+				});
+
+				if (recentBooks.length >= maxResults) break;
+			}
+		}
+	} catch {
+		// Fall through to subject endpoint below.
+	}
+
+	if (recentBooks.length >= maxResults) {
+		return recentBooks.slice(0, maxResults);
+	}
+
+	// Fallback: subject list (popular by genre), then apply recency if possible.
+	const endpoint = new URL(`https://openlibrary.org/subjects/${subjectKey}.json`);
+	endpoint.searchParams.set("limit", String(candidateLimit));
+	endpoint.searchParams.set("details", "true");
+
+	const response = await fetch(endpoint.toString(), {
+		headers: { Accept: "application/json" }
+	});
+	if (!response.ok) return recentBooks.slice(0, maxResults);
+
+	const data = await response.json();
+	const works = Array.isArray(data?.works) ? data.works : [];
+	const books: BrowseBook[] = [...recentBooks];
+
+	for (const work of works) {
+		const title = String(work?.title || "").trim();
+		if (!title) continue;
+		const authors = Array.isArray(work?.authors)
+			? work.authors.map((author: { name?: unknown }) => String(author?.name || "").trim()).filter(Boolean)
+			: [];
+		const key = `${title.toLowerCase()}|${(authors[0] || "").toLowerCase()}`;
+		if (dedupe.has(key)) continue;
+		dedupe.add(key);
+
+		const firstSentence = Array.isArray(work?.first_sentence)
+			? String(work.first_sentence[0] || "").trim()
+			: typeof work?.first_sentence === "string"
+				? work.first_sentence.trim()
+				: "";
+
+		books.push({
+			id: String(work?.key || key),
+			title,
+			authors,
+			thumbnail: openLibraryCoverUrl(work?.cover_id),
+			publishedDate: String(work?.first_publish_year || "").trim(),
+			description: trimDescription(firstSentence),
+			pageCount: 0,
+			format: "Book",
+			language: "EN"
+		});
+	}
+
+	let filtered = books;
+	if (options.minPublishedDate) {
+		if (minTs > 0) {
+			filtered = books.filter((book) => {
+				const publishedTs = publishedDateToTimestamp(book.publishedDate);
+				return publishedTs >= minTs;
+			});
+		}
+	}
+
+	// If strict recent filter is empty, show most recent available instead of blank shelves.
+	const finalBooks = filtered.length > 0 ? filtered : books;
+	finalBooks.sort((a, b) => dateScore(b.publishedDate) - dateScore(a.publishedDate));
+	return finalBooks.slice(0, maxResults);
+}
+
+async function fetchNytList(listName: string, options: { apiKey: string; maxResults?: number }) {
+	const endpoint = new URL(`https://api.nytimes.com/svc/books/v3/lists/current/${listName}.json`);
+	endpoint.searchParams.set("api-key", options.apiKey);
+
+	const response = await fetch(endpoint.toString(), {
+		headers: { Accept: "application/json" }
+	});
+	if (!response.ok) {
+		return {
+			books: [] as BrowseBook[],
+			listDate: "",
+			listDateNote: ""
+		};
+	}
+
+	const data = await response.json();
+	const results = data?.results || {};
+	const defaultPublishedDate = String(results?.published_date || results?.bestsellers_date || "").trim();
+	const books = Array.isArray(results?.books) ? results.books : [];
+	const dedupe = new Set<string>();
+	const mapped: BrowseBook[] = [];
+
+	for (const book of books) {
+		const title = String(book?.title || "").trim();
+		if (!title) continue;
+		const author = String(book?.author || "").trim();
+		const key = `${title.toLowerCase()}|${author.toLowerCase()}`;
+		if (dedupe.has(key)) continue;
+		dedupe.add(key);
+		mapped.push({
+			id: String(book?.primary_isbn13 || book?.primary_isbn10 || key),
+			title,
+			authors: author ? [author] : [],
+			thumbnail: toHttps(book?.book_image || ""),
+			publishedDate: String(book?.published_date || defaultPublishedDate || "").trim(),
+			description: trimDescription(book?.description),
+			pageCount: 0,
+			format: "Book",
+			language: "EN"
+		});
+	}
+
+	const listDate = formatDate(String(results?.published_date || results?.bestsellers_date || "").trim());
+	const updateMode = String(results?.updated || "").trim().toLowerCase();
+	const updateLabel = updateMode ? `${updateMode.slice(0, 1).toUpperCase()}${updateMode.slice(1)} update` : "";
+
+	return {
+		books: mapped.slice(0, options.maxResults || 12),
+		listDate,
+		listDateNote: updateLabel
+	};
+}
+
 function extractYear(value: string) {
 	const match = String(value || "").match(/\d{4}/);
 	return match ? Number(match[0]) : 0;
+}
+
+function publishedDateToTimestamp(value: string) {
+	const text = String(value || "").trim();
+	if (!text) return 0;
+	if (/^\d{4}$/.test(text)) {
+		const parsed = new Date(`${text}-01-01`).getTime();
+		return Number.isFinite(parsed) ? parsed : 0;
+	}
+	if (/^\d{4}-\d{2}$/.test(text)) {
+		const parsed = new Date(`${text}-01`).getTime();
+		return Number.isFinite(parsed) ? parsed : 0;
+	}
+	const parsed = new Date(text).getTime();
+	if (Number.isFinite(parsed)) return parsed;
+	return 0;
 }
 
 function dateScore(value: string) {
@@ -92,7 +343,7 @@ function dateScore(value: string) {
 
 async function fetchShelfFromQueries(
 	queries: string[],
-	options: { orderBy?: "relevance" | "newest"; maxResults?: number; apiKey: string; minYear?: number }
+	options: { orderBy?: "relevance" | "newest"; maxResults?: number; apiKey: string; minYear?: number; minPublishedDate?: string }
 ) {
 	const all = await Promise.all(
 		queries.map((query) => fetchShelf(query, {
@@ -120,99 +371,258 @@ async function fetchShelfFromQueries(
 		}
 	}
 
+	if (options.minPublishedDate) {
+		const minTs = publishedDateToTimestamp(options.minPublishedDate);
+		if (minTs > 0) {
+			merged = merged.filter((book) => {
+				const publishedTs = publishedDateToTimestamp(book.publishedDate);
+				return publishedTs >= minTs;
+			});
+		}
+	}
+
 	merged.sort((a, b) => dateScore(b.publishedDate) - dateScore(a.publishedDate));
 	return merged.slice(0, options.maxResults || 12);
 }
 
-const apiKey = String(import.meta.env.GOOGLE_BOOKS_API_KEY || "").trim();
-const currentYear = new Date().getFullYear();
-const sectionsConfig: Omit<BrowseSection, "books">[] = [
+const googleApiKey = String(import.meta.env.GOOGLE_BOOKS_API_KEY || "").trim();
+const nytApiKey = String(import.meta.env.NYT_BOOKS_API_KEY || "").trim();
+const sixMonthsAgoIso = new Date(
+	new Date().getFullYear(),
+	new Date().getMonth() - 6,
+	new Date().getDate()
+).toISOString().slice(0, 10);
+const sectionsConfig: Omit<BrowseSection, "books" | "listDate" | "listDateNote">[] = [
 	{
-		id: "new-releases",
-		title: "New Releases",
-		subtitle: "Published in the last 2 years.",
-		queries: [
-			"subject:fiction",
-			"subject:thriller",
-			"subject:romance",
-			"subject:young adult fiction",
-			"subject:science fiction"
-		],
-		orderBy: "newest",
-		minYear: currentYear - 1
+		id: "nyt-fiction",
+		title: "NYT Best Sellers: Fiction",
+		subtitle: "Current New York Times hardcover fiction best sellers.",
+		source: "nyt",
+		listName: "hardcover-fiction"
+	},
+	{
+		id: "nyt-nonfiction",
+		title: "NYT Best Sellers: Nonfiction",
+		subtitle: "Current New York Times hardcover nonfiction best sellers.",
+		source: "nyt",
+		listName: "hardcover-nonfiction"
+	},
+	{
+		id: "nyt-audio-fiction",
+		title: "NYT Audio Fiction",
+		subtitle: "Current New York Times audio fiction best sellers.",
+		source: "nyt",
+		listName: "audio-fiction"
+	},
+	{
+		id: "nyt-audio-nonfiction",
+		title: "NYT Audio Nonfiction",
+		subtitle: "Current New York Times audio nonfiction best sellers.",
+		source: "nyt",
+		listName: "audio-nonfiction"
+	},
+	{
+		id: "nyt-picture-books",
+		title: "NYT Picture Books",
+		subtitle: "Current New York Times picture books best sellers.",
+		source: "nyt",
+		listName: "picture-books"
 	},
 	{
 		id: "fantasy",
 		title: "Fantasy",
-		subtitle: "Epic worlds, magic systems, and legendary quests.",
-		queries: ["subject:fantasy"]
+		subtitle: "Popular fantasy picks from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "fantasy",
+		minPublishedDate: sixMonthsAgoIso
 	},
 	{
 		id: "mystery-thriller",
 		title: "Mystery & Thriller",
-		subtitle: "Detective stories, suspense, and page-turners.",
-		queries: ["subject:mystery", "subject:thriller"]
+		subtitle: "Popular mystery and thriller picks from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "mystery_and_detective_stories",
+		minPublishedDate: sixMonthsAgoIso
 	},
 	{
 		id: "romance",
 		title: "Romance",
-		subtitle: "Character-driven love stories and relationship arcs.",
-		queries: ["subject:romance"]
+		subtitle: "Popular romance picks from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "romance",
+		minPublishedDate: sixMonthsAgoIso
 	},
 	{
 		id: "science-fiction",
 		title: "Science Fiction",
-		subtitle: "Future tech, space, and speculative ideas.",
-		queries: ["subject:science fiction"]
+		subtitle: "Popular science fiction picks from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "science_fiction",
+		minPublishedDate: sixMonthsAgoIso
+	},
+	{
+		id: "childrens",
+		title: "Children's",
+		subtitle: "Popular children's books from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "children",
+		subjectQuery: "children's books",
+		minPublishedDate: sixMonthsAgoIso
+	},
+	{
+		id: "biographies",
+		title: "Biographies",
+		subtitle: "Popular biographies from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "biography",
+		subjectQuery: "biography",
+		minPublishedDate: sixMonthsAgoIso
+	},
+	{
+		id: "young-adult",
+		title: "Young Adult",
+		subtitle: "Popular young adult books from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "young_adult_fiction",
+		subjectQuery: "young adult fiction",
+		minPublishedDate: sixMonthsAgoIso
+	},
+	{
+		id: "classics",
+		title: "Classics",
+		subtitle: "Popular classics from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "classics",
+		subjectQuery: "classics",
+		minPublishedDate: sixMonthsAgoIso
+	},
+	{
+		id: "comics",
+		title: "Comics",
+		subtitle: "Popular comics from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "comics",
+		subjectQuery: "comics",
+		minPublishedDate: sixMonthsAgoIso
+	},
+	{
+		id: "crime",
+		title: "Crime",
+		subtitle: "Popular crime books from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "crime",
+		subjectQuery: "crime fiction",
+		minPublishedDate: sixMonthsAgoIso
+	},
+	{
+		id: "memoir",
+		title: "Memoir",
+		subtitle: "Popular memoirs from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "memoir",
+		subjectQuery: "memoir",
+		minPublishedDate: sixMonthsAgoIso
+	},
+	{
+		id: "self-help",
+		title: "Self Help",
+		subtitle: "Popular self help books from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "self-help",
+		subjectQuery: "self help",
+		minPublishedDate: sixMonthsAgoIso
+	},
+	{
+		id: "humor-comedy",
+		title: "Humor & Comedy",
+		subtitle: "Popular humor and comedy books from Open Library in the last 6 months.",
+		source: "openlibrary",
+		subjectKey: "humor",
+		subjectQuery: "humor comedy",
+		minPublishedDate: sixMonthsAgoIso
+	},
+	{
+		id: "new-releases",
+		title: "New Releases",
+		subtitle: "Current NYT combined print and e-book fiction best sellers.",
+		source: "nyt",
+		listName: "combined-print-and-e-book-fiction"
 	}
 ];
 
 let sections: BrowseSection[] = [];
 let errorMessage = "";
 
-if (apiKey) {
-	try {
-		const results = await Promise.all(
-			sectionsConfig.map((section) => fetchShelfFromQueries(section.queries, {
+try {
+	const results = await Promise.all(
+		sectionsConfig.map(async (section) => {
+			if (section.source === "nyt") {
+				if (!nytApiKey || !section.listName) {
+					return { books: [] as BrowseBook[], listDate: "", listDateNote: "" };
+				}
+				return fetchNytList(section.listName, {
+					apiKey: nytApiKey,
+					maxResults: 12
+				});
+			}
+			if (section.source === "openlibrary") {
+				if (!section.subjectKey) {
+					return { books: [] as BrowseBook[], listDate: "", listDateNote: "" };
+				}
+				const books = await fetchOpenLibrarySubject(section.subjectKey, {
+					maxResults: 12,
+					minPublishedDate: section.minPublishedDate,
+					subjectQuery: section.subjectQuery
+				});
+				return { books, listDate: "", listDateNote: "" };
+			}
+			if (!googleApiKey || !section.queries || section.queries.length === 0) {
+				return { books: [] as BrowseBook[], listDate: "", listDateNote: "" };
+			}
+			const books = await fetchShelfFromQueries(section.queries, {
 				orderBy: section.orderBy,
 				minYear: section.minYear,
+				minPublishedDate: section.minPublishedDate,
 				maxResults: 12,
-				apiKey
-			}))
-		);
+				apiKey: googleApiKey
+			});
+			return { books, listDate: "", listDateNote: "" };
+		})
+	);
 
-		sections = sectionsConfig.map((section, index) => ({
-			...section,
-			books: results[index] || []
-		}));
-	} catch (error) {
-		errorMessage = error instanceof Error ? error.message : "Failed to load browse shelves.";
-	}
-} else {
-	errorMessage = "Missing Google Books API key.";
+	sections = sectionsConfig.map((section, index) => ({
+		...section,
+		books: results[index]?.books || [],
+		listDate: results[index]?.listDate || "",
+		listDateNote: results[index]?.listDateNote || ""
+	}))
+		// Hide sparse shelves to keep Browse focused.
+		.filter((section) => section.books.length >= 4);
+} catch (error) {
+	errorMessage = error instanceof Error ? error.message : "Failed to load browse shelves.";
 }
 ---
 
-<Layout title="Browse">
+<Layout title="Browse" sectionLinks={sections.map((section) => ({ id: section.id, label: section.title }))}>
 	<div slot="right" class="browse-page">
 		<h1>Browse</h1>
-		<p class="subhead">Explore books by genre and discover newer releases.</p>
+		<p class="subhead">Discover books with NYT best sellers and Open Library genre shelves.</p>
 
 		{errorMessage && <p class="error">Browse unavailable: {errorMessage}</p>}
 
 		{!errorMessage && sections.length > 0 && (
 			<>
-				<div class="genre-row" aria-label="Browse genres">
-					{sections.map((section) => (
-						<a class="genre-chip" href={`#${section.id}`}>{section.title}</a>
-					))}
-				</div>
-
 				{sections.map((section) => (
 					<section id={section.id} class="browse-section">
 						<div class="section-head">
 							<h2>{section.title}</h2>
 							<p>{section.subtitle}</p>
+							{section.listDate && (
+								<p class="list-date">
+									List date: {section.listDate}
+									{section.listDateNote ? ` • ${section.listDateNote}` : ""}
+								</p>
+							)}
 						</div>
 						{section.books.length === 0 && <p class="empty">No books found for this shelf yet.</p>}
 						{section.books.length > 0 && (
@@ -227,8 +637,30 @@ if (apiKey) {
 										<div class="card-body">
 											<h3>{book.title}</h3>
 											<p class="meta">{book.authors.length > 0 ? book.authors.join(", ") : "Unknown author"}</p>
-											{book.publishedDate && <p class="meta">Published: {book.publishedDate}</p>}
+											{book.publishedDate && <p class="meta">Published: {formatPublishedLabel(book.publishedDate)}</p>}
 											{book.description && <p class="description">{book.description}</p>}
+											{!book.description && section.source !== "nyt" && <p class="description">Synopsis unavailable for this edition.</p>}
+											<div
+												class="shelf-dropdown"
+												data-title={book.title}
+												data-author={book.authors[0] ?? ""}
+												data-pages={String(book.pageCount ?? 0)}
+												data-cover={book.thumbnail}
+												data-format={book.format}
+												data-language={book.language}
+											>
+												<button type="button" class="shelf-trigger" data-action="toggle-shelf" aria-expanded="false">
+													<span class="material-icons shelf-check" aria-hidden="true">check</span>
+													<span class="shelf-label">Want to Read</span>
+													<span class="material-icons shelf-icon" aria-hidden="true">arrow_drop_down</span>
+												</button>
+												<div class="shelf-menu" hidden>
+													<button type="button" class="shelf-option" data-action="set-shelf" data-status="want_to_read">Want to Read</button>
+													<button type="button" class="shelf-option" data-action="set-shelf" data-status="reading">Currently Reading</button>
+													<button type="button" class="shelf-option" data-action="set-shelf" data-status="finished">Read</button>
+												</div>
+												<p class="shelf-feedback" hidden></p>
+											</div>
 										</div>
 									</li>
 								))}
@@ -263,31 +695,17 @@ if (apiKey) {
 		border-radius: 10px;
 	}
 
-	.genre-row {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.45rem;
-		margin-bottom: 1rem;
-	}
-
-	.genre-chip {
-		text-decoration: none;
-		color: #222;
-		background: #fff;
-		border: 1px solid #cecece;
-		border-radius: 999px;
-		padding: 0.35rem 0.65rem;
-		font-size: 0.88rem;
-	}
-
-	.genre-chip:hover {
-		background: #f5f5f5;
-	}
-
 	.browse-section {
 		margin-top: 1.35rem;
 	}
 
+	.section-head {
+		position: sticky;
+		top: 0;
+		padding-bottom: .5rem;
+		background-color: #efefef;
+		z-index: 100;
+	}
 	.section-head h2 {
 		margin: 0;
 	}
@@ -296,6 +714,12 @@ if (apiKey) {
 		margin: 0.25rem 0 0.7rem;
 		color: #4d4d4d;
 		font-size: 0.92rem;
+	}
+
+	.list-date {
+		margin-top: -0.35rem;
+		color: #5f5f5f;
+		font-size: 0.84rem;
 	}
 
 	.book-grid {
@@ -355,6 +779,83 @@ if (apiKey) {
 		color: #575757;
 	}
 
+	.shelf-dropdown {
+		position: relative;
+		display: inline-flex;
+		flex-direction: column;
+		align-items: flex-start;
+		margin-top: 0.5rem;
+	}
+
+	.shelf-trigger {
+		border: none;
+		border-radius: 8px;
+		padding: 0.5rem 0.8rem;
+		font-size: 0.92rem;
+		background: #2f8f57;
+		color: #fff;
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+	}
+
+	.shelf-trigger:hover {
+		background: #267647;
+	}
+
+	.shelf-check {
+		font-size: 1rem;
+		line-height: 1;
+		opacity: 0;
+		transition: opacity 120ms ease-in-out;
+	}
+
+	.shelf-dropdown.is-shelved .shelf-check {
+		opacity: 1;
+	}
+
+	.shelf-icon {
+		font-size: 1.1rem;
+		line-height: 1;
+	}
+
+	.shelf-menu {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 0;
+		min-width: 180px;
+		background: #fff;
+		border: 1px solid #c9c9c9;
+		border-radius: 8px;
+		box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+		padding: 0.25rem 0;
+		z-index: 25;
+	}
+
+	.shelf-option {
+		display: block;
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: transparent;
+		padding: 0.5rem 0.75rem;
+		font-size: 0.9rem;
+		cursor: pointer;
+		color: #222;
+	}
+
+	.shelf-option:hover {
+		background: #f2f2f2;
+	}
+
+	.shelf-feedback {
+		margin-top: 0.25rem;
+		font-size: 0.8rem;
+		color: #1f7a45;
+		line-height: 1.25;
+	}
+
 	.empty {
 		margin: 0;
 		font-size: 0.9rem;
@@ -368,3 +869,247 @@ if (apiKey) {
 	}
 
 </style>
+
+<script>
+	const STORAGE_KEY = "dogeared:myreads";
+	const UPDATES_KEY = "dogeared:updates";
+	const feedbackTimers = new WeakMap();
+	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
+	const STATUS_LABELS = {
+		want_to_read: "Want to Read",
+		reading: "Currently Reading",
+		finished: "Read"
+	};
+
+	function normalizeText(value) {
+		return String(value || "").trim().toLowerCase();
+	}
+
+	function canonicalizeTitle(value) {
+		return normalizeText(value)
+			.normalize("NFKD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/\([^)]*\)/g, " ")
+			.replace(/\b(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition)\b/g, " ")
+			.split(":")[0]
+			.replace(/^(the|a|an)\s+/g, "")
+			.replace(/[^a-z0-9\s]/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+	}
+
+	function canonicalizeAuthor(value) {
+		return normalizeText(value)
+			.normalize("NFKD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/^(by\s+)/, "")
+			.replace(/[^a-z0-9\s]/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+	}
+
+	function loadEntries() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function saveEntries(entries) {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+	}
+
+	function loadUpdates() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(UPDATES_KEY) || "[]");
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function saveUpdates(updates) {
+		localStorage.setItem(UPDATES_KEY, JSON.stringify(updates.slice(0, 200)));
+	}
+
+	function statusLabel(status) {
+		return STATUS_LABELS[status] || STATUS_LABELS.want_to_read;
+	}
+
+	function findEntry(entries, title, author) {
+		const t = canonicalizeTitle(title);
+		const a = canonicalizeAuthor(author);
+		return entries.find((entry) => (
+			canonicalizeTitle(entry.title) === t && canonicalizeAuthor(entry.author) === a
+		));
+	}
+
+	function logShelfUpdate(entry, status) {
+		if (!entry?.title) return;
+		const updates = loadUpdates();
+		updates.unshift({
+			id: `upd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+			timestamp: Date.now(),
+			status: status || entry.status || "want_to_read",
+			title: entry.title,
+			author: entry.author || "",
+			coverUrl: entry.coverUrl || "",
+			format: entry.format || "",
+			language: entry.language || ""
+		});
+		saveUpdates(updates);
+	}
+
+	function setDropdownLabel(dropdown, status) {
+		const label = dropdown.querySelector(".shelf-label");
+		if (label) label.textContent = statusLabel(status);
+	}
+
+	function setShelvedState(dropdown, isShelved) {
+		if (isShelved) dropdown.classList.add("is-shelved");
+		else dropdown.classList.remove("is-shelved");
+	}
+
+	function showShelfFeedback(dropdown, message) {
+		const feedback = dropdown.querySelector(".shelf-feedback");
+		if (!feedback) return;
+		feedback.textContent = message;
+		feedback.hidden = false;
+		const existingTimer = feedbackTimers.get(dropdown);
+		if (existingTimer) clearTimeout(existingTimer);
+		const timer = setTimeout(() => {
+			feedback.hidden = true;
+		}, 1800);
+		feedbackTimers.set(dropdown, timer);
+	}
+
+	function applyStatus(entry, selectedStatus, totalPages) {
+		entry.status = selectedStatus;
+		if (selectedStatus === "finished") {
+			if (totalPages > 0) entry.currentPage = totalPages;
+			entry.finishedDate = entry.finishedDate || new Date().toISOString().slice(0, 10);
+			return;
+		}
+		if (selectedStatus === "reading") {
+			entry.currentPage = Math.max(0, Number(entry.currentPage) || 0);
+		}
+		if (selectedStatus === "want_to_read") {
+			entry.currentPage = 0;
+		}
+		entry.finishedDate = "";
+	}
+
+	function closeMenus() {
+		for (const dropdown of shelfDropdowns) {
+			const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
+			const menu = dropdown.querySelector(".shelf-menu");
+			if (menu) menu.hidden = true;
+			if (trigger) trigger.setAttribute("aria-expanded", "false");
+		}
+	}
+
+	function toggleMenu(dropdown) {
+		const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
+		const menu = dropdown.querySelector(".shelf-menu");
+		if (!trigger || !menu) return;
+		const willOpen = menu.hidden;
+		closeMenus();
+		menu.hidden = !willOpen;
+		trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+	}
+
+	function setShelf(dropdown, selectedStatus) {
+		const title = String(dropdown.dataset.title || "").trim();
+		if (!title) return;
+		const author = String(dropdown.dataset.author || "").trim();
+		const totalPages = Math.max(0, Number(dropdown.dataset.pages || 0) || 0);
+		const coverUrl = String(dropdown.dataset.cover || "").trim();
+		const format = String(dropdown.dataset.format || "").trim();
+		const language = String(dropdown.dataset.language || "").trim();
+
+		const entries = loadEntries();
+		const existing = findEntry(entries, title, author);
+		if (existing) {
+			const previousStatus = existing.status;
+			if (!existing.totalPages && totalPages > 0) existing.totalPages = totalPages;
+			if (!existing.coverUrl && coverUrl) existing.coverUrl = coverUrl;
+			if (format && !existing.format) existing.format = format;
+			if (language && !existing.language) existing.language = language;
+			applyStatus(existing, selectedStatus, totalPages || Number(existing.totalPages) || 0);
+			existing.updatedAt = Date.now();
+			saveEntries(entries);
+			if (previousStatus !== selectedStatus) {
+				logShelfUpdate(existing, selectedStatus);
+				showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`);
+			} else {
+				showShelfFeedback(dropdown, `Already on ${statusLabel(selectedStatus)}.`);
+			}
+			setDropdownLabel(dropdown, selectedStatus);
+			setShelvedState(dropdown, true);
+			return;
+		}
+
+		const next = {
+			id: `book_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+			title,
+			author,
+			totalPages,
+			currentPage: 0,
+			status: selectedStatus,
+			finishedDate: "",
+			coverUrl,
+			format,
+			language,
+			updatedAt: Date.now()
+		};
+		applyStatus(next, selectedStatus, totalPages);
+		entries.unshift(next);
+		saveEntries(entries);
+		logShelfUpdate(next, selectedStatus);
+		setDropdownLabel(dropdown, selectedStatus);
+		setShelvedState(dropdown, true);
+		showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`);
+	}
+
+	function syncExistingState() {
+		const entries = loadEntries();
+		for (const dropdown of shelfDropdowns) {
+			const title = dropdown.dataset.title || "";
+			const author = dropdown.dataset.author || "";
+			const existing = findEntry(entries, title, author);
+			if (existing) {
+				setDropdownLabel(dropdown, existing.status || "want_to_read");
+				setShelvedState(dropdown, true);
+			} else {
+				setDropdownLabel(dropdown, "want_to_read");
+				setShelvedState(dropdown, false);
+			}
+		}
+	}
+
+	for (const dropdown of shelfDropdowns) {
+		const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
+		const options = Array.from(dropdown.querySelectorAll('[data-action="set-shelf"]'));
+		if (trigger) {
+			trigger.addEventListener("click", () => toggleMenu(dropdown));
+		}
+		for (const option of options) {
+			option.addEventListener("click", () => {
+				const status = option.dataset.status || "want_to_read";
+				setShelf(dropdown, status);
+				closeMenus();
+			});
+		}
+	}
+
+	document.addEventListener("click", (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		if (target.closest(".shelf-dropdown")) return;
+		closeMenus();
+	});
+
+	syncExistingState();
+</script>
