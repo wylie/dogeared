@@ -1,5 +1,6 @@
 ---
 import LeftHand from '../components/LeftHand.astro';
+import Analytics from '@vercel/analytics/astro';
 type SectionLink = { id: string; label: string };
 const { title = "DogEared", sectionLinks = [] } = Astro.props as { title?: string; sectionLinks?: SectionLink[] };
 const currentPath = Astro.url.pathname;
@@ -36,6 +37,7 @@ import '../assets/global.css';
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link href="https://fonts.googleapis.com/css2?family=Chewy&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Permanent+Marker&display=swap" rel="stylesheet">
 		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+		<Analytics />
 	</head>
 		<body>
 			<div class="container">
