@@ -1,5 +1,7 @@
 import type { APIRoute } from "astro";
 
+export const prerender = false;
+
 function normalizeIsbn(value: unknown) {
 	return String(value || "")
 		.replace(/[^0-9Xx]/g, "")
