@@ -10,6 +10,42 @@ We believe books are for everyone. No book should be hidden, restricted, or left
 
 This is a space for readers, built and maintained with care, where the goal is not growth at all costs, but something better, a tool that stays useful, thoughtful, and true to the people who use it.
 
+## Vercel + Neon Data Structure
+
+DogEared now includes a Neon-ready schema for app-driven genre lists.
+
+### Files
+
+- `db/neon-schema.sql`: core tables + `get_top_books_by_genre(...)` ranking function.
+- `src/lib/neon.ts`: Vercel server runtime Neon client.
+- `src/pages/api/lists/top.ts`: API route for Top books by genre.
+
+### Environment Variables
+
+Set this in local `.env` and in Vercel Project Settings:
+
+- `DATABASE_URL`: Neon pooled connection string.
+- `GOOGLE_BOOKS_API_KEY`: existing key for search/suggest routes.
+
+### Quick Setup
+
+1. Create a Neon project and copy its pooled `DATABASE_URL`.
+2. Run `db/neon-schema.sql` in Neon SQL Editor.
+3. Add `DATABASE_URL` to Vercel.
+4. Deploy to Vercel.
+5. Query top list route:
+   - `/api/lists/top?genre=fantasy`
+   - Optional: `limit` (1-50), `windowDays` (1-3650)
+
+### Top List Strategy
+
+`get_top_books_by_genre(...)` ranks titles from real user shelves:
+
+- `reading` weighted highest
+- `finished` weighted medium
+- `want_to_read` weighted baseline
+- plus unique reader count
+
 ## Support DogEared
 
 If you find DogEared useful and want to help it grow, this is a simple way to do that.
