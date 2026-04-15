@@ -33,6 +33,7 @@ import Layout from '../layouts/Layout.astro';
 <script>
 	const STORAGE_KEY = "dogeared:myreads";
 	const UPDATES_KEY = "dogeared:updates";
+	const USER_KEY_STORAGE_KEY = "dogeared:user-key";
 	let entries = [];
 
 	const wantToReadList = document.getElementById("want-to-read-list");
@@ -41,6 +42,47 @@ import Layout from '../layouts/Layout.astro';
 	const shelfTabs = Array.from(document.querySelectorAll(".shelf-tab"));
 	const shelfPanels = Array.from(document.querySelectorAll("[data-panel]"));
 	let activeTab = "want_to_read";
+
+	function getUserKey() {
+		try {
+			const existing = String(localStorage.getItem(USER_KEY_STORAGE_KEY) || "").trim();
+			if (existing) return existing;
+			const created = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+			localStorage.setItem(USER_KEY_STORAGE_KEY, created);
+			return created;
+		} catch {
+			return `usr_fallback_${Math.random().toString(36).slice(2, 10)}`;
+		}
+	}
+
+	async function syncEntryToServer(entry) {
+		const userKey = getUserKey();
+		await fetch("/api/shelf/entries", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ userKey, entry })
+		});
+	}
+
+	async function deleteEntryFromServer(entry) {
+		const userKey = getUserKey();
+		await fetch("/api/shelf/entries", {
+			method: "DELETE",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ userKey, entry })
+		});
+	}
+
+	async function hydrateEntriesFromServer() {
+		const userKey = getUserKey();
+		const response = await fetch(`/api/shelf/entries?userKey=${encodeURIComponent(userKey)}`);
+		if (!response.ok) return;
+		const data = await response.json();
+		if (!Array.isArray(data?.entries)) return;
+		entries = data.entries;
+		saveEntries();
+		renderLists();
+	}
 
 	function loadEntries() {
 		try {
@@ -189,9 +231,13 @@ import Layout from '../layouts/Layout.astro';
 	}
 
 	function deleteEntry(entryId) {
+		const existing = entries.find((entry) => entry.id === entryId);
 		entries = entries.filter((entry) => entry.id !== entryId);
 		saveEntries();
 		renderLists();
+		if (existing) {
+			void deleteEntryFromServer(existing);
+		}
 	}
 
 	function finishEntry(entryId) {
@@ -209,6 +255,7 @@ import Layout from '../layouts/Layout.astro';
 			logShelfUpdate(entry, "finished");
 		}
 		renderLists();
+		void syncEntryToServer(entry);
 	}
 
 	function startReading(entryId) {
@@ -223,6 +270,7 @@ import Layout from '../layouts/Layout.astro';
 			logShelfUpdate(entry, "reading");
 		}
 		renderLists();
+		void syncEntryToServer(entry);
 	}
 
 	function handleListClick(event) {
@@ -251,6 +299,7 @@ import Layout from '../layouts/Layout.astro';
 	loadEntries();
 	renderLists();
 	setActiveTab(activeTab);
+	void hydrateEntriesFromServer();
 </script>
 
 <style>
