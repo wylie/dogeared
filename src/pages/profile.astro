@@ -1,30 +1,30 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+const sectionLinks = [
+	{ id: "want_to_read", label: "Want to Read" },
+	{ id: "reading", label: "Currently Reading" },
+	{ id: "finished", label: "Read" }
+];
 ---
 
-<Layout title="Profile">
+<Layout title="Profile" sectionLinks={sectionLinks}>
 	<div slot="right" class="reads-page">
 		<h1>Profile</h1>
 		<p class="subhead">Your reading history, shelves, and progress.</p>
 
-		<div class="shelf-tabs" role="tablist" aria-label="My Reads Shelves">
-			<button type="button" class="shelf-tab active" role="tab" aria-selected="true" data-tab="want_to_read" id="tab-want-to-read">Want to Read</button>
-			<button type="button" class="shelf-tab" role="tab" aria-selected="false" data-tab="reading" id="tab-reading">Currently Reading</button>
-			<button type="button" class="shelf-tab" role="tab" aria-selected="false" data-tab="finished" id="tab-finished">Read</button>
-		</div>
-
-		<section class="list-section" data-panel="want_to_read" aria-labelledby="tab-want-to-read">
-			<h2>Want to Read</h2>
+		<section class="list-section" data-panel="want_to_read" id="want_to_read">
+			<h2 id="section-want-to-read">Want to Read</h2>
 			<div id="want-to-read-list" class="entry-list"></div>
 		</section>
 
-		<section class="list-section" data-panel="reading" aria-labelledby="tab-reading" hidden>
-			<h2>Currently Reading</h2>
+		<section class="list-section" data-panel="reading" id="reading" hidden>
+			<h2 id="section-reading">Currently Reading</h2>
 			<div id="currently-reading-list" class="entry-list"></div>
 		</section>
 
-		<section class="list-section" data-panel="finished" aria-labelledby="tab-finished" hidden>
-			<h2>Finished</h2>
+		<section class="list-section" data-panel="finished" id="finished" hidden>
+			<h2 id="section-finished">Finished</h2>
 			<div id="finished-list" class="entry-list"></div>
 		</section>
 	</div>
@@ -39,8 +39,8 @@ import Layout from '../layouts/Layout.astro';
 	const wantToReadList = document.getElementById("want-to-read-list");
 	const currentlyReadingList = document.getElementById("currently-reading-list");
 	const finishedList = document.getElementById("finished-list");
-	const shelfTabs = Array.from(document.querySelectorAll(".shelf-tab"));
 	const shelfPanels = Array.from(document.querySelectorAll("[data-panel]"));
+	const shelfFilterLinks = Array.from(document.querySelectorAll('.quick-links a[href^="#"]'));
 	let activeTab = "want_to_read";
 
 	function getUserKey() {
@@ -210,24 +210,40 @@ import Layout from '../layouts/Layout.astro';
 			? finished.map(renderEntryCard).join("")
 			: renderEmptyState("No finished books yet.");
 
-		for (const tab of shelfTabs) {
-			const tabName = tab.dataset.tab;
-			if (tabName === "want_to_read") tab.textContent = `Want to Read (${wantToRead.length})`;
-			if (tabName === "reading") tab.textContent = `Currently Reading (${reading.length})`;
-			if (tabName === "finished") tab.textContent = `Read (${finished.length})`;
+		for (const link of shelfFilterLinks) {
+			const hash = link.getAttribute("href") || "";
+			if (hash === "#want_to_read") link.textContent = `Want to Read (${wantToRead.length})`;
+			if (hash === "#reading") link.textContent = `Currently Reading (${reading.length})`;
+			if (hash === "#finished") link.textContent = `Read (${finished.length})`;
+		}
+	}
+
+	function normalizeHashToTab(hash) {
+		const value = String(hash || "").replace(/^#/, "").trim();
+		if (value === "want_to_read" || value === "reading" || value === "finished") {
+			return value;
+		}
+		return "want_to_read";
+	}
+
+	function syncSidebarFilterActive(nextTab) {
+		for (const link of shelfFilterLinks) {
+			const isActive = link.getAttribute("href") === `#${nextTab}`;
+			link.classList.toggle("active", isActive);
+			if (isActive) {
+				link.setAttribute("aria-current", "true");
+			} else {
+				link.removeAttribute("aria-current");
+			}
 		}
 	}
 
 	function setActiveTab(nextTab) {
 		activeTab = nextTab;
-		for (const tab of shelfTabs) {
-			const isActive = tab.dataset.tab === nextTab;
-			tab.classList.toggle("active", isActive);
-			tab.setAttribute("aria-selected", isActive ? "true" : "false");
-		}
 		for (const panel of shelfPanels) {
 			panel.hidden = panel.dataset.panel !== nextTab;
 		}
+		syncSidebarFilterActive(nextTab);
 	}
 
 	function deleteEntry(entryId) {
@@ -288,9 +304,18 @@ import Layout from '../layouts/Layout.astro';
 		if (action === "start") startReading(entryId);
 	}
 
-	for (const tab of shelfTabs) {
-		tab.addEventListener("click", () => setActiveTab(tab.dataset.tab || "want_to_read"));
+	for (const link of shelfFilterLinks) {
+		link.addEventListener("click", (event) => {
+			event.preventDefault();
+			const tabName = normalizeHashToTab(link.getAttribute("href"));
+			history.replaceState(null, "", `#${tabName}`);
+			setActiveTab(tabName);
+		});
 	}
+
+	window.addEventListener("hashchange", () => {
+		setActiveTab(normalizeHashToTab(window.location.hash));
+	});
 
 	wantToReadList.addEventListener("click", handleListClick);
 	currentlyReadingList.addEventListener("click", handleListClick);
@@ -298,7 +323,7 @@ import Layout from '../layouts/Layout.astro';
 
 	loadEntries();
 	renderLists();
-	setActiveTab(activeTab);
+	setActiveTab(normalizeHashToTab(window.location.hash));
 	void hydrateEntriesFromServer();
 </script>
 
@@ -318,28 +343,6 @@ import Layout from '../layouts/Layout.astro';
 
 	.list-section {
 		margin-top: 1.5rem;
-	}
-
-	.shelf-tabs {
-		margin-top: 1rem;
-		display: flex;
-		gap: 0.45rem;
-		flex-wrap: wrap;
-	}
-
-	.shelf-tab {
-		border: 1px solid #c8c8c8;
-		background: #fff;
-		color: #222;
-		border-radius: 999px;
-		padding: 0.45rem 0.75rem;
-		font-size: 0.9rem;
-	}
-
-	.shelf-tab.active {
-		background: #111;
-		color: #fff;
-		border-color: #111;
 	}
 
 	.list-section h2 {
