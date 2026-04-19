@@ -31,7 +31,7 @@ import Layout from '../layouts/Layout.astro';
 		<section class="settings-section" id="account-settings" aria-labelledby="account-settings-title">
 			<h2 id="account-settings-title">Account</h2>
 			<p class="section-copy">
-				Sign in with a magic link, sign out, or permanently delete your account.
+				Sign in with a magic link delivered through Brevo, sign out, or permanently delete your account.
 			</p>
 
 			<div id="account-authenticated" hidden>
@@ -868,7 +868,7 @@ import Layout from '../layouts/Layout.astro';
 				showAccountFeedback(`Magic link generated. Open: ${preview}`);
 				return;
 			}
-			showAccountFeedback("Check your email for a sign-in link.");
+			showAccountFeedback("Check your email for a DogEared sign-in link.");
 		} catch {
 			showAccountFeedback("Failed to send magic link.", true);
 		}

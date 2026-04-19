@@ -25,25 +25,52 @@ async function upsertUserByEmail(email: string) {
 	return String(userRows[0]?.id || "");
 }
 
-async function sendMagicLinkEmail(email: string, magicUrl: string) {
-	const resendApiKey = String(import.meta.env.RESEND_API_KEY || "").trim();
-	const fromEmail = String(import.meta.env.AUTH_FROM_EMAIL || "").trim();
-	if (!resendApiKey || !fromEmail) return { sent: false };
+function escapeHtml(value: string) {
+	return String(value || "")
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+}
 
-	const response = await fetch("https://api.resend.com/emails", {
+async function sendMagicLinkEmail(email: string, magicUrl: string) {
+	const brevoApiKey = String(import.meta.env.BREVO_API_KEY || "").trim();
+	const fromEmail = String(import.meta.env.BREVO_FROM_EMAIL || "").trim();
+	const fromName = String(import.meta.env.BREVO_FROM_NAME || "DogEared").trim();
+	if (!brevoApiKey || !fromEmail) {
+		return {
+			sent: false,
+			error: "Missing BREVO_API_KEY or BREVO_FROM_EMAIL."
+		};
+	}
+
+	const response = await fetch("https://api.brevo.com/v3/smtp/email", {
 		method: "POST",
 		headers: {
-			Authorization: `Bearer ${resendApiKey}`,
+			"api-key": brevoApiKey,
+			accept: "application/json",
 			"Content-Type": "application/json"
 		},
 		body: JSON.stringify({
-			from: fromEmail,
-			to: [email],
+			sender: {
+				name: fromName,
+				email: fromEmail
+			},
+			to: [{ email }],
 			subject: "Your DogEared sign-in link",
-			html: `<p>Click to sign in to DogEared:</p><p><a href="${magicUrl}">${magicUrl}</a></p><p>This link expires in 20 minutes.</p>`
+			htmlContent: `<p>Click to sign in to DogEared:</p><p><a href="${escapeHtml(magicUrl)}">${escapeHtml(magicUrl)}</a></p><p>This link expires in 20 minutes.</p>`,
+			textContent: `Sign in to DogEared: ${magicUrl}\n\nThis link expires in 20 minutes.`
 		})
 	});
-	return { sent: response.ok };
+	if (response.ok) {
+		return { sent: true };
+	}
+	const payload = await response.json().catch(() => ({}));
+	return {
+		sent: false,
+		error: String(payload?.message || payload?.code || payload?.error || "Brevo rejected the email request.")
+	};
 }
 
 export const POST: APIRoute = async ({ request, url }) => {
@@ -81,7 +108,7 @@ export const POST: APIRoute = async ({ request, url }) => {
 			sent: sendResult.sent,
 			message: sendResult.sent
 				? "Magic link sent."
-				: "Email provider not configured. Use preview link in development.",
+				: (sendResult.error || "Email provider not configured. Use preview link in development."),
 			previewUrl: isDevHost ? verifyUrl.toString() : undefined
 		});
 	} catch (error) {

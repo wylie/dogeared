@@ -28,6 +28,9 @@ Set this in local `.env` and in Vercel Project Settings:
 
 - `DATABASE_URL`: Neon pooled connection string.
 - `GOOGLE_BOOKS_API_KEY`: existing key for search/suggest routes.
+- `BREVO_API_KEY`: API key for DogEared magic-link email delivery.
+- `BREVO_FROM_EMAIL`: verified sender email used for magic-link emails.
+- `BREVO_FROM_NAME`: optional sender name for magic-link emails.
 
 ### Quick Setup
 
