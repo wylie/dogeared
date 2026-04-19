@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { getNeonSql } from "../../../lib/neon";
+import { resolveActiveUserId } from "../../../lib/auth";
 
 export const prerender = false;
 
@@ -101,29 +102,17 @@ function parseGenres(input: unknown) {
 	return genres;
 }
 
-async function resolveUserId(userKey: string) {
-	const sql = getNeonSql();
-	const rows = await sql<{ id: string }[]>`
-		insert into app_user (user_key)
-		values (${userKey})
-		on conflict (user_key) do update set user_key = excluded.user_key
-		returning id
-	`;
-	return String(rows[0]?.id || "");
-}
-
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ request, url }) => {
 	const userKey = normalizeText(url.searchParams.get("userKey"));
-	if (!userKey) {
-		return new Response(JSON.stringify({ entries: [] }), {
-			status: 200,
-			headers: { "Content-Type": "application/json" }
-		});
-	}
 
 	try {
-		const userId = await resolveUserId(userKey);
-		if (!userId) throw new Error("User resolution failed.");
+		const userId = await resolveActiveUserId(request, userKey);
+		if (!userId) {
+			return new Response(JSON.stringify({ entries: [] }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" }
+			});
+		}
 		const sql = getNeonSql();
 		const rows = await sql<Array<{
 			book_id: number;
@@ -135,6 +124,7 @@ export const GET: APIRoute = async ({ url }) => {
 			total_pages: number;
 			current_page: number;
 			finished_date: string | null;
+			first_added_at: string;
 			updated_at: string;
 			genres: string[] | null;
 			isbn10: string;
@@ -150,6 +140,7 @@ export const GET: APIRoute = async ({ url }) => {
 				ub.total_pages,
 				ub.current_page,
 				ub.finished_date::text as finished_date,
+				ub.first_added_at::text as first_added_at,
 				ub.updated_at::text as updated_at,
 				array_agg(bg.genre_name order by bg.genre_name asc) filter (where bg.genre_name is not null) as genres,
 				b.isbn10,
@@ -158,7 +149,7 @@ export const GET: APIRoute = async ({ url }) => {
 			join book b on b.id = ub.book_id
 			left join book_genre bg on bg.book_id = b.id
 			where ub.user_id = ${userId}::uuid
-			group by b.id, ub.status, ub.total_pages, ub.current_page, ub.finished_date, ub.updated_at
+			group by b.id, ub.status, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at
 			order by ub.updated_at desc
 		`;
 
@@ -170,6 +161,7 @@ export const GET: APIRoute = async ({ url }) => {
 			totalPages: normalizePositiveInt(row.total_pages),
 			currentPage: normalizePositiveInt(row.current_page),
 			finishedDate: row.finished_date || "",
+			addedAt: Date.parse(row.first_added_at || "") || Date.now(),
 			coverUrl: row.cover_url || "",
 			format: "",
 			language: row.language || "",
@@ -199,13 +191,6 @@ export const POST: APIRoute = async ({ request }) => {
 		const body = await request.json() as { userKey?: unknown; entry?: ShelfEntryInput };
 		const userKey = normalizeText(body?.userKey);
 		const entry = body?.entry || {};
-		if (!userKey) {
-			return new Response(JSON.stringify({ error: "Missing userKey." }), {
-				status: 400,
-				headers: { "Content-Type": "application/json" }
-			});
-		}
-
 		const title = normalizeText(entry.title);
 		if (!title) {
 			return new Response(JSON.stringify({ error: "Missing title." }), {
@@ -230,7 +215,7 @@ export const POST: APIRoute = async ({ request }) => {
 		const genres = parseGenres(entry.categories);
 		const workKey = canonicalWorkKey({ title, author, isbn10, isbn13 });
 
-		const userId = await resolveUserId(userKey);
+		const userId = await resolveActiveUserId(request, userKey);
 		if (!userId) throw new Error("User resolution failed.");
 		const sql = getNeonSql();
 
@@ -328,20 +313,13 @@ export const DELETE: APIRoute = async ({ request }) => {
 		const body = await request.json() as { userKey?: unknown; entry?: ShelfEntryInput };
 		const userKey = normalizeText(body?.userKey);
 		const entry = body?.entry || {};
-		if (!userKey) {
-			return new Response(JSON.stringify({ error: "Missing userKey." }), {
-				status: 400,
-				headers: { "Content-Type": "application/json" }
-			});
-		}
-
 		const title = normalizeText(entry.title);
 		const author = normalizeText(entry.author);
 		const isbn10 = normalizeIsbn(entry.isbn10);
 		const isbn13 = normalizeIsbn(entry.isbn13);
 		const workKey = canonicalWorkKey({ title, author, isbn10, isbn13 });
 
-		const userId = await resolveUserId(userKey);
+		const userId = await resolveActiveUserId(request, userKey);
 		if (!userId) throw new Error("User resolution failed.");
 		const sql = getNeonSql();
 		await sql`
@@ -366,4 +344,3 @@ export const DELETE: APIRoute = async ({ request }) => {
 		});
 	}
 };
-

@@ -2,8 +2,8 @@
 import Layout from '../layouts/Layout.astro';
 
 const sectionLinks = [
-	{ id: "want_to_read", label: "Want to Read" },
 	{ id: "reading", label: "Currently Reading" },
+	{ id: "want_to_read", label: "Want to Read" },
 	{ id: "finished", label: "Read" }
 ];
 ---
@@ -13,18 +13,130 @@ const sectionLinks = [
 		<h1>Profile</h1>
 		<p class="subhead">Your reading history, shelves, and progress.</p>
 
+		<section class="profile-details" aria-labelledby="profile-details-title">
+			<div class="profile-details-head">
+				<h2 id="profile-details-title">About You</h2>
+				<button type="button" id="profile-edit-toggle" class="secondary">Edit Profile</button>
+			</div>
+
+			<div id="profile-view" class="profile-view"></div>
+
+				<form id="profile-form" class="profile-form" hidden>
+					<div class="profile-grid">
+						<label class="full-span">
+							Avatar
+							<div class="avatar-editor">
+								<div id="profile-avatar-preview" class="avatar-preview"></div>
+								<div class="avatar-controls">
+									<input type="text" name="avatarUrl" maxlength="500" placeholder="Image URL (https://...)" />
+									<div class="avatar-buttons">
+										<input id="profile-avatar-file" type="file" accept="image/*" />
+										<button type="button" id="profile-avatar-remove" class="secondary">Remove</button>
+									</div>
+									<input type="hidden" name="avatar" />
+									<p class="field-hint">Upload an image or paste an image URL.</p>
+								</div>
+							</div>
+						</label>
+						<label>
+							Name
+							<input type="text" name="name" maxlength="80" placeholder="e.g. Wylie Reader" required />
+						</label>
+						<label>
+							Username
+							<input type="text" name="username" maxlength="40" placeholder="e.g. wylie_reads" required />
+							<p id="profile-username-status" class="field-status" hidden></p>
+						</label>
+						<label>
+							Location
+							<div class="location-autocomplete">
+								<input type="text" name="location" maxlength="80" autocomplete="off" placeholder="City, State or ZIP (e.g. Austin, TX or 78701)" required />
+								<div id="profile-location-options" class="location-options" hidden></div>
+							</div>
+							<p id="profile-location-status" class="location-status" hidden></p>
+						</label>
+					<label>
+						Reading Goal
+						<input type="text" name="readingGoal" maxlength="80" placeholder="e.g. 24 books in 2026" />
+					</label>
+					<label>
+						Favorite Book
+						<div class="favorite-book-autocomplete">
+							<input type="text" name="favoriteBook" maxlength="120" autocomplete="off" placeholder="Search title or author" />
+							<div id="profile-favorite-book-options" class="favorite-book-options" hidden></div>
+						</div>
+						<p id="profile-favorite-book-status" class="field-status" hidden></p>
+					</label>
+						<label>
+							Favorite Genres
+							<div class="genre-editor">
+								<div class="genre-input-row">
+									<input id="profile-genre-input" type="text" placeholder="Start typing a genre" />
+								</div>
+								<input type="hidden" name="genres" />
+								<p class="field-hint">Add one at a time. Press Enter or comma.</p>
+								<div id="profile-genre-selected" class="genre-list genre-edit-list"></div>
+							</div>
+						</label>
+					</div>
+				<label>
+					Blurb
+					<textarea name="blurb" rows="3" maxlength="400" placeholder="Tell people about your reading taste."></textarea>
+				</label>
+				<div class="profile-actions">
+					<button type="submit">Save Profile</button>
+					<button type="button" id="profile-edit-cancel" class="secondary">Cancel</button>
+				</div>
+			</form>
+		</section>
+
+		<section id="goal-progress-widget" class="goal-widget" aria-live="polite"></section>
+
 		<section class="list-section" data-panel="want_to_read" id="want_to_read">
-			<h2 id="section-want-to-read">Want to Read</h2>
+			<div class="list-section-head">
+				<h2 id="section-want-to-read">Want to Read</h2>
+				<label class="list-sort">
+					<span>Sort</span>
+					<select id="sort-want-to-read">
+						<option value="date_added_desc">Date Added</option>
+						<option value="name_asc">Name</option>
+						<option value="author_asc">Author</option>
+						<option value="date_finished_desc">Date Finished</option>
+					</select>
+				</label>
+			</div>
 			<div id="want-to-read-list" class="entry-list"></div>
 		</section>
 
 		<section class="list-section" data-panel="reading" id="reading" hidden>
-			<h2 id="section-reading">Currently Reading</h2>
+			<div class="list-section-head">
+				<h2 id="section-reading">Currently Reading</h2>
+				<label class="list-sort">
+					<span>Sort</span>
+					<select id="sort-reading">
+						<option value="date_added_desc">Date Added</option>
+						<option value="name_asc">Name</option>
+						<option value="author_asc">Author</option>
+						<option value="date_finished_desc">Date Finished</option>
+					</select>
+				</label>
+			</div>
 			<div id="currently-reading-list" class="entry-list"></div>
 		</section>
 
 		<section class="list-section" data-panel="finished" id="finished" hidden>
-			<h2 id="section-finished">Finished</h2>
+			<div class="list-section-head">
+				<h2 id="section-finished">Finished</h2>
+				<label class="list-sort">
+					<span>Sort</span>
+					<select id="sort-finished">
+						<option value="date_finished_desc">Date Finished</option>
+						<option value="date_added_desc">Date Added</option>
+						<option value="name_asc">Name</option>
+						<option value="author_asc">Author</option>
+					</select>
+				</label>
+			</div>
 			<div id="finished-list" class="entry-list"></div>
 		</section>
 	</div>
@@ -34,14 +146,89 @@ const sectionLinks = [
 	const STORAGE_KEY = "dogeared:myreads";
 	const UPDATES_KEY = "dogeared:updates";
 	const USER_KEY_STORAGE_KEY = "dogeared:user-key";
+	const PROFILE_INFO_KEY = "dogeared:profile-info";
+	const COVER_CACHE_KEY = "dogeared:cover-lookup-cache";
+	const LIST_SORTS_KEY = "dogeared:profile-list-sorts";
+	const MAX_COVER_LOOKUPS_PER_PASS = 40;
 	let entries = [];
+	let coverLookupInFlight = false;
+	let profileInfo = null;
 
 	const wantToReadList = document.getElementById("want-to-read-list");
 	const currentlyReadingList = document.getElementById("currently-reading-list");
 	const finishedList = document.getElementById("finished-list");
+	const wantToReadSort = document.getElementById("sort-want-to-read");
+	const readingSort = document.getElementById("sort-reading");
+	const finishedSort = document.getElementById("sort-finished");
+	const profileView = document.getElementById("profile-view");
+	const goalProgressWidget = document.getElementById("goal-progress-widget");
+	const profileForm = document.getElementById("profile-form");
+	const profileEditToggle = document.getElementById("profile-edit-toggle");
+	const profileEditCancel = document.getElementById("profile-edit-cancel");
+	const profileGenreInput = document.getElementById("profile-genre-input");
+	const profileGenreSelected = document.getElementById("profile-genre-selected");
+	const profileUsernameStatus = document.getElementById("profile-username-status");
+	const profileLocationStatus = document.getElementById("profile-location-status");
+	const profileLocationOptions = document.getElementById("profile-location-options");
+	const profileFavoriteBookStatus = document.getElementById("profile-favorite-book-status");
+	const profileFavoriteBookOptions = document.getElementById("profile-favorite-book-options");
+	const profileAvatarPreview = document.getElementById("profile-avatar-preview");
+	const profileAvatarFile = document.getElementById("profile-avatar-file");
+	const profileAvatarRemove = document.getElementById("profile-avatar-remove");
 	const shelfPanels = Array.from(document.querySelectorAll("[data-panel]"));
 	const shelfFilterLinks = Array.from(document.querySelectorAll('.quick-links a[href^="#"]'));
 	let activeTab = "want_to_read";
+	let editingGenres = [];
+	let editingAvatar = "";
+	let usernameCheckTimer = 0;
+	let locationLookupTimer = 0;
+	let locationLookupSeq = 0;
+	let locationMatches = [];
+	let locationActiveIndex = -1;
+	let favoriteBookLookupTimer = 0;
+	let favoriteBookLookupSeq = 0;
+	let favoriteBookMatches = [];
+	let favoriteBookActiveIndex = -1;
+	let listSorts = {
+		want_to_read: "date_added_desc",
+		reading: "date_added_desc",
+		finished: "date_finished_desc"
+	};
+	const GENRE_SUGGESTIONS = [
+		"Fantasy",
+		"Sci-Fi",
+		"Mystery",
+		"Thriller",
+		"Romance",
+		"Historical Fiction",
+		"Horror",
+		"Literary Fiction",
+		"Classics",
+		"Young Adult",
+		"Memoir",
+		"Biography",
+		"Self-Help",
+		"Business",
+		"History",
+		"Philosophy",
+		"Psychology",
+		"Science",
+		"Politics",
+		"Poetry",
+		"Graphic Novel",
+		"Manga",
+		"Comics",
+		"Children's",
+		"Religion & Spirituality",
+		"Travel",
+		"Cooking"
+	];
+	const GENRE_ALIASES = new Map([
+		["science fiction", "Sci-Fi"],
+		["scifi", "Sci-Fi"],
+		["sci fi", "Sci-Fi"],
+		["sci-fi", "Sci-Fi"]
+	]);
 
 	function getUserKey() {
 		try {
@@ -80,8 +267,13 @@ const sectionLinks = [
 		const data = await response.json();
 		if (!Array.isArray(data?.entries)) return;
 		entries = data.entries;
+		for (const entry of entries) {
+			if (normalizeNumber(entry?.addedAt) > 0) continue;
+			entry.addedAt = entryAddedTimestamp(entry);
+		}
 		saveEntries();
 		renderLists();
+		void enrichMissingCovers();
 	}
 
 	function loadEntries() {
@@ -91,11 +283,1256 @@ const sectionLinks = [
 		} catch {
 			entries = [];
 		}
+		let changed = false;
+		for (const entry of entries) {
+			const existingAddedAt = normalizeNumber(entry?.addedAt);
+			if (existingAddedAt > 0) continue;
+			entry.addedAt = entryAddedTimestamp(entry);
+			changed = true;
+		}
+		if (changed) {
+			try {
+				saveEntries();
+			} catch {
+				// Ignore localStorage quota errors during non-critical field backfill.
+			}
+		}
 	}
 
 	function saveEntries() {
 		localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 	}
+
+	function normalizeSortValue(value, panel) {
+		const allowed = ["date_added_desc", "date_finished_desc", "name_asc", "author_asc"];
+		const next = String(value || "").trim();
+		if (allowed.includes(next)) return next;
+		return panel === "finished" ? "date_finished_desc" : "date_added_desc";
+	}
+
+	function loadListSorts() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(LIST_SORTS_KEY) || "{}");
+			listSorts = {
+				want_to_read: normalizeSortValue(parsed?.want_to_read, "want_to_read"),
+				reading: normalizeSortValue(parsed?.reading, "reading"),
+				finished: normalizeSortValue(parsed?.finished, "finished")
+			};
+		} catch {
+			listSorts = {
+				want_to_read: "date_added_desc",
+				reading: "date_added_desc",
+				finished: "date_finished_desc"
+			};
+		}
+	}
+
+	function saveListSorts() {
+		localStorage.setItem(LIST_SORTS_KEY, JSON.stringify(listSorts));
+	}
+
+	function syncSortInputs() {
+		if (wantToReadSort instanceof HTMLSelectElement) {
+			wantToReadSort.value = normalizeSortValue(listSorts.want_to_read, "want_to_read");
+		}
+		if (readingSort instanceof HTMLSelectElement) {
+			readingSort.value = normalizeSortValue(listSorts.reading, "reading");
+		}
+		if (finishedSort instanceof HTMLSelectElement) {
+			finishedSort.value = normalizeSortValue(listSorts.finished, "finished");
+		}
+	}
+
+	function loadCoverLookupCache() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(COVER_CACHE_KEY) || "{}");
+			return parsed && typeof parsed === "object" ? parsed : {};
+		} catch {
+			return {};
+		}
+	}
+
+	function saveCoverLookupCache(cache) {
+		try {
+			localStorage.setItem(COVER_CACHE_KEY, JSON.stringify(cache));
+		} catch {
+			// Ignore cache write failures.
+		}
+	}
+
+	function normalizeProfileText(value, maxLength = 400) {
+		return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+	}
+
+	function parseGenres(value) {
+		const input = String(value || "");
+		const parts = input
+			.split(",")
+			.map((item) => canonicalGenreLabel(item))
+			.filter(Boolean);
+		const dedupe = new Set();
+		const genres = [];
+		for (const part of parts) {
+			const key = part.toLowerCase();
+			if (dedupe.has(key)) continue;
+			dedupe.add(key);
+			genres.push(part);
+			if (genres.length >= 12) break;
+		}
+		return genres;
+	}
+
+	function canonicalGenreLabel(value) {
+		const normalized = normalizeProfileText(value, 32).toLowerCase();
+		if (!normalized) return "";
+		const direct = GENRE_SUGGESTIONS.find((genre) => genre.toLowerCase() === normalized);
+		if (direct) return direct;
+		const alias = GENRE_ALIASES.get(normalized);
+		if (alias) return alias;
+		return "";
+	}
+
+	function normalizeProfileInfo(input) {
+		const genres = Array.isArray(input?.genres)
+			? parseGenres(input.genres.join(","))
+			: parseGenres(input?.genres || "");
+		const avatar = normalizeAvatarValue(input?.avatar || input?.avatarUrl);
+		return {
+			avatar,
+			name: normalizeProfileText(input?.name, 80),
+			username: normalizeProfileText(input?.username, 40).replace(/^@+/, ""),
+			location: normalizeProfileText(input?.location, 80),
+			readingGoal: normalizeProfileText(input?.readingGoal, 80),
+			favoriteBook: normalizeProfileText(input?.favoriteBook, 120),
+			blurb: normalizeProfileText(input?.blurb, 400),
+			genres
+		};
+	}
+
+	function loadProfileInfo() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(PROFILE_INFO_KEY) || "{}");
+			return normalizeProfileInfo(parsed);
+		} catch {
+			return normalizeProfileInfo({});
+		}
+	}
+
+	function saveProfileInfo(nextProfile) {
+		const normalized = normalizeProfileInfo(nextProfile);
+		localStorage.setItem(PROFILE_INFO_KEY, JSON.stringify(normalized));
+		return normalized;
+	}
+
+	function profileLabel(value, fallback = "Not set yet") {
+		const text = String(value || "").trim();
+		return text || fallback;
+	}
+
+	function normalizeAvatarValue(value) {
+		const text = String(value || "").trim();
+		if (!text) return "";
+		if (text.startsWith("data:image/")) return text;
+		if (/^https?:\/\//i.test(text)) return text;
+		return "";
+	}
+
+	function profileInitials() {
+		const name = String(profileInfo?.name || "").trim();
+		if (!name) return "R";
+		const parts = name.split(/\s+/).filter(Boolean);
+		if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+		return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+	}
+
+	function renderProfileInfo() {
+		if (!(profileView instanceof HTMLElement)) return;
+		const genres = Array.isArray(profileInfo?.genres) ? profileInfo.genres : [];
+		const avatar = normalizeAvatarValue(profileInfo?.avatar);
+		const location = normalizeProfileText(profileInfo?.location, 80);
+		const readingGoal = normalizeProfileText(profileInfo?.readingGoal, 80);
+		const favoriteBook = normalizeProfileText(profileInfo?.favoriteBook, 120);
+		const blurb = normalizeProfileText(profileInfo?.blurb, 400);
+
+		const details = [
+			location ? `<p class="meta"><strong>Location:</strong> ${escapeHtml(location)}</p>` : "",
+			readingGoal ? `<p class="meta"><strong>Reading Goal:</strong> ${escapeHtml(readingGoal)}</p>` : "",
+			favoriteBook ? `<p class="meta"><strong>Favorite Book:</strong> ${escapeHtml(favoriteBook)}</p>` : "",
+			blurb ? `<p class="profile-blurb">${escapeHtml(blurb)}</p>` : "",
+			genres.length > 0
+				? `<div class="genre-list">${genres.map((genre) => `<span class="genre-chip">${escapeHtml(genre)}</span>`).join("")}</div>`
+				: ""
+		].filter(Boolean).join("");
+
+		profileView.innerHTML = `
+			<div class="profile-view-head">
+				<div class="profile-avatar">
+					${avatar
+						? `<img class="profile-avatar-image" src="${escapeHtml(avatar)}" alt="" loading="lazy" />`
+						: `<span class="profile-avatar-fallback" aria-hidden="true">${escapeHtml(profileInitials())}</span>`}
+				</div>
+				<div>
+					<h3>${escapeHtml(profileLabel(profileInfo?.name, "Reader"))}</h3>
+					<p class="meta">@${escapeHtml(profileLabel(profileInfo?.username, "username"))}</p>
+				</div>
+			</div>
+			${details}
+		`;
+		renderGoalWidget();
+	}
+
+	function parseReadingGoalConfig(value) {
+		const text = String(value || "").trim();
+		const goalMatch = text.match(/\d{1,4}/);
+		const goal = goalMatch ? Math.floor(Number(goalMatch[0])) : 0;
+		const yearMatch = text.match(/\b(19|20)\d{2}\b/);
+		const currentYear = new Date().getFullYear();
+		const year = yearMatch ? Number(yearMatch[0]) : currentYear;
+		return {
+			goal: Number.isFinite(goal) && goal > 0 ? goal : 0,
+			year
+		};
+	}
+
+	function finishedYearForEntry(entry) {
+		const finishedDate = String(entry?.finishedDate || "").trim();
+		const dateYearMatch = finishedDate.match(/\b(19|20)\d{2}\b/);
+		if (dateYearMatch) return Number(dateYearMatch[0]);
+		return 0;
+	}
+
+	function entryAddedTimestamp(entry) {
+		const explicit = normalizeNumber(entry?.addedAt);
+		if (explicit > 0) return explicit;
+		const updated = normalizeNumber(entry?.updatedAt);
+		const id = String(entry?.id || "");
+		const idMatch = id.match(/^book_(\d{10,13})_/);
+		if (idMatch) {
+			const fromId = Number(idMatch[1]);
+			if (Number.isFinite(fromId) && fromId > 0) return fromId;
+		}
+		return updated > 0 ? updated : Date.now();
+	}
+
+	function finishedTimestamp(entry) {
+		const finishedDate = String(entry?.finishedDate || "").trim();
+		if (!finishedDate) return 0;
+		const parts = finishedDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+		if (!parts) {
+			const parsed = Date.parse(finishedDate);
+			return Number.isFinite(parsed) ? parsed : 0;
+		}
+		const year = Number(parts[1]);
+		const month = Number(parts[2]);
+		const day = Number(parts[3]);
+		return Date.UTC(year, month - 1, day);
+	}
+
+	function compareText(a, b, selector) {
+		const aText = normalizeProfileText(selector(a), 160).toLowerCase();
+		const bText = normalizeProfileText(selector(b), 160).toLowerCase();
+		if (aText < bText) return -1;
+		if (aText > bText) return 1;
+		return 0;
+	}
+
+	function sortEntries(items, panel) {
+		const mode = normalizeSortValue(listSorts[panel], panel);
+		const list = [...items];
+		list.sort((a, b) => {
+			if (mode === "name_asc") {
+				const byName = compareText(a, b, (item) => item?.title);
+				if (byName !== 0) return byName;
+				return compareText(a, b, (item) => item?.author);
+			}
+			if (mode === "author_asc") {
+				const byAuthor = compareText(a, b, (item) => item?.author);
+				if (byAuthor !== 0) return byAuthor;
+				return compareText(a, b, (item) => item?.title);
+			}
+			if (mode === "date_finished_desc") {
+				const byFinished = finishedTimestamp(b) - finishedTimestamp(a);
+				if (byFinished !== 0) return byFinished;
+				return entryAddedTimestamp(b) - entryAddedTimestamp(a);
+			}
+			const byAdded = entryAddedTimestamp(b) - entryAddedTimestamp(a);
+			if (byAdded !== 0) return byAdded;
+			return compareText(a, b, (item) => item?.title);
+		});
+		return list;
+	}
+
+	function finishedCountForGoalYear(year) {
+		return entries.filter((entry) => (
+			entry?.status === "finished" && finishedYearForEntry(entry) === year
+		)).length;
+	}
+
+	function renderGoalWidget() {
+		if (!(goalProgressWidget instanceof HTMLElement)) return;
+		const goalConfig = parseReadingGoalConfig(profileInfo?.readingGoal);
+		const goal = goalConfig.goal;
+		const goalYear = goalConfig.year;
+		if (goal <= 0) {
+			goalProgressWidget.innerHTML = `
+				<div class="goal-widget-card">
+					<h2>Reading Goal Progress</h2>
+					<p class="goal-meta">Add a numeric reading goal in About You to track progress here.</p>
+				</div>
+			`;
+			return;
+		}
+
+		const finished = finishedCountForGoalYear(goalYear);
+		const percent = Math.max(0, Math.min(100, Math.round((finished / goal) * 100)));
+		const remaining = Math.max(0, goal - finished);
+		const goalReached = finished >= goal;
+
+		goalProgressWidget.innerHTML = `
+			<div class="goal-widget-card">
+				<div class="goal-head">
+					<h2>Reading Goal Progress</h2>
+					<p class="goal-value">${finished} / ${goal} books</p>
+				</div>
+				<div class="goal-progress-track" aria-hidden="true">
+					<div class="goal-progress-fill" style="width:${percent}%"></div>
+				</div>
+				<p class="goal-meta">
+					${goalReached ? `Goal reached. ${finished - goal} over target in ${goalYear}.` : `${remaining} to go in ${goalYear}.`}
+				</p>
+			</div>
+		`;
+	}
+
+	function fillProfileForm() {
+		if (!(profileForm instanceof HTMLFormElement)) return;
+		const data = profileInfo || normalizeProfileInfo({});
+		const setField = (name, value) => {
+			const field = profileForm.elements.namedItem(name);
+			if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+				field.value = String(value || "");
+			}
+		};
+		setField("name", data.name);
+		setField("username", data.username);
+		setField("location", data.location);
+		setField("readingGoal", data.readingGoal);
+		setField("favoriteBook", data.favoriteBook);
+		setField("blurb", data.blurb);
+		const locationField = profileForm.elements.namedItem("location");
+		if (locationField instanceof HTMLInputElement) {
+			locationField.dataset.resolvedLocation = "";
+		}
+		const favoriteBookField = profileForm.elements.namedItem("favoriteBook");
+		if (favoriteBookField instanceof HTMLInputElement) {
+			favoriteBookField.dataset.resolvedFavoriteBook = "";
+		}
+		const avatarUrlField = profileForm.elements.namedItem("avatarUrl");
+		const avatarHiddenField = profileForm.elements.namedItem("avatar");
+		editingAvatar = normalizeAvatarValue(data.avatar);
+		if (avatarUrlField instanceof HTMLInputElement) {
+			avatarUrlField.value = /^https?:\/\//i.test(editingAvatar) ? editingAvatar : "";
+		}
+		if (avatarHiddenField instanceof HTMLInputElement) {
+			avatarHiddenField.value = editingAvatar;
+		}
+		if (profileAvatarFile instanceof HTMLInputElement) {
+			profileAvatarFile.value = "";
+		}
+		renderAvatarPreview();
+		editingGenres = Array.isArray(data.genres) ? [...data.genres] : [];
+		renderGenreEditor();
+		if (profileGenreInput instanceof HTMLInputElement) profileGenreInput.value = "";
+		locationMatches = [];
+		hideLocationOptions();
+		showLocationStatus("");
+		favoriteBookMatches = [];
+		hideFavoriteBookOptions();
+		showFavoriteBookStatus("");
+	}
+
+	function cleanupLikelyImportedFinishedDates() {
+		const groups = new Map();
+		for (const entry of entries) {
+			if (entry?.status !== "finished") continue;
+			const finishedDate = String(entry?.finishedDate || "").trim();
+			if (!finishedDate) continue;
+			const updatedAt = Number(entry?.updatedAt || 0);
+			if (!Number.isFinite(updatedAt) || updatedAt <= 0) continue;
+			const updatedDate = new Date(updatedAt).toISOString().slice(0, 10);
+			if (updatedDate !== finishedDate) continue;
+			const list = groups.get(finishedDate) || [];
+			list.push(entry);
+			groups.set(finishedDate, list);
+		}
+
+		let changed = false;
+		for (const group of groups.values()) {
+			if (group.length < 40) continue;
+			for (const entry of group) {
+				entry.finishedDate = "";
+				changed = true;
+			}
+		}
+
+		if (changed) {
+			saveEntries();
+		}
+	}
+
+	function renderAvatarPreview() {
+		if (!(profileAvatarPreview instanceof HTMLElement)) return;
+		if (editingAvatar) {
+			profileAvatarPreview.innerHTML = `<img class="avatar-preview-image" src="${escapeHtml(editingAvatar)}" alt="" loading="lazy" />`;
+			return;
+		}
+		const initials = (() => {
+			const source = profileForm instanceof HTMLFormElement ? profileForm.elements.namedItem("name") : null;
+			const name = source instanceof HTMLInputElement ? source.value : String(profileInfo?.name || "");
+			const text = String(name || "").trim();
+			if (!text) return "R";
+			const parts = text.split(/\s+/).filter(Boolean);
+			if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+			return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+		})();
+		profileAvatarPreview.innerHTML = `<span class="avatar-preview-fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
+	}
+
+	function setEditingAvatar(value) {
+		editingAvatar = normalizeAvatarValue(value);
+		if (profileForm instanceof HTMLFormElement) {
+			const hidden = profileForm.elements.namedItem("avatar");
+			if (hidden instanceof HTMLInputElement) hidden.value = editingAvatar;
+		}
+		renderAvatarPreview();
+	}
+
+	async function resizeImageFileToDataUrl(file, maxSize = 320) {
+		const dataUrl = await new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onerror = () => reject(new Error("Failed to read image file."));
+			reader.onload = () => resolve(String(reader.result || ""));
+			reader.readAsDataURL(file);
+		});
+		if (!String(dataUrl).startsWith("data:image/")) return "";
+		const img = await new Promise((resolve, reject) => {
+			const image = new Image();
+			image.onload = () => resolve(image);
+			image.onerror = () => reject(new Error("Invalid image."));
+			image.src = String(dataUrl);
+		});
+		const width = Number(img.width || 0);
+		const height = Number(img.height || 0);
+		if (!width || !height) return "";
+		const scale = Math.min(1, maxSize / Math.max(width, height));
+		const canvas = document.createElement("canvas");
+		canvas.width = Math.max(1, Math.round(width * scale));
+		canvas.height = Math.max(1, Math.round(height * scale));
+		const context = canvas.getContext("2d");
+		if (!context) return "";
+		context.drawImage(img, 0, 0, canvas.width, canvas.height);
+		return canvas.toDataURL("image/jpeg", 0.86);
+	}
+
+	function setProfileEditMode(isEditing) {
+		if (profileView instanceof HTMLElement) profileView.hidden = isEditing;
+		if (profileForm instanceof HTMLFormElement) profileForm.hidden = !isEditing;
+		if (profileEditToggle instanceof HTMLButtonElement) {
+			profileEditToggle.textContent = isEditing ? "Editing..." : "Edit Profile";
+			profileEditToggle.disabled = isEditing;
+		}
+		showLocationStatus("");
+		showFavoriteBookStatus("");
+	}
+
+	function showLocationStatus(message, isError = false) {
+		if (!(profileLocationStatus instanceof HTMLElement)) return;
+		profileLocationStatus.textContent = message;
+		profileLocationStatus.hidden = !message;
+		profileLocationStatus.classList.toggle("error", isError);
+	}
+
+	function showUsernameStatus(message, isError = false) {
+		if (!(profileUsernameStatus instanceof HTMLElement)) return;
+		profileUsernameStatus.textContent = message;
+		profileUsernameStatus.hidden = !message;
+		profileUsernameStatus.classList.toggle("error", isError);
+	}
+
+	function normalizeUsernameInput(value) {
+		return String(value || "")
+			.trim()
+			.toLowerCase()
+			.replace(/^@+/, "")
+			.replace(/[^a-z0-9._-]/g, "")
+			.slice(0, 40);
+	}
+
+	async function checkUsernameAvailability(rawUsername) {
+		const username = normalizeUsernameInput(rawUsername);
+		const currentUsername = normalizeUsernameInput(profileInfo?.username);
+		if (username && currentUsername && username === currentUsername) {
+			showUsernameStatus("This is your current username.");
+			return { ok: true, username, ownedByCurrentUser: true };
+		}
+		if (!username) {
+			showUsernameStatus("Username is required.", true);
+			return { ok: false, username };
+		}
+		if (username.length < 3) {
+			showUsernameStatus("Use at least 3 characters.", true);
+			return { ok: false, username };
+		}
+		showUsernameStatus("Checking username...");
+		try {
+			const userKey = getUserKey();
+			const endpoint = new URL("/api/profile/username", window.location.origin);
+			endpoint.searchParams.set("userKey", userKey);
+			endpoint.searchParams.set("username", username);
+			const response = await fetch(endpoint.toString());
+			const data = await response.json();
+			if (!response.ok) {
+				showUsernameStatus(String(data?.error || "Could not validate username."), true);
+				return { ok: false, username };
+			}
+			if (!data?.available) {
+				showUsernameStatus(String(data?.reason || "Username is taken."), true);
+				return { ok: false, username: String(data?.normalized || username) };
+			}
+			const normalized = String(data?.normalized || username);
+			if (data?.ownedByCurrentUser) {
+				showUsernameStatus("This is your current username.");
+				return { ok: true, username: normalized, ownedByCurrentUser: true };
+			}
+			showUsernameStatus("Username available.");
+			return { ok: true, username: normalized, ownedByCurrentUser: false };
+		} catch {
+			showUsernameStatus("Could not validate right now. Save will do a final check.");
+			return { ok: true, username, unchecked: true };
+		}
+	}
+
+	async function claimUsername(rawUsername) {
+		const username = normalizeUsernameInput(rawUsername);
+		const userKey = getUserKey();
+		const response = await fetch("/api/profile/username", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ userKey, username })
+		});
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok) {
+			return { ok: false, username, error: String(data?.error || "Failed to save username.") };
+		}
+		return { ok: true, username: String(data?.username || username) };
+	}
+
+	function renderGenreEditor() {
+		if (!(profileGenreSelected instanceof HTMLElement)) return;
+		profileGenreSelected.innerHTML = editingGenres.length > 0
+			? editingGenres.map((genre) => (
+				`<span class="genre-chip">${escapeHtml(genre)}<button type="button" class="genre-remove" data-remove-genre="${escapeHtml(genre)}" aria-label="Remove ${escapeHtml(genre)}">×</button></span>`
+			)).join("")
+			: `<span class="muted">No genres added yet.</span>`;
+		if (profileForm instanceof HTMLFormElement) {
+			const hiddenGenres = profileForm.elements.namedItem("genres");
+			if (hiddenGenres instanceof HTMLInputElement) {
+				hiddenGenres.value = editingGenres.join(", ");
+			}
+		}
+	}
+
+	function addGenreFromInput(rawValue) {
+		const value = canonicalGenreLabel(rawValue);
+		if (!value) return;
+		const exists = editingGenres.some((genre) => genre.toLowerCase() === value.toLowerCase());
+		if (exists || editingGenres.length >= 12) return;
+		editingGenres.push(value);
+		editingGenres = parseGenres(editingGenres.join(", "));
+		renderGenreEditor();
+		if (profileGenreInput instanceof HTMLInputElement) {
+			profileGenreInput.value = "";
+		}
+	}
+
+	function getGenreSuggestion(rawValue) {
+		const query = normalizeProfileText(rawValue, 32).toLowerCase();
+		if (!query || query.length < 2) return "";
+		const current = new Set(editingGenres.map((genre) => genre.toLowerCase()));
+		const startsWithMatches = GENRE_SUGGESTIONS.filter((genre) => {
+			const lower = genre.toLowerCase();
+			return lower.startsWith(query) && !current.has(lower);
+		});
+		if (startsWithMatches.length === 1) return startsWithMatches[0];
+		if (startsWithMatches.length > 1) return "";
+
+		const containsMatches = GENRE_SUGGESTIONS.filter((genre) => {
+			const lower = genre.toLowerCase();
+			return lower.includes(query) && !current.has(lower);
+		});
+		return containsMatches.length === 1 ? containsMatches[0] : "";
+	}
+
+	function applyGenreInlineAutocomplete(input) {
+		if (!(input instanceof HTMLInputElement)) return;
+		if (document.activeElement !== input) return;
+		const base = normalizeProfileText(input.value, 32);
+		if (!base) return;
+		const suggestion = getGenreSuggestion(base);
+		if (!suggestion) return;
+		if (suggestion.toLowerCase() === base.toLowerCase()) return;
+		const start = input.selectionStart ?? base.length;
+		const end = input.selectionEnd ?? base.length;
+		if (start !== end || start !== base.length) return;
+		input.value = suggestion;
+		input.setSelectionRange(base.length, suggestion.length);
+	}
+
+	function formatLocationLabel(input: { city: string; region: string; countryCode: string }) {
+		return [input.city, input.region, input.countryCode].filter(Boolean).join(", ");
+	}
+
+	function uniqueLocationMatches(matches) {
+		const seen = new Set<string>();
+		const out: Array<{ label: string; city: string; region: string; countryCode: string }> = [];
+		for (const match of matches) {
+			const city = String(match?.city || "").trim();
+			const region = String(match?.region || "").trim();
+			const countryCode = String(match?.countryCode || "").trim().toUpperCase();
+			const label = formatLocationLabel({ city, region, countryCode });
+			if (!label) continue;
+			const key = label.toLowerCase();
+			if (seen.has(key)) continue;
+			seen.add(key);
+			out.push({ label, city, region, countryCode });
+			if (out.length >= 8) break;
+		}
+		return out;
+	}
+
+	async function lookupLocationMatches(input) {
+		const value = String(input || "").trim();
+		if (!value) return [];
+		const zipMatch = value.match(/\b(\d{5})(?:-\d{4})?\b/);
+		const collected: Array<{ city: string; region: string; countryCode: string }> = [];
+		if (zipMatch) {
+			const response = await fetch(`https://api.zippopotam.us/us/${zipMatch[1]}`);
+			if (response.ok) {
+				const data = await response.json();
+				const places = Array.isArray(data?.places) ? data.places : [];
+				for (const place of places.slice(0, 5)) {
+					const city = String(place?.["place name"] || "").trim();
+					const state = String(place?.["state abbreviation"] || "").trim();
+					if (city || state) {
+						collected.push({ city, region: state, countryCode: "US" });
+					}
+				}
+			}
+		}
+
+		const attempts = [];
+		attempts.push(value);
+		if (value.includes(",")) {
+			attempts.push(value.split(",")[0].trim());
+			attempts.push(value.replace(",", " ").replace(/\s+/g, " ").trim());
+		}
+		const uniqueAttempts = Array.from(new Set(attempts.filter(Boolean)));
+
+		for (const query of uniqueAttempts) {
+			const endpoint = new URL("https://geocoding-api.open-meteo.com/v1/search");
+			endpoint.searchParams.set("name", query);
+			endpoint.searchParams.set("count", "8");
+			endpoint.searchParams.set("language", "en");
+			endpoint.searchParams.set("format", "json");
+			const response = await fetch(endpoint.toString());
+			if (!response.ok) continue;
+			const data = await response.json();
+			const results = Array.isArray(data?.results) ? data.results : [];
+			for (const result of results) {
+				const city = String(result?.name || "").trim();
+				const region = String(result?.admin1 || "").trim();
+				const country = String(result?.country_code || "").trim().toUpperCase();
+				if (!city && !region && !country) continue;
+				collected.push({ city, region, countryCode: country });
+			}
+		}
+
+		// Secondary fallback for city/state text searches.
+		for (const query of uniqueAttempts) {
+			const endpoint = new URL("https://nominatim.openstreetmap.org/search");
+			endpoint.searchParams.set("q", query);
+			endpoint.searchParams.set("format", "jsonv2");
+			endpoint.searchParams.set("addressdetails", "1");
+			endpoint.searchParams.set("limit", "1");
+			const response = await fetch(endpoint.toString());
+			if (!response.ok) continue;
+			const data = await response.json();
+			const results = Array.isArray(data) ? data : [];
+			for (const result of results.slice(0, 5)) {
+				const address = result?.address || {};
+				const city = String(address.city || address.town || address.village || address.hamlet || "").trim();
+				const region = String(address.state || "").trim();
+				const countryCode = String(address.country_code || "").trim().toUpperCase();
+				if (!city && !region && !countryCode) continue;
+				collected.push({ city, region, countryCode });
+			}
+		}
+
+		return uniqueLocationMatches(collected);
+	}
+
+	function hideLocationOptions() {
+		if (!(profileLocationOptions instanceof HTMLElement)) return;
+		profileLocationOptions.hidden = true;
+		profileLocationOptions.innerHTML = "";
+		locationActiveIndex = -1;
+	}
+
+	function isLocationOptionsOpen() {
+		return profileLocationOptions instanceof HTMLElement && !profileLocationOptions.hidden;
+	}
+
+	function commitLocationSelection(locationField, index) {
+		if (!(locationField instanceof HTMLInputElement)) return;
+		const selected = locationMatches[index];
+		if (!selected) return;
+		locationField.value = selected.label;
+		locationField.dataset.resolvedLocation = selected.label;
+		showLocationStatus(`Matched: ${selected.label}`);
+		hideLocationOptions();
+	}
+
+	function moveLocationActive(delta) {
+		if (!isLocationOptionsOpen() || locationMatches.length === 0) return;
+		const max = locationMatches.length - 1;
+		if (locationActiveIndex < 0) {
+			locationActiveIndex = delta > 0 ? 0 : max;
+		} else {
+			locationActiveIndex += delta;
+			if (locationActiveIndex < 0) locationActiveIndex = max;
+			if (locationActiveIndex > max) locationActiveIndex = 0;
+		}
+		if (profileLocationOptions instanceof HTMLElement) {
+			const items = Array.from(profileLocationOptions.querySelectorAll(".location-option"));
+			for (const [index, item] of items.entries()) {
+				item.classList.toggle("is-active", index === locationActiveIndex);
+			}
+			const active = items[locationActiveIndex];
+			if (active) active.scrollIntoView({ block: "nearest" });
+		}
+	}
+
+	function renderLocationOptions(locationField) {
+		if (!(profileLocationOptions instanceof HTMLElement)) return;
+		if (locationMatches.length === 0) {
+			hideLocationOptions();
+			return;
+		}
+		locationActiveIndex = 0;
+		profileLocationOptions.innerHTML = locationMatches.map((match, index) => (
+			`<button type="button" class="location-option ${index === 0 ? "is-active" : ""}" data-location-index="${index}">${escapeHtml(match.label)}</button>`
+		)).join("");
+		profileLocationOptions.hidden = false;
+		profileLocationOptions.onclick = (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			const rawIndex = target.getAttribute("data-location-index");
+			if (rawIndex == null) return;
+			const index = Number(rawIndex);
+			commitLocationSelection(locationField, index);
+		};
+	}
+
+	function scheduleLocationLookup(locationField, options = { immediate: false }) {
+		if (!(locationField instanceof HTMLInputElement)) return;
+		const query = String(locationField.value || "").trim();
+		if (locationLookupTimer) {
+			clearTimeout(locationLookupTimer);
+			locationLookupTimer = 0;
+		}
+		if (!query) {
+			locationMatches = [];
+			locationField.dataset.resolvedLocation = "";
+			showLocationStatus("");
+			hideLocationOptions();
+			return;
+		}
+
+		const lookupId = ++locationLookupSeq;
+		const execute = async () => {
+			showLocationStatus("Matching location...");
+			try {
+				const matches = await lookupLocationMatches(query);
+				if (lookupId !== locationLookupSeq) return;
+				locationMatches = matches;
+				if (matches.length === 0) {
+					locationField.dataset.resolvedLocation = "";
+					showLocationStatus("No match found. Try a fuller city/state or 5-digit ZIP.", true);
+					hideLocationOptions();
+					return;
+				}
+				if (matches.length === 1) {
+					const only = matches[0];
+					locationField.dataset.resolvedLocation = only.label;
+					showLocationStatus(`Matched: ${only.label}`);
+					hideLocationOptions();
+					return;
+				}
+				const exact = matches.find((item) => item.label.toLowerCase() === query.toLowerCase());
+				if (exact) {
+					locationField.dataset.resolvedLocation = exact.label;
+					showLocationStatus(`Matched: ${exact.label}`);
+					hideLocationOptions();
+					return;
+				}
+				locationField.dataset.resolvedLocation = "";
+				showLocationStatus(`Select a location (${matches.length} matches).`);
+				renderLocationOptions(locationField);
+			} catch {
+				if (lookupId !== locationLookupSeq) return;
+				showLocationStatus("Location lookup failed. You can still enter it manually.", true);
+				hideLocationOptions();
+			}
+		};
+
+		if (options.immediate) {
+			void execute();
+		} else {
+			locationLookupTimer = window.setTimeout(() => {
+				void execute();
+			}, 450);
+		}
+	}
+
+	function showFavoriteBookStatus(message, isError = false) {
+		if (!(profileFavoriteBookStatus instanceof HTMLElement)) return;
+		profileFavoriteBookStatus.textContent = message;
+		profileFavoriteBookStatus.hidden = !message;
+		profileFavoriteBookStatus.classList.toggle("error", isError);
+	}
+
+	function normalizeFavoriteBookLabel(title, author) {
+		const cleanTitle = normalizeProfileText(title, 120);
+		const cleanAuthor = normalizeProfileText(author, 80);
+		if (!cleanTitle) return "";
+		return cleanAuthor ? `${cleanTitle} by ${cleanAuthor}` : cleanTitle;
+	}
+
+	function isFavoriteBookOptionsOpen() {
+		return profileFavoriteBookOptions instanceof HTMLElement && !profileFavoriteBookOptions.hidden;
+	}
+
+	function hideFavoriteBookOptions() {
+		if (!(profileFavoriteBookOptions instanceof HTMLElement)) return;
+		profileFavoriteBookOptions.hidden = true;
+		profileFavoriteBookOptions.innerHTML = "";
+		favoriteBookActiveIndex = -1;
+	}
+
+	function renderFavoriteBookOptions(favoriteBookField) {
+		if (!(profileFavoriteBookOptions instanceof HTMLElement)) return;
+		if (favoriteBookMatches.length === 0) {
+			hideFavoriteBookOptions();
+			return;
+		}
+		favoriteBookActiveIndex = 0;
+		profileFavoriteBookOptions.innerHTML = favoriteBookMatches.map((book, index) => (
+			`<button type="button" class="favorite-book-option ${index === 0 ? "is-active" : ""}" data-favorite-book-index="${index}">
+				<span class="favorite-book-option-title">${escapeHtml(book.title)}</span>
+				<span class="favorite-book-option-meta">${escapeHtml(book.author || "Unknown author")}${book.year ? ` • ${escapeHtml(book.year)}` : ""}</span>
+			</button>`
+		)).join("");
+		profileFavoriteBookOptions.hidden = false;
+		profileFavoriteBookOptions.onclick = (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			const option = target.closest("[data-favorite-book-index]");
+			if (!(option instanceof HTMLElement)) return;
+			const rawIndex = option.getAttribute("data-favorite-book-index");
+			if (rawIndex == null) return;
+			commitFavoriteBookSelection(favoriteBookField, Number(rawIndex));
+		};
+	}
+
+	function moveFavoriteBookActive(delta) {
+		if (!isFavoriteBookOptionsOpen() || favoriteBookMatches.length === 0) return;
+		const max = favoriteBookMatches.length - 1;
+		if (favoriteBookActiveIndex < 0) {
+			favoriteBookActiveIndex = delta > 0 ? 0 : max;
+		} else {
+			favoriteBookActiveIndex += delta;
+			if (favoriteBookActiveIndex < 0) favoriteBookActiveIndex = max;
+			if (favoriteBookActiveIndex > max) favoriteBookActiveIndex = 0;
+		}
+		if (!(profileFavoriteBookOptions instanceof HTMLElement)) return;
+		const items = Array.from(profileFavoriteBookOptions.querySelectorAll(".favorite-book-option"));
+		for (const [index, item] of items.entries()) {
+			item.classList.toggle("is-active", index === favoriteBookActiveIndex);
+		}
+		const active = items[favoriteBookActiveIndex];
+		if (active) active.scrollIntoView({ block: "nearest" });
+	}
+
+	function commitFavoriteBookSelection(favoriteBookField, index) {
+		if (!(favoriteBookField instanceof HTMLInputElement)) return;
+		const selected = favoriteBookMatches[index];
+		if (!selected) return;
+		const formatted = normalizeFavoriteBookLabel(selected.title, selected.author);
+		favoriteBookField.value = formatted;
+		favoriteBookField.dataset.resolvedFavoriteBook = formatted;
+		showFavoriteBookStatus(`Selected: ${formatted}`);
+		hideFavoriteBookOptions();
+	}
+
+	async function lookupFavoriteBookMatches(input) {
+		const query = String(input || "").trim();
+		if (query.length < 2) return [];
+		const endpoint = new URL("https://openlibrary.org/search.json");
+		endpoint.searchParams.set("q", query);
+		endpoint.searchParams.set("limit", "8");
+		endpoint.searchParams.set("fields", "title,author_name,first_publish_year");
+		const response = await fetch(endpoint.toString());
+		if (!response.ok) return [];
+		const data = await response.json();
+		const docs = Array.isArray(data?.docs) ? data.docs : [];
+		const seen = new Set();
+		const matches = [];
+		for (const doc of docs) {
+			const title = normalizeProfileText(doc?.title, 120);
+			const author = normalizeProfileText(Array.isArray(doc?.author_name) ? doc.author_name[0] : "", 80);
+			const year = String(doc?.first_publish_year || "").trim();
+			const formatted = normalizeFavoriteBookLabel(title, author);
+			if (!formatted) continue;
+			const key = formatted.toLowerCase();
+			if (seen.has(key)) continue;
+			seen.add(key);
+			matches.push({ title, author, year, formatted });
+			if (matches.length >= 8) break;
+		}
+		return matches;
+	}
+
+	async function resolveFavoriteBookValue(rawValue) {
+		const query = normalizeProfileText(rawValue, 120);
+		if (!query) return "";
+		const direct = favoriteBookMatches.find((item) => item.formatted.toLowerCase() === query.toLowerCase());
+		if (direct) return direct.formatted;
+		const matches = await lookupFavoriteBookMatches(query);
+		if (matches.length === 1) return matches[0].formatted;
+		const exactTitle = matches.find((item) => item.title.toLowerCase() === query.toLowerCase());
+		if (exactTitle) return exactTitle.formatted;
+		const startsWith = matches.filter((item) => item.title.toLowerCase().startsWith(query.toLowerCase()));
+		if (startsWith.length === 1) return startsWith[0].formatted;
+		return query;
+	}
+
+	function scheduleFavoriteBookLookup(favoriteBookField, options = { immediate: false }) {
+		if (!(favoriteBookField instanceof HTMLInputElement)) return;
+		const query = String(favoriteBookField.value || "").trim();
+		if (favoriteBookLookupTimer) {
+			clearTimeout(favoriteBookLookupTimer);
+			favoriteBookLookupTimer = 0;
+		}
+		if (!query) {
+			favoriteBookMatches = [];
+			favoriteBookField.dataset.resolvedFavoriteBook = "";
+			showFavoriteBookStatus("");
+			hideFavoriteBookOptions();
+			return;
+		}
+
+		const lookupId = ++favoriteBookLookupSeq;
+		const execute = async () => {
+			showFavoriteBookStatus("Searching books...");
+			try {
+				const matches = await lookupFavoriteBookMatches(query);
+				if (lookupId !== favoriteBookLookupSeq) return;
+				favoriteBookMatches = matches;
+				if (matches.length === 0) {
+					favoriteBookField.dataset.resolvedFavoriteBook = "";
+					showFavoriteBookStatus("No matches found. You can still type a book name.", true);
+					hideFavoriteBookOptions();
+					return;
+				}
+				const exact = matches.find((item) => item.formatted.toLowerCase() === query.toLowerCase());
+				if (exact) {
+					favoriteBookField.dataset.resolvedFavoriteBook = exact.formatted;
+					showFavoriteBookStatus(`Matched: ${exact.formatted}`);
+					hideFavoriteBookOptions();
+					return;
+				}
+				favoriteBookField.dataset.resolvedFavoriteBook = "";
+				showFavoriteBookStatus(`Select a book (${matches.length} matches).`);
+				renderFavoriteBookOptions(favoriteBookField);
+			} catch {
+				if (lookupId !== favoriteBookLookupSeq) return;
+				showFavoriteBookStatus("Book search failed. You can still type one manually.", true);
+				hideFavoriteBookOptions();
+			}
+		};
+
+		if (options.immediate) {
+			void execute();
+		} else {
+			favoriteBookLookupTimer = window.setTimeout(() => {
+				void execute();
+			}, 300);
+		}
+	}
+
+	function initializeProfileInfo() {
+		profileInfo = loadProfileInfo();
+		renderProfileInfo();
+		setProfileEditMode(false);
+
+		if (profileEditToggle instanceof HTMLButtonElement) {
+			profileEditToggle.addEventListener("click", () => {
+				fillProfileForm();
+				setProfileEditMode(true);
+			});
+		}
+
+		if (profileEditCancel instanceof HTMLButtonElement) {
+			profileEditCancel.addEventListener("click", () => {
+				setProfileEditMode(false);
+			});
+		}
+
+		if (profileForm instanceof HTMLFormElement) {
+			const avatarUrlField = profileForm.elements.namedItem("avatarUrl");
+			const nameField = profileForm.elements.namedItem("name");
+			const usernameField = profileForm.elements.namedItem("username");
+			if (avatarUrlField instanceof HTMLInputElement) {
+				avatarUrlField.addEventListener("change", () => {
+					setEditingAvatar(avatarUrlField.value);
+				});
+				avatarUrlField.addEventListener("blur", () => {
+					setEditingAvatar(avatarUrlField.value);
+				});
+			}
+
+			if (nameField instanceof HTMLInputElement) {
+				nameField.addEventListener("input", () => {
+					if (!editingAvatar) renderAvatarPreview();
+				});
+			}
+
+			if (usernameField instanceof HTMLInputElement) {
+				usernameField.addEventListener("input", () => {
+					const normalized = normalizeUsernameInput(usernameField.value);
+					if (normalized !== usernameField.value) usernameField.value = normalized;
+					showUsernameStatus("");
+					if (usernameCheckTimer) clearTimeout(usernameCheckTimer);
+					usernameCheckTimer = window.setTimeout(() => {
+						if (!usernameField.value) return;
+						void checkUsernameAvailability(usernameField.value);
+					}, 350);
+				});
+				usernameField.addEventListener("blur", () => {
+					if (usernameField.value) void checkUsernameAvailability(usernameField.value);
+				});
+			}
+
+			if (profileAvatarRemove instanceof HTMLButtonElement) {
+				profileAvatarRemove.addEventListener("click", () => {
+					setEditingAvatar("");
+					if (avatarUrlField instanceof HTMLInputElement) avatarUrlField.value = "";
+					if (profileAvatarFile instanceof HTMLInputElement) profileAvatarFile.value = "";
+				});
+			}
+
+			if (profileAvatarFile instanceof HTMLInputElement) {
+				profileAvatarFile.addEventListener("change", async () => {
+					const file = profileAvatarFile.files?.[0];
+					if (!file) return;
+					try {
+						const dataUrl = await resizeImageFileToDataUrl(file);
+						if (dataUrl) {
+							setEditingAvatar(dataUrl);
+							if (avatarUrlField instanceof HTMLInputElement) avatarUrlField.value = "";
+						}
+					} catch {
+						// Ignore and keep current avatar.
+					}
+				});
+			}
+
+				if (profileGenreInput instanceof HTMLInputElement) {
+					profileGenreInput.addEventListener("keydown", (event) => {
+					if (event.key === "Tab") {
+						const selectionStart = profileGenreInput.selectionStart ?? 0;
+						const selectionEnd = profileGenreInput.selectionEnd ?? 0;
+						if (selectionEnd > selectionStart) {
+							event.preventDefault();
+							profileGenreInput.setSelectionRange(selectionEnd, selectionEnd);
+						}
+					}
+					if (event.key === "Enter" || event.key === ",") {
+						event.preventDefault();
+						addGenreFromInput(profileGenreInput.value);
+					}
+					});
+					profileGenreInput.addEventListener("input", (event) => {
+						if (event instanceof InputEvent && String(event.inputType || "").startsWith("delete")) {
+							return;
+						}
+						applyGenreInlineAutocomplete(profileGenreInput);
+					});
+				}
+
+			if (profileGenreSelected instanceof HTMLElement) {
+				profileGenreSelected.addEventListener("click", (event) => {
+					const target = event.target;
+					if (!(target instanceof HTMLElement)) return;
+					const removeValue = target.getAttribute("data-remove-genre");
+					if (!removeValue) return;
+					editingGenres = editingGenres.filter((genre) => genre.toLowerCase() !== removeValue.toLowerCase());
+					renderGenreEditor();
+				});
+			}
+
+			const locationField = profileForm.elements.namedItem("location");
+			if (locationField instanceof HTMLInputElement) {
+				locationField.addEventListener("input", () => {
+					scheduleLocationLookup(locationField, { immediate: false });
+				});
+				locationField.addEventListener("keydown", (event) => {
+					if (event.key === "ArrowDown" && locationMatches.length > 0) {
+						event.preventDefault();
+						if (!isLocationOptionsOpen()) {
+							renderLocationOptions(locationField);
+						}
+						moveLocationActive(1);
+						return;
+					}
+					if (event.key === "ArrowUp" && locationMatches.length > 0) {
+						event.preventDefault();
+						if (!isLocationOptionsOpen()) {
+							renderLocationOptions(locationField);
+						}
+						moveLocationActive(-1);
+						return;
+					}
+					if (event.key === "Escape" && isLocationOptionsOpen()) {
+						event.preventDefault();
+						hideLocationOptions();
+						return;
+					}
+					if ((event.key === "Enter" || event.key === "Tab") && isLocationOptionsOpen() && locationMatches.length > 0) {
+						event.preventDefault();
+						const index = locationActiveIndex >= 0 ? locationActiveIndex : 0;
+						commitLocationSelection(locationField, index);
+					}
+				});
+				locationField.addEventListener("blur", () => {
+					scheduleLocationLookup(locationField, { immediate: true });
+					window.setTimeout(() => hideLocationOptions(), 160);
+				});
+					locationField.addEventListener("focus", () => {
+						if (locationMatches.length > 1) renderLocationOptions(locationField);
+					});
+				}
+
+				const favoriteBookField = profileForm.elements.namedItem("favoriteBook");
+				if (favoriteBookField instanceof HTMLInputElement) {
+					favoriteBookField.addEventListener("input", () => {
+						favoriteBookField.dataset.resolvedFavoriteBook = "";
+						scheduleFavoriteBookLookup(favoriteBookField, { immediate: false });
+					});
+					favoriteBookField.addEventListener("keydown", (event) => {
+						if (event.key === "ArrowDown" && favoriteBookMatches.length > 0) {
+							event.preventDefault();
+							if (!isFavoriteBookOptionsOpen()) {
+								renderFavoriteBookOptions(favoriteBookField);
+							}
+							moveFavoriteBookActive(1);
+							return;
+						}
+						if (event.key === "ArrowUp" && favoriteBookMatches.length > 0) {
+							event.preventDefault();
+							if (!isFavoriteBookOptionsOpen()) {
+								renderFavoriteBookOptions(favoriteBookField);
+							}
+							moveFavoriteBookActive(-1);
+							return;
+						}
+						if (event.key === "Escape" && isFavoriteBookOptionsOpen()) {
+							event.preventDefault();
+							hideFavoriteBookOptions();
+							return;
+						}
+						if ((event.key === "Enter" || event.key === "Tab") && isFavoriteBookOptionsOpen() && favoriteBookMatches.length > 0) {
+							event.preventDefault();
+							const index = favoriteBookActiveIndex >= 0 ? favoriteBookActiveIndex : 0;
+							commitFavoriteBookSelection(favoriteBookField, index);
+						}
+					});
+					favoriteBookField.addEventListener("blur", () => {
+						scheduleFavoriteBookLookup(favoriteBookField, { immediate: true });
+						window.setTimeout(() => hideFavoriteBookOptions(), 160);
+						void (async () => {
+							const resolved = await resolveFavoriteBookValue(favoriteBookField.value);
+							favoriteBookField.value = resolved;
+							favoriteBookField.dataset.resolvedFavoriteBook = resolved;
+						})();
+					});
+					favoriteBookField.addEventListener("focus", () => {
+						if (favoriteBookMatches.length > 0) renderFavoriteBookOptions(favoriteBookField);
+					});
+				}
+
+			profileForm.addEventListener("submit", (event) => {
+				event.preventDefault();
+				if (!profileForm.reportValidity()) return;
+				void (async () => {
+					const formData = new FormData(profileForm);
+					const requestedUsername = normalizeUsernameInput(formData.get("username"));
+					const currentUsername = normalizeUsernameInput(profileInfo?.username);
+						let resolvedUsername = requestedUsername;
+						let resolvedFavoriteBook = normalizeProfileText(formData.get("favoriteBook"), 120);
+
+						if (requestedUsername !== currentUsername) {
+						const usernameCheck = await checkUsernameAvailability(requestedUsername);
+						if (!usernameCheck.ok) return;
+						const claim = await claimUsername(usernameCheck.username);
+						if (!claim.ok) {
+							showUsernameStatus(claim.error || "Username is unavailable.", true);
+							return;
+						}
+							resolvedUsername = claim.username;
+						}
+
+						if (resolvedFavoriteBook) {
+							const favoriteBookField = profileForm.elements.namedItem("favoriteBook");
+							if (favoriteBookField instanceof HTMLInputElement) {
+								if (favoriteBookField.dataset.resolvedFavoriteBook) {
+									resolvedFavoriteBook = favoriteBookField.dataset.resolvedFavoriteBook;
+								} else {
+									resolvedFavoriteBook = await resolveFavoriteBookValue(resolvedFavoriteBook);
+								}
+								favoriteBookField.value = resolvedFavoriteBook;
+								favoriteBookField.dataset.resolvedFavoriteBook = resolvedFavoriteBook;
+							}
+						}
+
+						const next = normalizeProfileInfo({
+							avatar: editingAvatar,
+							name: formData.get("name"),
+							username: resolvedUsername,
+							location: formData.get("location"),
+							readingGoal: formData.get("readingGoal"),
+							favoriteBook: resolvedFavoriteBook,
+								blurb: formData.get("blurb"),
+								genres: editingGenres.join(", ")
+							});
+						profileInfo = saveProfileInfo(next);
+						renderProfileInfo();
+						showUsernameStatus("");
+						setProfileEditMode(false);
+					})();
+				});
+			}
+		}
 
 	function loadUpdates() {
 		try {
@@ -139,6 +1576,52 @@ const sectionLinks = [
 		return Math.max(0, Math.min(100, Math.round((current / total) * 100)));
 	}
 
+	function formatPublishedLabel(value) {
+		const text = String(value || "").trim();
+		if (!text) return "";
+		if (/^\d{4}$/.test(text)) return text;
+		if (/^\d{4}-\d{2}$/.test(text)) {
+			const parsed = new Date(`${text}-01`);
+			if (!Number.isFinite(parsed.getTime())) return text;
+			return parsed.toLocaleDateString("en-US", {
+				month: "long",
+				year: "numeric"
+			});
+		}
+		const parsed = new Date(text);
+		if (!Number.isFinite(parsed.getTime())) return text;
+		return parsed.toLocaleDateString("en-US", {
+			month: "long",
+			day: "numeric",
+			year: "numeric"
+		});
+	}
+
+	function formatFinishedLabel(value) {
+		const text = String(value || "").trim();
+		if (!text) return "";
+		const parts = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+		if (parts) {
+			const year = Number(parts[1]);
+			const month = Number(parts[2]);
+			const day = Number(parts[3]);
+			const parsed = new Date(Date.UTC(year, month - 1, day));
+			return parsed.toLocaleDateString("en-US", {
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+				timeZone: "UTC"
+			});
+		}
+		const parsed = new Date(text);
+		if (!Number.isFinite(parsed.getTime())) return text;
+		return parsed.toLocaleDateString("en-US", {
+			month: "short",
+			day: "numeric",
+			year: "numeric"
+		});
+	}
+
 	function escapeHtml(value) {
 		return String(value || "")
 			.replace(/&/g, "&amp;")
@@ -148,36 +1631,243 @@ const sectionLinks = [
 			.replace(/'/g, "&#39;");
 	}
 
+	function normalizeIsbn(value) {
+		return String(value || "").replace(/[^0-9Xx]/g, "").toUpperCase();
+	}
+
+	function isValidIsbn(value) {
+		const isbn = normalizeIsbn(value);
+		return isbn.length === 10 || isbn.length === 13;
+	}
+
+	function coverFromIsbn(isbn13, isbn10, size = "M") {
+		const clean13 = normalizeIsbn(isbn13);
+		const clean10 = normalizeIsbn(isbn10);
+		if (clean13.length === 13) return `https://covers.openlibrary.org/b/isbn/${clean13}-${size}.jpg`;
+		if (clean10.length === 10) return `https://covers.openlibrary.org/b/isbn/${clean10}-${size}.jpg`;
+		return "";
+	}
+
+	function hasLikelyInvalidIsbnCover(entry) {
+		const url = String(entry?.coverUrl || "");
+		if (!url.includes("covers.openlibrary.org/b/isbn/")) return false;
+		return !isValidIsbn(entry?.isbn13) && !isValidIsbn(entry?.isbn10);
+	}
+
+	function normalizeText(value) {
+		return String(value || "").trim().toLowerCase();
+	}
+
+	function canonicalizeTitle(value) {
+		return normalizeText(value)
+			.normalize("NFKD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/\([^)]*\)/g, " ")
+			.replace(/\b(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition)\b/g, " ")
+			.split(":")[0]
+			.replace(/^(the|a|an)\s+/g, "")
+			.replace(/[^a-z0-9\s]/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+	}
+
+	function canonicalizeAuthor(value) {
+		return normalizeText(value)
+			.normalize("NFKD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/^(by\s+)/, "")
+			.replace(/[^a-z0-9\s]/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+	}
+
+	function coverLookupKey(entry) {
+		return `${canonicalizeTitle(entry?.title)}|${canonicalizeAuthor(entry?.author)}`;
+	}
+
+	function pickIsbn(values = []) {
+		const cleaned = values.map((value) => normalizeIsbn(value)).filter(Boolean);
+		const isbn13 = cleaned.find((value) => value.length === 13) || "";
+		const isbn10 = cleaned.find((value) => value.length === 10) || "";
+		return { isbn13, isbn10 };
+	}
+
+	async function fetchCoverByTitleAuthor(entry) {
+		const title = String(entry?.title || "").trim();
+		if (!title) return null;
+		const author = String(entry?.author || "").trim();
+		const targetTitle = canonicalizeTitle(title);
+		const targetAuthor = canonicalizeAuthor(author);
+		const targetAuthorLast = targetAuthor.split(" ").filter(Boolean).at(-1) || "";
+
+		const endpoint = new URL("https://openlibrary.org/search.json");
+		endpoint.searchParams.set("title", title);
+		if (author) endpoint.searchParams.set("author", author);
+		endpoint.searchParams.set("limit", "6");
+		endpoint.searchParams.set("language", "eng");
+
+		try {
+			const response = await fetch(endpoint.toString(), {
+				headers: { Accept: "application/json" }
+			});
+			if (!response.ok) return null;
+			const data = await response.json();
+			const docs = Array.isArray(data?.docs) ? data.docs : [];
+			let best = null;
+			let bestScore = -1;
+			for (const doc of docs) {
+				const docTitle = canonicalizeTitle(doc?.title);
+				const docAuthorRaw = Array.isArray(doc?.author_name) ? String(doc.author_name[0] || "") : "";
+				const docAuthor = canonicalizeAuthor(docAuthorRaw);
+				const isbns = Array.isArray(doc?.isbn) ? doc.isbn : [];
+				const { isbn13, isbn10 } = pickIsbn(isbns);
+				const fromIsbn = coverFromIsbn(isbn13, isbn10);
+				const coverId = Number(doc?.cover_i || 0);
+				const coverUrl = fromIsbn || (coverId > 0 ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : "");
+				if (!coverUrl) continue;
+
+				let score = 0;
+				if (docTitle === targetTitle) score += 4;
+				if (docTitle && targetTitle && (docTitle.includes(targetTitle) || targetTitle.includes(docTitle))) score += 2;
+				if (targetAuthor && docAuthor && docAuthor.includes(targetAuthor)) score += 2;
+				if (targetAuthorLast && docAuthor && docAuthor.includes(targetAuthorLast)) score += 1;
+				if (!targetAuthor) score += 1;
+
+				if (score > bestScore) {
+					bestScore = score;
+					best = { coverUrl, isbn13, isbn10 };
+				}
+			}
+			if (best && bestScore >= 2) {
+				return best;
+			}
+		} catch {
+			return null;
+		}
+		return null;
+	}
+
+	async function enrichMissingCovers() {
+		if (coverLookupInFlight) return;
+		coverLookupInFlight = true;
+		try {
+			const cache = loadCoverLookupCache();
+			const missing = entries
+				.filter((entry) => !entry.coverUrl || hasLikelyInvalidIsbnCover(entry))
+				.filter((entry) => !coverFromIsbn(entry.isbn13, entry.isbn10))
+				.slice(0, MAX_COVER_LOOKUPS_PER_PASS);
+			const changed = [];
+
+			for (const entry of missing) {
+				const key = coverLookupKey(entry);
+				if (!key || key === "|") continue;
+				const cached = cache[key];
+				if (cached?.missedAt && (Date.now() - Number(cached.missedAt)) < 300000) continue;
+				if (cached?.coverUrl) {
+					entry.coverUrl = String(cached.coverUrl || "");
+					if (!entry.isbn13 && cached.isbn13) entry.isbn13 = cached.isbn13;
+					if (!entry.isbn10 && cached.isbn10) entry.isbn10 = cached.isbn10;
+					changed.push(entry);
+					continue;
+				}
+				const resolved = await fetchCoverByTitleAuthor(entry);
+				if (resolved?.coverUrl) {
+					entry.coverUrl = resolved.coverUrl;
+					if (!entry.isbn13 && resolved.isbn13) entry.isbn13 = resolved.isbn13;
+					if (!entry.isbn10 && resolved.isbn10) entry.isbn10 = resolved.isbn10;
+					cache[key] = {
+						coverUrl: resolved.coverUrl,
+						isbn13: resolved.isbn13 || "",
+						isbn10: resolved.isbn10 || ""
+					};
+					changed.push(entry);
+				} else {
+					cache[key] = { missedAt: Date.now() };
+				}
+			}
+
+			saveCoverLookupCache(cache);
+			if (changed.length > 0) {
+				saveEntries();
+				renderLists();
+				await Promise.allSettled(changed.map((entry) => syncEntryToServer(entry)));
+			}
+		} finally {
+			coverLookupInFlight = false;
+		}
+	}
+
 	function renderEntryCard(entry) {
 		const author = entry.author ? `<p class="meta">${escapeHtml(entry.author)}</p>` : "";
 		const formatMeta = entry.format ? `<p class="meta">${escapeHtml(entry.format)}${entry.language ? ` • ${escapeHtml(String(entry.language).toUpperCase())}` : ""}</p>` : "";
+		const publishedMeta = entry.publishedDate ? `<p class="meta">Published: ${escapeHtml(formatPublishedLabel(entry.publishedDate))}</p>` : "";
 		const total = normalizeNumber(entry.totalPages);
 		const current = normalizeNumber(entry.currentPage);
 		const percent = progressPercent(entry);
 		const progress = (entry.status !== "want_to_read" && total > 0)
 			? `<div class="progress-wrap"><div class="progress-bar" style="width:${percent}%"></div></div><p class="meta">${current}/${total} pages (${percent}%)</p>`
 			: "";
-		const finishedDate = entry.finishedDate
-			? `<p class="meta">Finished: ${escapeHtml(entry.finishedDate)}</p>`
+		const progressEditor = entry.status === "reading"
+			? `<div class="progress-editor">
+				<label class="progress-label" for="progress-${escapeHtml(entry.id)}">Update progress</label>
+				<div class="progress-controls">
+					<input
+						id="progress-${escapeHtml(entry.id)}"
+						class="progress-input"
+						type="number"
+						min="0"
+						${total > 0 ? `max="${total}"` : ""}
+						step="1"
+						inputmode="numeric"
+						placeholder="Page #"
+						value="${current}"
+					/>
+					<button type="button" class="secondary progress-save" data-action="update-progress">Save</button>
+				</div>
+			</div>`
 			: "";
-		const cover = entry.coverUrl
-			? `<img class="cover" src="${escapeHtml(entry.coverUrl)}" alt="" loading="lazy" />`
+		const finishedDate = entry.finishedDate
+			? `<p class="meta">Finished: ${escapeHtml(formatFinishedLabel(entry.finishedDate))}</p>`
+			: "";
+		const coverUrl = entry.coverUrl || coverFromIsbn(entry.isbn13, entry.isbn10);
+		const cover = coverUrl
+			? `<img class="cover" src="${escapeHtml(coverUrl)}" alt="" loading="lazy" data-cover-image onerror="this.hidden=true; if (this.nextElementSibling) this.nextElementSibling.hidden=false;" />
+			   <div class="cover cover-placeholder" data-cover-placeholder hidden>
+				   <span class="material-icons cover-placeholder-icon" aria-hidden="true">menu_book</span>
+			   </div>`
+			: `<div class="cover cover-placeholder">
+				<span class="material-icons cover-placeholder-icon" aria-hidden="true">menu_book</span>
+			</div>`;
+		const actionButtons = [
+			entry.status === "want_to_read" ? `<button type="button" data-action="start" class="secondary">Start Reading</button>` : "",
+			entry.status === "reading" ? `<button type="button" data-action="finish" class="secondary">Mark Finished</button>` : ""
+		].filter(Boolean).join("");
+		const inlineActions = actionButtons
+			? `<div class="entry-actions">${actionButtons}</div>`
 			: "";
 
 		return `
 			<article class="entry-card" data-id="${escapeHtml(entry.id)}">
-				${cover}
-				<div class="entry-content">
+				<div class="card-menu-wrap">
+					<button type="button" class="card-menu-trigger" data-action="toggle-card-menu" aria-expanded="false" aria-label="More actions">
+						<span class="material-icons" aria-hidden="true">more_vert</span>
+					</button>
+					<div class="card-menu" hidden>
+						<button type="button" class="card-menu-item danger-text" data-action="delete">Delete</button>
+					</div>
+				</div>
+				<div class="cover-wrap">
+					${cover}
+				</div>
+				<div class="card-body">
 					<h3>${escapeHtml(entry.title)}</h3>
 					${author}
 					${formatMeta}
+					${publishedMeta}
 					${progress}
+					${progressEditor}
 					${finishedDate}
-					<div class="entry-actions">
-						<button type="button" data-action="delete" class="danger">Delete</button>
-						${entry.status === "want_to_read" ? `<button type="button" data-action="start" class="secondary">Start Reading</button>` : ""}
-						${entry.status === "reading" ? `<button type="button" data-action="finish" class="secondary">Mark Finished</button>` : ""}
-					</div>
+					${inlineActions}
 				</div>
 			</article>
 		`;
@@ -189,25 +1879,25 @@ const sectionLinks = [
 
 	function renderLists() {
 		const wantToRead = entries
-			.filter((entry) => entry.status === "want_to_read")
-			.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+			.filter((entry) => entry.status === "want_to_read");
 		const reading = entries
-			.filter((entry) => entry.status === "reading")
-			.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+			.filter((entry) => entry.status === "reading");
 		const finished = entries
-			.filter((entry) => entry.status === "finished")
-			.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+			.filter((entry) => entry.status === "finished");
+		const sortedWantToRead = sortEntries(wantToRead, "want_to_read");
+		const sortedReading = sortEntries(reading, "reading");
+		const sortedFinished = sortEntries(finished, "finished");
 
-		wantToReadList.innerHTML = wantToRead.length
-			? wantToRead.map(renderEntryCard).join("")
+		wantToReadList.innerHTML = sortedWantToRead.length
+			? sortedWantToRead.map(renderEntryCard).join("")
 			: renderEmptyState("No books queued yet.");
 
-		currentlyReadingList.innerHTML = reading.length
-			? reading.map(renderEntryCard).join("")
+		currentlyReadingList.innerHTML = sortedReading.length
+			? sortedReading.map(renderEntryCard).join("")
 			: renderEmptyState("No active books yet.");
 
-		finishedList.innerHTML = finished.length
-			? finished.map(renderEntryCard).join("")
+		finishedList.innerHTML = sortedFinished.length
+			? sortedFinished.map(renderEntryCard).join("")
 			: renderEmptyState("No finished books yet.");
 
 		for (const link of shelfFilterLinks) {
@@ -215,6 +1905,30 @@ const sectionLinks = [
 			if (hash === "#want_to_read") link.textContent = `Want to Read (${wantToRead.length})`;
 			if (hash === "#reading") link.textContent = `Currently Reading (${reading.length})`;
 			if (hash === "#finished") link.textContent = `Read (${finished.length})`;
+		}
+
+		bindCoverFallbacks();
+		renderGoalWidget();
+	}
+
+	function bindCoverFallbacks() {
+		const images = Array.from(document.querySelectorAll("[data-cover-image]"));
+		for (const image of images) {
+			if (!(image instanceof HTMLImageElement)) continue;
+			const wrap = image.closest(".cover-wrap");
+			if (!(wrap instanceof HTMLElement)) continue;
+			const placeholder = wrap.querySelector("[data-cover-placeholder]");
+			if (!(placeholder instanceof HTMLElement)) continue;
+
+			image.addEventListener("error", () => {
+				image.hidden = true;
+				placeholder.hidden = false;
+			}, { once: true });
+
+			if (image.complete && image.naturalWidth === 0) {
+				image.hidden = true;
+				placeholder.hidden = false;
+			}
 		}
 	}
 
@@ -289,19 +2003,109 @@ const sectionLinks = [
 		void syncEntryToServer(entry);
 	}
 
+	function updateProgress(entryId, nextPageValue) {
+		const entry = entries.find((item) => item.id === entryId);
+		if (!entry) return;
+		if (entry.status !== "reading") return;
+		const total = normalizeNumber(entry.totalPages);
+		let nextPage = normalizeNumber(nextPageValue);
+		if (total > 0) {
+			nextPage = Math.min(nextPage, total);
+		}
+		entry.currentPage = nextPage;
+		entry.updatedAt = Date.now();
+		saveEntries();
+		renderLists();
+		void syncEntryToServer(entry);
+	}
+
 	function handleListClick(event) {
 		const target = event.target;
 		if (!(target instanceof HTMLElement)) return;
-		const action = target.dataset.action;
+		const actionTarget = target.closest("[data-action]");
+		if (!(actionTarget instanceof HTMLElement)) return;
+		const action = actionTarget.dataset.action;
 		if (!action) return;
-		const card = target.closest(".entry-card");
+		const card = actionTarget.closest(".entry-card");
 		if (!card) return;
 		const entryId = card.getAttribute("data-id");
 		if (!entryId) return;
 
+		if (action === "toggle-card-menu") {
+			const trigger = card.querySelector('[data-action="toggle-card-menu"]');
+			const menu = card.querySelector(".card-menu");
+			if (!(trigger instanceof HTMLElement) || !(menu instanceof HTMLElement)) return;
+			const willOpen = menu.hidden;
+			closeCardMenus(card);
+			menu.hidden = !willOpen;
+			trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+			return;
+		}
+
+		closeCardMenus();
 		if (action === "delete") deleteEntry(entryId);
 		if (action === "finish") finishEntry(entryId);
 		if (action === "start") startReading(entryId);
+		if (action === "update-progress") {
+			const progressInput = card.querySelector(".progress-input");
+			if (progressInput instanceof HTMLInputElement) {
+				updateProgress(entryId, progressInput.value);
+			}
+		}
+	}
+
+	function handleListKeydown(event) {
+		const target = event.target;
+		if (!(target instanceof HTMLInputElement)) return;
+		if (!target.classList.contains("progress-input")) return;
+		if (event.key !== "Enter") return;
+		event.preventDefault();
+		const card = target.closest(".entry-card");
+		if (!card) return;
+		const entryId = card.getAttribute("data-id");
+		if (!entryId) return;
+		updateProgress(entryId, target.value);
+	}
+
+	function closeCardMenus(exceptCard = null) {
+		const menus = Array.from(document.querySelectorAll(".card-menu"));
+		for (const menu of menus) {
+			if (!(menu instanceof HTMLElement)) continue;
+			const card = menu.closest(".entry-card");
+			if (exceptCard && card === exceptCard) continue;
+			menu.hidden = true;
+			const trigger = card?.querySelector?.('[data-action="toggle-card-menu"]');
+			if (trigger instanceof HTMLElement) {
+				trigger.setAttribute("aria-expanded", "false");
+			}
+		}
+	}
+
+	function setupSortControls() {
+		loadListSorts();
+		syncSortInputs();
+
+		if (wantToReadSort instanceof HTMLSelectElement) {
+			wantToReadSort.addEventListener("change", () => {
+				listSorts.want_to_read = normalizeSortValue(wantToReadSort.value, "want_to_read");
+				saveListSorts();
+				renderLists();
+			});
+		}
+		if (readingSort instanceof HTMLSelectElement) {
+			readingSort.addEventListener("change", () => {
+				listSorts.reading = normalizeSortValue(readingSort.value, "reading");
+				saveListSorts();
+				renderLists();
+			});
+		}
+		if (finishedSort instanceof HTMLSelectElement) {
+			finishedSort.addEventListener("change", () => {
+				listSorts.finished = normalizeSortValue(finishedSort.value, "finished");
+				saveListSorts();
+				renderLists();
+			});
+		}
 	}
 
 	for (const link of shelfFilterLinks) {
@@ -317,73 +2121,579 @@ const sectionLinks = [
 		setActiveTab(normalizeHashToTab(window.location.hash));
 	});
 
+	document.addEventListener("click", (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		if (target.closest(".card-menu-wrap")) return;
+		closeCardMenus();
+	});
+
 	wantToReadList.addEventListener("click", handleListClick);
 	currentlyReadingList.addEventListener("click", handleListClick);
 	finishedList.addEventListener("click", handleListClick);
+	wantToReadList.addEventListener("keydown", handleListKeydown);
+	currentlyReadingList.addEventListener("keydown", handleListKeydown);
+	finishedList.addEventListener("keydown", handleListKeydown);
 
+	initializeProfileInfo();
+	setupSortControls();
 	loadEntries();
+	cleanupLikelyImportedFinishedDates();
 	renderLists();
 	setActiveTab(normalizeHashToTab(window.location.hash));
+	void enrichMissingCovers();
 	void hydrateEntriesFromServer();
 </script>
 
-<style>
+<style is:global>
 	.reads-page {
 		max-width: 860px;
 	}
 
-	h1 {
+	.reads-page h1 {
 		margin: 0;
 	}
 
-	.subhead {
+	.reads-page .subhead {
 		margin: 0.5rem 0 1.25rem;
 		color: #444;
 	}
 
-	.list-section {
-		margin-top: 1.5rem;
-	}
-
-	.list-section h2 {
-		margin: 0 0 0.65rem;
-	}
-
-	.entry-list {
-		display: grid;
-		gap: 0.75rem;
-	}
-
-	.entry-card {
+	.reads-page .profile-details {
 		border: 1px solid #d8d8d8;
 		border-radius: 12px;
-		padding: 0.75rem;
-		display: grid;
-		grid-template-columns: 52px auto;
-		gap: 0.75rem;
 		background: #fff;
+		padding: 0.9rem;
+		margin-bottom: 1.25rem;
 	}
 
-	.cover {
-		width: 52px;
-		height: 78px;
-		object-fit: cover;
-		border-radius: 6px;
-		background: #f2f2f2;
+	.reads-page .goal-widget {
+		margin-bottom: 1.25rem;
 	}
 
-	.entry-content h3 {
+	.reads-page .goal-widget-card {
+		border: 1px solid #d8d8d8;
+		border-radius: 12px;
+		background: #fff;
+		padding: 0.9rem;
+	}
+
+	.reads-page .goal-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+
+	.reads-page .goal-widget-card h2 {
+		margin: 0;
+		font-size: 1.1rem;
+	}
+
+	.reads-page .goal-value {
+		margin: 0;
+		font-weight: 700;
+		font-size: 0.95rem;
+		color: #222;
+	}
+
+	.reads-page .goal-progress-track {
+		margin-top: 0.6rem;
+		height: 12px;
+		background: #ececec;
+		border-radius: 999px;
+		overflow: hidden;
+	}
+
+	.reads-page .goal-progress-fill {
+		height: 100%;
+		background: #0f766e;
+	}
+
+	.reads-page .goal-meta {
+		margin: 0.45rem 0 0;
+		font-size: 0.88rem;
+		color: #4d4d4d;
+	}
+
+	.reads-page .profile-details-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-bottom: 0.55rem;
+	}
+
+	.reads-page .profile-details-head h2 {
+		margin: 0;
+		font-size: 1.1rem;
+	}
+
+	.reads-page .profile-view h3 {
 		margin: 0;
 		font-size: 1.05rem;
 	}
 
-	.meta {
-		margin: 0.2rem 0;
-		font-size: 0.9rem;
-		color: #4a4a4a;
+	.reads-page .profile-view-head {
+		display: grid;
+		grid-template-columns: 56px auto;
+		column-gap: 0.6rem;
+		align-items: center;
+		margin-bottom: 0.35rem;
 	}
 
-	.progress-wrap {
+	.reads-page .profile-avatar {
+		width: 56px;
+		height: 56px;
+		border-radius: 999px;
+		background: #f3f4f6;
+		border: 1px solid #d1d5db;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+	}
+
+	.reads-page .profile-avatar-image {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+
+	.reads-page .profile-avatar-fallback {
+		font-size: 1.05rem;
+		font-weight: 700;
+		color: #4b5563;
+	}
+
+	.reads-page .profile-blurb {
+		margin: 0.45rem 0;
+		font-size: 0.92rem;
+		color: #3f3f3f;
+		line-height: 1.35;
+	}
+
+	.reads-page .muted {
+		color: #666;
+	}
+
+	.reads-page .genre-list {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin-top: 0.45rem;
+	}
+
+	.reads-page .genre-chip {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.25rem 0.55rem;
+		border-radius: 999px;
+		border: 1px solid #d1d1d1;
+		background: #f7f7f7;
+		font-size: 0.82rem;
+		color: #444;
+	}
+
+	.reads-page .profile-form {
+		display: grid;
+		gap: 0.6rem;
+	}
+
+	.reads-page .profile-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.6rem;
+	}
+
+	.reads-page .profile-form label {
+		display: grid;
+		gap: 0.25rem;
+		font-size: 0.86rem;
+		color: #444;
+	}
+
+	.reads-page .profile-form .full-span {
+		grid-column: 1 / -1;
+	}
+
+	.reads-page .avatar-editor {
+		display: grid;
+		grid-template-columns: 56px auto;
+		gap: 0.6rem;
+		align-items: start;
+	}
+
+	.reads-page .avatar-preview {
+		width: 56px;
+		height: 56px;
+		border-radius: 999px;
+		border: 1px solid #d1d5db;
+		background: #f3f4f6;
+		overflow: hidden;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.reads-page .avatar-preview-image {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+
+	.reads-page .avatar-preview-fallback {
+		font-size: 1.05rem;
+		font-weight: 700;
+		color: #4b5563;
+	}
+
+	.reads-page .avatar-controls {
+		display: grid;
+		gap: 0.35rem;
+	}
+
+	.reads-page .avatar-buttons {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.reads-page .profile-form input,
+	.reads-page .profile-form textarea {
+		width: 100%;
+		font-size: 0.92rem;
+		padding: 0.5rem 0.6rem;
+		border: 1px solid #d1d1d1;
+		border-radius: 8px;
+		background: #fff;
+		box-sizing: border-box;
+		font-family: inherit;
+	}
+
+	.reads-page .profile-form textarea {
+		resize: vertical;
+		min-height: 84px;
+	}
+
+	.reads-page .genre-input-row {
+		display: flex;
+		gap: 0.45rem;
+	}
+
+	.reads-page .genre-input-row input {
+		flex: 1;
+	}
+
+	.reads-page .location-autocomplete {
+		position: relative;
+	}
+
+	.reads-page .favorite-book-autocomplete {
+		position: relative;
+		margin-top: -2.65rem;
+	}
+
+	.reads-page .favorite-book-autocomplete input {
+		padding-right: 1.8rem;
+	}
+
+	.reads-page .location-options {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 0;
+		right: 0;
+		z-index: 40;
+		background: #fff;
+		border: 1px solid #d1d1d1;
+		border-radius: 8px;
+		box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+		max-height: 220px;
+		overflow: auto;
+		padding: 0.2rem 0;
+	}
+
+	.reads-page .location-option {
+		display: block;
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: transparent;
+		padding: 0.5rem 0.6rem;
+		font-size: 0.9rem;
+		color: #222;
+		cursor: pointer;
+	}
+
+	.reads-page .location-option:hover {
+		background: #f3f4f6;
+	}
+
+	.reads-page .location-option.is-active {
+		background: #e5eefc;
+	}
+
+	.reads-page .favorite-book-options {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 0;
+		right: 0;
+		z-index: 40;
+		background: #fff;
+		border: 1px solid #d1d1d1;
+		border-radius: 8px;
+		box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+		max-height: 260px;
+		overflow: auto;
+		padding: 0.2rem 0;
+	}
+
+	.reads-page .favorite-book-option {
+		display: block;
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: transparent;
+		padding: 0.45rem 0.6rem;
+		cursor: pointer;
+	}
+
+	.reads-page .favorite-book-option:hover {
+		background: #f3f4f6;
+	}
+
+	.reads-page .favorite-book-option.is-active {
+		background: #e5eefc;
+	}
+
+	.reads-page .favorite-book-option-title {
+		display: block;
+		font-size: 0.9rem;
+		line-height: 1.25;
+		font-weight: 600;
+		color: #222;
+	}
+
+	.reads-page .favorite-book-option-meta {
+		display: block;
+		margin-top: 0.1rem;
+		font-size: 0.8rem;
+		line-height: 1.25;
+		color: #5a5a5a;
+	}
+
+	.reads-page .location-status {
+		margin: 0.1rem 0 0;
+		font-size: 0.8rem;
+		color: #1f7a45;
+	}
+
+	.reads-page .location-status.error {
+		color: #9b1c1c;
+	}
+
+	.reads-page .field-status {
+		margin: 0.1rem 0 0;
+		font-size: 0.8rem;
+		color: #1f7a45;
+		min-height: 1rem;
+	}
+
+	.reads-page .field-status.error {
+		color: #9b1c1c;
+	}
+
+	.reads-page .genre-edit-list {
+		min-height: 1.75rem;
+		margin-top: 0;
+	}
+
+	.reads-page .genre-remove {
+		border: none;
+		background: transparent;
+		color: #666;
+		cursor: pointer;
+		font-size: 0.95rem;
+		line-height: 1;
+		padding: 0 0 0 0.35rem;
+	}
+
+	.reads-page .field-hint {
+		margin: 0.1rem 0 0;
+		font-size: 0.75rem;
+		color: #666;
+	}
+
+	.reads-page .profile-actions {
+		display: flex;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.reads-page .list-section {
+		margin-top: 1.5rem;
+	}
+
+	.reads-page .list-section-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.65rem;
+		margin: 0 0 0.65rem;
+	}
+
+	.reads-page .list-section h2 {
+		margin: 0;
+	}
+
+	.reads-page .list-sort {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: 0.82rem;
+		color: #4d4d4d;
+	}
+
+	.reads-page .list-sort select {
+		border: 1px solid #d1d1d1;
+		border-radius: 8px;
+		background: #fff;
+		padding: 0.28rem 0.45rem;
+		font-size: 0.84rem;
+		color: #222;
+	}
+
+	.reads-page .entry-list {
+		display: grid;
+		gap: 0.75rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.reads-page .entry-card {
+		border: 1px solid #d8d8d8;
+		border-radius: 12px;
+		padding: 0.65rem;
+		display: grid;
+		grid-template-columns: 56px auto;
+		gap: 0.65rem;
+		background: #fff;
+		position: relative;
+	}
+
+	.reads-page .card-menu-wrap {
+		position: absolute;
+		top: 0.4rem;
+		right: 0.35rem;
+		z-index: 3;
+	}
+
+	.reads-page .card-menu-trigger {
+		border: none;
+		background: transparent;
+		color: #595959;
+		padding: 0.2rem;
+		border-radius: 6px;
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.reads-page .card-menu-trigger:hover {
+		background: #f1f1f1;
+	}
+
+	.reads-page .card-menu-trigger .material-icons {
+		font-size: 1.15rem;
+		line-height: 1;
+	}
+
+	.reads-page .card-menu {
+		position: absolute;
+		top: calc(100% + 4px);
+		right: 0;
+		background: #fff;
+		border: 1px solid #d1d1d1;
+		border-radius: 8px;
+		box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+		padding: 0.2rem 0;
+		min-width: 120px;
+	}
+
+	.reads-page .card-menu-item {
+		display: block;
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: transparent;
+		padding: 0.45rem 0.65rem;
+		font-size: 0.88rem;
+		cursor: pointer;
+	}
+
+	.reads-page .card-menu-item:hover {
+		background: #f3f4f6;
+	}
+
+	.reads-page .card-menu-item.danger-text {
+		color: #b91c1c;
+	}
+
+	.reads-page .cover-wrap {
+		width: 56px;
+		height: 84px;
+		border-radius: 6px;
+	}
+
+	.reads-page .cover {
+		width: 56px;
+		height: 84px;
+		display: block;
+		object-fit: cover;
+		border-radius: 6px;
+		background: #f1f1f1;
+	}
+
+	.reads-page .cover-placeholder {
+		width: 56px;
+		height: 84px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: #f1f1f1;
+		color: #8a8a8a;
+		border: 1px solid #d7d7d7;
+		border-radius: 6px;
+		box-sizing: border-box;
+	}
+
+	.reads-page .cover-placeholder-icon {
+		font-family: "Material Icons";
+		font-size: 24px;
+		line-height: 1;
+		color: #8a8a8a;
+	}
+
+	.reads-page [hidden] {
+		display: none !important;
+	}
+
+	.reads-page .card-body h3 {
+		margin: 0;
+		font-size: 1rem;
+		padding-right: 1.4rem;
+	}
+
+	.reads-page .meta {
+		margin: 0.2rem 0;
+		font-size: 0.87rem;
+		color: #4d4d4d;
+	}
+
+	.reads-page .progress-wrap {
 		height: 10px;
 		background: #ececec;
 		border-radius: 999px;
@@ -391,18 +2701,50 @@ const sectionLinks = [
 		margin-top: 0.3rem;
 	}
 
-	.progress-bar {
+	.reads-page .progress-bar {
 		height: 100%;
 		background: #0f766e;
 	}
 
-	.entry-actions {
-		display: flex;
-		gap: 0.45rem;
-		margin-top: 0.45rem;
+	.reads-page .progress-editor {
+		margin-top: 0.35rem;
 	}
 
-	button {
+	.reads-page .progress-label {
+		display: block;
+		font-size: 0.78rem;
+		color: #4d4d4d;
+		margin-bottom: 0.25rem;
+	}
+
+	.reads-page .progress-controls {
+		display: flex;
+		gap: 0.45rem;
+		align-items: center;
+	}
+
+	.reads-page .progress-input {
+		width: 104px;
+		border: 1px solid #cecece;
+		border-radius: 8px;
+		padding: 0.4rem 0.55rem;
+		font-size: 0.88rem;
+		line-height: 1.2;
+	}
+
+	.reads-page .progress-save {
+		padding: 0.42rem 0.75rem;
+		font-size: 0.85rem;
+	}
+
+	.reads-page .entry-actions {
+		display: flex;
+		gap: 0.45rem;
+		margin-top: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.reads-page button {
 		border: none;
 		border-radius: 8px;
 		padding: 0.55rem 0.85rem;
@@ -412,20 +2754,42 @@ const sectionLinks = [
 		cursor: pointer;
 	}
 
-	button.secondary {
+	.reads-page button.secondary {
 		background: #efefef;
 		color: #222;
 	}
 
-	button.danger {
+	.reads-page button.danger {
 		background: #9b1c1c;
 	}
 
-	.empty-state {
+	.reads-page .empty-state {
 		margin: 0;
 		border: 1px dashed #c5c5c5;
 		padding: 0.8rem;
 		border-radius: 10px;
 		background: #fafafa;
+		grid-column: 1 / -1;
+	}
+
+	@media (max-width: 860px) {
+		.reads-page .profile-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.reads-page .entry-list {
+			grid-template-columns: 1fr;
+		}
+
+		.reads-page .goal-head {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.2rem;
+		}
+
+		.reads-page .list-section-head {
+			flex-direction: column;
+			align-items: flex-start;
+		}
 	}
 </style>

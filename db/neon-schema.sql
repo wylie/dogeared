@@ -6,8 +6,41 @@ create extension if not exists pgcrypto;
 create table if not exists app_user (
 	id uuid primary key default gen_random_uuid(),
 	user_key text not null unique,
+	username text,
+	email_hash text unique,
+	email_enc bytea,
 	created_at timestamptz not null default now()
 );
+
+create unique index if not exists idx_app_user_username_lower on app_user (lower(username)) where username is not null;
+create unique index if not exists idx_app_user_email_hash on app_user(email_hash) where email_hash is not null;
+
+create table if not exists auth_magic_link (
+	id uuid primary key default gen_random_uuid(),
+	user_id uuid not null references app_user(id) on delete cascade,
+	token_hash text not null unique,
+	requested_ip text not null default '',
+	user_agent text not null default '',
+	expires_at timestamptz not null,
+	used_at timestamptz,
+	created_at timestamptz not null default now()
+);
+
+create index if not exists idx_auth_magic_link_user on auth_magic_link(user_id);
+create index if not exists idx_auth_magic_link_expires on auth_magic_link(expires_at);
+
+create table if not exists auth_session (
+	id uuid primary key default gen_random_uuid(),
+	user_id uuid not null references app_user(id) on delete cascade,
+	session_hash text not null unique,
+	expires_at timestamptz not null,
+	revoked_at timestamptz,
+	last_seen_at timestamptz not null default now(),
+	created_at timestamptz not null default now()
+);
+
+create index if not exists idx_auth_session_user on auth_session(user_id);
+create index if not exists idx_auth_session_expires on auth_session(expires_at);
 
 create table if not exists book (
 	id bigserial primary key,
@@ -113,4 +146,3 @@ as $$
 	order by score desc, a.reader_count desc, a.last_activity_at desc, b.id desc
 	limit greatest(1, least(p_limit, 50));
 $$;
-

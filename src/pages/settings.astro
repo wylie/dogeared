@@ -1,12 +1,773 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import Widget from '../components/Widget.astro';
 ---
 
 <Layout title="Settings">
-	<Widget slot="right">settings</Widget>
+	<div slot="right" class="settings-page">
+		<h1>Settings</h1>
+		<p class="subhead">Manage imports and account preferences.</p>
+
+		<section class="settings-section" id="goodreads-import" aria-labelledby="goodreads-import-title">
+			<h2 id="goodreads-import-title">Import Goodreads Data</h2>
+			<p class="section-copy">
+				Upload your Goodreads library export CSV to import shelves into DogEared.
+			</p>
+			<ol class="steps">
+				<li>In Goodreads, go to My Books and export your library as CSV.</li>
+				<li>Upload that CSV file here.</li>
+				<li>Review the import summary and open your <a href="/profile">Profile</a>.</li>
+			</ol>
+
+			<form id="goodreads-import-form" class="import-form">
+				<label for="goodreads-csv">Goodreads CSV</label>
+				<input id="goodreads-csv" name="goodreadsCsv" type="file" accept=".csv,text/csv" required />
+				<button type="submit">Import Goodreads CSV</button>
+			</form>
+
+			<p id="import-feedback" class="feedback" hidden></p>
+			<div id="import-summary" class="summary" hidden></div>
+		</section>
+
+		<section class="settings-section" id="account-settings" aria-labelledby="account-settings-title">
+			<h2 id="account-settings-title">Account</h2>
+			<p class="section-copy">
+				Sign in with a magic link, sign out, or permanently delete your account.
+			</p>
+
+			<div id="account-authenticated" hidden>
+				<p class="account-meta">Signed in as <strong id="account-email"></strong></p>
+				<div class="account-actions">
+					<button type="button" id="logout-button" class="secondary">Log Out</button>
+				</div>
+				<hr />
+				<p class="danger-copy">
+					Delete account permanently removes your account and synced shelf data.
+				</p>
+				<form id="delete-account-form" class="danger-form">
+					<label for="delete-confirm">Type <code>DELETE</code> to confirm</label>
+					<input id="delete-confirm" type="text" autocomplete="off" />
+					<button type="submit" class="danger">Delete Account</button>
+				</form>
+			</div>
+
+			<form id="magic-link-form" class="import-form" hidden>
+				<label for="magic-email">Email</label>
+				<input id="magic-email" type="email" autocomplete="email" required placeholder="you@example.com" />
+				<button type="submit">Send Magic Link</button>
+			</form>
+
+			<p id="account-feedback" class="feedback" hidden></p>
+		</section>
+	</div>
 </Layout>
 
 <style>
+	.settings-page {
+		max-width: 860px;
+	}
 
+	h1 {
+		margin: 0;
+	}
+
+	.subhead {
+		margin: 0.5rem 0 1.25rem;
+		color: #444;
+	}
+
+	.settings-section {
+		border: 1px solid #d8d8d8;
+		border-radius: 12px;
+		padding: 1rem;
+		background: #fff;
+	}
+
+	.settings-section h2 {
+		margin: 0;
+	}
+
+	.section-copy {
+		margin: 0.5rem 0 0.8rem;
+		color: #333;
+	}
+
+	.steps {
+		margin: 0 0 1rem 1.1rem;
+		padding: 0;
+		display: grid;
+		gap: 0.4rem;
+	}
+
+	.import-form {
+		display: grid;
+		gap: 0.55rem;
+	}
+
+	label {
+		font-weight: 600;
+	}
+
+	input[type="file"] {
+		font-size: 0.95rem;
+	}
+
+	button {
+		border: none;
+		border-radius: 8px;
+		padding: 0.6rem 0.9rem;
+		font-size: 0.95rem;
+		background: #111;
+		color: #fff;
+		cursor: pointer;
+		justify-self: start;
+	}
+
+	.feedback {
+		margin: 0.85rem 0 0;
+		padding: 0.7rem 0.8rem;
+		border-radius: 9px;
+		background: #f3f4f6;
+		color: #1f2937;
+	}
+
+	.feedback.error {
+		background: #fef2f2;
+		color: #991b1b;
+	}
+
+	.summary {
+		margin-top: 0.8rem;
+		padding: 0.85rem;
+		border: 1px dashed #c8c8c8;
+		border-radius: 10px;
+		background: #fafafa;
+	}
+
+	.summary p {
+		margin: 0.2rem 0;
+	}
+
+	.secondary {
+		background: #efefef;
+		color: #222;
+	}
+
+	.danger {
+		background: #991b1b;
+	}
+
+	.account-meta {
+		margin: 0 0 0.6rem;
+	}
+
+	.account-actions {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 0.8rem;
+	}
+
+	.danger-copy {
+		color: #991b1b;
+		margin: 0.8rem 0 0.35rem;
+	}
+
+	.danger-form {
+		display: grid;
+		gap: 0.45rem;
+		max-width: 340px;
+	}
 </style>
+
+<script>
+	const STORAGE_KEY = "dogeared:myreads";
+	const UPDATES_KEY = "dogeared:updates";
+	const USER_KEY_STORAGE_KEY = "dogeared:user-key";
+	const importForm = document.getElementById("goodreads-import-form");
+	const csvInput = document.getElementById("goodreads-csv");
+	const feedback = document.getElementById("import-feedback");
+	const summary = document.getElementById("import-summary");
+	const accountFeedback = document.getElementById("account-feedback");
+	const accountAuthenticated = document.getElementById("account-authenticated");
+	const accountEmail = document.getElementById("account-email");
+	const magicLinkForm = document.getElementById("magic-link-form");
+	const magicEmail = document.getElementById("magic-email");
+	const logoutButton = document.getElementById("logout-button");
+	const deleteAccountForm = document.getElementById("delete-account-form");
+	const deleteConfirm = document.getElementById("delete-confirm");
+
+	function showFeedback(message, isError = false) {
+		feedback.textContent = message;
+		feedback.hidden = false;
+		feedback.classList.toggle("error", isError);
+	}
+
+	function showSummary(result) {
+		summary.innerHTML = `
+			<p><strong>Imported:</strong> ${result.imported} books</p>
+			<p><strong>Updated:</strong> ${result.updated} books</p>
+			<p><strong>Skipped:</strong> ${result.skipped} rows</p>
+			<p><strong>Shelves:</strong> Want to Read (${result.wantToRead}), Currently Reading (${result.reading}), Read (${result.finished})</p>
+		`;
+		summary.hidden = false;
+	}
+
+	function showAccountFeedback(message, isError = false) {
+		accountFeedback.textContent = message;
+		accountFeedback.hidden = !message;
+		accountFeedback.classList.toggle("error", isError);
+	}
+
+	function normalizeText(value) {
+		return String(value || "").trim();
+	}
+
+	function normalizeNumber(value) {
+		const n = Number(value);
+		if (!Number.isFinite(n) || n < 0) return 0;
+		return Math.floor(n);
+	}
+
+	function normalizeIsbn(value) {
+		return String(value || "").replace(/[^0-9Xx]/g, "").toUpperCase();
+	}
+
+	function coverFromIsbn(isbn13, isbn10, size = "M") {
+		const clean13 = normalizeIsbn(isbn13);
+		const clean10 = normalizeIsbn(isbn10);
+		if (clean13.length === 13) return `https://covers.openlibrary.org/b/isbn/${clean13}-${size}.jpg`;
+		if (clean10.length === 10) return `https://covers.openlibrary.org/b/isbn/${clean10}-${size}.jpg`;
+		return "";
+	}
+
+	function canonicalizeTitle(value) {
+		return normalizeText(value)
+			.toLowerCase()
+			.normalize("NFKD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/\([^)]*\)/g, " ")
+			.replace(/\b(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition)\b/g, " ")
+			.split(":")[0]
+			.replace(/^(the|a|an)\s+/g, "")
+			.replace(/[^a-z0-9\s]/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+	}
+
+	function canonicalizeAuthor(value) {
+		return normalizeText(value)
+			.toLowerCase()
+			.normalize("NFKD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/^(by\s+)/, "")
+			.replace(/[^a-z0-9\s]/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+	}
+
+	function canonicalWorkKey(entry) {
+		const isbn13 = normalizeIsbn(entry.isbn13);
+		const isbn10 = normalizeIsbn(entry.isbn10);
+		if (isbn13) return `isbn13:${isbn13}`;
+		if (isbn10) return `isbn10:${isbn10}`;
+		return `title_author:${canonicalizeTitle(entry.title)}|${canonicalizeAuthor(entry.author)}`;
+	}
+
+	function parseCsv(text) {
+		const rows = [];
+		let row = [];
+		let cell = "";
+		let inQuotes = false;
+
+		for (let i = 0; i < text.length; i += 1) {
+			const char = text[i];
+			const next = text[i + 1];
+
+			if (char === '"') {
+				if (inQuotes && next === '"') {
+					cell += '"';
+					i += 1;
+				} else {
+					inQuotes = !inQuotes;
+				}
+				continue;
+			}
+
+			if (!inQuotes && char === ",") {
+				row.push(cell);
+				cell = "";
+				continue;
+			}
+
+			if (!inQuotes && (char === "\n" || char === "\r")) {
+				if (char === "\r" && next === "\n") i += 1;
+				row.push(cell);
+				rows.push(row);
+				row = [];
+				cell = "";
+				continue;
+			}
+
+			cell += char;
+		}
+
+		if (cell.length > 0 || row.length > 0) {
+			row.push(cell);
+			rows.push(row);
+		}
+
+		return rows;
+	}
+
+	function toHeaderMap(headers) {
+		const map = new Map();
+		headers.forEach((header, index) => {
+			map.set(normalizeText(header).toLowerCase(), index);
+		});
+		return map;
+	}
+
+	function getValue(row, headerMap, headerName) {
+		const index = headerMap.get(headerName.toLowerCase());
+		if (index === undefined) return "";
+		return normalizeText(row[index]);
+	}
+
+	function mapGoodreadsShelfToStatus(value) {
+		const shelf = normalizeText(value).toLowerCase();
+		if (shelf === "currently-reading") return "reading";
+		if (shelf === "read") return "finished";
+		return "want_to_read";
+	}
+
+	function parseGenres(value) {
+		if (!value) return [];
+		return value.split(",")
+			.map((item) => normalizeText(item))
+			.filter(Boolean);
+	}
+
+	function parseDate(value) {
+		const text = normalizeText(value);
+		if (!text) return "";
+		const parsed = new Date(text);
+		if (!Number.isFinite(parsed.getTime())) return "";
+		return parsed.toISOString().slice(0, 10);
+	}
+
+	function loadEntries() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function saveEntries(entries) {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+	}
+
+	function isQuotaExceededError(error) {
+		if (!error) return false;
+		if (typeof DOMException !== "undefined" && error instanceof DOMException) {
+			return error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED";
+		}
+		const name = String(error?.name || "");
+		const message = String(error?.message || "");
+		return name.includes("Quota") || message.toLowerCase().includes("quota");
+	}
+
+	function compactEntry(entry) {
+		const categories = Array.isArray(entry?.categories) ? entry.categories.slice(0, 8) : [];
+		return {
+			id: normalizeText(entry?.id),
+			title: normalizeText(entry?.title),
+			author: normalizeText(entry?.author),
+			status: normalizeText(entry?.status) || "want_to_read",
+			totalPages: normalizeNumber(entry?.totalPages),
+			currentPage: normalizeNumber(entry?.currentPage),
+			finishedDate: normalizeText(entry?.finishedDate),
+			coverUrl: normalizeText(entry?.coverUrl),
+			format: normalizeText(entry?.format),
+			language: normalizeText(entry?.language),
+			publisher: normalizeText(entry?.publisher),
+			publishedDate: normalizeText(entry?.publishedDate),
+			isbn10: normalizeIsbn(entry?.isbn10),
+			isbn13: normalizeIsbn(entry?.isbn13),
+			categories,
+			updatedAt: normalizeNumber(entry?.updatedAt) || Date.now()
+		};
+	}
+
+	function saveEntriesWithFallback(entries) {
+		try {
+			saveEntries(entries);
+			return "full";
+		} catch (error) {
+			if (!isQuotaExceededError(error)) throw error;
+		}
+
+		const compact = entries.map(compactEntry);
+		const limits = [compact.length, 2000, 1500, 1000, 700, 500, 300];
+		for (const limit of limits) {
+			const subset = compact.slice(0, Math.min(limit, compact.length));
+			try {
+				saveEntries(subset);
+				return subset.length === entries.length ? "compact" : "trimmed";
+			} catch (error) {
+				if (!isQuotaExceededError(error)) throw error;
+			}
+		}
+		return "failed";
+	}
+
+	function loadUpdates() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(UPDATES_KEY) || "[]");
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function saveUpdates(updates) {
+		const candidates = [200, 120, 80, 40, 20];
+		for (const limit of candidates) {
+			try {
+				localStorage.setItem(UPDATES_KEY, JSON.stringify(updates.slice(0, limit)));
+				return true;
+			} catch (error) {
+				if (!isQuotaExceededError(error)) return false;
+			}
+		}
+		return false;
+	}
+
+	function logShelfUpdate(entry, status) {
+		if (!entry?.title) return;
+		const updates = loadUpdates();
+		updates.unshift({
+			id: `upd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+			timestamp: Date.now(),
+			status: status || entry.status || "want_to_read",
+			title: entry.title,
+			author: entry.author || "",
+			coverUrl: entry.coverUrl || "",
+			format: entry.format || "",
+			language: entry.language || ""
+		});
+		void saveUpdates(updates);
+	}
+
+	function getUserKey() {
+		try {
+			const existing = String(localStorage.getItem(USER_KEY_STORAGE_KEY) || "").trim();
+			if (existing) return existing;
+			const created = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+			localStorage.setItem(USER_KEY_STORAGE_KEY, created);
+			return created;
+		} catch {
+			return `usr_fallback_${Math.random().toString(36).slice(2, 10)}`;
+		}
+	}
+
+	async function syncEntryToServer(entry) {
+		const userKey = getUserKey();
+		try {
+			const response = await fetch("/api/shelf/entries", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ userKey, entry })
+			});
+			return response.ok;
+		} catch {
+			return false;
+		}
+	}
+
+	async function syncEntriesToServer(entries) {
+		let failed = 0;
+		const batchSize = 25;
+		for (let i = 0; i < entries.length; i += batchSize) {
+			const batch = entries.slice(i, i + batchSize);
+			const results = await Promise.all(batch.map((entry) => syncEntryToServer(entry)));
+			for (const ok of results) {
+				if (!ok) failed += 1;
+			}
+		}
+		return failed;
+	}
+
+	function applyStatus(entry, status, options = { setFinishedDateWhenMissing: true }) {
+		entry.status = status;
+		if (status === "finished") {
+			if (normalizeNumber(entry.totalPages) > 0) {
+				entry.currentPage = normalizeNumber(entry.totalPages);
+			}
+			if (options.setFinishedDateWhenMissing) {
+				entry.finishedDate = entry.finishedDate || new Date().toISOString().slice(0, 10);
+			}
+			return;
+		}
+		if (status === "reading") {
+			entry.currentPage = Math.max(0, normalizeNumber(entry.currentPage));
+			entry.finishedDate = "";
+			return;
+		}
+		entry.currentPage = 0;
+		entry.finishedDate = "";
+	}
+
+	function normalizeImportedEntry(raw) {
+		const status = mapGoodreadsShelfToStatus(raw.exclusiveShelf);
+		const totalPages = normalizeNumber(raw.pages);
+		const finishedDate = status === "finished" ? parseDate(raw.dateRead) : "";
+		const categories = parseGenres(raw.bookshelves);
+		const isbn10 = normalizeIsbn(raw.isbn);
+		const isbn13 = normalizeIsbn(raw.isbn13);
+		const entry = {
+			id: `book_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+			title: normalizeText(raw.title),
+			author: normalizeText(raw.author),
+			totalPages,
+			currentPage: 0,
+			status,
+			finishedDate,
+			coverUrl: coverFromIsbn(isbn13, isbn10),
+			format: normalizeText(raw.binding),
+			language: "",
+			publisher: normalizeText(raw.publisher),
+			publishedDate: normalizeText(raw.yearPublished),
+			isbn10,
+			isbn13,
+			categories,
+			updatedAt: Date.now()
+		};
+		applyStatus(entry, status, { setFinishedDateWhenMissing: false });
+		entry.finishedDate = finishedDate || "";
+		return entry;
+	}
+
+	function toImportCandidates(csvText) {
+		const rows = parseCsv(csvText);
+		if (rows.length < 2) return [];
+		const headers = rows[0];
+		const headerMap = toHeaderMap(headers);
+		const results = [];
+
+		for (let i = 1; i < rows.length; i += 1) {
+			const row = rows[i];
+			const title = getValue(row, headerMap, "Title");
+			const author = getValue(row, headerMap, "Author");
+			if (!title) continue;
+			results.push(normalizeImportedEntry({
+				title,
+				author,
+				exclusiveShelf: getValue(row, headerMap, "Exclusive Shelf"),
+				pages: getValue(row, headerMap, "Number of Pages"),
+				dateRead: getValue(row, headerMap, "Date Read"),
+				bookshelves: getValue(row, headerMap, "Bookshelves"),
+				binding: getValue(row, headerMap, "Binding"),
+				publisher: getValue(row, headerMap, "Publisher"),
+				yearPublished: getValue(row, headerMap, "Year Published"),
+				isbn: getValue(row, headerMap, "ISBN"),
+				isbn13: getValue(row, headerMap, "ISBN13")
+			}));
+		}
+
+		return results;
+	}
+
+	async function importGoodreadsCsv(file) {
+		const text = await file.text();
+		const candidates = toImportCandidates(text);
+		if (candidates.length === 0) {
+			throw new Error("No importable rows found. Confirm this is a Goodreads export CSV.");
+		}
+
+		const existingEntries = loadEntries();
+		const byKey = new Map();
+		for (const existing of existingEntries) {
+			byKey.set(canonicalWorkKey(existing), existing);
+		}
+
+		let imported = 0;
+		let updated = 0;
+		let skipped = 0;
+		let wantToRead = 0;
+		let reading = 0;
+		let finished = 0;
+		const changedEntries = [];
+
+		for (const candidate of candidates) {
+			const key = canonicalWorkKey(candidate);
+			if (!candidate.title) {
+				skipped += 1;
+				continue;
+			}
+			const existing = byKey.get(key);
+			if (existing) {
+				const previousStatus = existing.status || "want_to_read";
+				existing.title = existing.title || candidate.title;
+				existing.author = existing.author || candidate.author;
+				existing.totalPages = existing.totalPages || candidate.totalPages;
+				existing.format = existing.format || candidate.format;
+				existing.publisher = existing.publisher || candidate.publisher;
+				existing.publishedDate = existing.publishedDate || candidate.publishedDate;
+				existing.isbn10 = existing.isbn10 || candidate.isbn10;
+				existing.isbn13 = existing.isbn13 || candidate.isbn13;
+				existing.coverUrl = existing.coverUrl || candidate.coverUrl || coverFromIsbn(existing.isbn13, existing.isbn10);
+				existing.categories = Array.isArray(existing.categories) && existing.categories.length > 0
+					? existing.categories
+					: candidate.categories;
+				applyStatus(existing, candidate.status, { setFinishedDateWhenMissing: false });
+				if (candidate.status === "finished") {
+					existing.finishedDate = candidate.finishedDate || "";
+				}
+				existing.updatedAt = Date.now();
+				changedEntries.push(existing);
+				if (previousStatus !== existing.status) {
+					logShelfUpdate(existing, existing.status);
+				}
+				updated += 1;
+			} else {
+				existingEntries.unshift(candidate);
+				byKey.set(key, candidate);
+				changedEntries.push(candidate);
+				logShelfUpdate(candidate, candidate.status);
+				imported += 1;
+			}
+		}
+
+		for (const entry of existingEntries) {
+			if (entry.status === "reading") reading += 1;
+			else if (entry.status === "finished") finished += 1;
+			else wantToRead += 1;
+		}
+
+		const localCache = saveEntriesWithFallback(existingEntries);
+		const syncFailed = await syncEntriesToServer(changedEntries);
+
+		return { imported, updated, skipped, wantToRead, reading, finished, localCache, syncFailed };
+	}
+
+	importForm?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		summary.hidden = true;
+		const file = csvInput?.files?.[0];
+		if (!file) {
+			showFeedback("Choose a Goodreads CSV file first.", true);
+			return;
+		}
+		showFeedback("Importing Goodreads data...");
+		try {
+			const result = await importGoodreadsCsv(file);
+			const statusParts = [
+				`${result.imported} imported`,
+				`${result.updated} updated`,
+				`${result.skipped} skipped`
+			];
+			if (result.localCache === "failed") {
+				showFeedback(`Import complete (${statusParts.join(", ")}), but browser storage is full. Data was synced to server; reload Profile to confirm.`, true);
+			} else if (result.localCache === "trimmed") {
+				showFeedback(`Import complete (${statusParts.join(", ")}). Local cache was trimmed due to browser storage limits.`);
+			} else if (result.syncFailed > 0) {
+				showFeedback(`Import complete (${statusParts.join(", ")}), but ${result.syncFailed} items failed to sync to server.`, true);
+			} else {
+				showFeedback(`Import complete: ${statusParts.join(", ")}.`);
+			}
+			showSummary(result);
+			importForm.reset();
+		} catch (error) {
+			showFeedback(error instanceof Error ? error.message : "Import failed.", true);
+		}
+	});
+
+	async function loadAuthState() {
+		try {
+			const response = await fetch("/api/auth/me");
+			const data = await response.json();
+			const authenticated = !!data?.authenticated;
+			if (accountAuthenticated instanceof HTMLElement) {
+				accountAuthenticated.hidden = !authenticated;
+			}
+			if (magicLinkForm instanceof HTMLFormElement) {
+				magicLinkForm.hidden = authenticated;
+			}
+			if (authenticated && accountEmail instanceof HTMLElement) {
+				accountEmail.textContent = String(data?.user?.email || "");
+			}
+		} catch {
+			if (accountAuthenticated instanceof HTMLElement) accountAuthenticated.hidden = true;
+			if (magicLinkForm instanceof HTMLFormElement) magicLinkForm.hidden = false;
+		}
+	}
+
+	magicLinkForm?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		const email = String(magicEmail?.value || "").trim();
+		if (!email) {
+			showAccountFeedback("Enter an email address.", true);
+			return;
+		}
+		showAccountFeedback("Sending magic link...");
+		try {
+			const response = await fetch("/api/auth/request-magic-link", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ email })
+			});
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				showAccountFeedback(String(data?.error || "Failed to send magic link."), true);
+				return;
+			}
+			const preview = String(data?.previewUrl || "").trim();
+			if (preview) {
+				showAccountFeedback(`Magic link generated. Open: ${preview}`);
+				return;
+			}
+			showAccountFeedback("Check your email for a sign-in link.");
+		} catch {
+			showAccountFeedback("Failed to send magic link.", true);
+		}
+	});
+
+	logoutButton?.addEventListener("click", async () => {
+		showAccountFeedback("Signing out...");
+		try {
+			await fetch("/api/auth/logout", { method: "POST" });
+			showAccountFeedback("Signed out.");
+			await loadAuthState();
+		} catch {
+			showAccountFeedback("Failed to sign out.", true);
+		}
+	});
+
+	deleteAccountForm?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		const confirmation = String(deleteConfirm?.value || "").trim();
+		if (confirmation !== "DELETE") {
+			showAccountFeedback('Type "DELETE" to confirm account deletion.', true);
+			return;
+		}
+		showAccountFeedback("Deleting account...");
+		try {
+			const response = await fetch("/api/account/delete", { method: "POST" });
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				showAccountFeedback(String(data?.error || "Failed to delete account."), true);
+				return;
+			}
+			localStorage.removeItem("dogeared:myreads");
+			localStorage.removeItem("dogeared:profile-info");
+			localStorage.removeItem("dogeared:updates");
+			showAccountFeedback("Account deleted.");
+			await loadAuthState();
+		} catch {
+			showAccountFeedback("Failed to delete account.", true);
+		}
+	});
+
+	void loadAuthState();
+</script>
