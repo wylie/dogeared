@@ -1,7 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { resolveUserBySession } from '../lib/auth';
 
 export const prerender = false;
+const session = await resolveUserBySession(Astro.request);
+const isAuthenticated = !!session?.userId;
 
 type BrowseBook = {
 	id: string;
@@ -635,7 +638,7 @@ try {
 ---
 
 <Layout title="Browse" sectionLinks={sections.map((section) => ({ id: section.id, label: section.title }))}>
-	<div slot="right" class="browse-page">
+	<div slot="right" class="browse-page" id="browse-page" data-authenticated={String(isAuthenticated)}>
 		<h1>Browse</h1>
 		<p class="subhead">Discover books with NYT best sellers and Open Library genre shelves.</p>
 
@@ -908,6 +911,8 @@ try {
 </style>
 
 <script>
+	const browsePage = document.getElementById("browse-page");
+	const IS_AUTHENTICATED = browsePage?.dataset.authenticated === "true";
 	const STORAGE_KEY = "dogeared:myreads";
 	const UPDATES_KEY = "dogeared:updates";
 	const USER_KEY_STORAGE_KEY = "dogeared:user-key";
@@ -918,6 +923,13 @@ try {
 		reading: "Currently Reading",
 		finished: "Read"
 	};
+
+	function promptForLogin() {
+		const shouldRedirect = window.confirm("Log in or sign up to save books to your shelf. Go there now?");
+		if (shouldRedirect) {
+			window.location.href = "/settings#account-settings";
+		}
+	}
 
 	function getUserKey() {
 		try {
@@ -1080,6 +1092,10 @@ try {
 	}
 
 	function setShelf(dropdown, selectedStatus) {
+		if (!IS_AUTHENTICATED) {
+			promptForLogin();
+			return;
+		}
 		const title = String(dropdown.dataset.title || "").trim();
 		if (!title) return;
 		const author = String(dropdown.dataset.author || "").trim();
@@ -1153,6 +1169,13 @@ try {
 	}
 
 	function syncExistingState() {
+		if (!IS_AUTHENTICATED) {
+			for (const dropdown of shelfDropdowns) {
+				setDropdownLabel(dropdown, "want_to_read");
+				setShelvedState(dropdown, false);
+			}
+			return;
+		}
 		const entries = loadEntries();
 		for (const dropdown of shelfDropdowns) {
 			const title = dropdown.dataset.title || "";

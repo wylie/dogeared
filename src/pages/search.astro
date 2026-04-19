@@ -1,7 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { resolveUserBySession } from '../lib/auth';
 
 export const prerender = false;
+const session = await resolveUserBySession(Astro.request);
+const isAuthenticated = !!session?.userId;
 
 type SearchResult = {
 	title: string;
@@ -257,7 +260,7 @@ if (query && apiKey) {
 ---
 
 <Layout title="Search">
-	<div slot="right" class="search-page" id="search-page" data-query={query}>
+		<div slot="right" class="search-page" id="search-page" data-query={query} data-authenticated={String(isAuthenticated)}>
 		<h1>Search</h1>
 		{!query && <p>Enter a search term to find books.</p>}
 		{query && errorMessage && <p>Search failed: {errorMessage}</p>}
@@ -572,6 +575,8 @@ if (query && apiKey) {
 </style>
 
 <script>
+	const searchPage = document.getElementById("search-page");
+	const IS_AUTHENTICATED = searchPage?.dataset.authenticated === "true";
 	const STORAGE_KEY = "dogeared:myreads";
 	const UPDATES_KEY = "dogeared:updates";
 	const USER_KEY_STORAGE_KEY = "dogeared:user-key";
@@ -583,6 +588,13 @@ if (query && apiKey) {
 		reading: "Currently Reading",
 		finished: "Read"
 	};
+
+	function promptForLogin() {
+		const shouldRedirect = window.confirm("Log in or sign up to save books to your shelf. Go there now?");
+		if (shouldRedirect) {
+			window.location.href = "/settings#account-settings";
+		}
+	}
 
 	function getUserKey() {
 		try {
@@ -812,6 +824,10 @@ if (query && apiKey) {
 	}
 
 	function setShelf(dropdown, selectedStatus) {
+		if (!IS_AUTHENTICATED) {
+			promptForLogin();
+			return;
+		}
 		const resultCard = dropdown.closest(".search-content");
 		const variantDropdown = resultCard?.querySelector(".variant-dropdown");
 		const title = String(variantDropdown?.dataset?.title || dropdown.dataset.title || "").trim();
@@ -890,6 +906,13 @@ if (query && apiKey) {
 	}
 
 	function syncExistingState() {
+		if (!IS_AUTHENTICATED) {
+			for (const dropdown of shelfDropdowns) {
+				setDropdownLabel(dropdown, "want_to_read");
+				setShelvedState(dropdown, false);
+			}
+			return;
+		}
 		const entries = loadEntries();
 		for (const dropdown of shelfDropdowns) {
 			const title = dropdown.dataset.title || "";

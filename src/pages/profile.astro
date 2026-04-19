@@ -1,15 +1,29 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { resolveUserBySession } from '../lib/auth';
+
+export const prerender = false;
 
 const sectionLinks = [
 	{ id: "reading", label: "Currently Reading" },
 	{ id: "want_to_read", label: "Want to Read" },
 	{ id: "finished", label: "Read" }
 ];
+const session = await resolveUserBySession(Astro.request);
+const isAuthenticated = !!session?.userId;
 ---
 
 <Layout title="Profile" sectionLinks={sectionLinks}>
-	<div slot="right" class="reads-page">
+	<div slot="right" class="reads-page" data-authenticated={String(isAuthenticated)}>
+		{!isAuthenticated && (
+			<section class="auth-required">
+				<h1>Profile</h1>
+				<p class="subhead">Log in to view your reading history, shelves, and progress.</p>
+				<p><a href="/settings#account-settings" class="auth-link">Log In or Sign Up</a></p>
+			</section>
+		)}
+		{isAuthenticated && (
+		<>
 		<h1>Profile</h1>
 		<p class="subhead">Your reading history, shelves, and progress.</p>
 
@@ -139,10 +153,14 @@ const sectionLinks = [
 			</div>
 			<div id="finished-list" class="entry-list"></div>
 		</section>
+		</>
+		)}
 	</div>
 </Layout>
 
 <script>
+	const profilePageRoot = document.querySelector(".reads-page");
+	if (profilePageRoot?.dataset.authenticated === "true") {
 	const STORAGE_KEY = "dogeared:myreads";
 	const UPDATES_KEY = "dogeared:updates";
 	const USER_KEY_STORAGE_KEY = "dogeared:user-key";
@@ -2143,11 +2161,28 @@ const sectionLinks = [
 	setActiveTab(normalizeHashToTab(window.location.hash));
 	void enrichMissingCovers();
 	void hydrateEntriesFromServer();
+	}
 </script>
 
 <style is:global>
 	.reads-page {
 		max-width: 860px;
+	}
+
+	.reads-page .auth-required {
+		border: 1px solid #d8d8d8;
+		border-radius: 12px;
+		padding: 1rem;
+		background: #fff;
+	}
+
+	.reads-page .auth-link {
+		display: inline-block;
+		padding: 0.6rem 0.9rem;
+		border-radius: 999px;
+		background: #111;
+		color: #fff;
+		text-decoration: none;
 	}
 
 	.reads-page h1 {

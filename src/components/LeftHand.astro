@@ -8,14 +8,16 @@ const query = Astro.url.searchParams.get("q") ?? "";
 ---
 
 <Widget style="height: 100%" background={true}>
+  <div id="left-hand-nav" data-current={current}>
   <h2><a href="/" class="special-font">DogEared</a></h2>
   <form action="/search" method="get">
     <input type="search" name="q" placeholder="Search" value={query} />
   </form>
   <ul>
     <li><a href={isActive('/browse') ? undefined : '/browse'} class={isActive('/browse') ? 'active' : 'hover'} aria-current={isActive('/browse') ? 'page' : undefined}>Browse</a></li>
-    <li><a href={isActive('/profile') ? undefined : '/profile'} class={isActive('/profile') ? 'active' : 'hover'} aria-current={isActive('/profile') ? 'page' : undefined}>Profile</a></li>
-    <li><a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a></li>
+    <li id="left-hand-login-item"><a href="/settings#account-settings" class="hover auth-cta">Log In</a></li>
+    <li id="left-hand-profile-item" hidden><a href={isActive('/profile') ? undefined : '/profile'} class={isActive('/profile') ? 'active' : 'hover'} aria-current={isActive('/profile') ? 'page' : undefined}>Profile</a></li>
+    <li id="left-hand-settings-item" hidden><a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a></li>
   </ul>
   {sectionLinks.length > 0 && (
     <ul class="quick-links">
@@ -24,6 +26,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       ))}
     </ul>
   )}
+  </div>
 </Widget>
 
 <style>
@@ -52,10 +55,22 @@ const query = Astro.url.searchParams.get("q") ?? "";
     background-color: #ddd;
     cursor: default;
   }
+  .auth-cta {
+    display: inline-block;
+    margin-top: 0.15rem;
+    padding: 0.55rem 0.85rem;
+    border-radius: 999px;
+    background: #111;
+    color: #fff;
+  }
   .hover:hover {
     text-decoration: underline;
     /* background-color: black;
     color: white; */
+  }
+  .auth-cta.hover:hover {
+    text-decoration: none;
+    background: #222;
   }
   input[type="search"] {
     font-size: 16px;
@@ -80,3 +95,26 @@ const query = Astro.url.searchParams.get("q") ?? "";
     line-height: 1;
   }
 </style>
+
+<script>
+  const leftHandLoginItem = document.getElementById("left-hand-login-item");
+  const leftHandProfileItem = document.getElementById("left-hand-profile-item");
+  const leftHandSettingsItem = document.getElementById("left-hand-settings-item");
+
+  async function syncLeftHandAuthState() {
+    try {
+      const response = await fetch("/api/auth/me");
+      const data = await response.json().catch(() => ({}));
+      const authenticated = !!data?.authenticated;
+      if (leftHandLoginItem instanceof HTMLElement) leftHandLoginItem.hidden = authenticated;
+      if (leftHandProfileItem instanceof HTMLElement) leftHandProfileItem.hidden = !authenticated;
+      if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = !authenticated;
+    } catch {
+      if (leftHandLoginItem instanceof HTMLElement) leftHandLoginItem.hidden = false;
+      if (leftHandProfileItem instanceof HTMLElement) leftHandProfileItem.hidden = true;
+      if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = true;
+    }
+  }
+
+  void syncLeftHandAuthState();
+</script>
