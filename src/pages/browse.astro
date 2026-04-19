@@ -13,6 +13,12 @@ type BrowseBook = {
 	pageCount: number;
 	format: string;
 	language: string;
+	isbn10?: string;
+	isbn13?: string;
+	source: "google_books" | "open_library" | "nyt";
+	sourceWorkId?: string;
+	sourceEditionId?: string;
+	sourceUrl?: string;
 };
 
 type BrowseSection = {
@@ -109,11 +115,19 @@ async function fetchShelf(query: string, options: { orderBy?: "relevance" | "new
 		const title = String(info?.title || "").trim();
 		if (!title) continue;
 		const authors = Array.isArray(info?.authors) ? info.authors.map((a: unknown) => String(a || "").trim()).filter(Boolean) : [];
+		const identifiers = Array.isArray(info?.industryIdentifiers) ? info.industryIdentifiers : [];
+		const isbn13 = String(
+			identifiers.find((entry: { type?: unknown; identifier?: unknown }) => String(entry?.type || "") === "ISBN_13")?.identifier || ""
+		).replace(/[^0-9Xx]/g, "").toUpperCase();
+		const isbn10 = String(
+			identifiers.find((entry: { type?: unknown; identifier?: unknown }) => String(entry?.type || "") === "ISBN_10")?.identifier || ""
+		).replace(/[^0-9Xx]/g, "").toUpperCase();
 		const key = `${title.toLowerCase()}|${(authors[0] || "").toLowerCase()}`;
 		if (dedupe.has(key)) continue;
 		dedupe.add(key);
+		const googleBooksId = String(item?.id || "").trim();
 		books.push({
-			id: String(item?.id || `${title}-${authors[0] || "unknown"}`),
+			id: googleBooksId || `${title}-${authors[0] || "unknown"}`,
 			title,
 			authors,
 			thumbnail: toHttps(info?.imageLinks?.thumbnail || info?.imageLinks?.smallThumbnail || ""),
@@ -121,7 +135,12 @@ async function fetchShelf(query: string, options: { orderBy?: "relevance" | "new
 			description: trimDescription(info?.description),
 			pageCount: Math.max(0, Number(info?.pageCount || 0) || 0),
 			format: "Book",
-			language: String(info?.language || "").trim().toUpperCase()
+			language: String(info?.language || "").trim().toUpperCase(),
+			isbn10,
+			isbn13,
+			source: "google_books",
+			sourceWorkId: googleBooksId,
+			sourceUrl: googleBooksId ? `https://books.google.com/books?id=${encodeURIComponent(googleBooksId)}` : ""
 		});
 	}
 
@@ -185,7 +204,11 @@ async function fetchOpenLibrarySubject(
 					description: trimDescription(rawSynopsis),
 					pageCount: 0,
 					format: "Book",
-					language: "EN"
+					language: "EN",
+					source: "open_library",
+					sourceWorkId: String(doc?.key || "").trim(),
+					sourceEditionId: Array.isArray(doc?.edition_key) ? String(doc.edition_key[0] || "").trim() : "",
+					sourceUrl: doc?.key ? `https://openlibrary.org${String(doc.key).trim()}` : ""
 				});
 
 				if (recentBooks.length >= maxResults) break;
@@ -238,7 +261,10 @@ async function fetchOpenLibrarySubject(
 			description: trimDescription(firstSentence),
 			pageCount: 0,
 			format: "Book",
-			language: "EN"
+			language: "EN",
+			source: "open_library",
+			sourceWorkId: String(work?.key || "").trim(),
+			sourceUrl: work?.key ? `https://openlibrary.org${String(work.key).trim()}` : ""
 		});
 	}
 
@@ -296,7 +322,12 @@ async function fetchNytList(listName: string, options: { apiKey: string; maxResu
 			description: trimDescription(book?.description),
 			pageCount: 0,
 			format: "Book",
-			language: "EN"
+			language: "EN",
+			isbn10: String(book?.primary_isbn10 || "").trim(),
+			isbn13: String(book?.primary_isbn13 || "").trim(),
+			source: "nyt",
+			sourceWorkId: `${listName}:${String(book?.primary_isbn13 || book?.primary_isbn10 || key).trim()}`,
+			sourceUrl: String(book?.amazon_product_url || "").trim()
 		});
 	}
 
@@ -648,6 +679,12 @@ try {
 												data-cover={book.thumbnail}
 												data-format={book.format}
 												data-language={book.language}
+												data-isbn10={book.isbn10 ?? ""}
+												data-isbn13={book.isbn13 ?? ""}
+												data-source={book.source}
+												data-source-work-id={book.sourceWorkId ?? ""}
+												data-source-edition-id={book.sourceEditionId ?? ""}
+												data-source-url={book.sourceUrl ?? ""}
 											>
 												<button type="button" class="shelf-trigger" data-action="toggle-shelf" aria-expanded="false">
 													<span class="material-icons shelf-check" aria-hidden="true">check</span>
@@ -873,6 +910,7 @@ try {
 <script>
 	const STORAGE_KEY = "dogeared:myreads";
 	const UPDATES_KEY = "dogeared:updates";
+	const USER_KEY_STORAGE_KEY = "dogeared:user-key";
 	const feedbackTimers = new WeakMap();
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	const STATUS_LABELS = {
@@ -880,6 +918,27 @@ try {
 		reading: "Currently Reading",
 		finished: "Read"
 	};
+
+	function getUserKey() {
+		try {
+			const existing = String(localStorage.getItem(USER_KEY_STORAGE_KEY) || "").trim();
+			if (existing) return existing;
+			const created = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+			localStorage.setItem(USER_KEY_STORAGE_KEY, created);
+			return created;
+		} catch {
+			return `usr_fallback_${Math.random().toString(36).slice(2, 10)}`;
+		}
+	}
+
+	async function syncEntryToServer(entry) {
+		const userKey = getUserKey();
+		await fetch("/api/shelf/entries", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ userKey, entry })
+		});
+	}
 
 	function normalizeText(value) {
 		return String(value || "").trim().toLowerCase();
@@ -1028,6 +1087,12 @@ try {
 		const coverUrl = String(dropdown.dataset.cover || "").trim();
 		const format = String(dropdown.dataset.format || "").trim();
 		const language = String(dropdown.dataset.language || "").trim();
+		const isbn10 = String(dropdown.dataset.isbn10 || "").trim();
+		const isbn13 = String(dropdown.dataset.isbn13 || "").trim();
+		const source = String(dropdown.dataset.source || "").trim();
+		const sourceWorkId = String(dropdown.dataset.sourceWorkId || "").trim();
+		const sourceEditionId = String(dropdown.dataset.sourceEditionId || "").trim();
+		const sourceUrl = String(dropdown.dataset.sourceUrl || "").trim();
 
 		const entries = loadEntries();
 		const existing = findEntry(entries, title, author);
@@ -1037,6 +1102,12 @@ try {
 			if (!existing.coverUrl && coverUrl) existing.coverUrl = coverUrl;
 			if (format && !existing.format) existing.format = format;
 			if (language && !existing.language) existing.language = language;
+			if (isbn10) existing.isbn10 = isbn10;
+			if (isbn13) existing.isbn13 = isbn13;
+			if (source) existing.source = source;
+			if (sourceWorkId) existing.sourceWorkId = sourceWorkId;
+			if (sourceEditionId) existing.sourceEditionId = sourceEditionId;
+			if (sourceUrl) existing.sourceUrl = sourceUrl;
 			applyStatus(existing, selectedStatus, totalPages || Number(existing.totalPages) || 0);
 			existing.updatedAt = Date.now();
 			saveEntries(entries);
@@ -1048,6 +1119,7 @@ try {
 			}
 			setDropdownLabel(dropdown, selectedStatus);
 			setShelvedState(dropdown, true);
+			void syncEntryToServer(existing);
 			return;
 		}
 
@@ -1062,6 +1134,12 @@ try {
 			coverUrl,
 			format,
 			language,
+			isbn10,
+			isbn13,
+			source,
+			sourceWorkId,
+			sourceEditionId,
+			sourceUrl,
 			updatedAt: Date.now()
 		};
 		applyStatus(next, selectedStatus, totalPages);
@@ -1071,6 +1149,7 @@ try {
 		setDropdownLabel(dropdown, selectedStatus);
 		setShelvedState(dropdown, true);
 		showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`);
+		void syncEntryToServer(next);
 	}
 
 	function syncExistingState() {

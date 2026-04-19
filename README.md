@@ -13,10 +13,12 @@ This is a space for readers, built and maintained with care, where the goal is n
 ## Vercel + Neon Data Structure
 
 DogEared now includes a Neon-ready schema for app-driven genre lists.
+The catalog layer is designed to persist normalized book metadata and source identifiers only. Avoid storing or re-serving full third-party payloads unless the provider terms explicitly allow it.
 
 ### Files
 
 - `db/neon-schema.sql`: core tables + `get_top_books_by_genre(...)` ranking function.
+- `src/lib/catalog.ts`: catalog-source helpers for source mapping persistence.
 - `src/lib/neon.ts`: Vercel server runtime Neon client.
 - `src/pages/api/lists/top.ts`: API route for Top books by genre.
 

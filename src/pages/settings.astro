@@ -58,6 +58,50 @@ import Layout from '../layouts/Layout.astro';
 
 			<p id="account-feedback" class="feedback" hidden></p>
 		</section>
+
+		<section class="settings-section" id="api-settings" aria-labelledby="api-settings-title">
+			<h2 id="api-settings-title">API</h2>
+			<p class="section-copy">
+				DogEared now stores shelved books in its own catalog. Use these routes to read from the DogEared API instead of relying on third-party APIs for saved data.
+			</p>
+
+			<div class="api-grid">
+				<div class="api-card">
+					<h3>My Shelf</h3>
+					<p class="api-copy">Returns the saved books currently synced to your DogEared shelf.</p>
+					<label for="api-shelf-url">Endpoint</label>
+					<div class="api-url-row">
+						<input id="api-shelf-url" class="api-url" type="text" readonly value="" />
+						<button type="button" class="secondary copy-button" data-copy-target="api-shelf-url">Copy</button>
+					</div>
+				</div>
+
+				<div class="api-card">
+					<h3>Catalog Search</h3>
+					<p class="api-copy">Searches books through DogEared's server-side search route.</p>
+					<label for="api-search-url">Endpoint</label>
+					<div class="api-url-row">
+						<input id="api-search-url" class="api-url" type="text" readonly value="" />
+						<button type="button" class="secondary copy-button" data-copy-target="api-search-url">Copy</button>
+					</div>
+				</div>
+
+				<div class="api-card">
+					<h3>Top Books By Genre</h3>
+					<p class="api-copy">Returns books ranked from real DogEared shelf activity.</p>
+					<label for="api-top-url">Endpoint</label>
+					<div class="api-url-row">
+						<input id="api-top-url" class="api-url" type="text" readonly value="" />
+						<button type="button" class="secondary copy-button" data-copy-target="api-top-url">Copy</button>
+					</div>
+				</div>
+			</div>
+
+			<p class="api-note">
+				Search still begins with Google Books, but once a book is shelved or imported it can be served back from DogEared's own database.
+			</p>
+			<p id="api-feedback" class="feedback" hidden></p>
+		</section>
 	</div>
 </Layout>
 
@@ -80,6 +124,7 @@ import Layout from '../layouts/Layout.astro';
 		border-radius: 12px;
 		padding: 1rem;
 		background: #fff;
+		margin-top: 1rem;
 	}
 
 	.settings-section h2 {
@@ -176,6 +221,61 @@ import Layout from '../layouts/Layout.astro';
 		gap: 0.45rem;
 		max-width: 340px;
 	}
+
+	.api-grid {
+		display: grid;
+		gap: 0.85rem;
+	}
+
+	.api-card {
+		border: 1px solid #e5e7eb;
+		border-radius: 10px;
+		padding: 0.85rem;
+		background: #fafafa;
+	}
+
+	.api-card h3 {
+		margin: 0 0 0.35rem;
+		font-size: 1rem;
+	}
+
+	.api-copy {
+		margin: 0 0 0.55rem;
+		color: #4b5563;
+	}
+
+	.api-url-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.api-url {
+		width: 100%;
+		padding: 0.65rem 0.75rem;
+		border: 1px solid #d1d5db;
+		border-radius: 8px;
+		background: #fff;
+		font-size: 0.92rem;
+		color: #111827;
+	}
+
+	.copy-button {
+		white-space: nowrap;
+	}
+
+	.api-note {
+		margin: 0.8rem 0 0;
+		color: #4b5563;
+		font-size: 0.92rem;
+	}
+
+	@media (max-width: 640px) {
+		.api-url-row {
+			grid-template-columns: 1fr;
+		}
+	}
 </style>
 
 <script>
@@ -194,6 +294,11 @@ import Layout from '../layouts/Layout.astro';
 	const logoutButton = document.getElementById("logout-button");
 	const deleteAccountForm = document.getElementById("delete-account-form");
 	const deleteConfirm = document.getElementById("delete-confirm");
+	const apiFeedback = document.getElementById("api-feedback");
+	const shelfApiInput = document.getElementById("api-shelf-url");
+	const searchApiInput = document.getElementById("api-search-url");
+	const topApiInput = document.getElementById("api-top-url");
+	const copyButtons = Array.from(document.querySelectorAll(".copy-button"));
 
 	function showFeedback(message, isError = false) {
 		feedback.textContent = message;
@@ -215,6 +320,13 @@ import Layout from '../layouts/Layout.astro';
 		accountFeedback.textContent = message;
 		accountFeedback.hidden = !message;
 		accountFeedback.classList.toggle("error", isError);
+	}
+
+	function showApiFeedback(message, isError = false) {
+		if (!(apiFeedback instanceof HTMLElement)) return;
+		apiFeedback.textContent = message;
+		apiFeedback.hidden = !message;
+		apiFeedback.classList.toggle("error", isError);
 	}
 
 	function normalizeText(value) {
@@ -468,6 +580,35 @@ import Layout from '../layouts/Layout.astro';
 			return created;
 		} catch {
 			return `usr_fallback_${Math.random().toString(36).slice(2, 10)}`;
+		}
+	}
+
+	function populateApiEndpoints() {
+		const origin = window.location.origin;
+		const userKey = getUserKey();
+		if (shelfApiInput instanceof HTMLInputElement) {
+			shelfApiInput.value = `${origin}/api/shelf/entries?userKey=${encodeURIComponent(userKey)}`;
+		}
+		if (searchApiInput instanceof HTMLInputElement) {
+			searchApiInput.value = `${origin}/api/books/search?q=${encodeURIComponent("parable of the sower")}`;
+		}
+		if (topApiInput instanceof HTMLInputElement) {
+			topApiInput.value = `${origin}/api/lists/top?genre=${encodeURIComponent("fantasy")}`;
+		}
+	}
+
+	async function copyApiValue(targetId) {
+		const input = document.getElementById(targetId);
+		if (!(input instanceof HTMLInputElement) || !input.value) {
+			showApiFeedback("Nothing to copy yet.", true);
+			return;
+		}
+		try {
+			await navigator.clipboard.writeText(input.value);
+			showApiFeedback("API URL copied.");
+		} catch {
+			input.select();
+			showApiFeedback("Copy failed. Select the URL manually.", true);
 		}
 	}
 
@@ -769,5 +910,14 @@ import Layout from '../layouts/Layout.astro';
 		}
 	});
 
+	for (const button of copyButtons) {
+		button.addEventListener("click", () => {
+			const targetId = String(button.getAttribute("data-copy-target") || "").trim();
+			if (!targetId) return;
+			void copyApiValue(targetId);
+		});
+	}
+
+	populateApiEndpoints();
 	void loadAuthState();
 </script>

@@ -104,6 +104,7 @@ function mapGoogleSuggestion(item: Record<string, unknown>) {
 		coverUrl,
 		isbn13,
 		isbn,
+		googleBooksId: String(item?.id || "").trim(),
 		subtitle,
 		source: "google_books"
 	};

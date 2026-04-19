@@ -1,6 +1,12 @@
 import type { APIRoute } from "astro";
 import { getNeonSql } from "../../../lib/neon";
 import { resolveActiveUserId } from "../../../lib/auth";
+import {
+	normalizeCatalogText,
+	normalizeCatalogIsbn,
+	upsertBookSources,
+	type CatalogSourceInput
+} from "../../../lib/catalog";
 
 export const prerender = false;
 
@@ -21,6 +27,11 @@ type ShelfEntryInput = {
 	publisher?: unknown;
 	publishedDate?: unknown;
 	categories?: unknown;
+	source?: unknown;
+	sourceWorkId?: unknown;
+	sourceEditionId?: unknown;
+	sourceUrl?: unknown;
+	googleBooksId?: unknown;
 };
 
 function normalizeText(value: unknown) {
@@ -40,7 +51,7 @@ function normalizePositiveInt(value: unknown) {
 }
 
 function normalizeIsbn(value: unknown) {
-	return String(value || "").replace(/[^0-9Xx]/g, "").toUpperCase();
+	return normalizeCatalogIsbn(value);
 }
 
 function slugify(value: string) {
@@ -214,6 +225,34 @@ export const POST: APIRoute = async ({ request }) => {
 		const publishedYear = publishedYearMatch ? Number(publishedYearMatch[0]) : null;
 		const genres = parseGenres(entry.categories);
 		const workKey = canonicalWorkKey({ title, author, isbn10, isbn13 });
+		const googleBooksId = normalizeCatalogText(entry.googleBooksId);
+		const source = normalizeCatalogText(entry.source);
+		const sourceWorkId = normalizeCatalogText(entry.sourceWorkId);
+		const sourceEditionId = normalizeCatalogText(entry.sourceEditionId);
+		const sourceUrl = normalizeCatalogText(entry.sourceUrl);
+		const sources: CatalogSourceInput[] = [];
+		if (googleBooksId) {
+			sources.push({
+				source: "google_books",
+				sourceWorkId: googleBooksId,
+				sourceUrl: sourceUrl || "https://books.google.com/"
+			});
+		}
+		if (source === "open_library" && (sourceWorkId || sourceEditionId)) {
+			sources.push({
+				source: "open_library",
+				sourceWorkId,
+				sourceEditionId,
+				sourceUrl
+			});
+		}
+		if (source === "nyt" && sourceWorkId) {
+			sources.push({
+				source: "nyt",
+				sourceWorkId,
+				sourceUrl
+			});
+		}
 
 		const userId = await resolveActiveUserId(request, userKey);
 		if (!userId) throw new Error("User resolution failed.");
@@ -226,6 +265,7 @@ export const POST: APIRoute = async ({ request }) => {
 				primary_author,
 				isbn13,
 				isbn10,
+				google_books_id,
 				cover_url,
 				language,
 				published_year
@@ -236,6 +276,7 @@ export const POST: APIRoute = async ({ request }) => {
 				${author},
 				${isbn13},
 				${isbn10},
+				${googleBooksId},
 				${coverUrl},
 				${language},
 				${publishedYear}
@@ -245,6 +286,7 @@ export const POST: APIRoute = async ({ request }) => {
 				primary_author = excluded.primary_author,
 				isbn13 = case when excluded.isbn13 <> '' then excluded.isbn13 else book.isbn13 end,
 				isbn10 = case when excluded.isbn10 <> '' then excluded.isbn10 else book.isbn10 end,
+				google_books_id = case when excluded.google_books_id <> '' then excluded.google_books_id else book.google_books_id end,
 				cover_url = case when excluded.cover_url <> '' then excluded.cover_url else book.cover_url end,
 				language = case when excluded.language <> '' then excluded.language else book.language end,
 				published_year = coalesce(excluded.published_year, book.published_year),
@@ -254,6 +296,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 		const bookId = Number(bookRows[0]?.id || 0);
 		if (!bookId) throw new Error("Book upsert failed.");
+		await upsertBookSources(sql, bookId, sources);
 
 		for (const genre of genres) {
 			await sql`

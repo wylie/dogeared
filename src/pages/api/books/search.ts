@@ -16,6 +16,7 @@ type SearchResult = {
 	thumbnail: string;
 	isbn10: string;
 	isbn13: string;
+	googleBooksId: string;
 	variantCount?: number;
 	variants?: Array<{
 		title: string;
@@ -27,6 +28,7 @@ type SearchResult = {
 		publisher: string;
 		isbn10: string;
 		isbn13: string;
+		googleBooksId: string;
 		format: string;
 		optionLabel: string;
 		detailLabel: string;
@@ -101,6 +103,7 @@ function toVariant(result: SearchResult) {
 		publisher: String(result.publisher || "").trim(),
 		isbn10: String(result.isbn10 || "").trim(),
 		isbn13: String(result.isbn13 || "").trim(),
+		googleBooksId: String(result.googleBooksId || "").trim(),
 		format,
 		optionLabel: summaryParts.join(" • "),
 		detailLabel: [format, ...detailParts].join(" • ")
@@ -246,7 +249,8 @@ export const GET: APIRoute = async ({ url }) => {
 				language: info.language ?? "",
 				thumbnail: info.imageLinks?.thumbnail ?? "",
 				isbn10,
-				isbn13
+				isbn13,
+				googleBooksId: String(item?.id || "").trim()
 			};
 		}).filter((result) => isLikelyMatch(result, query));
 		const results = dedupeVariants(mapped, query);

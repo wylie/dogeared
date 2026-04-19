@@ -57,6 +57,19 @@ create table if not exists book (
 	updated_at timestamptz not null default now()
 );
 
+create table if not exists book_source (
+	id bigserial primary key,
+	book_id bigint not null references book(id) on delete cascade,
+	source text not null check (source in ('google_books', 'open_library', 'nyt')),
+	source_key text not null,
+	source_work_id text not null default '',
+	source_edition_id text not null default '',
+	source_url text not null default '',
+	last_synced_at timestamptz not null default now(),
+	created_at timestamptz not null default now(),
+	unique (source, source_key)
+);
+
 create table if not exists book_genre (
 	book_id bigint not null references book(id) on delete cascade,
 	genre_slug text not null,
@@ -78,6 +91,8 @@ create table if not exists user_book (
 );
 
 create index if not exists idx_book_genre_slug on book_genre(genre_slug);
+create index if not exists idx_book_source_book on book_source(book_id);
+create index if not exists idx_book_source_source on book_source(source, source_work_id, source_edition_id);
 create index if not exists idx_user_book_status_updated on user_book(status, updated_at desc);
 create index if not exists idx_user_book_book on user_book(book_id);
 
