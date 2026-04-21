@@ -10,7 +10,7 @@ import Layout from '../layouts/Layout.astro';
 </Layout>
 
 <script>
-	const UPDATES_KEY = "dogeared:updates";
+	const USER_KEY_STORAGE_KEY = "dogeared:user-key";
 	const updatesList = document.getElementById("updates-list");
 
 	function escapeHtml(value) {
@@ -34,15 +34,32 @@ import Layout from '../layouts/Layout.astro';
 	}
 
 	function statusLine(update) {
+		if (Number.isFinite(Number(update?.rating)) && Number(update?.rating) > 0) {
+			const stars = Number(update.rating) === 1 ? "star" : "stars";
+			return `rated ${Number(update.rating)} ${stars}`;
+		}
 		if (update?.status === "reading") return "started reading";
-		if (update?.status === "finished") return "marked as read";
-		return "added to want to read";
+		if (update?.status === "finished") return "finished";
+		return "added to a shelf";
 	}
 
-	function loadUpdates() {
+	function getUserKey() {
 		try {
-			const parsed = JSON.parse(localStorage.getItem(UPDATES_KEY) || "[]");
-			return Array.isArray(parsed) ? parsed : [];
+			const existing = String(localStorage.getItem(USER_KEY_STORAGE_KEY) || "").trim();
+			if (existing) return existing;
+			const created = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+			localStorage.setItem(USER_KEY_STORAGE_KEY, created);
+			return created;
+		} catch {
+			return `usr_fallback_${Math.random().toString(36).slice(2, 10)}`;
+		}
+	}
+
+	async function loadUpdates() {
+		try {
+			const response = await fetch(`/api/activity/recent?userKey=${encodeURIComponent(getUserKey())}`);
+			const data = await response.json().catch(() => ({}));
+			return Array.isArray(data?.updates) ? data.updates : [];
 		} catch {
 			return [];
 		}
@@ -58,7 +75,7 @@ import Layout from '../layouts/Layout.astro';
 		return `
 			<div class="update-card">
 				<div class="update-header">
-					<span><strong>Wylie</strong> ${statusLine(update)}</span>
+					<span><strong>${escapeHtml(update.actorName || "A User")}</strong> ${statusLine(update)}</span>
 					<span class="date">${formatWhen(update.timestamp)}</span>
 				</div>
 				<div class="update-body">
@@ -73,8 +90,8 @@ import Layout from '../layouts/Layout.astro';
 		`;
 	}
 
-	function renderFeed() {
-		const updates = loadUpdates()
+	async function renderFeed() {
+		const updates = (await loadUpdates())
 			.filter((update) => update && update.title)
 			.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))
 			.slice(0, 50);
@@ -88,10 +105,10 @@ import Layout from '../layouts/Layout.astro';
 	}
 
 	window.addEventListener("storage", (event) => {
-		if (event.key === UPDATES_KEY) renderFeed();
+		if (event.key === USER_KEY_STORAGE_KEY) void renderFeed();
 	});
 
-	renderFeed();
+	void renderFeed();
 </script>
 
 <style>

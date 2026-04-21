@@ -278,6 +278,36 @@ const isAuthenticated = !!session?.userId;
 		});
 	}
 
+	async function hydrateProfileInfoFromServer() {
+		const userKey = getUserKey();
+		try {
+			const endpoint = new URL("/api/profile/info", window.location.origin);
+			endpoint.searchParams.set("userKey", userKey);
+			const response = await fetch(endpoint.toString());
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok || !data?.profile) return false;
+			profileInfo = saveProfileInfo(data.profile);
+			renderProfileInfo();
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	async function saveProfileInfoToServer(nextProfile) {
+		const userKey = getUserKey();
+		const response = await fetch("/api/profile/info", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ userKey, profile: nextProfile })
+		});
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok) {
+			throw new Error(String(data?.error || "Failed to save profile info."));
+		}
+		return data?.profile || nextProfile;
+	}
+
 	async function hydrateEntriesFromServer() {
 		const userKey = getUserKey();
 		const response = await fetch(`/api/shelf/entries?userKey=${encodeURIComponent(userKey)}`);
@@ -1543,7 +1573,8 @@ const isAuthenticated = !!session?.userId;
 								blurb: formData.get("blurb"),
 								genres: editingGenres.join(", ")
 							});
-						profileInfo = saveProfileInfo(next);
+						const savedProfile = await saveProfileInfoToServer(next);
+						profileInfo = saveProfileInfo(savedProfile);
 						renderProfileInfo();
 						showUsernameStatus("");
 						setProfileEditMode(false);
@@ -2160,6 +2191,7 @@ const isAuthenticated = !!session?.userId;
 	renderLists();
 	setActiveTab(normalizeHashToTab(window.location.hash));
 	void enrichMissingCovers();
+	void hydrateProfileInfoFromServer();
 	void hydrateEntriesFromServer();
 	}
 </script>

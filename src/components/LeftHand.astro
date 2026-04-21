@@ -9,23 +9,38 @@ const query = Astro.url.searchParams.get("q") ?? "";
 
 <Widget style="height: 100%" background={true}>
   <div id="left-hand-nav" data-current={current}>
-  <h2><a href="/" class="special-font">DogEared</a></h2>
-  <form action="/search" method="get">
-    <input type="search" name="q" placeholder="Search" value={query} />
-  </form>
-  <ul>
-    <li><a href={isActive('/browse') ? undefined : '/browse'} class={isActive('/browse') ? 'active' : 'hover'} aria-current={isActive('/browse') ? 'page' : undefined}>Browse</a></li>
-    <li id="left-hand-login-item"><a href="/settings#account-settings" class="hover auth-cta">Log In</a></li>
-    <li id="left-hand-profile-item" hidden><a href={isActive('/profile') ? undefined : '/profile'} class={isActive('/profile') ? 'active' : 'hover'} aria-current={isActive('/profile') ? 'page' : undefined}>Profile</a></li>
-    <li id="left-hand-settings-item" hidden><a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a></li>
-  </ul>
-  {sectionLinks.length > 0 && (
-    <ul class="quick-links">
-      {sectionLinks.map((link) => (
-        <li><a href={`#${link.id}`} class="hover">{link.label}</a></li>
-      ))}
+    <h2><a href="/" class="special-font">Dogeared</a></h2>
+    <form action="/search" method="get">
+      <input type="search" name="q" placeholder="Search" value={query} />
+    </form>
+    <ul>
+      <li><a href={isActive('/browse') ? undefined : '/browse'} class={isActive('/browse') ? 'active' : 'hover'} aria-current={isActive('/browse') ? 'page' : undefined}>Browse</a></li>
+      <li id="left-hand-login-item"><button type="button" class="nav-text-button hover">Log In</button></li>
+      <li id="left-hand-profile-item" hidden><a href={isActive('/profile') ? undefined : '/profile'} class={isActive('/profile') ? 'active' : 'hover'} aria-current={isActive('/profile') ? 'page' : undefined}>Profile</a></li>
+      <li id="left-hand-settings-item" hidden><a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a></li>
+      <li id="left-hand-logout-item" hidden><button type="button" class="nav-text-button hover">Log Out</button></li>
     </ul>
-  )}
+    {sectionLinks.length > 0 && (
+      <ul class="quick-links">
+        {sectionLinks.map((link) => (
+          <li><a href={`#${link.id}`} class="hover">{link.label}</a></li>
+        ))}
+      </ul>
+    )}
+  </div>
+  <div id="left-hand-login-modal" class="login-modal" hidden>
+    <div class="login-modal-backdrop" data-action="close-login-modal"></div>
+    <div class="login-modal-panel" role="dialog" aria-modal="true" aria-labelledby="left-hand-login-title">
+      <button type="button" class="login-modal-close" data-action="close-login-modal" aria-label="Close login dialog">×</button>
+      <h3 id="left-hand-login-title">Log In</h3>
+      <p class="login-modal-copy">Enter your email and Dogeared will send you a magic link.</p>
+      <form id="left-hand-login-form" class="login-modal-form">
+        <label for="left-hand-login-email">Email</label>
+        <input id="left-hand-login-email" type="email" autocomplete="email" required placeholder="you@example.com" />
+        <button type="submit" class="login-submit">Send Magic Link</button>
+      </form>
+      <p id="left-hand-login-feedback" class="login-feedback" hidden></p>
+    </div>
   </div>
 </Widget>
 
@@ -55,22 +70,19 @@ const query = Astro.url.searchParams.get("q") ?? "";
     background-color: #ddd;
     cursor: default;
   }
-  .auth-cta {
-    display: inline-block;
-    margin-top: 0.15rem;
-    padding: 0.55rem 0.85rem;
-    border-radius: 999px;
-    background: #111;
-    color: #fff;
-  }
   .hover:hover {
     text-decoration: underline;
-    /* background-color: black;
-    color: white; */
   }
-  .auth-cta.hover:hover {
-    text-decoration: none;
-    background: #222;
+  .nav-text-button {
+    appearance: none;
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    color: black;
+    font: inherit;
+    cursor: pointer;
+    border-radius: 5px;
   }
   input[type="search"] {
     font-size: 16px;
@@ -94,12 +106,129 @@ const query = Astro.url.searchParams.get("q") ?? "";
     font-size: clamp(0rem, 22cqw, 4rem);
     line-height: 1;
   }
+  .login-modal[hidden] {
+    display: none !important;
+  }
+  .login-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+  }
+  .login-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.42);
+  }
+  .login-modal-panel {
+    position: relative;
+    z-index: 1;
+    width: min(420px, calc(100vw - 2rem));
+    margin: 12vh auto 0;
+    background: #fff;
+    border-radius: 14px;
+    padding: 1rem;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+  }
+  .login-modal-panel h3 {
+    margin: 0;
+  }
+  .login-modal-copy {
+    margin: 0.5rem 0 0.9rem;
+    color: #444;
+  }
+  .login-modal-form {
+    display: grid;
+    gap: 0.55rem;
+  }
+  .login-modal-form label {
+    font-weight: 600;
+  }
+  .login-modal-form input[type="email"] {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    border: 1px solid #999;
+    border-radius: 10px;
+    padding: 0.7rem 0.85rem;
+    font-size: 16px;
+    margin-top: 0;
+  }
+  .login-submit {
+    appearance: none;
+    border: none;
+    border-radius: 8px;
+    padding: 0.65rem 0.9rem;
+    background: #111;
+    color: #fff;
+    font: inherit;
+    cursor: pointer;
+    justify-self: start;
+  }
+  .login-modal-close {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    appearance: none;
+    border: none;
+    background: transparent;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #444;
+  }
+  .login-feedback {
+    margin: 0.8rem 0 0;
+    padding: 0.7rem 0.8rem;
+    border-radius: 9px;
+    background: #f3f4f6;
+    color: #1f2937;
+  }
+  .login-feedback.error {
+    background: #fef2f2;
+    color: #991b1b;
+  }
 </style>
 
 <script>
   const leftHandLoginItem = document.getElementById("left-hand-login-item");
+  const leftHandLoginButton = leftHandLoginItem?.querySelector("button");
   const leftHandProfileItem = document.getElementById("left-hand-profile-item");
   const leftHandSettingsItem = document.getElementById("left-hand-settings-item");
+  const leftHandLogoutItem = document.getElementById("left-hand-logout-item");
+  const leftHandLogoutButton = leftHandLogoutItem?.querySelector("button");
+  const leftHandLoginModal = document.getElementById("left-hand-login-modal");
+  const leftHandLoginForm = document.getElementById("left-hand-login-form");
+  const leftHandLoginEmail = document.getElementById("left-hand-login-email");
+  const leftHandLoginFeedback = document.getElementById("left-hand-login-feedback");
+
+  function showLoginFeedback(message, isError = false) {
+    if (!(leftHandLoginFeedback instanceof HTMLElement)) return;
+    leftHandLoginFeedback.textContent = message;
+    leftHandLoginFeedback.hidden = !message;
+    leftHandLoginFeedback.classList.toggle("error", isError);
+  }
+
+  function openLoginModal() {
+    if (!(leftHandLoginModal instanceof HTMLElement)) return;
+    leftHandLoginModal.hidden = false;
+    showLoginFeedback("");
+    window.setTimeout(() => {
+      if (leftHandLoginEmail instanceof HTMLInputElement) {
+        leftHandLoginEmail.focus();
+      }
+    }, 0);
+  }
+
+  function closeLoginModal() {
+    if (!(leftHandLoginModal instanceof HTMLElement)) return;
+    leftHandLoginModal.hidden = true;
+    showLoginFeedback("");
+    if (leftHandLoginForm instanceof HTMLFormElement) {
+      leftHandLoginForm.reset();
+    }
+  }
 
   async function syncLeftHandAuthState() {
     try {
@@ -109,12 +238,70 @@ const query = Astro.url.searchParams.get("q") ?? "";
       if (leftHandLoginItem instanceof HTMLElement) leftHandLoginItem.hidden = authenticated;
       if (leftHandProfileItem instanceof HTMLElement) leftHandProfileItem.hidden = !authenticated;
       if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = !authenticated;
+      if (leftHandLogoutItem instanceof HTMLElement) leftHandLogoutItem.hidden = !authenticated;
     } catch {
       if (leftHandLoginItem instanceof HTMLElement) leftHandLoginItem.hidden = false;
       if (leftHandProfileItem instanceof HTMLElement) leftHandProfileItem.hidden = true;
       if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = true;
+      if (leftHandLogoutItem instanceof HTMLElement) leftHandLogoutItem.hidden = true;
     }
   }
+
+  leftHandLogoutButton?.addEventListener("click", async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.href = "/browse";
+    }
+  });
+
+  leftHandLoginButton?.addEventListener("click", () => {
+    openLoginModal();
+  });
+
+  leftHandLoginModal?.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.matches('[data-action="close-login-modal"]')) {
+      closeLoginModal();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && leftHandLoginModal instanceof HTMLElement && !leftHandLoginModal.hidden) {
+      closeLoginModal();
+    }
+  });
+
+  leftHandLoginForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const email = String(leftHandLoginEmail instanceof HTMLInputElement ? leftHandLoginEmail.value : "").trim();
+    if (!email) {
+      showLoginFeedback("Enter an email address.", true);
+      return;
+    }
+    showLoginFeedback("Sending magic link...");
+    try {
+      const response = await fetch("/api/auth/request-magic-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        showLoginFeedback(String(data?.error || "Failed to send magic link."), true);
+        return;
+      }
+      const preview = String(data?.previewUrl || "").trim();
+      if (preview) {
+        showLoginFeedback(`Magic link generated. Open: ${preview}`);
+        return;
+      }
+      showLoginFeedback("Check your email for a sign-in link.");
+    } catch {
+      showLoginFeedback("Failed to send magic link.", true);
+    }
+  });
 
   void syncLeftHandAuthState();
 </script>

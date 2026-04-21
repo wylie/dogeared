@@ -9,6 +9,7 @@ create table if not exists app_user (
 	username text,
 	email_hash text unique,
 	email_enc bytea,
+	profile_data jsonb not null default '{}'::jsonb,
 	created_at timestamptz not null default now()
 );
 
@@ -90,9 +91,19 @@ create table if not exists user_book (
 	primary key (user_id, book_id)
 );
 
+create table if not exists user_activity (
+	id bigserial primary key,
+	user_id uuid not null references app_user(id) on delete cascade,
+	book_id bigint not null references book(id) on delete cascade,
+	event_type text not null check (event_type in ('want_to_read', 'reading', 'finished', 'rating')),
+	rating int,
+	created_at timestamptz not null default now()
+);
+
 create index if not exists idx_book_genre_slug on book_genre(genre_slug);
 create index if not exists idx_book_source_book on book_source(book_id);
 create index if not exists idx_book_source_source on book_source(source, source_work_id, source_edition_id);
+create index if not exists idx_user_activity_user_created on user_activity(user_id, created_at desc);
 create index if not exists idx_user_book_status_updated on user_book(status, updated_at desc);
 create index if not exists idx_user_book_book on user_book(book_id);
 

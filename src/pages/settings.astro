@@ -1,8 +1,14 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+const sectionLinks = [
+	{ id: "goodreads-import", label: "Import Goodreads" },
+	{ id: "account-settings", label: "Account" },
+	{ id: "api-settings", label: "API" }
+];
 ---
 
-<Layout title="Settings">
+<Layout title="Settings" sectionLinks={sectionLinks}>
 	<div slot="right" class="settings-page">
 		<h1>Settings</h1>
 		<p class="subhead">Manage imports and account preferences.</p>
@@ -10,7 +16,7 @@ import Layout from '../layouts/Layout.astro';
 		<section class="settings-section" id="goodreads-import" aria-labelledby="goodreads-import-title">
 			<h2 id="goodreads-import-title">Import Goodreads Data</h2>
 			<p class="section-copy">
-				Upload your Goodreads library export CSV to import shelves into DogEared.
+				Upload your Goodreads library export CSV to import shelves into Dogeared.
 			</p>
 			<ol class="steps">
 				<li>In Goodreads, go to My Books and export your library as CSV.</li>
@@ -62,13 +68,13 @@ import Layout from '../layouts/Layout.astro';
 		<section class="settings-section" id="api-settings" aria-labelledby="api-settings-title">
 			<h2 id="api-settings-title">API</h2>
 			<p class="section-copy">
-				DogEared now stores shelved books in its own catalog. Use these routes to read from the DogEared API instead of relying on third-party APIs for saved data.
+				Dogeared now stores shelved books in its own catalog. Use these routes to read from the Dogeared API instead of relying on third-party APIs for saved data.
 			</p>
 
 			<div class="api-grid">
 				<div class="api-card">
 					<h3>My Shelf</h3>
-					<p class="api-copy">Returns the saved books currently synced to your DogEared shelf.</p>
+					<p class="api-copy">Returns the saved books currently synced to your Dogeared shelf.</p>
 					<label for="api-shelf-url">Endpoint</label>
 					<div class="api-url-row">
 						<input id="api-shelf-url" class="api-url" type="text" readonly value="" />
@@ -78,7 +84,7 @@ import Layout from '../layouts/Layout.astro';
 
 				<div class="api-card">
 					<h3>Catalog Search</h3>
-					<p class="api-copy">Searches books through DogEared's server-side search route.</p>
+					<p class="api-copy">Searches books through Dogeared's server-side search route.</p>
 					<label for="api-search-url">Endpoint</label>
 					<div class="api-url-row">
 						<input id="api-search-url" class="api-url" type="text" readonly value="" />
@@ -88,7 +94,7 @@ import Layout from '../layouts/Layout.astro';
 
 				<div class="api-card">
 					<h3>Top Books By Genre</h3>
-					<p class="api-copy">Returns books ranked from real DogEared shelf activity.</p>
+					<p class="api-copy">Returns books ranked from real Dogeared shelf activity.</p>
 					<label for="api-top-url">Endpoint</label>
 					<div class="api-url-row">
 						<input id="api-top-url" class="api-url" type="text" readonly value="" />
@@ -98,7 +104,7 @@ import Layout from '../layouts/Layout.astro';
 			</div>
 
 			<p class="api-note">
-				Search still begins with Google Books, but once a book is shelved or imported it can be served back from DogEared's own database.
+				Search still begins with Google Books, but once a book is shelved or imported it can be served back from Dogeared's own database.
 			</p>
 			<p id="api-feedback" class="feedback" hidden></p>
 		</section>
@@ -868,7 +874,7 @@ import Layout from '../layouts/Layout.astro';
 				showAccountFeedback(`Magic link generated. Open: ${preview}`);
 				return;
 			}
-			showAccountFeedback("Check your email for a DogEared sign-in link.");
+			showAccountFeedback("Check your email for a Dogeared sign-in link.");
 		} catch {
 			showAccountFeedback("Failed to send magic link.", true);
 		}

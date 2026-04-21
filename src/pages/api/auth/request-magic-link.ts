@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { getNeonSql } from "../../../lib/neon";
-import { getEncryptionKey, normalizeEmail, randomToken, sha256Hex } from "../../../lib/auth";
+import { normalizeEmail, randomToken, sha256Hex, upsertUserByEmail } from "../../../lib/auth";
 
 export const prerender = false;
 
@@ -9,20 +9,6 @@ function json(status: number, body: unknown) {
 		status,
 		headers: { "Content-Type": "application/json" }
 	});
-}
-
-async function upsertUserByEmail(email: string) {
-	const sql = getNeonSql();
-	const encryptionKey = getEncryptionKey();
-	const emailHash = sha256Hex(email);
-	const userRows = await sql<Array<{ id: string }>>`
-		insert into app_user (user_key, email_hash, email_enc)
-		values (${`auth_${randomToken(10)}`}, ${emailHash}, pgp_sym_encrypt(${email}, ${encryptionKey}))
-		on conflict (email_hash) do update set
-			email_enc = excluded.email_enc
-		returning id::text as id
-	`;
-	return String(userRows[0]?.id || "");
 }
 
 function escapeHtml(value: string) {
@@ -37,7 +23,7 @@ function escapeHtml(value: string) {
 async function sendMagicLinkEmail(email: string, magicUrl: string) {
 	const brevoApiKey = String(import.meta.env.BREVO_API_KEY || "").trim();
 	const fromEmail = String(import.meta.env.BREVO_FROM_EMAIL || "").trim();
-	const fromName = String(import.meta.env.BREVO_FROM_NAME || "DogEared").trim();
+	const fromName = String(import.meta.env.BREVO_FROM_NAME || "Dogeared").trim();
 	if (!brevoApiKey || !fromEmail) {
 		return {
 			sent: false,
@@ -58,9 +44,9 @@ async function sendMagicLinkEmail(email: string, magicUrl: string) {
 				email: fromEmail
 			},
 			to: [{ email }],
-			subject: "Your DogEared sign-in link",
-			htmlContent: `<p>Click to sign in to DogEared:</p><p><a href="${escapeHtml(magicUrl)}">${escapeHtml(magicUrl)}</a></p><p>This link expires in 20 minutes.</p>`,
-			textContent: `Sign in to DogEared: ${magicUrl}\n\nThis link expires in 20 minutes.`
+			subject: "Your Dogeared sign-in link",
+			htmlContent: `<p>Click to sign in to Dogeared:</p><p><a href="${escapeHtml(magicUrl)}">${escapeHtml(magicUrl)}</a></p><p>This link expires in 20 minutes.</p>`,
+			textContent: `Sign in to Dogeared: ${magicUrl}\n\nThis link expires in 20 minutes.`
 		})
 	});
 	if (response.ok) {

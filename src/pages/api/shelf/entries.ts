@@ -253,10 +253,22 @@ export const POST: APIRoute = async ({ request }) => {
 				sourceUrl
 			});
 		}
-
 		const userId = await resolveActiveUserId(request, userKey);
 		if (!userId) throw new Error("User resolution failed.");
 		const sql = getNeonSql();
+		const previousRows = await sql<Array<{ status: ShelfStatus }>>`
+			select status
+			from user_book
+			where user_id = ${userId}::uuid
+				and book_id in (
+					select id
+					from book
+					where canonical_work_key = ${workKey}
+					limit 1
+				)
+			limit 1
+		`;
+		const previousStatus = String(previousRows[0]?.status || "").trim() as ShelfStatus | "";
 
 		const bookRows = await sql<{ id: number }[]>`
 			insert into book (
@@ -335,6 +347,21 @@ export const POST: APIRoute = async ({ request }) => {
 				finished_date = excluded.finished_date,
 				updated_at = now()
 		`;
+
+		if (!previousStatus || previousStatus !== status) {
+			await sql`
+				insert into user_activity (
+					user_id,
+					book_id,
+					event_type
+				)
+				values (
+					${userId}::uuid,
+					${bookId},
+					${status}
+				)
+			`;
+		}
 
 		return new Response(JSON.stringify({ ok: true, bookId }), {
 			status: 200,

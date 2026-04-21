@@ -6,7 +6,7 @@ const isActive = (href: string) => normalize(current) === normalize(href);
 
 <nav aria-label="Primary">
   <ul>
-    <li><a href="/" class="special-font">DogEared</a></li>
+    <li><a href="/" class="special-font">Dogeared</a></li>
     <li><a href={isActive('/browse') ? undefined : '/browse'} class={isActive('/browse') ? 'active' : 'hover'} aria-current={isActive('/browse') ? 'page' : undefined}>Browse</a></li>
     <li><input type="search" /></li>
     <li class="material-icons"><a href={isActive('/profile') ? undefined : '/profile'} class={isActive('/profile') ? 'active' : 'hover'} aria-current={isActive('/profile') ? 'page' : undefined}>person</a></li>

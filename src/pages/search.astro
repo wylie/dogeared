@@ -189,7 +189,7 @@ function dedupeVariants(input: SearchResult[], queryText: string) {
 }
 
 const query = Astro.url.searchParams.get("q")?.trim() ?? "";
-const apiKey = import.meta.env.GOOGLE_BOOKS_API_KEY ?? "";
+const apiKey = String(import.meta.env.GOOGLE_BOOKS_API_KEY ?? "").trim();
 
 let results: SearchResult[] = [];
 let errorMessage = "";
@@ -232,23 +232,22 @@ if (query && apiKey) {
 			const isbn10 = String(
 				(identifiers.find((entry) => String(entry?.type || "") === "ISBN_10")?.identifier || "")
 			).replace(/[^0-9Xx]/g, "").toUpperCase();
-
-				return {
-					title: info.title ?? "Untitled",
-					subtitle: info.subtitle ?? "",
-					authors: Array.isArray(info.authors) ? info.authors : [],
+			return {
+				title: info.title ?? "Untitled",
+				subtitle: info.subtitle ?? "",
+				authors: Array.isArray(info.authors) ? info.authors : [],
 				description: info.description ?? "",
 				publisher: info.publisher ?? "",
 				publishedDate: info.publishedDate ?? "",
 				printType: info.printType ?? "",
 				pageCount: typeof info.pageCount === "number" ? info.pageCount : null,
 				categories: Array.isArray(info.categories) ? info.categories : [],
-					language: info.language ?? "",
-					thumbnail: info.imageLinks?.thumbnail ?? "",
-					isbn10,
-					isbn13,
-					googleBooksId: String(item?.id || "").trim()
-				};
+				language: info.language ?? "",
+				thumbnail: info.imageLinks?.thumbnail ?? "",
+				isbn10,
+				isbn13,
+				googleBooksId: String(item?.id || "").trim()
+			};
 		}).filter((result) => isLikelyMatch(result, query));
 		results = dedupeVariants(mapped, query);
 	} catch (error) {

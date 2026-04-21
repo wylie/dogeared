@@ -50,6 +50,20 @@ export function clearSessionCookie() {
 	return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
+export async function upsertUserByEmail(email: string) {
+	const sql = getNeonSql();
+	const encryptionKey = getEncryptionKey();
+	const emailHash = sha256Hex(email);
+	const userRows = await sql<Array<{ id: string }>>`
+		insert into app_user (user_key, email_hash, email_enc)
+		values (${`auth_${randomToken(10)}`}, ${emailHash}, pgp_sym_encrypt(${email}, ${encryptionKey}))
+		on conflict (email_hash) do update set
+			email_enc = excluded.email_enc
+		returning id::text as id
+	`;
+	return String(userRows[0]?.id || "");
+}
+
 export async function resolveUserBySession(request: Request) {
 	const token = readCookie(request.headers, SESSION_COOKIE);
 	if (!token) return null;
