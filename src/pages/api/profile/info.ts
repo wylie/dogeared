@@ -24,6 +24,7 @@ function normalizeProfilePayload(input: unknown) {
 		location: normalizeProfileText(source.location, 80),
 		readingGoal: normalizeProfileText(source.readingGoal, 80),
 		favoriteBook: normalizeProfileText(source.favoriteBook, 120),
+		favoriteAuthor: normalizeProfileText(source.favoriteAuthor, 120),
 		blurb: normalizeProfileText(source.blurb, 400),
 		genres
 	};

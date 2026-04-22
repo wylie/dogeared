@@ -16,6 +16,7 @@ type ShelfEntryInput = {
 	title?: unknown;
 	author?: unknown;
 	status?: unknown;
+	rating?: unknown;
 	totalPages?: unknown;
 	currentPage?: unknown;
 	finishedDate?: unknown;
@@ -48,6 +49,13 @@ function normalizePositiveInt(value: unknown) {
 	const parsed = Number(value);
 	if (!Number.isFinite(parsed) || parsed < 0) return 0;
 	return Math.floor(parsed);
+}
+
+function normalizeRating(value: unknown) {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed)) return null;
+	const rounded = Math.floor(parsed);
+	return rounded >= 1 && rounded <= 5 ? rounded : null;
 }
 
 function normalizeIsbn(value: unknown) {
@@ -145,10 +153,16 @@ function parseGenres(input: unknown) {
 	return genres;
 }
 
+async function ensureShelfSchema() {
+	const sql = getNeonSql();
+	await sql`alter table user_book add column if not exists rating int`;
+}
+
 export const GET: APIRoute = async ({ request, url }) => {
 	const userKey = normalizeText(url.searchParams.get("userKey"));
 
 	try {
+		await ensureShelfSchema();
 		const userId = await resolveActiveUserId(request, userKey);
 		if (!userId) {
 			return new Response(JSON.stringify({ entries: [] }), {
@@ -164,6 +178,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			cover_url: string;
 			language: string;
 			status: ShelfStatus;
+			rating: number | null;
 			total_pages: number;
 			current_page: number;
 			finished_date: string | null;
@@ -180,6 +195,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 				b.cover_url,
 				b.language,
 				ub.status,
+				ub.rating,
 				ub.total_pages,
 				ub.current_page,
 				ub.finished_date::text as finished_date,
@@ -192,7 +208,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			join book b on b.id = ub.book_id
 			left join book_genre bg on bg.book_id = b.id
 			where ub.user_id = ${userId}::uuid
-			group by b.id, ub.status, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at
+			group by b.id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at
 			order by ub.updated_at desc
 		`;
 
@@ -201,6 +217,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			title: row.title,
 			author: row.primary_author || "",
 			status: row.status,
+			rating: normalizeRating(row.rating),
 			totalPages: normalizePositiveInt(row.total_pages),
 			currentPage: normalizePositiveInt(row.current_page),
 			finishedDate: row.finished_date || "",
@@ -231,6 +248,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 
 export const POST: APIRoute = async ({ request }) => {
 	try {
+		await ensureShelfSchema();
 		const body = await request.json() as { userKey?: unknown; entry?: ShelfEntryInput };
 		const userKey = normalizeText(body?.userKey);
 		const entry = body?.entry || {};
@@ -244,6 +262,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 		const author = normalizeText(entry.author);
 		const status = normalizeStatus(entry.status);
+		const rating = status === "finished" ? normalizeRating(entry.rating) : null;
 		const totalPages = normalizePositiveInt(entry.totalPages);
 		const currentPage = normalizePositiveInt(entry.currentPage);
 		const finishedDateRaw = normalizeText(entry.finishedDate);
@@ -288,8 +307,8 @@ export const POST: APIRoute = async ({ request }) => {
 		const userId = await resolveActiveUserId(request, userKey);
 		if (!userId) throw new Error("User resolution failed.");
 		const sql = getNeonSql();
-		const previousRows = await sql<Array<{ status: ShelfStatus }>>`
-			select status
+		const previousRows = await sql<Array<{ status: ShelfStatus; rating: number | null }>>`
+			select status, rating
 			from user_book
 			where user_id = ${userId}::uuid
 				and book_id in (
@@ -301,6 +320,7 @@ export const POST: APIRoute = async ({ request }) => {
 			limit 1
 		`;
 		const previousStatus = String(previousRows[0]?.status || "").trim() as ShelfStatus | "";
+		const previousRating = normalizeRating(previousRows[0]?.rating);
 
 		const bookRows = await sql<{ id: number }[]>`
 			insert into book (
@@ -356,6 +376,7 @@ export const POST: APIRoute = async ({ request }) => {
 				user_id,
 				book_id,
 				status,
+				rating,
 				total_pages,
 				current_page,
 				finished_date,
@@ -366,6 +387,7 @@ export const POST: APIRoute = async ({ request }) => {
 				${userId}::uuid,
 				${bookId},
 				${status},
+				${rating},
 				${totalPages},
 				${currentPage},
 				${finishedDate ? finishedDate : null}::date,
@@ -374,6 +396,7 @@ export const POST: APIRoute = async ({ request }) => {
 			)
 			on conflict (user_id, book_id) do update set
 				status = excluded.status,
+				rating = excluded.rating,
 				total_pages = excluded.total_pages,
 				current_page = excluded.current_page,
 				finished_date = excluded.finished_date,
@@ -395,6 +418,23 @@ export const POST: APIRoute = async ({ request }) => {
 			`;
 		}
 
+		if (rating !== null && previousRating !== rating) {
+			await sql`
+				insert into user_activity (
+					user_id,
+					book_id,
+					event_type,
+					rating
+				)
+				values (
+					${userId}::uuid,
+					${bookId},
+					'rating',
+					${rating}
+				)
+			`;
+		}
+
 		return new Response(JSON.stringify({ ok: true, bookId }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" }
@@ -412,6 +452,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 export const DELETE: APIRoute = async ({ request }) => {
 	try {
+		await ensureShelfSchema();
 		const body = await request.json() as { userKey?: unknown; entry?: ShelfEntryInput };
 		const userKey = normalizeText(body?.userKey);
 		const entry = body?.entry || {};

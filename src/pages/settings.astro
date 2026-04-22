@@ -544,6 +544,7 @@ const sectionLinks = [
 			title: normalizeText(entry?.title),
 			author: normalizeText(entry?.author),
 			status: normalizeText(entry?.status) || "want_to_read",
+			rating: Number.isFinite(Number(entry?.rating)) ? Number(entry.rating) : 0,
 			totalPages: normalizeNumber(entry?.totalPages),
 			currentPage: normalizeNumber(entry?.currentPage),
 			finishedDate: normalizeText(entry?.finishedDate),

@@ -81,6 +81,14 @@ const isAuthenticated = !!session?.userId;
 						</div>
 						<p id="profile-favorite-book-status" class="field-status" hidden></p>
 					</label>
+					<label>
+						Favorite Author
+						<div class="favorite-author-autocomplete">
+							<input type="text" name="favoriteAuthor" maxlength="120" autocomplete="off" placeholder="Search author" />
+							<div id="profile-favorite-author-options" class="favorite-author-options" hidden></div>
+						</div>
+						<p id="profile-favorite-author-status" class="field-status" hidden></p>
+					</label>
 						<label>
 							Favorite Genres
 							<div class="genre-editor">
@@ -112,10 +120,14 @@ const isAuthenticated = !!session?.userId;
 				<label class="list-sort">
 					<span>Sort</span>
 					<select id="sort-want-to-read">
-						<option value="date_added_desc">Date Added</option>
-						<option value="name_asc">Name</option>
-						<option value="author_asc">Author</option>
-						<option value="date_finished_desc">Date Finished</option>
+						<option value="date_added_desc">Date Added: Newest First</option>
+						<option value="date_added_asc">Date Added: Oldest First</option>
+						<option value="date_finished_desc">Date Finished: Newest First</option>
+						<option value="date_finished_asc">Date Finished: Oldest First</option>
+						<option value="name_asc">Name: A–Z</option>
+						<option value="name_desc">Name: Z–A</option>
+						<option value="author_asc">Author: A–Z</option>
+						<option value="author_desc">Author: Z–A</option>
 					</select>
 				</label>
 			</div>
@@ -128,10 +140,14 @@ const isAuthenticated = !!session?.userId;
 				<label class="list-sort">
 					<span>Sort</span>
 					<select id="sort-reading">
-						<option value="date_added_desc">Date Added</option>
-						<option value="name_asc">Name</option>
-						<option value="author_asc">Author</option>
-						<option value="date_finished_desc">Date Finished</option>
+						<option value="date_added_desc">Date Added: Newest First</option>
+						<option value="date_added_asc">Date Added: Oldest First</option>
+						<option value="date_finished_desc">Date Finished: Newest First</option>
+						<option value="date_finished_asc">Date Finished: Oldest First</option>
+						<option value="name_asc">Name: A–Z</option>
+						<option value="name_desc">Name: Z–A</option>
+						<option value="author_asc">Author: A–Z</option>
+						<option value="author_desc">Author: Z–A</option>
 					</select>
 				</label>
 			</div>
@@ -144,10 +160,14 @@ const isAuthenticated = !!session?.userId;
 				<label class="list-sort">
 					<span>Sort</span>
 					<select id="sort-finished">
-						<option value="date_finished_desc">Date Finished</option>
-						<option value="date_added_desc">Date Added</option>
-						<option value="name_asc">Name</option>
-						<option value="author_asc">Author</option>
+						<option value="date_finished_desc">Date Finished: Newest First</option>
+						<option value="date_finished_asc">Date Finished: Oldest First</option>
+						<option value="date_added_desc">Date Added: Newest First</option>
+						<option value="date_added_asc">Date Added: Oldest First</option>
+						<option value="name_asc">Name: A–Z</option>
+						<option value="name_desc">Name: Z–A</option>
+						<option value="author_asc">Author: A–Z</option>
+						<option value="author_desc">Author: Z–A</option>
 					</select>
 				</label>
 			</div>
@@ -190,6 +210,8 @@ const isAuthenticated = !!session?.userId;
 	const profileLocationOptions = document.getElementById("profile-location-options");
 	const profileFavoriteBookStatus = document.getElementById("profile-favorite-book-status");
 	const profileFavoriteBookOptions = document.getElementById("profile-favorite-book-options");
+	const profileFavoriteAuthorStatus = document.getElementById("profile-favorite-author-status");
+	const profileFavoriteAuthorOptions = document.getElementById("profile-favorite-author-options");
 	const profileAvatarPreview = document.getElementById("profile-avatar-preview");
 	const profileAvatarFile = document.getElementById("profile-avatar-file");
 	const profileAvatarRemove = document.getElementById("profile-avatar-remove");
@@ -207,6 +229,12 @@ const isAuthenticated = !!session?.userId;
 	let favoriteBookLookupSeq = 0;
 	let favoriteBookMatches = [];
 	let favoriteBookActiveIndex = -1;
+	let favoriteAuthorLookupTimer = 0;
+	let favoriteAuthorLookupSeq = 0;
+	let favoriteAuthorMatches = [];
+	let favoriteAuthorActiveIndex = -1;
+	let pendingFinishEntryId = "";
+	let pendingFinishRating = 0;
 	let listSorts = {
 		want_to_read: "date_added_desc",
 		reading: "date_added_desc",
@@ -352,7 +380,16 @@ const isAuthenticated = !!session?.userId;
 	}
 
 	function normalizeSortValue(value, panel) {
-		const allowed = ["date_added_desc", "date_finished_desc", "name_asc", "author_asc"];
+		const allowed = [
+			"date_added_desc",
+			"date_added_asc",
+			"date_finished_desc",
+			"date_finished_asc",
+			"name_asc",
+			"name_desc",
+			"author_asc",
+			"author_desc"
+		];
 		const next = String(value || "").trim();
 		if (allowed.includes(next)) return next;
 		return panel === "finished" ? "date_finished_desc" : "date_added_desc";
@@ -452,6 +489,7 @@ const isAuthenticated = !!session?.userId;
 			location: normalizeProfileText(input?.location, 80),
 			readingGoal: normalizeProfileText(input?.readingGoal, 80),
 			favoriteBook: normalizeProfileText(input?.favoriteBook, 120),
+			favoriteAuthor: normalizeProfileText(input?.favoriteAuthor, 120),
 			blurb: normalizeProfileText(input?.blurb, 400),
 			genres
 		};
@@ -472,6 +510,7 @@ const isAuthenticated = !!session?.userId;
 			location: hasProfileValue(next.location) ? next.location : current.location,
 			readingGoal: hasProfileValue(next.readingGoal) ? next.readingGoal : current.readingGoal,
 			favoriteBook: hasProfileValue(next.favoriteBook) ? next.favoriteBook : current.favoriteBook,
+			favoriteAuthor: hasProfileValue(next.favoriteAuthor) ? next.favoriteAuthor : current.favoriteAuthor,
 			blurb: hasProfileValue(next.blurb) ? next.blurb : current.blurb,
 			genres: hasProfileValue(next.genres) ? next.genres : current.genres
 		};
@@ -520,12 +559,14 @@ const isAuthenticated = !!session?.userId;
 		const location = normalizeProfileText(profileInfo?.location, 80);
 		const readingGoal = normalizeProfileText(profileInfo?.readingGoal, 80);
 		const favoriteBook = normalizeProfileText(profileInfo?.favoriteBook, 120);
+		const favoriteAuthor = normalizeProfileText(profileInfo?.favoriteAuthor, 120);
 		const blurb = normalizeProfileText(profileInfo?.blurb, 400);
 
 		const details = [
 			location ? `<p class="meta"><strong>Location:</strong> ${escapeHtml(location)}</p>` : "",
 			readingGoal ? `<p class="meta"><strong>Reading Goal:</strong> ${escapeHtml(readingGoal)}</p>` : "",
 			favoriteBook ? `<p class="meta"><strong>Favorite Book:</strong> ${escapeHtml(favoriteBook)}</p>` : "",
+			favoriteAuthor ? `<p class="meta"><strong>Favorite Author:</strong> ${escapeHtml(favoriteAuthor)}</p>` : "",
 			blurb ? `<p class="profile-blurb">${escapeHtml(blurb)}</p>` : "",
 			genres.length > 0
 				? `<div class="genre-list">${genres.map((genre) => `<span class="genre-chip">${escapeHtml(genre)}</span>`).join("")}</div>`
@@ -613,15 +654,35 @@ const isAuthenticated = !!session?.userId;
 				if (byName !== 0) return byName;
 				return compareText(a, b, (item) => item?.author);
 			}
+			if (mode === "name_desc") {
+				const byName = compareText(b, a, (item) => item?.title);
+				if (byName !== 0) return byName;
+				return compareText(b, a, (item) => item?.author);
+			}
 			if (mode === "author_asc") {
 				const byAuthor = compareText(a, b, (item) => item?.author);
 				if (byAuthor !== 0) return byAuthor;
 				return compareText(a, b, (item) => item?.title);
 			}
+			if (mode === "author_desc") {
+				const byAuthor = compareText(b, a, (item) => item?.author);
+				if (byAuthor !== 0) return byAuthor;
+				return compareText(b, a, (item) => item?.title);
+			}
 			if (mode === "date_finished_desc") {
 				const byFinished = finishedTimestamp(b) - finishedTimestamp(a);
 				if (byFinished !== 0) return byFinished;
 				return entryAddedTimestamp(b) - entryAddedTimestamp(a);
+			}
+			if (mode === "date_finished_asc") {
+				const byFinished = finishedTimestamp(a) - finishedTimestamp(b);
+				if (byFinished !== 0) return byFinished;
+				return entryAddedTimestamp(a) - entryAddedTimestamp(b);
+			}
+			if (mode === "date_added_asc") {
+				const byAdded = entryAddedTimestamp(a) - entryAddedTimestamp(b);
+				if (byAdded !== 0) return byAdded;
+				return compareText(a, b, (item) => item?.title);
 			}
 			const byAdded = entryAddedTimestamp(b) - entryAddedTimestamp(a);
 			if (byAdded !== 0) return byAdded;
@@ -686,6 +747,7 @@ const isAuthenticated = !!session?.userId;
 		setField("location", data.location);
 		setField("readingGoal", data.readingGoal);
 		setField("favoriteBook", data.favoriteBook);
+		setField("favoriteAuthor", data.favoriteAuthor);
 		setField("blurb", data.blurb);
 		const locationField = profileForm.elements.namedItem("location");
 		if (locationField instanceof HTMLInputElement) {
@@ -694,6 +756,10 @@ const isAuthenticated = !!session?.userId;
 		const favoriteBookField = profileForm.elements.namedItem("favoriteBook");
 		if (favoriteBookField instanceof HTMLInputElement) {
 			favoriteBookField.dataset.resolvedFavoriteBook = "";
+		}
+		const favoriteAuthorField = profileForm.elements.namedItem("favoriteAuthor");
+		if (favoriteAuthorField instanceof HTMLInputElement) {
+			favoriteAuthorField.dataset.resolvedFavoriteAuthor = "";
 		}
 		const avatarUrlField = profileForm.elements.namedItem("avatarUrl");
 		const avatarHiddenField = profileForm.elements.namedItem("avatar");
@@ -717,6 +783,9 @@ const isAuthenticated = !!session?.userId;
 		favoriteBookMatches = [];
 		hideFavoriteBookOptions();
 		showFavoriteBookStatus("");
+		favoriteAuthorMatches = [];
+		hideFavoriteAuthorOptions();
+		showFavoriteAuthorStatus("");
 	}
 
 	function cleanupLikelyImportedFinishedDates() {
@@ -1179,6 +1248,13 @@ const isAuthenticated = !!session?.userId;
 		profileFavoriteBookStatus.classList.toggle("error", isError);
 	}
 
+	function showFavoriteAuthorStatus(message, isError = false) {
+		if (!(profileFavoriteAuthorStatus instanceof HTMLElement)) return;
+		profileFavoriteAuthorStatus.textContent = message;
+		profileFavoriteAuthorStatus.hidden = !message;
+		profileFavoriteAuthorStatus.classList.toggle("error", isError);
+	}
+
 	function normalizeFavoriteBookLabel(title, author) {
 		const cleanTitle = normalizeProfileText(title, 120);
 		const cleanAuthor = normalizeProfileText(author, 80);
@@ -1190,11 +1266,22 @@ const isAuthenticated = !!session?.userId;
 		return profileFavoriteBookOptions instanceof HTMLElement && !profileFavoriteBookOptions.hidden;
 	}
 
+	function isFavoriteAuthorOptionsOpen() {
+		return profileFavoriteAuthorOptions instanceof HTMLElement && !profileFavoriteAuthorOptions.hidden;
+	}
+
 	function hideFavoriteBookOptions() {
 		if (!(profileFavoriteBookOptions instanceof HTMLElement)) return;
 		profileFavoriteBookOptions.hidden = true;
 		profileFavoriteBookOptions.innerHTML = "";
 		favoriteBookActiveIndex = -1;
+	}
+
+	function hideFavoriteAuthorOptions() {
+		if (!(profileFavoriteAuthorOptions instanceof HTMLElement)) return;
+		profileFavoriteAuthorOptions.hidden = true;
+		profileFavoriteAuthorOptions.innerHTML = "";
+		favoriteAuthorActiveIndex = -1;
 	}
 
 	function renderFavoriteBookOptions(favoriteBookField) {
@@ -1222,6 +1309,31 @@ const isAuthenticated = !!session?.userId;
 		};
 	}
 
+	function renderFavoriteAuthorOptions(favoriteAuthorField) {
+		if (!(profileFavoriteAuthorOptions instanceof HTMLElement)) return;
+		if (favoriteAuthorMatches.length === 0) {
+			hideFavoriteAuthorOptions();
+			return;
+		}
+		favoriteAuthorActiveIndex = 0;
+		profileFavoriteAuthorOptions.innerHTML = favoriteAuthorMatches.map((author, index) => (
+			`<button type="button" class="favorite-author-option ${index === 0 ? "is-active" : ""}" data-favorite-author-index="${index}">
+				<span class="favorite-author-option-title">${escapeHtml(author.name)}</span>
+				${author.workCount > 0 ? `<span class="favorite-author-option-meta">${escapeHtml(String(author.workCount))} matching books</span>` : ""}
+			</button>`
+		)).join("");
+		profileFavoriteAuthorOptions.hidden = false;
+		profileFavoriteAuthorOptions.onclick = (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			const option = target.closest("[data-favorite-author-index]");
+			if (!(option instanceof HTMLElement)) return;
+			const rawIndex = option.getAttribute("data-favorite-author-index");
+			if (rawIndex == null) return;
+			commitFavoriteAuthorSelection(favoriteAuthorField, Number(rawIndex));
+		};
+	}
+
 	function moveFavoriteBookActive(delta) {
 		if (!isFavoriteBookOptionsOpen() || favoriteBookMatches.length === 0) return;
 		const max = favoriteBookMatches.length - 1;
@@ -1241,6 +1353,25 @@ const isAuthenticated = !!session?.userId;
 		if (active) active.scrollIntoView({ block: "nearest" });
 	}
 
+	function moveFavoriteAuthorActive(delta) {
+		if (!isFavoriteAuthorOptionsOpen() || favoriteAuthorMatches.length === 0) return;
+		const max = favoriteAuthorMatches.length - 1;
+		if (favoriteAuthorActiveIndex < 0) {
+			favoriteAuthorActiveIndex = delta > 0 ? 0 : max;
+		} else {
+			favoriteAuthorActiveIndex += delta;
+			if (favoriteAuthorActiveIndex < 0) favoriteAuthorActiveIndex = max;
+			if (favoriteAuthorActiveIndex > max) favoriteAuthorActiveIndex = 0;
+		}
+		if (!(profileFavoriteAuthorOptions instanceof HTMLElement)) return;
+		const items = Array.from(profileFavoriteAuthorOptions.querySelectorAll(".favorite-author-option"));
+		for (const [index, item] of items.entries()) {
+			item.classList.toggle("is-active", index === favoriteAuthorActiveIndex);
+		}
+		const active = items[favoriteAuthorActiveIndex];
+		if (active) active.scrollIntoView({ block: "nearest" });
+	}
+
 	function commitFavoriteBookSelection(favoriteBookField, index) {
 		if (!(favoriteBookField instanceof HTMLInputElement)) return;
 		const selected = favoriteBookMatches[index];
@@ -1250,6 +1381,16 @@ const isAuthenticated = !!session?.userId;
 		favoriteBookField.dataset.resolvedFavoriteBook = formatted;
 		showFavoriteBookStatus(`Selected: ${formatted}`);
 		hideFavoriteBookOptions();
+	}
+
+	function commitFavoriteAuthorSelection(favoriteAuthorField, index) {
+		if (!(favoriteAuthorField instanceof HTMLInputElement)) return;
+		const selected = favoriteAuthorMatches[index];
+		if (!selected) return;
+		favoriteAuthorField.value = selected.name;
+		favoriteAuthorField.dataset.resolvedFavoriteAuthor = selected.name;
+		showFavoriteAuthorStatus(`Selected: ${selected.name}`);
+		hideFavoriteAuthorOptions();
 	}
 
 	async function lookupFavoriteBookMatches(input) {
@@ -1278,6 +1419,44 @@ const isAuthenticated = !!session?.userId;
 			if (matches.length >= 8) break;
 		}
 		return matches;
+	}
+
+	async function lookupFavoriteAuthorMatches(input) {
+		const query = String(input || "").trim();
+		if (query.length < 2) return [];
+		const endpoint = new URL("https://openlibrary.org/search.json");
+		endpoint.searchParams.set("author", query);
+		endpoint.searchParams.set("limit", "20");
+		endpoint.searchParams.set("fields", "author_name");
+		const response = await fetch(endpoint.toString());
+		if (!response.ok) return [];
+		const data = await response.json();
+		const docs = Array.isArray(data?.docs) ? data.docs : [];
+		const counts = new Map();
+		for (const doc of docs) {
+			const names = Array.isArray(doc?.author_name) ? doc.author_name : [];
+			for (const rawName of names) {
+				const name = normalizeProfileText(rawName, 120);
+				if (!name) continue;
+				counts.set(name, (counts.get(name) || 0) + 1);
+			}
+		}
+		return Array.from(counts.entries())
+			.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+			.slice(0, 8)
+			.map(([name, workCount]) => ({ name, workCount }));
+	}
+
+	async function resolveFavoriteAuthorValue(rawValue) {
+		const query = normalizeProfileText(rawValue, 120);
+		if (!query) return "";
+		const direct = favoriteAuthorMatches.find((item) => item.name.toLowerCase() === query.toLowerCase());
+		if (direct) return direct.name;
+		const matches = await lookupFavoriteAuthorMatches(query);
+		if (matches.length === 1) return matches[0].name;
+		const exact = matches.find((item) => item.name.toLowerCase() === query.toLowerCase());
+		if (exact) return exact.name;
+		return query;
 	}
 
 	async function resolveFavoriteBookValue(rawValue) {
@@ -1343,6 +1522,60 @@ const isAuthenticated = !!session?.userId;
 			void execute();
 		} else {
 			favoriteBookLookupTimer = window.setTimeout(() => {
+				void execute();
+			}, 300);
+		}
+	}
+
+	function scheduleFavoriteAuthorLookup(favoriteAuthorField, options = { immediate: false }) {
+		if (!(favoriteAuthorField instanceof HTMLInputElement)) return;
+		const query = String(favoriteAuthorField.value || "").trim();
+		if (favoriteAuthorLookupTimer) {
+			clearTimeout(favoriteAuthorLookupTimer);
+			favoriteAuthorLookupTimer = 0;
+		}
+		if (!query) {
+			favoriteAuthorMatches = [];
+			favoriteAuthorField.dataset.resolvedFavoriteAuthor = "";
+			showFavoriteAuthorStatus("");
+			hideFavoriteAuthorOptions();
+			return;
+		}
+
+		const lookupId = ++favoriteAuthorLookupSeq;
+		const execute = async () => {
+			showFavoriteAuthorStatus("Searching authors...");
+			try {
+				const matches = await lookupFavoriteAuthorMatches(query);
+				if (lookupId !== favoriteAuthorLookupSeq) return;
+				favoriteAuthorMatches = matches;
+				if (matches.length === 0) {
+					favoriteAuthorField.dataset.resolvedFavoriteAuthor = "";
+					showFavoriteAuthorStatus("No authors found. You can still type one manually.", true);
+					hideFavoriteAuthorOptions();
+					return;
+				}
+				const exact = matches.find((item) => item.name.toLowerCase() === query.toLowerCase());
+				if (exact) {
+					favoriteAuthorField.dataset.resolvedFavoriteAuthor = exact.name;
+					showFavoriteAuthorStatus(`Matched: ${exact.name}`);
+					hideFavoriteAuthorOptions();
+					return;
+				}
+				favoriteAuthorField.dataset.resolvedFavoriteAuthor = "";
+				showFavoriteAuthorStatus(`Select an author (${matches.length} matches).`);
+				renderFavoriteAuthorOptions(favoriteAuthorField);
+			} catch {
+				if (lookupId !== favoriteAuthorLookupSeq) return;
+				showFavoriteAuthorStatus("Author search failed. You can still type one manually.", true);
+				hideFavoriteAuthorOptions();
+			}
+		};
+
+		if (options.immediate) {
+			void execute();
+		} else {
+			favoriteAuthorLookupTimer = window.setTimeout(() => {
 				void execute();
 			}, 300);
 		}
@@ -1452,7 +1685,9 @@ const isAuthenticated = !!session?.userId;
 				profileGenreSelected.addEventListener("click", (event) => {
 					const target = event.target;
 					if (!(target instanceof HTMLElement)) return;
-					const removeValue = target.getAttribute("data-remove-genre");
+					const removeButton = target.closest("[data-remove-genre]");
+					if (!(removeButton instanceof HTMLElement)) return;
+					const removeValue = removeButton.getAttribute("data-remove-genre");
 					if (!removeValue) return;
 					editingGenres = editingGenres.filter((genre) => genre.toLowerCase() !== removeValue.toLowerCase());
 					renderGenreEditor();
@@ -1549,6 +1784,54 @@ const isAuthenticated = !!session?.userId;
 					});
 				}
 
+				const favoriteAuthorField = profileForm.elements.namedItem("favoriteAuthor");
+				if (favoriteAuthorField instanceof HTMLInputElement) {
+					favoriteAuthorField.addEventListener("input", () => {
+						favoriteAuthorField.dataset.resolvedFavoriteAuthor = "";
+						scheduleFavoriteAuthorLookup(favoriteAuthorField, { immediate: false });
+					});
+					favoriteAuthorField.addEventListener("keydown", (event) => {
+						if (event.key === "ArrowDown" && favoriteAuthorMatches.length > 0) {
+							event.preventDefault();
+							if (!isFavoriteAuthorOptionsOpen()) {
+								renderFavoriteAuthorOptions(favoriteAuthorField);
+							}
+							moveFavoriteAuthorActive(1);
+							return;
+						}
+						if (event.key === "ArrowUp" && favoriteAuthorMatches.length > 0) {
+							event.preventDefault();
+							if (!isFavoriteAuthorOptionsOpen()) {
+								renderFavoriteAuthorOptions(favoriteAuthorField);
+							}
+							moveFavoriteAuthorActive(-1);
+							return;
+						}
+						if (event.key === "Escape" && isFavoriteAuthorOptionsOpen()) {
+							event.preventDefault();
+							hideFavoriteAuthorOptions();
+							return;
+						}
+						if ((event.key === "Enter" || event.key === "Tab") && isFavoriteAuthorOptionsOpen() && favoriteAuthorMatches.length > 0) {
+							event.preventDefault();
+							const index = favoriteAuthorActiveIndex >= 0 ? favoriteAuthorActiveIndex : 0;
+							commitFavoriteAuthorSelection(favoriteAuthorField, index);
+						}
+					});
+					favoriteAuthorField.addEventListener("blur", () => {
+						scheduleFavoriteAuthorLookup(favoriteAuthorField, { immediate: true });
+						window.setTimeout(() => hideFavoriteAuthorOptions(), 160);
+						void (async () => {
+							const resolved = await resolveFavoriteAuthorValue(favoriteAuthorField.value);
+							favoriteAuthorField.value = resolved;
+							favoriteAuthorField.dataset.resolvedFavoriteAuthor = resolved;
+						})();
+					});
+					favoriteAuthorField.addEventListener("focus", () => {
+						if (favoriteAuthorMatches.length > 0) renderFavoriteAuthorOptions(favoriteAuthorField);
+					});
+				}
+
 			profileForm.addEventListener("submit", (event) => {
 				event.preventDefault();
 				if (!profileForm.reportValidity()) return;
@@ -1558,6 +1841,7 @@ const isAuthenticated = !!session?.userId;
 					const currentUsername = normalizeUsernameInput(profileInfo?.username);
 						let resolvedUsername = requestedUsername;
 						let resolvedFavoriteBook = normalizeProfileText(formData.get("favoriteBook"), 120);
+						let resolvedFavoriteAuthor = normalizeProfileText(formData.get("favoriteAuthor"), 120);
 
 						if (requestedUsername !== currentUsername) {
 						const usernameCheck = await checkUsernameAvailability(requestedUsername);
@@ -1582,6 +1866,18 @@ const isAuthenticated = !!session?.userId;
 								favoriteBookField.dataset.resolvedFavoriteBook = resolvedFavoriteBook;
 							}
 						}
+						if (resolvedFavoriteAuthor) {
+							const favoriteAuthorField = profileForm.elements.namedItem("favoriteAuthor");
+							if (favoriteAuthorField instanceof HTMLInputElement) {
+								if (favoriteAuthorField.dataset.resolvedFavoriteAuthor) {
+									resolvedFavoriteAuthor = favoriteAuthorField.dataset.resolvedFavoriteAuthor;
+								} else {
+									resolvedFavoriteAuthor = await resolveFavoriteAuthorValue(resolvedFavoriteAuthor);
+								}
+								favoriteAuthorField.value = resolvedFavoriteAuthor;
+								favoriteAuthorField.dataset.resolvedFavoriteAuthor = resolvedFavoriteAuthor;
+							}
+						}
 
 						const next = normalizeProfileInfo({
 							avatar: editingAvatar,
@@ -1590,14 +1886,15 @@ const isAuthenticated = !!session?.userId;
 							location: formData.get("location"),
 							readingGoal: formData.get("readingGoal"),
 							favoriteBook: resolvedFavoriteBook,
+							favoriteAuthor: resolvedFavoriteAuthor,
 								blurb: formData.get("blurb"),
 								genres: editingGenres.join(", ")
 							});
-						profileInfo = saveProfileInfo(mergeProfileInfo(profileInfo, next));
+						profileInfo = saveProfileInfo(next);
 						renderProfileInfo();
 						try {
 							const savedProfile = await saveProfileInfoToServer(next);
-							profileInfo = saveProfileInfo(mergeProfileInfo(profileInfo, savedProfile));
+							profileInfo = saveProfileInfo(savedProfile);
 							renderProfileInfo();
 							showUsernameStatus("");
 							setProfileEditMode(false);
@@ -1625,6 +1922,25 @@ const isAuthenticated = !!session?.userId;
 		localStorage.setItem(UPDATES_KEY, JSON.stringify(updates.slice(0, 200)));
 	}
 
+	function normalizeRating(value) {
+		const parsed = Number(value);
+		if (!Number.isFinite(parsed)) return 0;
+		const rounded = Math.floor(parsed);
+		return rounded >= 1 && rounded <= 5 ? rounded : 0;
+	}
+
+	function renderRatingStars(rating, interactive = false) {
+		const value = normalizeRating(rating);
+		return Array.from({ length: 5 }, (_, index) => {
+			const starValue = index + 1;
+			const filled = starValue <= value;
+			if (!interactive) {
+				return `<span class="rating-star ${filled ? "is-filled" : ""}" aria-hidden="true">★</span>`;
+			}
+			return `<button type="button" class="rating-star ${filled ? "is-filled" : ""}" data-action="set-rating" data-rating="${starValue}" aria-label="Rate ${starValue} star${starValue === 1 ? "" : "s"}">★</button>`;
+		}).join("");
+	}
+
 	function logShelfUpdate(entry, status) {
 		if (!entry?.title) return;
 		const updates = loadUpdates();
@@ -1632,6 +1948,7 @@ const isAuthenticated = !!session?.userId;
 			id: `upd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
 			timestamp: Date.now(),
 			status: status || entry.status || "want_to_read",
+			rating: normalizeRating(entry.rating),
 			title: entry.title,
 			author: entry.author || "",
 			coverUrl: entry.coverUrl || "",
@@ -1881,6 +2198,7 @@ const isAuthenticated = !!session?.userId;
 		const publishedMeta = entry.publishedDate ? `<p class="meta">Published: ${escapeHtml(formatPublishedLabel(entry.publishedDate))}</p>` : "";
 		const total = normalizeNumber(entry.totalPages);
 		const current = normalizeNumber(entry.currentPage);
+		const rating = normalizeRating(entry.rating);
 		const percent = progressPercent(entry);
 		const progress = (entry.status !== "want_to_read" && total > 0)
 			? `<div class="progress-wrap"><div class="progress-bar" style="width:${percent}%"></div></div><p class="meta">${current}/${total} pages (${percent}%)</p>`
@@ -1923,6 +2241,22 @@ const isAuthenticated = !!session?.userId;
 		const inlineActions = actionButtons
 			? `<div class="entry-actions">${actionButtons}</div>`
 			: "";
+		const finishPrompt = entry.status === "reading" && pendingFinishEntryId === entry.id
+			? `<div class="rating-block finish-rating-block">
+				<p class="rating-label">Rate this book before moving it to Read</p>
+				<div class="rating-stars">${renderRatingStars(pendingFinishRating, true)}</div>
+				<div class="entry-actions finish-rating-actions">
+					<button type="button" class="secondary" data-action="cancel-finish">Cancel</button>
+					<button type="button" data-action="confirm-finish" ${pendingFinishRating > 0 ? "" : "disabled"}>Save Rating & Move to Read</button>
+				</div>
+			</div>`
+			: "";
+		const ratingBlock = entry.status === "finished"
+			? `<div class="rating-block">
+				<p class="rating-label">${rating > 0 ? `Your rating: ${rating}/5` : "Rate this book"}</p>
+				<div class="rating-stars">${renderRatingStars(rating, true)}</div>
+			</div>`
+			: "";
 
 		return `
 			<article class="entry-card" data-id="${escapeHtml(entry.id)}">
@@ -1931,6 +2265,11 @@ const isAuthenticated = !!session?.userId;
 						<span class="material-icons" aria-hidden="true">more_vert</span>
 					</button>
 					<div class="card-menu" hidden>
+						<p class="card-menu-label">Move to shelf</p>
+						<button type="button" class="card-menu-item" data-action="move-shelf" data-status="want_to_read">Want to Read</button>
+						<button type="button" class="card-menu-item" data-action="move-shelf" data-status="reading">Currently Reading</button>
+						<button type="button" class="card-menu-item" data-action="move-shelf" data-status="finished">Read</button>
+						<div class="card-menu-divider"></div>
 						<button type="button" class="card-menu-item danger-text" data-action="delete">Delete</button>
 					</div>
 				</div>
@@ -1945,6 +2284,8 @@ const isAuthenticated = !!session?.userId;
 					${progress}
 					${progressEditor}
 					${finishedDate}
+					${finishPrompt}
+					${ratingBlock}
 					${inlineActions}
 				</div>
 			</article>
@@ -2038,6 +2379,48 @@ const isAuthenticated = !!session?.userId;
 		syncSidebarFilterActive(nextTab);
 	}
 
+	function moveEntryToShelf(entryId, nextStatus) {
+		const entry = entries.find((item) => item.id === entryId);
+		if (!entry) return;
+		const status = String(nextStatus || "").trim();
+		if (status !== "want_to_read" && status !== "reading" && status !== "finished") return;
+		const previousStatus = entry.status;
+		entry.status = status;
+		entry.updatedAt = Date.now();
+
+		if (status === "want_to_read") {
+			entry.currentPage = 0;
+			entry.finishedDate = "";
+			entry.rating = 0;
+		}
+
+		if (status === "reading") {
+			entry.finishedDate = "";
+			entry.rating = 0;
+			entry.currentPage = Math.max(0, normalizeNumber(entry.currentPage));
+		}
+
+		if (status === "finished") {
+			if (normalizeNumber(entry.totalPages) > 0) {
+				entry.currentPage = normalizeNumber(entry.totalPages);
+			}
+			entry.finishedDate = entry.finishedDate || new Date().toISOString().slice(0, 10);
+		}
+
+		if (pendingFinishEntryId === entryId) {
+			pendingFinishEntryId = "";
+			pendingFinishRating = 0;
+		}
+
+		saveEntries();
+		if (previousStatus !== status) {
+			logShelfUpdate(entry, status);
+		}
+		renderLists();
+		setActiveTab(status);
+		void syncEntryToServer(entry);
+	}
+
 	function deleteEntry(entryId) {
 		const existing = entries.find((entry) => entry.id === entryId);
 		entries = entries.filter((entry) => entry.id !== entryId);
@@ -2048,20 +2431,54 @@ const isAuthenticated = !!session?.userId;
 		}
 	}
 
-	function finishEntry(entryId) {
+	function openFinishPrompt(entryId) {
+		pendingFinishEntryId = entryId;
+		pendingFinishRating = 0;
+		renderLists();
+	}
+
+	function cancelFinishPrompt(entryId) {
+		if (pendingFinishEntryId !== entryId) return;
+		pendingFinishEntryId = "";
+		pendingFinishRating = 0;
+		renderLists();
+	}
+
+	function finishEntry(entryId, ratingValue) {
 		const entry = entries.find((item) => item.id === entryId);
 		if (!entry) return;
 		const previousStatus = entry.status;
 		entry.status = "finished";
+		entry.rating = normalizeRating(ratingValue);
 		if (normalizeNumber(entry.totalPages) > 0) {
 			entry.currentPage = normalizeNumber(entry.totalPages);
 		}
 		entry.finishedDate = entry.finishedDate || new Date().toISOString().slice(0, 10);
 		entry.updatedAt = Date.now();
+		pendingFinishEntryId = "";
+		pendingFinishRating = 0;
 		saveEntries();
 		if (previousStatus !== "finished") {
 			logShelfUpdate(entry, "finished");
 		}
+		renderLists();
+		setActiveTab("finished");
+		void syncEntryToServer(entry);
+	}
+
+	function setRating(entryId, nextRatingValue) {
+		const nextRating = normalizeRating(nextRatingValue);
+		if (!nextRating) return;
+		if (pendingFinishEntryId === entryId) {
+			pendingFinishRating = nextRating;
+			renderLists();
+			return;
+		}
+		const entry = entries.find((item) => item.id === entryId);
+		if (!entry || entry.status !== "finished") return;
+		entry.rating = nextRating;
+		entry.updatedAt = Date.now();
+		saveEntries();
 		renderLists();
 		void syncEntryToServer(entry);
 	}
@@ -2117,13 +2534,18 @@ const isAuthenticated = !!session?.userId;
 			closeCardMenus(card);
 			menu.hidden = !willOpen;
 			trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
+			card.classList.toggle("is-menu-open", willOpen);
 			return;
 		}
 
 		closeCardMenus();
 		if (action === "delete") deleteEntry(entryId);
-		if (action === "finish") finishEntry(entryId);
+		if (action === "move-shelf") moveEntryToShelf(entryId, actionTarget.dataset.status);
+		if (action === "finish") openFinishPrompt(entryId);
 		if (action === "start") startReading(entryId);
+		if (action === "set-rating") setRating(entryId, actionTarget.dataset.rating);
+		if (action === "cancel-finish") cancelFinishPrompt(entryId);
+		if (action === "confirm-finish") finishEntry(entryId, pendingFinishRating);
 		if (action === "update-progress") {
 			const progressInput = card.querySelector(".progress-input");
 			if (progressInput instanceof HTMLInputElement) {
@@ -2152,6 +2574,9 @@ const isAuthenticated = !!session?.userId;
 			const card = menu.closest(".entry-card");
 			if (exceptCard && card === exceptCard) continue;
 			menu.hidden = true;
+			if (card instanceof HTMLElement) {
+				card.classList.remove("is-menu-open");
+			}
 			const trigger = card?.querySelector?.('[data-action="toggle-card-menu"]');
 			if (trigger instanceof HTMLElement) {
 				trigger.setAttribute("aria-expanded", "false");
@@ -2679,6 +3104,10 @@ const isAuthenticated = !!session?.userId;
 		position: relative;
 	}
 
+	.reads-page .entry-card.is-menu-open {
+		z-index: 20;
+	}
+
 	.reads-page .card-menu-wrap {
 		position: absolute;
 		top: 0.4rem;
@@ -2719,6 +3148,22 @@ const isAuthenticated = !!session?.userId;
 		min-width: 120px;
 	}
 
+	.reads-page .card-menu-label {
+		margin: 0;
+		padding: 0.35rem 0.65rem 0.2rem;
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: #666;
+	}
+
+	.reads-page .card-menu-divider {
+		height: 1px;
+		background: #ececec;
+		margin: 0.25rem 0;
+	}
+
 	.reads-page .card-menu-item {
 		display: block;
 		width: 100%;
@@ -2728,6 +3173,8 @@ const isAuthenticated = !!session?.userId;
 		padding: 0.45rem 0.65rem;
 		font-size: 0.88rem;
 		cursor: pointer;
+		color: #222;
+		border-radius: 0;
 	}
 
 	.reads-page .card-menu-item:hover {
@@ -2838,6 +3285,44 @@ const isAuthenticated = !!session?.userId;
 		gap: 0.45rem;
 		margin-top: 0.5rem;
 		flex-wrap: wrap;
+	}
+
+	.reads-page .rating-block {
+		margin-top: 0.55rem;
+	}
+
+	.reads-page .finish-rating-block {
+		padding-top: 0.15rem;
+	}
+
+	.reads-page .rating-label {
+		margin: 0 0 0.2rem;
+		font-size: 0.78rem;
+		color: #4d4d4d;
+	}
+
+	.reads-page .rating-stars {
+		display: flex;
+		gap: 0.2rem;
+		align-items: center;
+	}
+
+	.reads-page .rating-star {
+		border: none;
+		background: transparent;
+		padding: 0;
+		font-size: 1.1rem;
+		line-height: 1;
+		color: #d0d0d0;
+		cursor: pointer;
+	}
+
+	.reads-page .rating-star.is-filled {
+		color: #d3a32b;
+	}
+
+	.reads-page .finish-rating-actions {
+		margin-top: 0.4rem;
 	}
 
 	.reads-page button {

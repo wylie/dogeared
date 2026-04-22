@@ -19,6 +19,8 @@ type BrowseBook = {
 	language: string;
 	isbn10?: string;
 	isbn13?: string;
+	averageRating: number;
+	ratingCount: number;
 	source: "google_books" | "open_library" | "nyt";
 	sourceWorkId?: string;
 	sourceEditionId?: string;
@@ -99,6 +101,12 @@ function formatPublishedLabel(value: string) {
 	});
 }
 
+function renderAverageStars(value: number) {
+	const clamped = Math.max(0, Math.min(5, Number(value) || 0));
+	const rounded = Math.round(clamped);
+	return Array.from({ length: 5 }, (_, index) => (index < rounded ? "★" : "☆")).join("");
+}
+
 let sections: BrowseSection[] = [];
 let errorMessage = "";
 
@@ -144,6 +152,8 @@ try {
 			isbn10: string;
 			isbn13: string;
 			google_books_id: string;
+			average_rating: number | null;
+			rating_count: number;
 			source: "google_books" | "open_library" | "nyt" | null;
 			source_work_id: string | null;
 			source_edition_id: string | null;
@@ -163,12 +173,21 @@ try {
 				b.isbn10,
 				b.isbn13,
 				b.google_books_id,
+				coalesce(ra.average_rating, 0) as average_rating,
+				coalesce(ra.rating_count, 0)::int as rating_count,
 				bs.source,
 				bs.source_work_id,
 				bs.source_edition_id,
 				bs.source_url
 			from ranked r
 			join book b on b.id = r.book_id
+			left join lateral (
+				select
+					round(avg(ub.rating)::numeric, 1) as average_rating,
+					count(*) filter (where ub.rating is not null) as rating_count
+				from user_book ub
+				where ub.book_id = b.id
+			) ra on true
 			left join lateral (
 				select
 					source,
@@ -201,6 +220,8 @@ try {
 			language: String(row.language || "").trim().toUpperCase(),
 			isbn10: String(row.isbn10 || "").trim(),
 			isbn13: String(row.isbn13 || "").trim(),
+			averageRating: Number(row.average_rating || 0),
+			ratingCount: Number(row.rating_count || 0),
 			source: row.source || (row.google_books_id ? "google_books" : "open_library"),
 			sourceWorkId: String(row.source_work_id || row.google_books_id || "").trim(),
 			sourceEditionId: String(row.source_edition_id || "").trim(),
@@ -257,6 +278,9 @@ try {
 											<h3>{book.title}</h3>
 											<p class="meta">{book.authors.length > 0 ? book.authors.join(", ") : "Unknown author"}</p>
 											{book.publishedDate && <p class="meta">Published: {formatPublishedLabel(book.publishedDate)}</p>}
+											{book.ratingCount > 0 && (
+												<p class="meta rating-meta">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
+											)}
 											{book.description && <p class="description">{book.description}</p>}
 											{!book.description && <p class="description">Synopsis unavailable for this edition.</p>}
 											<div
@@ -437,6 +461,11 @@ try {
 		margin: 0.25rem 0 0;
 		font-size: 0.85rem;
 		color: #575757;
+	}
+
+	.rating-meta {
+		color: #8a6a15;
+		font-weight: 600;
 	}
 
 	.shelf-dropdown {
