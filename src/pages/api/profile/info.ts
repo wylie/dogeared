@@ -17,7 +17,7 @@ function normalizeProfilePayload(input: unknown) {
 	const genres = Array.isArray(source.genres)
 		? source.genres.map((item) => normalizeProfileText(item, 40)).filter(Boolean).slice(0, 20)
 		: [];
-	const avatar = normalizeProfileText(source.avatar, 500);
+	const avatar = normalizeText(source.avatar).slice(0, 500000);
 	return {
 		avatar: avatar.startsWith("data:image/") || /^https?:\/\//i.test(avatar) ? avatar : "",
 		name: normalizeProfileText(source.name, 80),

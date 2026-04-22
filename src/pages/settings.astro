@@ -457,11 +457,53 @@ const sectionLinks = [
 		return "want_to_read";
 	}
 
+	const NON_GENRE_SHELVES = new Set([
+		"",
+		"all",
+		"book-club",
+		"books-i-own",
+		"default",
+		"did-not-finish",
+		"dnf",
+		"faves",
+		"favorites",
+		"fiction",
+		"general",
+		"kindle",
+		"library",
+		"maybe",
+		"owned",
+		"physical",
+		"read",
+		"re-read",
+		"reread",
+		"tbr",
+		"to-buy",
+		"to-read",
+		"currently-reading",
+		"want-to-buy",
+		"want-to-own"
+	]);
+
+	function slugifyShelf(value) {
+		return normalizeText(value)
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-+|-+$/g, "");
+	}
+
+	function isGenreShelf(slug) {
+		if (!slug || NON_GENRE_SHELVES.has(slug)) return false;
+		if (/^\d{4}(-reads)?$/.test(slug)) return false;
+		if (/^\d+$/.test(slug)) return false;
+		return true;
+	}
+
 	function parseGenres(value) {
 		if (!value) return [];
 		return value.split(",")
 			.map((item) => normalizeText(item))
-			.filter(Boolean);
+			.filter((item) => isGenreShelf(slugifyShelf(item)));
 	}
 
 	function parseDate(value) {

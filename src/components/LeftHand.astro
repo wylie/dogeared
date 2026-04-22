@@ -14,9 +14,9 @@ const query = Astro.url.searchParams.get("q") ?? "";
       <input type="search" name="q" placeholder="Search" value={query} />
     </form>
     <ul>
-      <li><a href={isActive('/browse') ? undefined : '/browse'} class={isActive('/browse') ? 'active' : 'hover'} aria-current={isActive('/browse') ? 'page' : undefined}>Browse</a></li>
       <li id="left-hand-login-item"><button type="button" class="nav-text-button hover">Log In</button></li>
       <li id="left-hand-profile-item" hidden><a href={isActive('/profile') ? undefined : '/profile'} class={isActive('/profile') ? 'active' : 'hover'} aria-current={isActive('/profile') ? 'page' : undefined}>Profile</a></li>
+      <li><a href={isActive('/mission') ? undefined : '/mission'} class={isActive('/mission') ? 'active' : 'hover'} aria-current={isActive('/mission') ? 'page' : undefined}>Mission</a></li>
       <li id="left-hand-settings-item" hidden><a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a></li>
       <li id="left-hand-logout-item" hidden><button type="button" class="nav-text-button hover">Log Out</button></li>
     </ul>
@@ -251,7 +251,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
-      window.location.href = "/browse";
+      window.location.href = "/";
     }
   });
 

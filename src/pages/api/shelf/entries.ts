@@ -62,6 +62,41 @@ function slugify(value: string) {
 		.replace(/^-+|-+$/g, "");
 }
 
+const NON_GENRE_SLUGS = new Set([
+	"",
+	"all",
+	"book-club",
+	"books-i-own",
+	"default",
+	"did-not-finish",
+	"dnf",
+	"faves",
+	"favorites",
+	"fiction",
+	"general",
+	"kindle",
+	"library",
+	"maybe",
+	"owned",
+	"physical",
+	"read",
+	"re-read",
+	"reread",
+	"tbr",
+	"to-buy",
+	"to-read",
+	"currently-reading",
+	"want-to-buy",
+	"want-to-own"
+]);
+
+function isGenreSlug(slug: string) {
+	if (!slug || NON_GENRE_SLUGS.has(slug)) return false;
+	if (/^\d{4}(-reads)?$/.test(slug)) return false;
+	if (/^\d+$/.test(slug)) return false;
+	return true;
+}
+
 function canonicalizeTitle(value: unknown) {
 	return String(value || "")
 		.toLowerCase()
@@ -103,12 +138,9 @@ function parseGenres(input: unknown) {
 		const name = String(raw || "").trim();
 		if (!name) continue;
 		const slug = slugify(name);
-		if (!slug || dedupe.has(slug)) continue;
+		if (!isGenreSlug(slug) || dedupe.has(slug)) continue;
 		dedupe.add(slug);
 		genres.push({ slug, name });
-	}
-	if (genres.length === 0) {
-		genres.push({ slug: "general", name: "General" });
 	}
 	return genres;
 }

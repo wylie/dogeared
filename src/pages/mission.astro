@@ -1,0 +1,183 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const sectionLinks = [
+	{ id: "why", label: "Why" },
+	{ id: "broken", label: "What’s Broken" },
+	{ id: "principles", label: "Principles" },
+	{ id: "vision", label: "Vision" }
+];
+---
+
+<Layout title="Mission" sectionLinks={sectionLinks}>
+	<div slot="right" class="mission-page">
+		<header class="mission-hero">
+			<p class="eyebrow">Mission</p>
+			<h1>A reading life with less noise, more memory, and better taste.</h1>
+			<p class="lede">
+				Dogeared exists to give readers a calmer place to keep track of what matters, discover what to pick up
+				next, and stay closer to the reasons they read in the first place.
+			</p>
+		</header>
+
+		<section id="why" class="mission-section">
+			<h2>Why Dogeared</h2>
+			<p>
+				Most reading tools are good at collecting data and much worse at helping someone stay close to the reason
+				they read in the first place. Dogeared is meant to feel smaller, calmer, and more personal than that.
+			</p>
+			<p>
+				It should be easy to remember what moved you, what you want to read next, and how your taste is changing
+				over time. That is the job. Everything else is secondary.
+			</p>
+		</section>
+
+		<section id="broken" class="mission-section">
+			<h2>What Feels Broken Elsewhere</h2>
+			<p>
+				Too many platforms are built to optimize engagement instead of usefulness. They push volume over reflection,
+				rank visibility over taste, and turn reading into something performative.
+			</p>
+			<p>
+				Books do not need more churn around them. Readers do not need more pressure to brand themselves. A reading
+				product should help people notice, remember, choose, and return.
+			</p>
+		</section>
+
+		<section id="principles" class="mission-section">
+			<h2>Principles</h2>
+			<ul class="principles">
+				<li>
+					<strong>Reader first.</strong> The product should serve the person reading, not an advertiser, growth loop,
+					or recommendation engine.
+				</li>
+				<li>
+					<strong>Useful over addictive.</strong> A tool can be quiet and still be valuable. The goal is return value,
+					not compulsion.
+				</li>
+				<li>
+					<strong>Simplicity matters.</strong> The interface should stay legible, respectful, and easy to live with.
+				</li>
+				<li>
+					<strong>Taste is personal.</strong> Discovery should widen possibility, not flatten everyone into the same feed.
+				</li>
+				<li>
+					<strong>Books are for everyone.</strong> No gatekeeping, no prestige performance, no assumption that one kind
+					of reader matters more than another.
+				</li>
+			</ul>
+		</section>
+
+		<section id="vision" class="mission-section">
+			<h2>Long-Term Vision</h2>
+			<p>
+				Dogeared should become a trustworthy home base for readers: part notebook, part shelf, part discovery tool.
+				Not massive, not loud, not trying to dominate your time.
+			</p>
+			<p>
+				If it succeeds, it will not be because it kept people scrolling. It will be because it helped them build a
+				richer relationship with books and made that process feel more thoughtful, more generous, and more their own.
+			</p>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.mission-page {
+		max-width: 860px;
+	}
+
+	.mission-hero {
+		margin-bottom: 1.5rem;
+	}
+
+	.eyebrow {
+		margin: 0 0 0.35rem;
+		font-size: 0.82rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: #6a5c3d;
+	}
+
+	.mission-page h1 {
+		margin: 0;
+		/* max-width: 11ch; */
+		line-height: 1.02;
+		font-size: clamp(2.2rem, 4vw, 3.9rem);
+	}
+
+	.lede {
+		max-width: 38rem;
+		margin: 0.9rem 0 0;
+		font-size: 1.08rem;
+		line-height: 1.55;
+		color: #4d4d4d;
+	}
+
+	.hero-card {
+		padding: 1rem 1rem 0.95rem;
+		border: 1px solid #d8d0c2;
+		border-radius: 16px;
+		background:
+			linear-gradient(180deg, rgba(234, 226, 211, 0.7), rgba(255, 255, 255, 0.92)),
+			#f6f2ea;
+		box-shadow: 0 10px 24px rgba(60, 44, 17, 0.06);
+	}
+
+	.hero-card-label {
+		margin: 0;
+		font-size: 0.78rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: #6a5c3d;
+	}
+
+	.hero-points {
+		margin: 0.8rem 0 0;
+		padding-left: 1rem;
+	}
+
+	.hero-points li {
+		margin: 0.55rem 0;
+		line-height: 1.45;
+		color: #3d3525;
+	}
+
+	.mission-section {
+		margin-top: 1.6rem;
+		max-width: 50rem;
+	}
+
+	.mission-section h2 {
+		margin: 0 0 0.55rem;
+	}
+
+	.mission-section p {
+		margin: 0.55rem 0 0;
+		line-height: 1.65;
+		color: #353535;
+	}
+
+	.principles {
+		margin: 0.8rem 0 0;
+		padding-left: 1.1rem;
+	}
+
+	.principles li {
+		margin: 0.55rem 0;
+		line-height: 1.55;
+		color: #353535;
+	}
+
+	@media (max-width: 860px) {
+		.mission-hero {
+			grid-template-columns: 1fr;
+		}
+
+		.mission-page h1 {
+			max-width: 12ch;
+		}
+	}
+</style>

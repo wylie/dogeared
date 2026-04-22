@@ -106,7 +106,7 @@ const isAuthenticated = !!session?.userId;
 
 		<section id="goal-progress-widget" class="goal-widget" aria-live="polite"></section>
 
-		<section class="list-section" data-panel="want_to_read" id="want_to_read">
+		<section class="list-section" data-panel="want_to_read" id="want_to_read" hidden>
 			<div class="list-section-head">
 				<h2 id="section-want-to-read">Want to Read</h2>
 				<label class="list-sort">
@@ -122,7 +122,7 @@ const isAuthenticated = !!session?.userId;
 			<div id="want-to-read-list" class="entry-list"></div>
 		</section>
 
-		<section class="list-section" data-panel="reading" id="reading" hidden>
+		<section class="list-section" data-panel="reading" id="reading">
 			<div class="list-section-head">
 				<h2 id="section-reading">Currently Reading</h2>
 				<label class="list-sort">
@@ -195,7 +195,7 @@ const isAuthenticated = !!session?.userId;
 	const profileAvatarRemove = document.getElementById("profile-avatar-remove");
 	const shelfPanels = Array.from(document.querySelectorAll("[data-panel]"));
 	const shelfFilterLinks = Array.from(document.querySelectorAll('.quick-links a[href^="#"]'));
-	let activeTab = "want_to_read";
+	let activeTab = "reading";
 	let editingGenres = [];
 	let editingAvatar = "";
 	let usernameCheckTimer = 0;
@@ -286,7 +286,7 @@ const isAuthenticated = !!session?.userId;
 			const response = await fetch(endpoint.toString());
 			const data = await response.json().catch(() => ({}));
 			if (!response.ok || !data?.profile) return false;
-			profileInfo = saveProfileInfo(data.profile);
+			profileInfo = saveProfileInfo(mergeProfileInfo(loadProfileInfo(), data.profile));
 			renderProfileInfo();
 			return true;
 		} catch {
@@ -454,6 +454,26 @@ const isAuthenticated = !!session?.userId;
 			favoriteBook: normalizeProfileText(input?.favoriteBook, 120),
 			blurb: normalizeProfileText(input?.blurb, 400),
 			genres
+		};
+	}
+
+	function hasProfileValue(value) {
+		if (Array.isArray(value)) return value.length > 0;
+		return String(value || "").trim().length > 0;
+	}
+
+	function mergeProfileInfo(base, incoming) {
+		const current = normalizeProfileInfo(base || {});
+		const next = normalizeProfileInfo(incoming || {});
+		return {
+			avatar: hasProfileValue(next.avatar) ? next.avatar : current.avatar,
+			name: hasProfileValue(next.name) ? next.name : current.name,
+			username: hasProfileValue(next.username) ? next.username : current.username,
+			location: hasProfileValue(next.location) ? next.location : current.location,
+			readingGoal: hasProfileValue(next.readingGoal) ? next.readingGoal : current.readingGoal,
+			favoriteBook: hasProfileValue(next.favoriteBook) ? next.favoriteBook : current.favoriteBook,
+			blurb: hasProfileValue(next.blurb) ? next.blurb : current.blurb,
+			genres: hasProfileValue(next.genres) ? next.genres : current.genres
 		};
 	}
 
@@ -1573,11 +1593,20 @@ const isAuthenticated = !!session?.userId;
 								blurb: formData.get("blurb"),
 								genres: editingGenres.join(", ")
 							});
-						const savedProfile = await saveProfileInfoToServer(next);
-						profileInfo = saveProfileInfo(savedProfile);
+						profileInfo = saveProfileInfo(mergeProfileInfo(profileInfo, next));
 						renderProfileInfo();
-						showUsernameStatus("");
-						setProfileEditMode(false);
+						try {
+							const savedProfile = await saveProfileInfoToServer(next);
+							profileInfo = saveProfileInfo(mergeProfileInfo(profileInfo, savedProfile));
+							renderProfileInfo();
+							showUsernameStatus("");
+							setProfileEditMode(false);
+						} catch (error) {
+							showUsernameStatus(
+								error instanceof Error ? error.message : "Profile saved locally, but server sync failed.",
+								true
+							);
+						}
 					})();
 				});
 			}
@@ -1986,7 +2015,7 @@ const isAuthenticated = !!session?.userId;
 		if (value === "want_to_read" || value === "reading" || value === "finished") {
 			return value;
 		}
-		return "want_to_read";
+		return "reading";
 	}
 
 	function syncSidebarFilterActive(nextTab) {
