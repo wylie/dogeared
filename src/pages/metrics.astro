@@ -1,0 +1,1372 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getNeonSql } from '../lib/neon';
+
+function normalizeLabel(value: string, fallback = "Unknown") {
+	const text = String(value || "").trim();
+	return text || fallback;
+}
+
+const US_STATE_ABBR: Record<string, string> = {
+	alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR", california: "CA", colorado: "CO",
+	connecticut: "CT", delaware: "DE", florida: "FL", georgia: "GA", hawaii: "HI", idaho: "ID",
+	illinois: "IL", indiana: "IN", iowa: "IA", kansas: "KS", kentucky: "KY", louisiana: "LA",
+	maine: "ME", maryland: "MD", massachusetts: "MA", michigan: "MI", minnesota: "MN",
+	mississippi: "MS", missouri: "MO", montana: "MT", nebraska: "NE", nevada: "NV",
+	"new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+	"north carolina": "NC", "north dakota": "ND", ohio: "OH", oklahoma: "OK", oregon: "OR",
+	pennsylvania: "PA", "rhode island": "RI", "south carolina": "SC", "south dakota": "SD",
+	tennessee: "TN", texas: "TX", utah: "UT", vermont: "VT", virginia: "VA", washington: "WA",
+	"west virginia": "WV", wisconsin: "WI", wyoming: "WY", "district of columbia": "DC"
+};
+
+const US_COUNTRY_ALIASES = new Set(["us", "usa", "united states", "united states of america"]);
+
+function toUsStateAbbreviation(value: string) {
+	const text = normalizeLabel(value).replace(/\./g, "").trim();
+	if (!text || text === "Unknown") return null;
+	const upper = text.toUpperCase();
+	if (/^[A-Z]{2}$/.test(upper)) return upper;
+	return US_STATE_ABBR[text.toLowerCase()] || null;
+}
+
+function normalizeCountry(value: string) {
+	const text = normalizeLabel(value);
+	if (US_COUNTRY_ALIASES.has(text.toLowerCase())) return "US";
+	return text;
+}
+
+function normalizeLocationRegion(value: string) {
+	const text = normalizeLabel(value);
+	if (text === "Unknown") return text;
+	const parts = text.split(",").map((part) => part.trim()).filter(Boolean);
+	if (parts.length >= 3) {
+		const region = toUsStateAbbreviation(parts[parts.length - 2]) || parts[parts.length - 2];
+		const country = normalizeCountry(parts[parts.length - 1]);
+		return `${region}, ${country}`;
+	}
+	if (parts.length === 2) {
+		const [first, second] = parts;
+		const secondNormalized = normalizeCountry(second);
+		if (secondNormalized === "US") {
+			const region = toUsStateAbbreviation(first) || first;
+			return `${region}, US`;
+		}
+		const secondAsState = toUsStateAbbreviation(second);
+		if (secondAsState) return secondAsState;
+		return secondNormalized;
+	}
+	return toUsStateAbbreviation(parts[0]) || parts[0] || "Unknown";
+}
+
+function slugify(value: string) {
+	return normalizeLabel(value)
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "") || "item";
+}
+
+function formatGenreTitle(slug: string, fallback: string) {
+	const source = String(fallback || slug || "").trim();
+	if (!source) return "Genre";
+	return source
+		.replace(/[-_]+/g, " ")
+		.replace(/\band\b/gi, "&")
+		.replace(/\bya\b/gi, "YA")
+		.replace(/\bmg\b/gi, "MG")
+		.replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function classifyGenreType(value: string) {
+	const normalized = String(value || "").toLowerCase();
+	const nonfictionPattern = /(history|biograph|memoir|self-help|self help|business|econom|psycholog|philosoph|science|politic|essay|travel|cook|relig|spiritual|true[-\s]?crime|journalism|reference|education|health|productivity|finance)/;
+	const fictionPattern = /(fiction|fantasy|sci[-\s]?fi|science[-\s]?fiction|romance|mystery|thriller|horror|literary|classic|young[-\s]?adult|ya|dystopian|adventure|graphic|manga|poetry)/;
+	if (nonfictionPattern.test(normalized)) return "Non-Fiction";
+	if (fictionPattern.test(normalized)) return "Fiction";
+	return "Unclassified";
+}
+
+type MetricRow = { key: string; label: string; value: number };
+type DrillGenre = { key: string; label: string; value: number; locations: MetricRow[] };
+type DrillAuthor = { key: string; label: string; value: number; genres: DrillGenre[]; fictionNonfiction: MetricRow[] };
+type AnalyticsFact = {
+	userId: string;
+	status: string;
+	author: string;
+	genre: string;
+	book: string;
+	location: string;
+	language: string;
+	yearBucket: string;
+};
+
+type MetricsPayload = {
+	generatedAt: string;
+	dataSource: "live" | "sample";
+	error: string;
+	summary: {
+		totalUsers: number;
+		totalShelvedBooks: number;
+		distinctBooks: number;
+		trackedGenres: number;
+		activeLocations: number;
+	};
+	usersByStatus: MetricRow[];
+	topLocations: MetricRow[];
+	authors: DrillAuthor[];
+	analyticsFacts: AnalyticsFact[];
+};
+
+const samplePayload: MetricsPayload = {
+	generatedAt: new Date().toISOString(),
+	dataSource: "sample",
+	error: "",
+	summary: {
+		totalUsers: 842,
+		totalShelvedBooks: 9704,
+		distinctBooks: 3750,
+		trackedGenres: 154,
+		activeLocations: 61
+	},
+	usersByStatus: [
+		{ key: "reading", label: "Currently Reading", value: 289 },
+		{ key: "want_to_read", label: "Want to Read", value: 511 },
+		{ key: "finished", label: "Read", value: 604 }
+	],
+	topLocations: [
+		{ key: "ny", label: "NY", value: 64 },
+		{ key: "tx", label: "TX", value: 51 },
+		{ key: "ca", label: "CA", value: 49 },
+		{ key: "il", label: "IL", value: 41 },
+		{ key: "wa", label: "WA", value: 38 }
+	],
+	authors: [
+		{
+			key: "ursula-k-le-guin",
+			label: "Ursula K. Le Guin",
+			value: 138,
+			genres: [
+				{ key: "science-fiction", label: "Science Fiction", value: 96, locations: [
+					{ key: "brooklyn-ny", label: "Brooklyn, NY", value: 22 },
+					{ key: "austin-tx", label: "Austin, TX", value: 16 },
+					{ key: "seattle-wa", label: "Seattle, WA", value: 14 }
+				] },
+				{ key: "fantasy", label: "Fantasy", value: 72, locations: [
+					{ key: "los-angeles-ca", label: "Los Angeles, CA", value: 15 },
+					{ key: "brooklyn-ny", label: "Brooklyn, NY", value: 12 },
+					{ key: "chicago-il", label: "Chicago, IL", value: 9 }
+				] }
+			],
+			fictionNonfiction: [
+				{ key: "fiction", label: "Fiction", value: 168 },
+				{ key: "non-fiction", label: "Non-Fiction", value: 22 },
+				{ key: "unclassified", label: "Unclassified", value: 20 }
+			]
+		}
+	],
+	analyticsFacts: [
+		{
+			userId: "user_1",
+			status: "reading",
+			author: "Ursula K. Le Guin",
+			genre: "Science Fiction",
+			book: "The Left Hand of Darkness",
+			location: "NY",
+			language: "EN",
+			yearBucket: "1960s"
+		},
+		{
+			userId: "user_2",
+			status: "finished",
+			author: "Octavia E. Butler",
+			genre: "Science Fiction",
+			book: "Kindred",
+			location: "IL",
+			language: "EN",
+			yearBucket: "1970s"
+		}
+	]
+};
+
+let metricsPayload: MetricsPayload = samplePayload;
+
+try {
+	const sql = getNeonSql();
+	const [summaryRows, statusRows, topLocationRows, authorRows, genreRows, locationRows, factsRows] = await Promise.all([
+		sql<Array<{ total_users: number; total_shelved_books: number; distinct_books: number; tracked_genres: number; active_locations: number }>>`
+			select
+				(select count(*)::int from app_user) as total_users,
+				(select count(*)::int from user_book) as total_shelved_books,
+				(select count(distinct ub.book_id)::int from user_book ub) as distinct_books,
+				(select count(distinct bg.genre_slug)::int from book_genre bg) as tracked_genres,
+				(select count(distinct lower(trim(au.profile_data->>'location')))::int from app_user au where trim(coalesce(au.profile_data->>'location', '')) <> '') as active_locations
+		`,
+		sql<Array<{ status: string; users: number }>>`
+			select ub.status, count(distinct ub.user_id)::int as users
+			from user_book ub
+			group by ub.status
+			order by users desc, ub.status asc
+		`,
+		sql<Array<{ location: string; users: number }>>`
+			select trim(au.profile_data->>'location') as location, count(*)::int as users
+			from app_user au
+			where trim(coalesce(au.profile_data->>'location', '')) <> ''
+			group by trim(au.profile_data->>'location')
+			order by users desc, location asc
+		`,
+		sql<Array<{ author: string; readers: number }>>`
+			select b.primary_author as author, count(distinct ub.user_id)::int as readers
+			from user_book ub
+			join book b on b.id = ub.book_id
+			where trim(coalesce(b.primary_author, '')) <> ''
+			group by b.primary_author
+			order by readers desc, b.primary_author asc
+			limit 16
+		`,
+		sql<Array<{ author: string; genre_slug: string; genre_name: string; readers: number }>>`
+			with top_authors as (
+				select b.primary_author as author, count(distinct ub.user_id)::int as readers
+				from user_book ub
+				join book b on b.id = ub.book_id
+				where trim(coalesce(b.primary_author, '')) <> ''
+				group by b.primary_author
+				order by readers desc, b.primary_author asc
+				limit 16
+			)
+			select b.primary_author as author, bg.genre_slug, min(bg.genre_name) as genre_name, count(distinct ub.user_id)::int as readers
+			from user_book ub
+			join book b on b.id = ub.book_id
+			join top_authors ta on ta.author = b.primary_author
+			join book_genre bg on bg.book_id = b.id
+			where trim(coalesce(bg.genre_slug, '')) <> ''
+			group by b.primary_author, bg.genre_slug
+		`,
+		sql<Array<{ author: string; genre_slug: string; location: string; readers: number }>>`
+			with top_authors as (
+				select b.primary_author as author, count(distinct ub.user_id)::int as readers
+				from user_book ub
+				join book b on b.id = ub.book_id
+				where trim(coalesce(b.primary_author, '')) <> ''
+				group by b.primary_author
+				order by readers desc, b.primary_author asc
+				limit 16
+			), aggregated as (
+				select
+					b.primary_author as author,
+					bg.genre_slug,
+					coalesce(nullif(trim(au.profile_data->>'location'), ''), 'Unknown') as location,
+					count(distinct ub.user_id)::int as readers
+				from user_book ub
+				join book b on b.id = ub.book_id
+				join top_authors ta on ta.author = b.primary_author
+				join book_genre bg on bg.book_id = b.id
+				join app_user au on au.id = ub.user_id
+				where trim(coalesce(bg.genre_slug, '')) <> ''
+				group by b.primary_author, bg.genre_slug, coalesce(nullif(trim(au.profile_data->>'location'), ''), 'Unknown')
+			), ranked as (
+				select a.*, row_number() over (partition by a.author, a.genre_slug order by a.readers desc, a.location asc) as row_num
+				from aggregated a
+			)
+			select author, genre_slug, location, readers
+			from ranked
+			where row_num <= 10
+		`,
+		sql<Array<{
+			user_id: string;
+			status: string;
+			author: string;
+			genre: string;
+			book: string;
+			location: string;
+			language: string;
+			published_year: number | null;
+		}>>`
+			select
+				ub.user_id::text as user_id,
+				ub.status,
+				coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				coalesce(nullif(trim(bg.genre_name), ''), 'Uncategorized') as genre,
+				coalesce(nullif(trim(b.title), ''), 'Unknown') as book,
+				coalesce(nullif(trim(au.profile_data->>'location'), ''), 'Unknown') as location,
+				coalesce(nullif(upper(trim(b.language)), ''), 'Unknown') as language,
+				b.published_year
+			from user_book ub
+			join book b on b.id = ub.book_id
+			join app_user au on au.id = ub.user_id
+			left join lateral (
+				select bg1.genre_name
+				from book_genre bg1
+				where bg1.book_id = b.id
+				order by bg1.genre_name asc
+				limit 1
+			) bg on true
+		`
+	]);
+
+	const summaryRow = summaryRows[0] || { total_users: 0, total_shelved_books: 0, distinct_books: 0, tracked_genres: 0, active_locations: 0 };
+	const usersByStatus: MetricRow[] = statusRows.map((row) => ({
+		key: slugify(row.status),
+		label: row.status === "want_to_read" ? "Want to Read" : row.status === "reading" ? "Currently Reading" : row.status === "finished" ? "Read" : formatGenreTitle(row.status, row.status),
+		value: Number(row.users || 0)
+	}));
+	const topLocationMap = new Map<string, number>();
+	for (const row of topLocationRows) {
+		const region = normalizeLocationRegion(row.location);
+		topLocationMap.set(region, (topLocationMap.get(region) || 0) + Number(row.users || 0));
+	}
+	const topLocations: MetricRow[] = Array.from(topLocationMap.entries())
+		.map(([label, value]) => ({ key: slugify(label), label, value }))
+		.sort((a, b) => b.value - a.value || a.label.localeCompare(b.label))
+		.slice(0, 12);
+
+	const authorMap = new Map<string, DrillAuthor>();
+	for (const row of authorRows) {
+		const label = normalizeLabel(row.author);
+		authorMap.set(label, { key: slugify(label), label, value: Number(row.readers || 0), genres: [], fictionNonfiction: [] });
+	}
+
+	for (const row of genreRows) {
+		const author = authorMap.get(normalizeLabel(row.author));
+		if (!author) continue;
+		author.genres.push({
+			key: slugify(String(row.genre_slug || row.genre_name || "")),
+			label: formatGenreTitle(String(row.genre_slug || ""), String(row.genre_name || "")),
+			value: Number(row.readers || 0),
+			locations: []
+		});
+	}
+
+	const lookup = new Map<string, DrillGenre>();
+	for (const author of authorMap.values()) {
+		for (const genre of author.genres) lookup.set(`${author.label}::${genre.key}`, genre);
+	}
+
+	for (const row of locationRows) {
+		const genre = lookup.get(`${normalizeLabel(row.author)}::${slugify(String(row.genre_slug || ""))}`);
+		if (!genre) continue;
+		const region = normalizeLocationRegion(row.location);
+		const existing = genre.locations.find((item) => item.label === region);
+		if (existing) {
+			existing.value += Number(row.readers || 0);
+		} else {
+			genre.locations.push({ key: slugify(region), label: region, value: Number(row.readers || 0) });
+		}
+	}
+
+	for (const author of authorMap.values()) {
+		const mix = new Map<string, number>();
+		for (const genre of author.genres) {
+			const bucket = classifyGenreType(genre.label);
+			mix.set(bucket, (mix.get(bucket) || 0) + genre.value);
+		}
+		for (const genre of author.genres) {
+			genre.locations.sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+		}
+		author.fictionNonfiction = Array.from(mix.entries()).map(([label, value]) => ({ key: slugify(label), label, value }));
+		author.genres.sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+	}
+
+	metricsPayload = {
+		generatedAt: new Date().toISOString(),
+		dataSource: "live",
+		error: "",
+		summary: {
+			totalUsers: Number(summaryRow.total_users || 0),
+			totalShelvedBooks: Number(summaryRow.total_shelved_books || 0),
+			distinctBooks: Number(summaryRow.distinct_books || 0),
+			trackedGenres: Number(summaryRow.tracked_genres || 0),
+			activeLocations: Number(summaryRow.active_locations || 0)
+		},
+		usersByStatus,
+		topLocations,
+		authors: Array.from(authorMap.values()).sort((a, b) => b.value - a.value || a.label.localeCompare(b.label)),
+		analyticsFacts: factsRows.map((row) => {
+			const year = Number(row.published_year || 0);
+			let yearBucket = "Unknown";
+			if (year > 0) {
+				if (year < 1900) yearBucket = "Before 1900";
+				else yearBucket = `${Math.floor(year / 10) * 10}s`;
+			}
+			return {
+				userId: String(row.user_id || ""),
+				status: row.status === "want_to_read" ? "Want to Read" : row.status === "reading" ? "Currently Reading" : row.status === "finished" ? "Read" : formatGenreTitle(row.status, row.status),
+				author: normalizeLabel(row.author),
+				genre: normalizeLabel(row.genre, "Uncategorized"),
+				book: normalizeLabel(row.book),
+				location: normalizeLocationRegion(row.location),
+				language: normalizeLabel(row.language),
+				yearBucket
+			};
+		})
+	};
+} catch (error) {
+	metricsPayload = { ...samplePayload, error: error instanceof Error ? error.message : "Failed to load live metrics." };
+}
+
+const sectionLinks = [
+	{ id: "overview", label: "Overview" },
+	{ id: "insights", label: "Insights" },
+	{ id: "snapshots", label: "Snapshots" },
+	{ id: "explorer", label: "Explorer" },
+	{ id: "compare", label: "Compare" }
+];
+
+const metricsPayloadJson = JSON.stringify(metricsPayload)
+	.replace(/</g, "\\u003c")
+	.replace(/-->/g, "--\\>");
+---
+
+<Layout title="Metrics" sectionLinks={sectionLinks}>
+	<div slot="right" class="metrics-page">
+		<header id="overview" class="metrics-hero">
+			<p class="eyebrow">Metrics</p>
+			<h1>Explore Dogeared data from readers to tastes to places.</h1>
+			{metricsPayload.dataSource === "sample" && metricsPayload.error && (
+				<p class="note">Live metrics unavailable. Showing sample data. ({metricsPayload.error})</p>
+			)}
+		</header>
+
+		<section class="widget-grid">
+			<article class="widget"><p>Users</p><strong>{metricsPayload.summary.totalUsers.toLocaleString()}</strong></article>
+			<article class="widget"><p>Shelved Books</p><strong>{metricsPayload.summary.totalShelvedBooks.toLocaleString()}</strong></article>
+			<article class="widget"><p>Distinct Titles</p><strong>{metricsPayload.summary.distinctBooks.toLocaleString()}</strong></article>
+			<article class="widget"><p>Tracked Genres</p><strong>{metricsPayload.summary.trackedGenres.toLocaleString()}</strong></article>
+			<article class="widget"><p>Active Locations</p><strong>{metricsPayload.summary.activeLocations.toLocaleString()}</strong></article>
+		</section>
+
+		<section id="insights" class="panel">
+			<div class="panel-head">
+				<h2>Helpful Takeaways</h2>
+				<p>Quick interpretation of current reader activity.</p>
+			</div>
+			<div id="metrics-insights" class="insight-grid"></div>
+		</section>
+
+		<section id="snapshots" class="panel">
+			<div class="panel-head">
+				<h2>Quick Pie Snapshots</h2>
+				<p>Small pie widgets for high-level distribution checks.</p>
+			</div>
+			<div id="metrics-pie-widgets" class="pie-widget-grid"></div>
+		</section>
+
+			<section id="explorer" class="panel">
+				<div class="panel-head">
+					<h2>Drill-Down Explorer</h2>
+					<p>Click rows to drill from author to genre to book.</p>
+				</div>
+				<div class="controls">
+					<div class="toggle" role="tablist" aria-label="Explorer View">
+						<button type="button" class="is-active" data-metrics-view="bars">Bars</button>
+					<button type="button" data-metrics-view="table">Table</button>
+					<button type="button" data-metrics-view="pie">Pie</button>
+					</div>
+				</div>
+				<p id="explorer-context" class="chart-context"></p>
+				<div id="metrics-explorer"></div>
+			</section>
+
+		<section id="compare" class="panel">
+			<div class="panel-head">
+				<h2>Comparison Views</h2>
+			</div>
+				<div class="controls stack">
+					<label>
+						<span>Dataset</span>
+						<select id="metrics-dataset-select">
+						<option value="status">Users by Shelf Status</option>
+						<option value="locations">Users by Region</option>
+						<option value="mix">Fiction vs Non-Fiction (Selected Author)</option>
+					</select>
+				</label>
+				<div class="toggle" role="tablist" aria-label="Compare View">
+					<button type="button" class="is-active" data-compare-view="bars">Bars</button>
+					<button type="button" data-compare-view="table">Table</button>
+						<button type="button" data-compare-view="pie">Pie</button>
+					</div>
+				</div>
+				<p id="compare-context" class="chart-context"></p>
+				<div id="metrics-compare"></div>
+			</section>
+
+		<script id="metrics-payload" type="application/json" set:html={metricsPayloadJson}></script>
+	</div>
+</Layout>
+
+<script>
+	import * as echarts from "echarts";
+
+	const metricsPayloadNode = document.getElementById("metrics-payload");
+	const explorerRoot = document.getElementById("metrics-explorer");
+	const compareRoot = document.getElementById("metrics-compare");
+	const insightsRoot = document.getElementById("metrics-insights");
+	const datasetSelect = document.getElementById("metrics-dataset-select");
+	const explorerContext = document.getElementById("explorer-context");
+	const compareContext = document.getElementById("compare-context");
+	const pieWidgetRoot = document.getElementById("metrics-pie-widgets");
+	const explorerViewButtons = Array.from(document.querySelectorAll("[data-metrics-view]"));
+	const compareViewButtons = Array.from(document.querySelectorAll("[data-compare-view]"));
+
+	if (
+		metricsPayloadNode instanceof HTMLScriptElement &&
+		explorerRoot instanceof HTMLElement &&
+		compareRoot instanceof HTMLElement &&
+		datasetSelect instanceof HTMLSelectElement
+	) {
+		let payload = {};
+		try {
+			payload = JSON.parse(metricsPayloadNode.textContent || "{}");
+		} catch {
+			payload = { authors: [], usersByStatus: [], topLocations: [] };
+		}
+			const authors = Array.isArray(payload?.authors) ? payload.authors : [];
+			const statusRows = Array.isArray(payload?.usersByStatus) ? payload.usersByStatus : [];
+			const locationRows = Array.isArray(payload?.topLocations) ? payload.topLocations : [];
+			const analyticsFacts = Array.isArray(payload?.analyticsFacts) ? payload.analyticsFacts : [];
+			const summary = (payload && typeof payload === "object" && payload.summary && typeof payload.summary === "object") ? payload.summary : {};
+
+			let selectedAuthor = authors[0] || null;
+			let explorerView = "bars";
+			let compareView = "bars";
+			let explorerChart = null;
+			let compareChart = null;
+			let drillDepth = 0;
+			let drillFilters = [];
+			let drillPath = ["author", "genre", "book"];
+
+			const escapeHtml = (value) => String(value || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+			const formatNumber = (value) => Number(value || 0).toLocaleString();
+			const chartPalette = [
+				"#16a34a",
+				"#2563eb",
+				"#f97316",
+				"#a855f7",
+				"#e11d48",
+				"#06b6d4",
+				"#84cc16",
+				"#f59e0b",
+				"#14b8a6",
+				"#ef4444",
+				"#8b5cf6",
+				"#0ea5e9"
+			];
+			const compareDatasetLabels = {
+				status: "Users by Shelf Status",
+				locations: "Users by Region",
+				mix: "Fiction vs Non-Fiction"
+			};
+			const dimensionLabels = {
+				author: "Author",
+				genre: "Genre",
+				book: "Book",
+				location: "Reader Region",
+				status: "Shelf Status",
+				language: "Language",
+				yearBucket: "Publication Decade"
+			};
+			const linkableDimensions = new Set(["author", "genre", "book"]);
+
+			function buildRelatedHref(kind, value) {
+				const params = new URLSearchParams();
+				params.set("kind", String(kind || ""));
+				params.set("value", String(value || ""));
+				return `/related?${params.toString()}`;
+			}
+
+			function renderRowLabel(label, rowLinkKind = "") {
+				const safeLabel = escapeHtml(label);
+				const kind = String(rowLinkKind || "");
+				if (!linkableDimensions.has(kind)) return safeLabel;
+				const href = buildRelatedHref(kind, String(label || ""));
+				return `<a class="metric-link" href="${escapeHtml(href)}">${safeLabel}</a>`;
+			}
+
+			function getPieUsefulness(rows) {
+				const values = rows
+					.map((row) => Number(row?.value || 0))
+					.filter((value) => Number.isFinite(value) && value > 0);
+				const bucketCount = values.length;
+				const total = values.reduce((sum, value) => sum + value, 0);
+				const top = values.length ? Math.max(...values) : 0;
+				const topShare = total > 0 ? top / total : 0;
+
+				if (bucketCount < 2) {
+					return { usable: false, reason: "Pie needs at least 2 non-zero categories.", bucketCount, topShare };
+				}
+				if (bucketCount > 24) {
+					return { usable: false, reason: `Pie is disabled for ${bucketCount} categories; use Bars or Table.`, bucketCount, topShare };
+				}
+				if (bucketCount > 12 && topShare < 0.34) {
+					return { usable: false, reason: "Pie is disabled because this distribution is too flat to read.", bucketCount, topShare };
+				}
+				return { usable: true, reason: "", bucketCount, topShare };
+			}
+
+			function syncPieButtonAvailability(buttons, attr, rows) {
+				const pieMeta = getPieUsefulness(rows);
+				buttons.forEach((button) => {
+					if (!(button instanceof HTMLButtonElement)) return;
+					if (button.getAttribute(attr) !== "pie") return;
+					button.disabled = !pieMeta.usable;
+					button.classList.toggle("is-disabled", !pieMeta.usable);
+					button.title = pieMeta.usable ? "Pie" : pieMeta.reason;
+					button.setAttribute("aria-disabled", String(!pieMeta.usable));
+				});
+				return pieMeta;
+			}
+
+		function factsWithFilters(filters) {
+			return analyticsFacts.filter((fact) => (
+				filters.every((filter) => String(fact?.[filter.dim] || "") === String(filter.value || ""))
+			));
+		}
+
+			function aggregateFactCounts(dim) {
+				const buckets = new Map();
+				for (const fact of analyticsFacts) {
+				const label = String(fact?.[dim] || "Unknown");
+				buckets.set(label, (buckets.get(label) || 0) + 1);
+			}
+				return Array.from(buckets.entries())
+					.map(([label, value]) => ({ label, value: Number(value || 0) }))
+					.filter((row) => row.value > 0)
+					.sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+			}
+
+			function renderInsights() {
+				if (!(insightsRoot instanceof HTMLElement)) return;
+				const genres = aggregateFactCounts("genre");
+				const statuses = aggregateFactCounts("status");
+				const regions = aggregateFactCounts("location");
+				const totalShelved = Number(summary?.totalShelvedBooks || analyticsFacts.length || 0);
+				const uncategorizedGenre = genres.find((row) => row.label === "Uncategorized");
+				const categorizedGenres = genres.filter((row) => row.label !== "Uncategorized");
+				const taggedCount = categorizedGenres.reduce((sum, row) => sum + Number(row.value || 0), 0);
+				const topGenre = categorizedGenres[0] || null;
+				const topStatus = statuses[0] || null;
+				const topRegion = regions[0] || null;
+
+				const pct = (value, total) => total > 0 ? ((Number(value || 0) / Number(total || 0)) * 100).toFixed(1) : "0.0";
+				const uncategorizedCount = Number(uncategorizedGenre?.value || 0);
+
+				const cards = [
+					{
+						title: "Top Genre",
+						body: topGenre
+							? `${topGenre.label} leads tagged genres at ${pct(topGenre.value, taggedCount)}% of tagged books. Coverage: ${pct(taggedCount, totalShelved)}% tagged, ${pct(uncategorizedCount, totalShelved)}% uncategorized.`
+							: "No tagged genre data yet."
+					},
+					{
+						title: "Reading Behavior",
+						body: topStatus ? `${topStatus.label} is the biggest shelf status at ${pct(topStatus.value, totalShelved)}%.` : "No status data yet."
+					},
+					{
+						title: "Reader Footprint",
+						body: topRegion ? `${regions.length} regions tracked, led by ${topRegion.label} (${pct(topRegion.value, totalShelved)}%).` : "No region data yet."
+					}
+				];
+
+				insightsRoot.innerHTML = cards.map((card) => `
+					<article class="insight-card">
+						<h3>${escapeHtml(card.title)}</h3>
+						<p>${escapeHtml(card.body)}</p>
+					</article>
+				`).join("");
+			}
+
+		function buildPieSlices(rows, maxSlices = 5) {
+			const sorted = [...rows].sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+			const top = sorted.slice(0, maxSlices);
+			const rest = sorted.slice(maxSlices);
+			if (rest.length) {
+				top.push({
+					label: "Other",
+					value: rest.reduce((sum, row) => sum + Number(row.value || 0), 0)
+				});
+			}
+			const total = top.reduce((sum, row) => sum + Number(row.value || 0), 0);
+			let start = 0;
+			const slices = top.map((row, index) => {
+				const color = chartPalette[index % chartPalette.length];
+				const ratio = total > 0 ? Number(row.value || 0) / total : 0;
+				const end = start + ratio * 360;
+				const slice = { ...row, color, start, end };
+				start = end;
+				return slice;
+			});
+			const gradient = slices.length
+				? slices.map((slice) => `${slice.color} ${slice.start.toFixed(2)}deg ${slice.end.toFixed(2)}deg`).join(", ")
+				: "#e8e3d8 0deg 360deg";
+			return { slices, total, gradient };
+		}
+
+			function renderPieWidgets() {
+				if (!(pieWidgetRoot instanceof HTMLElement)) return;
+				const genreAll = aggregateFactCounts("genre");
+				const genreTagged = genreAll.filter((row) => row.label !== "Uncategorized");
+				const uncategorizedGenre = genreAll.find((row) => row.label === "Uncategorized");
+				const taggedCount = genreTagged.reduce((sum, row) => sum + Number(row.value || 0), 0);
+				const uncategorizedCount = Number(uncategorizedGenre?.value || 0);
+
+				const widgets = [
+					{
+						title: "Tagged Genres",
+						subtitle: `Top genres from tagged books (${taggedCount.toLocaleString()} tagged / ${uncategorizedCount.toLocaleString()} uncategorized)`,
+						rows: genreTagged
+					},
+					{
+						title: "Shelf Status",
+						subtitle: "Shelved books by reading status",
+					rows: aggregateFactCounts("status")
+				},
+				{
+					title: "Reader Regions",
+					subtitle: "Shelved books by state/country",
+					rows: aggregateFactCounts("location")
+				}
+			];
+
+			pieWidgetRoot.innerHTML = widgets.map((widget) => {
+				if (!widget.rows.length) {
+					return `<article class="pie-widget"><h3>${escapeHtml(widget.title)}</h3><p class="pie-widget-sub">${escapeHtml(widget.subtitle)}</p><p class="empty">No data yet.</p></article>`;
+				}
+				const pie = buildPieSlices(widget.rows, 5);
+				return `
+					<article class="pie-widget">
+						<h3>${escapeHtml(widget.title)}</h3>
+						<p class="pie-widget-sub">${escapeHtml(widget.subtitle)}</p>
+						<div class="pie-widget-body">
+							<div class="mini-donut" style="--donut:${pie.gradient}">
+								<div class="mini-donut-center">
+									<strong>${formatNumber(pie.total)}</strong>
+									<span>books</span>
+								</div>
+							</div>
+							<div class="mini-legend">
+								${pie.slices.map((slice) => {
+									const share = pie.total > 0 ? ((slice.value / pie.total) * 100).toFixed(1) : "0.0";
+									return `<div class="mini-legend-row"><span class="mini-dot" style="background:${slice.color}"></span><span class="mini-label">${escapeHtml(slice.label)}</span><span class="mini-share">${share}%</span></div>`;
+								}).join("")}
+							</div>
+						</div>
+					</article>
+				`;
+			}).join("");
+		}
+
+		function aggregateRows(currentDim, nextDim, filters) {
+			const filtered = factsWithFilters(filters);
+			const bucketMap = new Map();
+			for (const fact of filtered) {
+				const rawValue = String(fact?.[currentDim] || "Unknown");
+				const key = `k:${encodeURIComponent(rawValue)}`;
+				if (!bucketMap.has(key)) {
+					bucketMap.set(key, {
+						key,
+						rawValue,
+						label: rawValue,
+						userIds: new Set(),
+						nextValues: new Set(),
+						factsCount: 0
+					});
+				}
+				const bucket = bucketMap.get(key);
+				bucket.userIds.add(String(fact?.userId || ""));
+				bucket.factsCount += 1;
+				if (nextDim) {
+					const nextValue = String(fact?.[nextDim] || "Unknown");
+					bucket.nextValues.add(nextValue);
+				}
+			}
+
+			return Array.from(bucketMap.values())
+				.map((bucket) => ({
+					key: bucket.key,
+					rawValue: bucket.rawValue,
+					label: bucket.label,
+					value: bucket.userIds.size,
+					factsCount: bucket.factsCount,
+					canDrill: !!nextDim && bucket.nextValues.size > 0,
+					nextCount: bucket.nextValues.size
+				}))
+				.sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+		}
+
+			function renderTable(rows, options = {}) {
+				if (!rows.length) return `<p class="empty">No rows available for this selection yet.</p>`;
+				const total = rows.reduce((sum, row) => sum + Number(row.value || 0), 0);
+				const includeDrill = !!options.includeDrill;
+				const rowLabelHeader = String(options.rowLabelHeader || "Label");
+				const nextLabel = String(options.nextLabel || "");
+				const rowLinkKind = String(options.rowLinkKind || "");
+			return `<table class="metric-table"><thead><tr><th>${escapeHtml(rowLabelHeader)}</th><th>Users</th><th>Share</th>${includeDrill ? "<th>Drill</th>" : ""}</tr></thead><tbody>${rows.map((row) => {
+				const share = total > 0 ? ((Number(row.value || 0) / total) * 100).toFixed(1) : "0.0";
+				let drillLabel = "";
+					if (includeDrill) {
+						if (nextLabel) {
+							drillLabel = row.canDrill
+								? `<span class="drill-status drill-status-ok">↳ ${row.nextCount} ${escapeHtml(nextLabel)}${row.nextCount === 1 ? "" : "s"}</span>`
+								: `<span class="drill-status drill-status-none">No deeper data</span>`;
+						} else {
+							drillLabel = `<span class="drill-status drill-status-final">Final level</span>`;
+						}
+					}
+				return `<tr class="${row.canDrill ? "is-clickable is-drillable" : "is-not-drillable"}" data-key="${escapeHtml(row.key)}" ${row.canDrill ? "data-action=\"drill\"" : ""}><td>${renderRowLabel(row.label, rowLinkKind)}</td><td>${formatNumber(row.value)}</td><td>${share}%</td>${includeDrill ? `<td>${drillLabel}</td>` : ""}</tr>`;
+			}).join("")}</tbody></table>`;
+			}
+
+			function disposeChart(chart) {
+				if (chart && !chart.isDisposed()) chart.dispose();
+			}
+
+			function mountChart(root, rows, view, interactive, onDrill, options = {}) {
+				if (!rows.length) {
+					root.innerHTML = `<p class="empty">No rows available for this selection yet.</p>`;
+					return null;
+				}
+				const uniqueUserValues = new Set(rows.map((row) => Number(row.value || 0)));
+				const canUseFactsCount = rows.some((row) => Number(row.factsCount || 0) !== Number(rows[0]?.factsCount || 0));
+				const useFactsMetric = view !== "pie" && rows.length > 8 && uniqueUserValues.size <= 1 && canUseFactsCount;
+				const activeMetricKey = useFactsMetric ? "factsCount" : "value";
+				const seriesData = rows.map((row) => ({
+					value: Number(row?.[activeMetricKey] || 0),
+					userCount: Number(row.value || 0),
+					factsCount: Number(row.factsCount || 0),
+					name: String(row.label || ""),
+					key: String(row.key || ""),
+					canDrill: !!row.canDrill
+				}));
+				root.innerHTML = `<div class="metrics-echart"></div>`;
+				const host = root.querySelector(".metrics-echart");
+				if (!(host instanceof HTMLElement)) return null;
+				const maxVisibleBars = 20;
+				const useCategoryZoom = view !== "pie" && seriesData.length > maxVisibleBars;
+				const endValue = Math.max(0, Math.min(seriesData.length - 1, maxVisibleBars - 1));
+				const chart = echarts.init(host, null, { renderer: "canvas" });
+
+				if (view === "pie") {
+					const pieMeta = getPieUsefulness(rows);
+					if (!pieMeta.usable) {
+						root.innerHTML = `<p class="pie-hint">${escapeHtml(pieMeta.reason)}</p>`;
+						return null;
+					}
+					const pieMaxSegments = 12;
+					let pieData = [...seriesData];
+					let isAggregatedPie = false;
+					if (pieData.length > pieMaxSegments) {
+						isAggregatedPie = true;
+						const sorted = [...pieData].sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
+						const kept = sorted.slice(0, pieMaxSegments);
+						const rest = sorted.slice(pieMaxSegments);
+						const otherValue = rest.reduce((sum, row) => sum + Number(row.value || 0), 0);
+						const otherUsers = rest.reduce((sum, row) => sum + Number(row.userCount || 0), 0);
+						pieData = [
+							...kept,
+							{
+								name: "Other",
+								value: otherValue,
+								key: "__other__",
+								canDrill: false,
+								userCount: otherUsers
+							}
+						];
+					}
+
+					chart.setOption({
+						color: chartPalette,
+						title: options.title ? {
+							text: options.title,
+							left: "right",
+							top: 0,
+							textStyle: { fontSize: 13, fontWeight: 700, color: "#2b2b2b" }
+						} : undefined,
+						tooltip: {
+							trigger: "item",
+							formatter: (params) => {
+								const data = params?.data || {};
+								return `${escapeHtml(String(data.name || ""))}<br>Users: ${formatNumber(data.userCount || data.value || 0)}`;
+							}
+						},
+						legend: {
+							type: "scroll",
+							orient: "vertical",
+							right: 0,
+							top: 18,
+							bottom: 12,
+							itemWidth: 10,
+							itemHeight: 10,
+							textStyle: { color: "#2b2b2b", fontSize: 12 },
+							show: pieData.length <= 18
+						},
+						series: [{
+							type: "pie",
+							radius: ["42%", "74%"],
+							center: [pieData.length <= 18 ? "34%" : "50%", "54%"],
+							avoidLabelOverlap: true,
+							label: {
+								show: pieData.length <= 8,
+								formatter: "{d}%"
+							},
+							labelLine: {
+								show: pieData.length <= 8
+							},
+							emphasis: { scale: true, scaleSize: 6 },
+							data: pieData
+						}]
+					});
+					if (isAggregatedPie) {
+						root.insertAdjacentHTML(
+							"afterbegin",
+							`<p class="pie-hint">Pie shows top ${pieMaxSegments} segments plus “Other”. Use Bars or Table for full detail.</p>`
+						);
+					}
+				} else {
+					chart.setOption({
+						color: [chartPalette[0]],
+						title: options.title ? {
+							text: options.title,
+							left: "right",
+							top: 0,
+							textStyle: { fontSize: 13, fontWeight: 700, color: "#2b2b2b" }
+						} : undefined,
+						grid: { left: 110, right: useCategoryZoom ? 34 : 16, top: 36, bottom: 24 },
+						tooltip: {
+							trigger: "axis",
+							axisPointer: { type: "shadow" },
+							formatter: (params) => {
+								const first = Array.isArray(params) ? params[0] : params;
+								const data = first?.data || {};
+								const barsValueLabel = useFactsMetric ? "Shelved Books" : "Users";
+								return `${escapeHtml(String(first?.name || ""))}<br>${barsValueLabel}: ${formatNumber(data.value || 0)}<br>Users: ${formatNumber(data.userCount || 0)}`;
+							}
+						},
+						xAxis: {
+							type: "value",
+							name: useFactsMetric ? "Shelved Books" : (options.valueAxisName || "Users"),
+							nameLocation: "middle",
+							nameGap: 34,
+							nameTextStyle: { color: "#4a4a4a", fontSize: 12 },
+							axisLabel: { color: "#4a4a4a" },
+							splitLine: { lineStyle: { color: "#ece5d8" } }
+						},
+						yAxis: {
+							type: "category",
+							data: seriesData.map((item) => item.name),
+							axisLabel: { color: "#2b2b2b", width: 140, overflow: "truncate", interval: 0 }
+						},
+						dataZoom: useCategoryZoom
+							? [
+								{
+									type: "inside",
+									yAxisIndex: 0,
+									startValue: 0,
+									endValue
+								},
+								{
+									type: "slider",
+									yAxisIndex: 0,
+									right: 6,
+									width: 12,
+									startValue: 0,
+									endValue,
+									fillerColor: "rgba(47,143,87,0.22)",
+									borderColor: "#d7d7d7"
+								}
+							]
+							: [],
+						series: [{
+							type: "bar",
+							barWidth: 18,
+							data: seriesData,
+							label: {
+								show: seriesData.length <= maxVisibleBars,
+								position: "right",
+								formatter: ({ value }) => formatNumber(value),
+								color: "#2b2b2b"
+							},
+							itemStyle: { borderRadius: [4, 4, 4, 4] }
+						}]
+					});
+				}
+
+				if (interactive) {
+					chart.on("click", (params) => {
+						const data = params?.data;
+						if (!data || !data.canDrill || !data.key) return;
+						onDrill(String(data.key));
+					});
+				}
+
+				return chart;
+			}
+
+			function renderScrollableBars(rows, options = {}) {
+				if (!rows.length) return `<p class="empty">No rows available for this selection yet.</p>`;
+				const uniqueUserValues = new Set(rows.map((row) => Number(row.value || 0)));
+				const canUseFactsCount = rows.some((row) => Number(row.factsCount || 0) !== Number(rows[0]?.factsCount || 0));
+				const useFactsMetric = rows.length > 8 && uniqueUserValues.size <= 1 && canUseFactsCount;
+				const metricKey = useFactsMetric ? "factsCount" : "value";
+				const metricLabel = useFactsMetric ? "Shelved Books" : "Users";
+				const maxValue = Math.max(...rows.map((row) => Number(row?.[metricKey] || 0)), 1);
+				const includeDrill = !!options.includeDrill;
+				const nextLabel = String(options.nextLabel || "");
+				const rowLinkKind = String(options.rowLinkKind || "");
+
+				return `
+					<div class="bars-scroll-wrap">
+						<div class="bars-scroll-head">
+							<span class="bars-col-label">${escapeHtml(options.rowLabelHeader || "Label")}</span>
+							<span class="bars-col-metric">${escapeHtml(metricLabel)}</span>
+							${includeDrill ? `<span class="bars-col-drill">Drill</span>` : ""}
+						</div>
+						<div class="bars-scroll-body">
+							${rows.map((row) => {
+								const raw = Number(row?.[metricKey] || 0);
+								const width = Math.max(3, Math.round((raw / maxValue) * 100));
+								let drillLabel = "";
+								if (includeDrill) {
+									if (nextLabel) {
+										drillLabel = row.canDrill
+											? `<span class="drill-status drill-status-ok">↳ ${row.nextCount} ${escapeHtml(nextLabel)}${row.nextCount === 1 ? "" : "s"}</span>`
+											: `<span class="drill-status drill-status-none">No deeper data</span>`;
+									} else {
+										drillLabel = `<span class="drill-status drill-status-final">Final level</span>`;
+									}
+								}
+								return `
+									<div class="bars-row ${row.canDrill ? "is-drillable" : "is-not-drillable"}" ${row.canDrill ? `data-action="drill" data-key="${escapeHtml(row.key)}"` : ""}>
+										<span class="bars-row-label">${renderRowLabel(row.label, rowLinkKind)}</span>
+										<span class="bars-row-bar"><span class="bars-row-fill" style="width:${width}%"></span><span class="bars-row-value">${formatNumber(raw)}</span></span>
+										${includeDrill ? `<span class="bars-row-drill">${drillLabel}</span>` : ""}
+									</div>
+								`;
+							}).join("")}
+						</div>
+					</div>
+				`;
+			}
+
+			function renderRows(root, rows, view, interactive = false, onDrill = () => {}, options = {}) {
+				if (view === "table") {
+					root.innerHTML = renderTable(rows, options);
+					if (root === explorerRoot) {
+						disposeChart(explorerChart);
+						explorerChart = null;
+					}
+					if (root === compareRoot) {
+						disposeChart(compareChart);
+						compareChart = null;
+					}
+					return;
+				}
+				if (view === "bars") {
+					root.innerHTML = renderScrollableBars(rows, options);
+					if (root === explorerRoot) {
+						disposeChart(explorerChart);
+						explorerChart = null;
+					}
+					if (root === compareRoot) {
+						disposeChart(compareChart);
+						compareChart = null;
+					}
+					return;
+				}
+				const nextChart = mountChart(root, rows, view, interactive, onDrill, options);
+				if (root === explorerRoot) {
+					disposeChart(explorerChart);
+					explorerChart = nextChart;
+				}
+				if (root === compareRoot) {
+					disposeChart(compareChart);
+					compareChart = nextChart;
+				}
+			}
+
+		function updateExplorer() {
+			drillPath = ["author", "genre", "book"];
+			const maxDepth = drillPath.length - 1;
+			if (drillDepth > maxDepth) drillDepth = maxDepth;
+			if (drillFilters.length > drillDepth) drillFilters = drillFilters.slice(0, drillDepth);
+
+			const currentDim = drillPath[drillDepth];
+			const nextDim = drillPath[drillDepth + 1] || "";
+			const rows = aggregateRows(currentDim, nextDim || null, drillFilters);
+			const explorerPieMeta = syncPieButtonAvailability(explorerViewButtons, "data-metrics-view", rows);
+			if (explorerView === "pie" && !explorerPieMeta.usable) {
+				explorerView = "bars";
+				syncButtons(explorerViewButtons, explorerView, "data-metrics-view");
+			}
+			const titleParts = [dimensionLabels[currentDim] || currentDim];
+			if (drillFilters.length > 0) titleParts.push(...drillFilters.map((item) => item.value));
+			const explorerTitle = titleParts.join(" · ");
+
+			renderRows(explorerRoot, rows, explorerView, true, (key) => {
+				const selected = rows.find((row) => row.key === key);
+				if (!selected || !nextDim || !selected.canDrill) return;
+				drillFilters.push({ dim: currentDim, value: selected.rawValue });
+				drillDepth = Math.min(drillDepth + 1, maxDepth);
+				if (currentDim === "author") {
+					selectedAuthor = authors.find((author) => author.label === selected.rawValue) || selectedAuthor;
+				}
+				updateExplorer();
+				updateCompare();
+			}, {
+				title: explorerTitle,
+				valueAxisName: "Readers",
+				includeDrill: true,
+				nextLabel: nextDim ? (dimensionLabels[nextDim] || nextDim) : "",
+				rowLabelHeader: dimensionLabels[currentDim] || "Label",
+				rowLinkKind: currentDim
+			});
+
+			if (explorerContext instanceof HTMLElement) {
+				const pathText = drillPath.map((dim) => dimensionLabels[dim] || dim).join(" → ");
+				const filterText = drillFilters.length > 0
+					? drillFilters.map((item) => `${dimensionLabels[item.dim] || item.dim} = ${item.value}`).join(", ")
+					: "";
+				const uniqueUsers = new Set(rows.map((row) => Number(row.value || 0)));
+				const flatUsersHint = explorerView === "bars" && rows.length > 8 && uniqueUsers.size <= 1
+					? " User counts are flat here, so bars are auto-scaled by Shelved Books for readability."
+					: "";
+				const zoomHint = explorerView === "bars" && rows.length > 20
+					? " Bars mode is scrollable: use the list scroll inside the chart area to view all rows."
+					: "";
+				const pieHint = !explorerPieMeta.usable
+					? ` ${explorerPieMeta.reason}`
+					: "";
+				const navHint = drillFilters.length > 0
+					? ` <span class="context-actions"><button type="button" class="inline-nav" data-drill-back>Back one level</button><button type="button" class="inline-nav" data-drill-reset>Start over</button></span>`
+					: "";
+				const guidanceText = `Click a row or chart segment to drill forward.${flatUsersHint}${zoomHint}${pieHint}`;
+				explorerContext.innerHTML = `
+					<div class="context-block">
+						<p><span class="context-k">Path</span><span class="context-v">${escapeHtml(pathText)}</span></p>
+						<p><span class="context-k">Level</span><span class="context-v">${escapeHtml(dimensionLabels[currentDim] || currentDim)} (${formatNumber(rows.length)} rows)</span></p>
+						${filterText ? `<p><span class="context-k">Filter</span><span class="context-v">${escapeHtml(filterText)}</span></p>` : ""}
+						<p class="context-note">${escapeHtml(guidanceText)}</p>
+						${navHint}
+					</div>
+				`;
+			}
+
+			const selectedAuthorFilter = [...drillFilters].reverse().find((item) => item.dim === "author");
+			if (selectedAuthorFilter) {
+				selectedAuthor = authors.find((author) => author.label === selectedAuthorFilter.value) || selectedAuthor;
+			}
+		}
+
+		function rowsForCompare() {
+			if (datasetSelect.value === "status") return statusRows;
+			if (datasetSelect.value === "locations") return locationRows;
+			if (selectedAuthor && Array.isArray(selectedAuthor.fictionNonfiction)) return selectedAuthor.fictionNonfiction;
+			return [];
+		}
+
+			function updateCompare() {
+				const rows = rowsForCompare().map((row) => ({ ...row, canDrill: false }));
+				const comparePieMeta = syncPieButtonAvailability(compareViewButtons, "data-compare-view", rows);
+				if (compareView === "pie" && !comparePieMeta.usable) {
+					compareView = "bars";
+					syncButtons(compareViewButtons, compareView, "data-compare-view");
+				}
+				const datasetKey = String(datasetSelect.value || "status");
+				const datasetLabel = compareDatasetLabels[datasetKey] || "Comparison";
+				const compareTitle = datasetKey === "mix"
+					? `${datasetLabel} · ${selectedAuthor?.label || "Selected Author"}`
+					: datasetLabel;
+				renderRows(compareRoot, rows, compareView, false, () => {}, {
+					title: compareTitle,
+					valueAxisName: "Readers",
+					includeDrill: false
+				});
+				if (compareContext instanceof HTMLElement) {
+					compareContext.textContent = `Bottom chart: ${compareTitle} (${rows.length} rows).${!comparePieMeta.usable ? ` ${comparePieMeta.reason}` : ""}`;
+				}
+			}
+
+		function syncButtons(buttons, activeValue, attr) {
+			buttons.forEach((button) => {
+				if (!(button instanceof HTMLButtonElement)) return;
+				button.classList.toggle("is-active", button.getAttribute(attr) === activeValue);
+			});
+		}
+
+		explorerViewButtons.forEach((button) => {
+			button.addEventListener("click", () => {
+				if (!(button instanceof HTMLButtonElement)) return;
+				explorerView = button.dataset.metricsView || "bars";
+				syncButtons(explorerViewButtons, explorerView, "data-metrics-view");
+				updateExplorer();
+			});
+		});
+
+		compareViewButtons.forEach((button) => {
+			button.addEventListener("click", () => {
+				if (!(button instanceof HTMLButtonElement)) return;
+				compareView = button.dataset.compareView || "bars";
+				syncButtons(compareViewButtons, compareView, "data-compare-view");
+				updateCompare();
+			});
+		});
+
+		explorerRoot.addEventListener("click", (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			if (target.closest("a.metric-link")) return;
+			const action = target.closest("[data-action='drill'][data-key]");
+			if (!(action instanceof HTMLElement)) return;
+			const key = action.dataset.key || "";
+			const currentDim = drillPath[drillDepth];
+			const nextDim = drillPath[drillDepth + 1] || "";
+			if (!nextDim) return;
+			const rows = aggregateRows(currentDim, nextDim, drillFilters);
+			const selected = rows.find((row) => row.key === key);
+			if (!selected || !selected.canDrill) return;
+			drillFilters.push({ dim: currentDim, value: selected.rawValue });
+			drillDepth = Math.min(drillDepth + 1, drillPath.length - 1);
+			if (currentDim === "author") {
+				selectedAuthor = authors.find((author) => author.label === selected.rawValue) || selectedAuthor;
+			}
+			updateExplorer();
+			updateCompare();
+		});
+
+		explorerContext?.addEventListener("click", (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			if (target.matches("[data-drill-back]")) {
+				if (drillFilters.length === 0) return;
+				drillFilters = drillFilters.slice(0, -1);
+				drillDepth = Math.max(0, drillDepth - 1);
+				updateExplorer();
+				return;
+			}
+			if (target.matches("[data-drill-reset]")) {
+				if (drillFilters.length === 0) return;
+				drillFilters = [];
+				drillDepth = 0;
+				updateExplorer();
+			}
+		});
+
+			datasetSelect.addEventListener("change", updateCompare);
+			window.addEventListener("resize", () => {
+				if (explorerChart && !explorerChart.isDisposed()) explorerChart.resize();
+				if (compareChart && !compareChart.isDisposed()) compareChart.resize();
+			});
+
+		renderInsights();
+		renderPieWidgets();
+		updateExplorer();
+		updateCompare();
+	}
+</script>
+
+<style>
+	.metrics-page { max-width: 960px; }
+	.metrics-hero { margin-bottom: 1rem; }
+	.eyebrow { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6a5c3d; }
+	.metrics-page h1 { margin: 0; line-height: 1.05; font-size: clamp(2rem, 3.8vw, 3.5rem); }
+	.note { margin-top: 0.6rem; color: #805f2c; font-size: 0.9rem; }
+	.chart-context { margin: 0.55rem 0 0; color: #3f3f3f; font-size: 1rem; line-height: 1.55; }
+	:global(.context-block) { display: grid; gap: 0.18rem; }
+	:global(.context-block p) { margin: 0; }
+	:global(.context-k) { display: inline-block; min-width: 3.4rem; margin-right: 0.25rem; color: #6c5e44; font-weight: 700; letter-spacing: 0.02em; }
+	:global(.context-v) { color: #2f2f2f; }
+	:global(.context-note) { margin-top: 0.15rem; color: #4d4d4d; }
+	.widget-grid { display: grid; gap: 0.65rem; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+	.widget { border: 1px solid #d8d0c2; border-radius: 12px; background: #fff; padding: 0.75rem; }
+	.widget p { margin: 0; text-transform: uppercase; letter-spacing: 0.06em; color: #6d5d46; font-size: 0.74rem; font-weight: 700; }
+	.widget strong { display: block; margin-top: 0.35rem; font-size: clamp(1.1rem, 1.8vw, 1.65rem); }
+	.insight-grid { margin-top: 0.65rem; display: grid; gap: 0.65rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.insight-card { border: 1px solid #e3dbcd; border-radius: 12px; background: #fcfbf8; padding: 0.72rem; }
+	.insight-card h3 { margin: 0; font-size: 0.98rem; color: #2b2b2b; }
+	.insight-card p { margin: 0.32rem 0 0; color: #545454; line-height: 1.45; font-size: 0.9rem; }
+	:global(.pie-widget-grid) { margin-top: 0.65rem; display: grid; gap: 0.65rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	:global(.pie-widget) { border: 1px solid #e3dbcd; border-radius: 12px; background: #fcfbf8; padding: 0.72rem; }
+	:global(.pie-widget h3) { margin: 0; font-size: 1rem; }
+	:global(.pie-widget-sub) { margin: 0.2rem 0 0; color: #5d5d5d; font-size: 0.88rem; }
+	:global(.pie-widget-body) { margin-top: 0.6rem; display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 0.6rem; align-items: center; }
+	:global(.mini-donut) { width: 110px; height: 110px; border-radius: 50%; background: conic-gradient(var(--donut)); position: relative; display: grid; place-items: center; }
+	:global(.mini-donut)::after { content: ""; position: absolute; inset: 19px; border-radius: 50%; background: #fff; }
+	:global(.mini-donut-center) { position: relative; z-index: 1; text-align: center; line-height: 1.1; }
+	:global(.mini-donut-center strong) { display: block; font-size: 1.02rem; }
+	:global(.mini-donut-center span) { color: #5f5f5f; font-size: 0.72rem; }
+	:global(.mini-legend) { display: grid; gap: 0.28rem; }
+	:global(.mini-legend-row) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.35rem; align-items: center; font-size: 0.8rem; }
+	:global(.mini-dot) { width: 9px; height: 9px; border-radius: 50%; }
+	:global(.mini-label) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #2f2f2f; }
+	:global(.mini-share) { color: #575757; font-variant-numeric: tabular-nums; }
+	.panel { margin-top: 0.9rem; border: 1px solid #d8d0c2; border-radius: 12px; background: #fff; padding: 0.8rem; }
+	.panel-head h2 { margin: 0; }
+	.panel-head p { margin: 0.3rem 0 0; color: #515151; }
+	.controls { margin-top: 0.55rem; display: flex; justify-content: space-between; gap: 0.5rem; align-items: center; }
+	.controls.stack { align-items: flex-end; }
+	.toggle { display: inline-flex; gap: 0.25rem; padding: 0.2rem; border: 1px solid #dfd4bf; background: #f4eee2; border-radius: 999px; }
+	.toggle button { border: none; background: transparent; border-radius: 999px; padding: 0.35rem 0.62rem; font: inherit; font-size: 0.82rem; cursor: pointer; }
+	.toggle button.is-active { background: #2f8f57; color: #fff; }
+	.toggle button.is-disabled,
+	.toggle button:disabled { opacity: 0.45; cursor: not-allowed; }
+	:global(.context-actions) { display: block; margin-top: 0.45rem; }
+	:global(.inline-nav) { border: 1px solid #dfd4bf; background: #fff; color: #2f6e52; border-radius: 999px; font: inherit; font-size: 0.82rem; cursor: pointer; padding: 0.22rem 0.62rem; margin-right: 0.35rem; }
+	:global(.inline-nav:hover) { border-color: #2f8f57; color: #1f5a40; background: #f7fcf9; }
+	label span { display: block; margin-bottom: 0.2rem; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.72rem; color: #6e5f49; font-weight: 700; }
+	select { border: 1px solid #cfcfcf; border-radius: 8px; padding: 0.36rem 0.46rem; font: inherit; }
+	:global(.metric-bars) { margin-top: 0.6rem; display: grid; gap: 0.4rem; }
+	:global(.metric-row) { width: 100%; border: 1px solid #e0ded8; border-radius: 10px; background: #fbfbfb; padding: 0.45rem 0.55rem; display: grid; grid-template-columns: minmax(120px,1fr) minmax(120px,2fr) auto; gap: 0.5rem; align-items: center; text-align: left; font: inherit; }
+	:global(.metric-row.is-clickable) { cursor: pointer; }
+	:global(.metric-row.is-clickable:hover) { border-color: #2f8f57; background: #f3f9f4; }
+	:global(.track) { height: 0.55rem; border-radius: 999px; background: #efe7da; overflow: hidden; }
+	:global(.track span) { display: block; height: 100%; background: linear-gradient(90deg, #2f8f57, #88b16f); }
+	:global(.metric-table) { margin-top: 0.6rem; width: 100%; border-collapse: collapse; }
+	:global(.metric-table th), :global(.metric-table td) { border-bottom: 1px solid #ececec; padding: 0.45rem; text-align: left; }
+	:global(.metric-table tr.is-clickable) { cursor: pointer; }
+	:global(.metric-table tr.is-clickable:hover) { background: #f3f9f4; }
+	:global(.metric-table tr.is-not-drillable) { opacity: 0.9; }
+	:global(.bars-scroll-wrap) { margin-top: 0.6rem; border: 1px solid #e3ded2; border-radius: 10px; overflow: hidden; background: #fff; }
+	:global(.bars-scroll-head) { display: grid; grid-template-columns: minmax(180px, 1.4fr) minmax(260px, 2fr) minmax(140px, 1.2fr); gap: 0.5rem; align-items: center; padding: 0.5rem 0.65rem; background: #faf6ed; border-bottom: 1px solid #ece5d8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #6a5c3d; }
+	:global(.bars-scroll-body) { max-height: 420px; overflow-y: auto; }
+	:global(.bars-row) { display: grid; grid-template-columns: minmax(180px, 1.4fr) minmax(260px, 2fr) minmax(140px, 1.2fr); gap: 0.5rem; align-items: center; padding: 0.45rem 0.65rem; border-bottom: 1px solid #f0ece4; }
+	:global(.bars-row.is-drillable) { cursor: pointer; }
+	:global(.bars-row.is-drillable:hover) { background: #f3f9f4; }
+	:global(.bars-row-label) { color: #2b2b2b; font-size: 0.92rem; line-height: 1.25; }
+	:global(.metric-link) { color: #1e5f46; text-decoration: underline; text-underline-offset: 2px; }
+	:global(.metric-link:hover) { color: #114b35; }
+	:global(.bars-row-bar) { position: relative; height: 22px; border-radius: 999px; background: #f2ecdf; overflow: hidden; display: flex; align-items: center; }
+	:global(.bars-row-fill) { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #2f8f57, #4ea86f); border-radius: 999px; }
+	:global(.bars-row-value) { position: relative; z-index: 1; margin-left: auto; margin-right: 0.45rem; color: #1f1f1f; font-weight: 700; font-size: 0.82rem; }
+	:global(.bars-row-drill) { justify-self: start; }
+	:global(.drill-status) { display: inline-block; border-radius: 999px; padding: 0.14rem 0.5rem; font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
+	:global(.drill-status-ok) { background: #d7f1df; color: #176339; }
+	:global(.drill-status-none) { background: #efefef; color: #676767; }
+	:global(.drill-status-final) { background: #ece5d8; color: #5f4d2d; }
+	:global(.metrics-echart) { margin-top: 0.6rem; width: 100%; height: 280px; }
+	:global(.pie-hint) { margin: 0.6rem 0 0; font-size: 0.84rem; color: #625544; }
+	:global(.pie-wrap) { margin-top: 0.6rem; display: grid; grid-template-columns: 130px minmax(0,1fr); gap: 0.75rem; align-items: center; }
+	:global(.pie) { width: 130px; height: 130px; border-radius: 50%; background: conic-gradient(var(--pie)); position: relative; }
+	:global(.pie)::after { content: ""; position: absolute; inset: 22px; background: #fff; border-radius: 50%; }
+	:global(.legend) { display: grid; gap: 0.35rem; }
+	:global(.legend-row) { border: 1px solid #e7e3d9; border-radius: 8px; background: #fff; padding: 0.3rem 0.4rem; font: inherit; display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 0.4rem; align-items: center; text-align: left; }
+	:global(.legend-row.is-clickable) { cursor: pointer; }
+	:global(.legend-row.is-clickable:hover) { border-color: #2f8f57; background: #f3f9f4; }
+	:global(.dot) { width: 10px; height: 10px; border-radius: 50%; }
+	:global(.empty) { margin-top: 0.6rem; color: #616161; }
+	@media (max-width: 980px) {
+		.widget-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+		.insight-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+		:global(.pie-widget-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	}
+	@media (max-width: 720px) {
+		.widget-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+		.insight-grid { grid-template-columns: 1fr; }
+		:global(.pie-widget-grid) { grid-template-columns: 1fr; }
+		:global(.pie-widget-body) { grid-template-columns: 1fr; justify-items: center; }
+		.controls, .controls.stack { flex-direction: column; align-items: flex-start; }
+		:global(.bars-scroll-head),
+		:global(.bars-row) { grid-template-columns: 1fr; }
+		:global(.bars-row-bar) { height: 20px; }
+		:global(.metric-row) { grid-template-columns: 1fr; }
+		:global(.pie-wrap) { grid-template-columns: 1fr; }
+		:global(.metrics-echart) { height: 320px; }
+	}
+</style>

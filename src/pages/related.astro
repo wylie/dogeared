@@ -1,0 +1,486 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getNeonSql } from "../lib/neon";
+
+export const prerender = false;
+
+type BookRow = {
+	id: number;
+	title: string;
+	author: string;
+	shelves: number;
+	readers: number;
+	genres: string[];
+	coverUrl: string;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+};
+
+type AuthorRow = {
+	author: string;
+	books: number;
+	shelves: number;
+	readers: number;
+};
+
+function normalizeText(value: unknown, fallback = "") {
+	const text = String(value || "").trim();
+	return text || fallback;
+}
+
+function slugify(value: string) {
+	return normalizeText(value)
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "");
+}
+
+function canonicalKey(value: string) {
+	return normalizeText(value)
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "");
+}
+
+const kind = normalizeText(Astro.url.searchParams.get("kind"), "author");
+const value = normalizeText(Astro.url.searchParams.get("value"));
+const canonical = canonicalKey(value);
+const genreSlug = slugify(value);
+
+const sectionLinks = [
+	{ id: "overview", label: "Overview" },
+	{ id: "books", label: "Books" },
+	{ id: "related", label: "Related" }
+];
+
+let books: BookRow[] = [];
+let relatedAuthors: AuthorRow[] = [];
+let pageTitle = "Related";
+let subtitle = "Explore related books in Dogeared.";
+let error = "";
+let activeShelves = 0;
+let distinctReaders = 0;
+
+if (value) {
+	try {
+		const sql = getNeonSql();
+
+		if (kind === "author") {
+			pageTitle = value;
+			subtitle = "All books by this author in Dogeared.";
+			books = await sql<BookRow[]>`
+				select
+					b.id,
+					b.title,
+					coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+					count(distinct ub.user_id)::int as shelves,
+					count(distinct ub.user_id)::int as readers,
+					coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}') as genres,
+					coalesce(nullif(trim(b.cover_url), ''), '') as "coverUrl",
+					coalesce(nullif(trim(b.language), ''), '') as language,
+					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13
+				from book b
+				left join user_book ub on ub.book_id = b.id
+				left join book_genre bg on bg.book_id = b.id
+				where lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+				group by b.id, b.title, b.primary_author, b.cover_url, b.language, b.isbn10, b.isbn13
+				having count(distinct ub.user_id) > 0
+				order by shelves desc, readers desc, b.title asc
+			`;
+		} else if (kind === "genre") {
+			pageTitle = value;
+			subtitle = "Books in this genre in Dogeared.";
+			books = await sql<BookRow[]>`
+				select
+					b.id,
+					b.title,
+					coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+					count(distinct ub.user_id)::int as shelves,
+					count(distinct ub.user_id)::int as readers,
+					coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}') as genres,
+					coalesce(nullif(trim(b.cover_url), ''), '') as "coverUrl",
+					coalesce(nullif(trim(b.language), ''), '') as language,
+					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13
+				from book b
+				join book_genre g on g.book_id = b.id
+				left join user_book ub on ub.book_id = b.id
+				left join book_genre bg on bg.book_id = b.id
+				where
+					lower(regexp_replace(coalesce(g.genre_name, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+					or lower(coalesce(g.genre_slug, '')) = ${genreSlug}
+				group by b.id, b.title, b.primary_author, b.cover_url, b.language, b.isbn10, b.isbn13
+				having count(distinct ub.user_id) > 0
+				order by shelves desc, readers desc, b.title asc
+			`;
+
+			relatedAuthors = await sql<AuthorRow[]>`
+				select
+					coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+					count(distinct b.id)::int as books,
+					count(distinct (ub.user_id, ub.book_id))::int as shelves,
+					count(distinct ub.user_id)::int as readers
+				from book b
+				join book_genre g on g.book_id = b.id
+				left join user_book ub on ub.book_id = b.id
+				where
+					lower(regexp_replace(coalesce(g.genre_name, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+					or lower(coalesce(g.genre_slug, '')) = ${genreSlug}
+				group by b.primary_author
+				having count(distinct (ub.user_id, ub.book_id)) > 0
+				order by shelves desc, readers desc, author asc
+				limit 30
+			`;
+		} else if (kind === "book") {
+			pageTitle = value;
+			subtitle = "Book details and shelf activity in Dogeared.";
+			books = await sql<BookRow[]>`
+				select
+					b.id,
+					b.title,
+					coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+					count(distinct ub.user_id)::int as shelves,
+					count(distinct ub.user_id)::int as readers,
+					coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}') as genres,
+					coalesce(nullif(trim(b.cover_url), ''), '') as "coverUrl",
+					coalesce(nullif(trim(b.language), ''), '') as language,
+					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13
+				from book b
+				left join user_book ub on ub.book_id = b.id
+				left join book_genre bg on bg.book_id = b.id
+				where lower(regexp_replace(coalesce(b.title, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+				group by b.id, b.title, b.primary_author, b.cover_url, b.language, b.isbn10, b.isbn13
+				having count(distinct ub.user_id) > 0
+				order by shelves desc, readers desc, b.title asc
+			`;
+		}
+
+		if (kind === "author") {
+			const totals = await sql<Array<{ active_shelves: number; readers: number }>>`
+				select
+					count(distinct ub.status)::int as active_shelves,
+					count(distinct ub.user_id)::int as readers
+				from user_book ub
+				join book b on b.id = ub.book_id
+				where lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+			`;
+			activeShelves = Number(totals[0]?.active_shelves || 0);
+			distinctReaders = Number(totals[0]?.readers || 0);
+		} else if (kind === "genre") {
+			const totals = await sql<Array<{ active_shelves: number; readers: number }>>`
+				select
+					count(distinct ub.status)::int as active_shelves,
+					count(distinct ub.user_id)::int as readers
+				from user_book ub
+				join book b on b.id = ub.book_id
+				join book_genre g on g.book_id = b.id
+				where
+					lower(regexp_replace(coalesce(g.genre_name, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+					or lower(coalesce(g.genre_slug, '')) = ${genreSlug}
+			`;
+			activeShelves = Number(totals[0]?.active_shelves || 0);
+			distinctReaders = Number(totals[0]?.readers || 0);
+		} else if (kind === "book") {
+			const totals = await sql<Array<{ active_shelves: number; readers: number }>>`
+				select
+					count(distinct ub.status)::int as active_shelves,
+					count(distinct ub.user_id)::int as readers
+				from user_book ub
+				join book b on b.id = ub.book_id
+				where lower(regexp_replace(coalesce(b.title, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+			`;
+			activeShelves = Number(totals[0]?.active_shelves || 0);
+			distinctReaders = Number(totals[0]?.readers || 0);
+		}
+	} catch (cause) {
+		error = cause instanceof Error ? cause.message : "Failed to load related data.";
+	}
+}
+
+if (!activeShelves) activeShelves = 0;
+if (!distinctReaders) distinctReaders = Math.max(...books.map((row) => Number(row.readers || 0)), 0);
+---
+
+<Layout title="Related" sectionLinks={sectionLinks}>
+	<div slot="right" class="related-page">
+		<header id="overview" class="hero">
+			<p class="eyebrow">Related View</p>
+			<h1>{pageTitle || "Related"}</h1>
+			<p>{subtitle}</p>
+		</header>
+
+		{!value && (
+			<section class="panel">
+				<p>Select an Author, Genre, or Book from the Metrics drill-down to open this view.</p>
+			</section>
+		)}
+
+		{value && (
+			<>
+				<section class="stats-grid">
+					<article class="stat"><p>Books</p><strong>{books.length.toLocaleString()}</strong></article>
+					<article class="stat"><p>Active Shelves</p><strong>{activeShelves.toLocaleString()}</strong></article>
+					<article class="stat"><p>Distinct Readers</p><strong>{distinctReaders.toLocaleString()}</strong></article>
+				</section>
+
+				<section id="books" class="panel panel-plain">
+					<div class="panel-head">
+						<h2>Books In Dogeared</h2>
+					</div>
+					{error ? (
+						<p class="error">{error}</p>
+					) : books.length === 0 ? (
+						<p>No matching books found yet.</p>
+					) : (
+						<ul class="book-grid">
+							{books.map((book, index) => (
+								<li class="book-card">
+									<div class="rank-badge" aria-label={`Rank ${index + 1}`}>#{index + 1}</div>
+									<div class="cover-wrap">
+										{book.coverUrl
+											? <img class="cover" src={book.coverUrl} alt={`${book.title} cover`} loading="lazy" />
+											: <div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>}
+									</div>
+									<div class="card-body">
+										<h3>
+											<a href={`/related?kind=book&value=${encodeURIComponent(book.title)}`}>{book.title}</a>
+										</h3>
+										<p class="meta">
+											By <a class="metric-link" href={`/related?kind=author&value=${encodeURIComponent(book.author)}`}>{book.author}</a>
+										</p>
+										<p class="meta">Readers: {book.readers} · Shelf entries: {book.shelves}</p>
+										<div class="genre-chips">
+											{(book.genres.length > 0 ? book.genres : ["Uncategorized"]).slice(0, 4).map((genre) => (
+												<a class="genre-chip" href={`/related?kind=genre&value=${encodeURIComponent(genre)}`}>{genre}</a>
+											))}
+										</div>
+										<div
+											class="shelf-dropdown"
+											data-title={book.title}
+											data-author={book.author}
+											data-cover={book.coverUrl}
+											data-language={book.language}
+											data-isbn10={book.isbn10}
+											data-isbn13={book.isbn13}
+											data-categories={JSON.stringify(book.genres ?? [])}
+										>
+											<button type="button" class="shelf-trigger" data-action="toggle-shelf" aria-expanded="false">
+												<span class="shelf-label">Want to Read</span>
+												<span class="shelf-icon" aria-hidden="true">▾</span>
+											</button>
+											<div class="shelf-menu" hidden>
+												<button type="button" class="shelf-option" data-action="set-shelf" data-status="want_to_read">Want to Read</button>
+												<button type="button" class="shelf-option" data-action="set-shelf" data-status="reading">Currently Reading</button>
+												<button type="button" class="shelf-option" data-action="set-shelf" data-status="finished">Read</button>
+											</div>
+											<p class="shelf-feedback" hidden></p>
+										</div>
+									</div>
+								</li>
+							))}
+						</ul>
+					)}
+				</section>
+
+				{kind === "genre" && relatedAuthors.length > 0 && (
+					<section id="related" class="panel panel-plain">
+						<div class="panel-head">
+							<h2>Top Authors In This Genre</h2>
+						</div>
+						<ul class="author-grid">
+							{relatedAuthors.map((row) => (
+								<li class="author-card">
+									<h3><a class="metric-link" href={`/related?kind=author&value=${encodeURIComponent(row.author)}`}>{row.author}</a></h3>
+									<p>{row.books} books</p>
+									<p>{row.shelves} shelf entries · {row.readers} readers</p>
+								</li>
+							))}
+						</ul>
+					</section>
+				)}
+			</>
+		)}
+	</div>
+</Layout>
+
+<script>
+	const USER_KEY_STORAGE_KEY = "dogeared:user-key";
+	const STATUS_LABELS = {
+		want_to_read: "Want to Read",
+		reading: "Currently Reading",
+		finished: "Read"
+	};
+	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
+	const feedbackTimers = new WeakMap();
+
+	function getUserKey() {
+		try {
+			const existing = String(localStorage.getItem(USER_KEY_STORAGE_KEY) || "").trim();
+			if (existing) return existing;
+			const created = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+			localStorage.setItem(USER_KEY_STORAGE_KEY, created);
+			return created;
+		} catch {
+			return `usr_fallback_${Math.random().toString(36).slice(2, 10)}`;
+		}
+	}
+
+	function parseCategories(rawValue) {
+		try {
+			const parsed = JSON.parse(String(rawValue || "[]"));
+			return Array.isArray(parsed)
+				? parsed.map((item) => String(item || "").trim()).filter(Boolean)
+				: [];
+		} catch {
+			return [];
+		}
+	}
+
+	function statusLabel(status) {
+		return STATUS_LABELS[status] || STATUS_LABELS.want_to_read;
+	}
+
+	function showFeedback(dropdown, message) {
+		const feedback = dropdown.querySelector(".shelf-feedback");
+		if (!(feedback instanceof HTMLElement)) return;
+		feedback.textContent = message;
+		feedback.hidden = false;
+		const existing = feedbackTimers.get(dropdown);
+		if (existing) clearTimeout(existing);
+		const timer = window.setTimeout(() => {
+			feedback.hidden = true;
+		}, 1800);
+		feedbackTimers.set(dropdown, timer);
+	}
+
+	function closeShelfMenus() {
+		for (const dropdown of shelfDropdowns) {
+			const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
+			const menu = dropdown.querySelector(".shelf-menu");
+			if (menu instanceof HTMLElement) menu.hidden = true;
+			if (trigger instanceof HTMLElement) trigger.setAttribute("aria-expanded", "false");
+		}
+	}
+
+	async function syncEntryToServer(entry) {
+		const userKey = getUserKey();
+		const response = await fetch("/api/shelf/entries", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ userKey, entry })
+		});
+		if (!response.ok) {
+			const data = await response.json().catch(() => ({}));
+			throw new Error(String(data?.error || "Failed to save shelf entry."));
+		}
+	}
+
+	document.addEventListener("click", async (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+
+		const toggle = target.closest('[data-action="toggle-shelf"]');
+		if (toggle instanceof HTMLButtonElement) {
+			const dropdown = toggle.closest(".shelf-dropdown");
+			if (!(dropdown instanceof HTMLElement)) return;
+			const menu = dropdown.querySelector(".shelf-menu");
+			if (!(menu instanceof HTMLElement)) return;
+			const willOpen = menu.hidden;
+			closeShelfMenus();
+			menu.hidden = !willOpen;
+			toggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+			return;
+		}
+
+		const option = target.closest('[data-action="set-shelf"]');
+		if (option instanceof HTMLButtonElement) {
+			const dropdown = option.closest(".shelf-dropdown");
+			if (!(dropdown instanceof HTMLElement)) return;
+			const status = String(option.dataset.status || "want_to_read");
+			const title = String(dropdown.dataset.title || "").trim();
+			if (!title) return;
+			const author = String(dropdown.dataset.author || "").trim();
+			const categories = parseCategories(dropdown.dataset.categories);
+			const entry = {
+				title,
+				author,
+				status,
+				rating: null,
+				totalPages: 0,
+				currentPage: status === "reading" ? 1 : 0,
+				finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : "",
+				coverUrl: String(dropdown.dataset.cover || ""),
+				format: "",
+				language: String(dropdown.dataset.language || ""),
+				isbn10: String(dropdown.dataset.isbn10 || ""),
+				isbn13: String(dropdown.dataset.isbn13 || ""),
+				categories
+			};
+			try {
+				await syncEntryToServer(entry);
+				const label = dropdown.querySelector(".shelf-label");
+				if (label) label.textContent = statusLabel(status);
+				showFeedback(dropdown, `Saved to ${statusLabel(status)}.`);
+				closeShelfMenus();
+			} catch (err) {
+				showFeedback(dropdown, err instanceof Error ? err.message : "Failed to save.");
+			}
+			return;
+		}
+
+		if (!target.closest(".shelf-dropdown")) closeShelfMenus();
+	});
+</script>
+
+<style>
+	.related-page { max-width: 980px; }
+	.hero { margin-bottom: 0.9rem; }
+	.eyebrow { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6a5c3d; }
+	h1 { margin: 0; line-height: 1.05; font-size: clamp(2rem, 3.8vw, 3.3rem); }
+	.hero p { margin: 0.45rem 0 0; color: #4f4f4f; }
+	.stats-grid { display: grid; gap: 0.65rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 0.85rem; }
+	.stat { border: 1px solid #d8d0c2; border-radius: 12px; background: #fff; padding: 0.75rem; }
+	.stat p { margin: 0; text-transform: uppercase; letter-spacing: 0.06em; color: #6d5d46; font-size: 0.74rem; font-weight: 700; }
+	.stat strong { display: block; margin-top: 0.35rem; font-size: clamp(1.1rem, 1.8vw, 1.65rem); }
+	.panel { margin-top: 0.8rem; border: 1px solid #d8d0c2; border-radius: 12px; background: #fff; padding: 0.8rem; }
+	.panel-plain { border: none; background: transparent; padding: 0; border-radius: 0; }
+	.panel-head h2 { margin: 0; }
+	.error { color: #991b1b; }
+	.book-grid { list-style: none; padding: 0; margin: 0.65rem 0 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.book-card { border: 1px solid #d7d7d7; border-radius: 12px; background: #fff; padding: 0.65rem; position: relative; display: grid; grid-template-columns: 56px auto; gap: 0.65rem; }
+	.rank-badge { position: absolute; top: 0.65rem; right: 0.65rem; padding: 0.14rem 0.42rem; border-radius: 999px; background: #f4efe2; color: #6a5c3d; font-size: 0.76rem; font-weight: 700; letter-spacing: 0.04em; line-height: 1.2; }
+	.cover-wrap { width: 56px; height: 84px; }
+	.cover { width: 56px; height: 84px; object-fit: cover; border-radius: 6px; background: #f1f1f1; }
+	.cover-placeholder { display: flex; align-items: center; justify-content: center; color: #8a8a8a; border: 1px solid #d7d7d7; }
+	.card-body h3 { margin: 0; padding-right: 2.8rem; font-size: 1rem; line-height: 1.3; }
+	.card-body h3 a { color: #171717; text-decoration: none; }
+	.card-body h3 a:hover { text-decoration: underline; text-underline-offset: 2px; }
+	.meta { margin: 0.2rem 0; font-size: 0.87rem; color: #4d4d4d; }
+	.metric-link { color: #1f5f47; text-decoration: none; font-weight: 600; }
+	.metric-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+	.genre-chips { margin-top: 0.38rem; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+	.genre-chip { text-decoration: none; border: 1px solid #d8d0c2; color: #5a513f; background: #f8f5ef; border-radius: 999px; font-size: 0.75rem; padding: 0.16rem 0.46rem; line-height: 1.2; }
+	.genre-chip:hover { background: #eee7d9; }
+	.author-grid { list-style: none; margin: 0.65rem 0 0; padding: 0; display: grid; gap: 0.6rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.author-card { border: 1px solid #dfd8ca; border-radius: 10px; padding: 0.62rem; background: #fcfbf8; }
+	.author-card h3 { margin: 0; font-size: 0.98rem; line-height: 1.3; }
+	.author-card p { margin: 0.3rem 0 0; color: #4f4f4f; font-size: 0.86rem; }
+	.shelf-dropdown { position: relative; display: inline-flex; flex-direction: column; align-items: flex-start; min-width: 150px; }
+	.shelf-trigger { border: none; border-radius: 8px; padding: 0.42rem 0.65rem; font-size: 0.88rem; background: #2f8f57; color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; margin-top: 0.46rem; }
+	.shelf-trigger:hover { background: #267647; }
+	.shelf-icon { line-height: 1; }
+	.shelf-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 180px; background: #fff; border: 1px solid #c9c9c9; border-radius: 8px; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12); padding: 0.25rem 0; z-index: 25; }
+	.shelf-option { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 0.5rem 0.75rem; font-size: 0.9rem; cursor: pointer; color: #222; }
+	.shelf-option:hover { background: #f2f2f2; }
+	.shelf-feedback { margin-top: 0.25rem; font-size: 0.79rem; color: #1f7a45; line-height: 1.2; }
+	@media (max-width: 980px) {
+		.author-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	}
+	@media (max-width: 760px) {
+		.stats-grid { grid-template-columns: 1fr; }
+		.book-grid { grid-template-columns: 1fr; }
+		.author-grid { grid-template-columns: 1fr; }
+	}
+</style>

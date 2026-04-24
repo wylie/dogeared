@@ -35,6 +35,8 @@ type ShelfEntryInput = {
 	googleBooksId?: unknown;
 };
 
+const GOOGLE_BOOKS_API_KEY = normalizeCatalogText(import.meta.env.GOOGLE_BOOKS_API_KEY);
+
 function normalizeText(value: unknown) {
 	return String(value || "").trim();
 }
@@ -151,6 +153,161 @@ function parseGenres(input: unknown) {
 		genres.push({ slug, name });
 	}
 	return genres;
+}
+
+function scoreGoogleVolume(
+	volume: { id?: string; volumeInfo?: { title?: string; authors?: string[]; categories?: string[] } } | null | undefined,
+	input: { title: string; author: string; googleBooksId: string }
+) {
+	if (!volume) return -1;
+	const info = volume.volumeInfo || {};
+	const title = canonicalizeTitle(info.title || "");
+	const author = canonicalizeAuthor(Array.isArray(info.authors) ? info.authors[0] : "");
+	const targetTitle = canonicalizeTitle(input.title);
+	const targetAuthor = canonicalizeAuthor(input.author);
+	let score = 0;
+	if (title && targetTitle && title === targetTitle) score += 120;
+	if (title && targetTitle && title.includes(targetTitle)) score += 80;
+	if (targetTitle && title && targetTitle.includes(title)) score += 60;
+	if (author && targetAuthor && author === targetAuthor) score += 70;
+	if (author && targetAuthor && author.includes(targetAuthor)) score += 35;
+	if (Array.isArray(info.categories) && info.categories.length > 0) score += 40;
+	if (input.googleBooksId && String(volume.id || "").trim() === input.googleBooksId) score += 160;
+	return score;
+}
+
+async function fetchGoogleBooksJson(url: string) {
+	try {
+		const response = await fetch(url);
+		if (!response.ok) return null;
+		return await response.json();
+	} catch {
+		return null;
+	}
+}
+
+function scoreOpenLibraryDoc(
+	doc: { title?: string; author_name?: string[]; subject?: string[]; subject_facet?: string[] } | null | undefined,
+	input: { title: string; author: string }
+) {
+	if (!doc) return -1;
+	const title = canonicalizeTitle(doc.title || "");
+	const author = canonicalizeAuthor(Array.isArray(doc.author_name) ? doc.author_name[0] : "");
+	const targetTitle = canonicalizeTitle(input.title);
+	const targetAuthor = canonicalizeAuthor(input.author);
+	let score = 0;
+	if (title && targetTitle && title === targetTitle) score += 120;
+	if (title && targetTitle && title.includes(targetTitle)) score += 80;
+	if (targetTitle && title && targetTitle.includes(title)) score += 60;
+	if (author && targetAuthor && author === targetAuthor) score += 70;
+	if (author && targetAuthor && author.includes(targetAuthor)) score += 35;
+	if (Array.isArray(doc.subject) && doc.subject.length > 0) score += 40;
+	if (Array.isArray(doc.subject_facet) && doc.subject_facet.length > 0) score += 25;
+	return score;
+}
+
+async function fetchOpenLibraryDocs(query: Record<string, string>) {
+	try {
+		const params = new URLSearchParams({ ...query, limit: "8" });
+		const response = await fetch(`https://openlibrary.org/search.json?${params.toString()}`);
+		if (!response.ok) return [];
+		const data = await response.json();
+		return Array.isArray(data?.docs) ? data.docs : [];
+	} catch {
+		return [];
+	}
+}
+
+function normalizeOpenLibraryWorkKey(value: unknown) {
+	const raw = normalizeText(value);
+	const match = raw.match(/OL[0-9A-Z]+W/i);
+	return match ? match[0] : "";
+}
+
+async function fetchOpenLibraryWorkSubjects(workKey: string) {
+	const key = normalizeOpenLibraryWorkKey(workKey);
+	if (!key) return [];
+	try {
+		const response = await fetch(`https://openlibrary.org/works/${encodeURIComponent(key)}.json`);
+		if (!response.ok) return [];
+		const data = await response.json();
+		return parseGenres(data?.subjects || []);
+	} catch {
+		return [];
+	}
+}
+
+async function inferGenresForBook(input: {
+	title: string;
+	author: string;
+	isbn10: string;
+	isbn13: string;
+	googleBooksId: string;
+}) {
+	if (!GOOGLE_BOOKS_API_KEY) return [] as Array<{ slug: string; name: string }>;
+	const queries: string[] = [];
+	if (input.googleBooksId) {
+		const params = new URLSearchParams({ key: GOOGLE_BOOKS_API_KEY });
+		const direct = await fetchGoogleBooksJson(
+			`https://www.googleapis.com/books/v1/volumes/${encodeURIComponent(input.googleBooksId)}?${params.toString()}`
+		);
+		const directGenres = parseGenres(direct?.volumeInfo?.categories || []);
+		if (directGenres.length > 0) return directGenres.slice(0, 8);
+	}
+	if (input.isbn13) queries.push(`isbn:${input.isbn13}`);
+	if (input.isbn10) queries.push(`isbn:${input.isbn10}`);
+	if (input.title && input.author) queries.push(`intitle:${input.title} inauthor:${input.author}`);
+	if (input.title) queries.push(`intitle:${input.title}`);
+
+	let bestVolume: { id?: string; volumeInfo?: { title?: string; authors?: string[]; categories?: string[] } } | null = null;
+	let bestScore = -1;
+
+	for (const query of queries) {
+		const params = new URLSearchParams({
+			key: GOOGLE_BOOKS_API_KEY,
+			q: query,
+			maxResults: "5",
+			printType: "books"
+		});
+		const data = await fetchGoogleBooksJson(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
+		const items = Array.isArray(data?.items) ? data.items : [];
+		for (const item of items) {
+			const score = scoreGoogleVolume(item, input);
+			if (score > bestScore) {
+				bestScore = score;
+				bestVolume = item;
+			}
+		}
+	}
+
+	const googleGenres = parseGenres(bestVolume?.volumeInfo?.categories || []);
+	if (googleGenres.length > 0) return googleGenres.slice(0, 8);
+
+	const openQueries: Array<Record<string, string>> = [];
+	if (input.isbn13) openQueries.push({ isbn: input.isbn13 });
+	if (input.isbn10) openQueries.push({ isbn: input.isbn10 });
+	if (input.title && input.author) openQueries.push({ title: input.title, author: input.author });
+	if (input.title) openQueries.push({ title: input.title });
+
+	let bestDoc: { key?: string; title?: string; author_name?: string[]; subject?: string[]; subject_facet?: string[] } | null = null;
+	let bestDocScore = -1;
+	for (const query of openQueries) {
+		const docs = await fetchOpenLibraryDocs(query);
+		for (const doc of docs) {
+			const score = scoreOpenLibraryDoc(doc, { title: input.title, author: input.author });
+			if (score > bestDocScore) {
+				bestDocScore = score;
+				bestDoc = doc;
+			}
+		}
+	}
+	if (!bestDoc) return [];
+	const subjects = Array.isArray(bestDoc.subject) && bestDoc.subject.length > 0
+		? bestDoc.subject
+		: (Array.isArray(bestDoc.subject_facet) ? bestDoc.subject_facet : []);
+	const direct = parseGenres(subjects).slice(0, 8);
+	if (direct.length > 0) return direct;
+	return (await fetchOpenLibraryWorkSubjects(bestDoc.key || "")).slice(0, 8);
 }
 
 async function ensureShelfSchema() {
@@ -369,6 +526,26 @@ export const POST: APIRoute = async ({ request }) => {
 				on conflict (book_id, genre_slug) do update set
 					genre_name = excluded.genre_name
 			`;
+		}
+
+		if (genres.length === 0) {
+			const genreCountRows = await sql<Array<{ count: number }>>`
+				select count(*)::int as count
+				from book_genre
+				where book_id = ${bookId}
+			`;
+			const hasAnyGenres = Number(genreCountRows[0]?.count || 0) > 0;
+			if (!hasAnyGenres) {
+				const inferredGenres = await inferGenresForBook({ title, author, isbn10, isbn13, googleBooksId });
+				for (const genre of inferredGenres) {
+					await sql`
+						insert into book_genre (book_id, genre_slug, genre_name)
+						values (${bookId}, ${genre.slug}, ${genre.name})
+						on conflict (book_id, genre_slug) do update set
+							genre_name = excluded.genre_name
+					`;
+				}
+			}
 		}
 
 		await sql`

@@ -17,6 +17,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
       <li id="left-hand-login-item"><button type="button" class="nav-text-button hover">Log In</button></li>
       <li id="left-hand-profile-item" hidden><a href={isActive('/profile') ? undefined : '/profile'} class={isActive('/profile') ? 'active' : 'hover'} aria-current={isActive('/profile') ? 'page' : undefined}>Profile</a></li>
       <li><a href={isActive('/mission') ? undefined : '/mission'} class={isActive('/mission') ? 'active' : 'hover'} aria-current={isActive('/mission') ? 'page' : undefined}>Mission</a></li>
+      <li><a href={isActive('/metrics') ? undefined : '/metrics'} class={isActive('/metrics') ? 'active' : 'hover'} aria-current={isActive('/metrics') ? 'page' : undefined}>Metrics</a></li>
+      <li><a href={isActive('/roadmap') ? undefined : '/roadmap'} class={isActive('/roadmap') ? 'active' : 'hover'} aria-current={isActive('/roadmap') ? 'page' : undefined}>Roadmap</a></li>
       <li id="left-hand-settings-item" hidden><a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a></li>
       <li id="left-hand-logout-item" hidden><button type="button" class="nav-text-button hover">Log Out</button></li>
     </ul>

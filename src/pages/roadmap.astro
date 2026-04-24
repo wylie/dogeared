@@ -1,0 +1,164 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const sectionLinks = [
+	{ id: "roadmap", label: "Roadmap" },
+	{ id: "support", label: "Support" }
+];
+
+const SUPPORT_LINKS = {
+	buyMeACoffee: "https://buymeacoffee.com/wylie"
+};
+
+const roadmapItems = [
+	{
+		status: "Now",
+		title: "Richer Metrics Views",
+		description: "Expand drill-downs from authors to genres, tags, and location snapshots with cleaner exportable views."
+	},
+	{
+		status: "Next",
+		title: "Reader Similarity",
+		description: "Show readers with overlapping taste using shared shelf activity and favorite-author overlap."
+	},
+	{
+		status: "Next",
+		title: "List & Collection Profiles",
+		description: "Support custom themed reading lists with sharable URLs and follower counts."
+	},
+	{
+		status: "Later",
+		title: "Reading Trends Over Time",
+		description: "Add month-over-month trend lines for genres, completion rates, and reading velocity."
+	},
+	{
+		status: "Later",
+		title: "Community Challenges",
+		description: "Seasonal reading challenges with progress tracking and opt-in public leaderboards."
+	}
+];
+
+const supportOptions = [
+	{
+		title: "One-Time Support",
+		description: "Contribute once to help cover hosting, APIs, and development time.",
+		cta: "Buy Me a Coffee",
+		href: SUPPORT_LINKS.buyMeACoffee,
+		share: false
+	},
+	{
+		title: "Share With Readers",
+		description: "Sharing the project is one of the fastest ways to help it grow.",
+		cta: "Share Dogeared",
+		href: "",
+		share: true
+	}
+];
+---
+
+<Layout title="Roadmap" sectionLinks={sectionLinks}>
+	<div slot="right" class="roadmap-page">
+		<header class="hero">
+			<p class="eyebrow">Roadmap + Support</p>
+			<h1>What’s coming next for Dogeared, and how readers can help.</h1>
+		</header>
+
+		<section id="roadmap" class="panel">
+			<div class="panel-head">
+				<h2>Roadmap</h2>
+				<p>Upcoming additions planned for Dogeared.</p>
+			</div>
+			<div class="roadmap-grid">
+				{roadmapItems.map((item) => (
+					<article class="roadmap-item">
+						<p class={`status-pill status-${item.status.toLowerCase()}`}>{item.status}</p>
+						<h3>{item.title}</h3>
+						<p>{item.description}</p>
+					</article>
+				))}
+			</div>
+		</section>
+
+		<section id="support" class="panel">
+			<div class="panel-head">
+				<h2>Support Dogeared</h2>
+				<p>More ways readers can support the site and help fund new features.</p>
+			</div>
+			<div class="support-grid">
+				{supportOptions.map((option) => (
+					<article class="support-card">
+						<h3>{option.title}</h3>
+						<p>{option.description}</p>
+						{option.href ? (
+							<a class="support-cta" href={option.href} target="_blank" rel="noopener noreferrer">{option.cta}</a>
+						) : (
+							<button type="button" class="support-cta ghost" data-share={option.share ? "true" : "false"}>{option.cta}</button>
+						)}
+					</article>
+				))}
+			</div>
+			<p class="support-hint">Set your support URL in <code>SUPPORT_LINKS</code> at the top of this file.</p>
+		</section>
+	</div>
+</Layout>
+
+<script>
+	const shareButtons = Array.from(document.querySelectorAll("[data-share='true']"));
+	shareButtons.forEach((button) => {
+		button.addEventListener("click", async () => {
+			const url = window.location.origin;
+			try {
+				if (navigator.share) {
+					await navigator.share({ title: "Dogeared", text: "Check out Dogeared", url });
+					return;
+				}
+			} catch {
+				// no-op
+			}
+			try {
+				await navigator.clipboard.writeText(url);
+				if (button instanceof HTMLButtonElement) button.textContent = "Link Copied";
+				window.setTimeout(() => {
+					if (button instanceof HTMLButtonElement) button.textContent = "Share Dogeared";
+				}, 1600);
+			} catch {
+				window.open(url, "_blank", "noopener,noreferrer");
+			}
+		});
+	});
+</script>
+
+<style>
+	.roadmap-page { max-width: 960px; }
+	.hero { margin-bottom: 1rem; }
+	.eyebrow { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6a5c3d; }
+	.roadmap-page h1 { margin: 0; line-height: 1.05; font-size: clamp(2rem, 3.8vw, 3.4rem); }
+	.panel { margin-top: 0.9rem; border: 1px solid #d8d0c2; border-radius: 12px; background: #fff; padding: 0.8rem; }
+	.panel-head h2 { margin: 0; }
+	.panel-head p { margin: 0.3rem 0 0; color: #515151; }
+	.roadmap-grid { margin-top: 0.7rem; display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.roadmap-item { border: 1px solid #e1ded4; border-radius: 12px; padding: 0.75rem; background: #fcfbf8; }
+	.roadmap-item h3 { margin: 0.35rem 0 0; font-size: 1rem; }
+	.roadmap-item p { margin: 0.45rem 0 0; color: #4f4f4f; line-height: 1.5; }
+	.status-pill { display: inline-flex; margin: 0; border-radius: 999px; padding: 0.14rem 0.5rem; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+	.status-now { background: #d7f1df; color: #176339; }
+	.status-next { background: #f6ebcf; color: #7a5a19; }
+	.status-later { background: #e8e8e8; color: #5e5e5e; }
+	.support-grid { margin-top: 0.7rem; display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.support-card { border: 1px solid #e1ded4; border-radius: 12px; padding: 0.75rem; background: #fcfbf8; display: flex; flex-direction: column; min-height: 180px; }
+	.support-card h3 { margin: 0; font-size: 1rem; }
+	.support-card p { margin: 0.45rem 0 0; color: #4f4f4f; line-height: 1.5; }
+	.support-cta { margin-top: auto; align-self: flex-start; text-decoration: none; border: none; background: #1f1f1f; color: #fff; border-radius: 999px; padding: 0.5rem 0.75rem; font: inherit; font-size: 0.83rem; cursor: pointer; }
+	.support-cta:hover { background: #2f8f57; }
+	.support-cta.ghost { background: #efe9da; color: #4c3d21; }
+	.support-cta.ghost:hover { background: #e4ddcd; }
+	.support-hint { margin: 0.7rem 0 0; font-size: 0.84rem; color: #5d5d5d; }
+	.support-hint code { background: #f1efe9; border-radius: 6px; padding: 0.1rem 0.28rem; }
+	@media (max-width: 980px) {
+		.support-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	}
+	@media (max-width: 720px) {
+		.roadmap-grid,
+		.support-grid { grid-template-columns: 1fr; }
+	}
+</style>

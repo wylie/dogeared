@@ -151,8 +151,7 @@ async function fetchVolumes(query) {
 		q: query,
 		key: GOOGLE_BOOKS_API_KEY,
 		maxResults: "5",
-		printType: "books",
-		langRestrict: "en"
+		printType: "books"
 	});
 	const data = await fetchJson(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
 	return Array.isArray(data.items) ? data.items : [];
@@ -193,6 +192,81 @@ async function resolveVolume(book) {
 	}
 
 	return null;
+}
+
+function scoreOpenLibraryDoc(doc, book) {
+	const title = canonicalizeTitle(doc?.title || "");
+	const author = canonicalizeAuthor(Array.isArray(doc?.author_name) ? doc.author_name[0] : "");
+	const targetTitle = canonicalizeTitle(book.title || "");
+	const targetAuthor = canonicalizeAuthor(book.primary_author || "");
+	let score = 0;
+	if (title && targetTitle && title === targetTitle) score += 120;
+	if (title && targetTitle && title.includes(targetTitle)) score += 80;
+	if (targetTitle && title && targetTitle.includes(title)) score += 60;
+	if (author && targetAuthor && author === targetAuthor) score += 70;
+	if (author && targetAuthor && author.includes(targetAuthor)) score += 35;
+	if (Array.isArray(doc?.subject) && doc.subject.length > 0) score += 40;
+	if (Array.isArray(doc?.subject_facet) && doc.subject_facet.length > 0) score += 25;
+	return score;
+}
+
+async function fetchOpenLibraryDocs(paramsObj) {
+	const params = new URLSearchParams({ ...paramsObj, limit: "8" });
+	try {
+		const data = await fetchJson(`https://openlibrary.org/search.json?${params.toString()}`);
+		return Array.isArray(data?.docs) ? data.docs : [];
+	} catch {
+		return [];
+	}
+}
+
+function normalizeOpenLibraryWorkKey(value) {
+	const raw = String(value || "").trim();
+	if (!raw) return "";
+	const match = raw.match(/OL[0-9A-Z]+W/i);
+	return match ? match[0] : "";
+}
+
+async function fetchOpenLibraryWorkSubjects(workKey) {
+	const key = normalizeOpenLibraryWorkKey(workKey);
+	if (!key) return [];
+	try {
+		const data = await fetchJson(`https://openlibrary.org/works/${encodeURIComponent(key)}.json`);
+		const subjects = Array.isArray(data?.subjects) ? data.subjects : [];
+		return extractGenres(subjects);
+	} catch {
+		return [];
+	}
+}
+
+async function resolveOpenLibraryGenres(book) {
+	const queries = [];
+	if (book.isbn13) queries.push({ isbn: book.isbn13 });
+	if (book.isbn10) queries.push({ isbn: book.isbn10 });
+	if (book.title && book.primary_author) queries.push({ title: book.title, author: book.primary_author });
+	if (book.title) queries.push({ title: book.title });
+
+	let best = null;
+	let bestScore = -1;
+
+	for (const query of queries) {
+		const docs = await fetchOpenLibraryDocs(query);
+		for (const doc of docs) {
+			const score = scoreOpenLibraryDoc(doc, book);
+			if (score > bestScore) {
+				bestScore = score;
+				best = doc;
+			}
+		}
+	}
+
+	if (!best) return [];
+	const subjects = Array.isArray(best.subject) && best.subject.length > 0
+		? best.subject
+		: (Array.isArray(best.subject_facet) ? best.subject_facet : []);
+	const direct = extractGenres(subjects);
+	if (direct.length > 0) return direct;
+	return fetchOpenLibraryWorkSubjects(best.key);
 }
 
 async function replaceGenresForBook(bookId, genres) {
@@ -302,13 +376,21 @@ let failures = 0;
 await mapWithConcurrency(books, CONCURRENCY, async (book, index) => {
 	try {
 		const volume = await resolveVolume(book);
-		if (!volume) {
+		const hasVolume = !!volume;
+		let genres = [];
+		if (volume) {
+			genres = await updateBookMetadata(book.id, volume);
+		}
+		if (genres.length === 0) {
+			const openLibraryGenres = await resolveOpenLibraryGenres(book);
+			if (openLibraryGenres.length > 0) genres = openLibraryGenres;
+		}
+
+		if (!hasVolume && genres.length === 0) {
 			noMatch += 1;
 			process.stdout.write(`\rProcessed ${index + 1}/${books.length}`);
 			return;
 		}
-
-		const genres = await updateBookMetadata(book.id, volume);
 		if (genres.length === 0) {
 			await sql`delete from book_genre where book_id = ${book.id}`;
 			noGenres += 1;
