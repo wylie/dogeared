@@ -3,8 +3,14 @@ import Layout from '../layouts/Layout.astro';
 
 const sectionLinks = [
 	{ id: "goodreads-import", label: "Import Goodreads" },
+	{ id: "import-controls", label: "Import Controls" },
 	{ id: "account-settings", label: "Account" },
-	{ id: "api-settings", label: "API" }
+	{ id: "privacy-settings", label: "Privacy" },
+	{ id: "reading-defaults", label: "Reading Defaults" },
+	{ id: "personalization-settings", label: "Personalization" },
+	{ id: "security-settings", label: "Security" },
+	{ id: "api-settings", label: "API" },
+	{ id: "data-export", label: "Data Export" }
 ];
 ---
 
@@ -34,35 +40,112 @@ const sectionLinks = [
 			<div id="import-summary" class="summary" hidden></div>
 		</section>
 
+		<section class="settings-section" id="import-controls" aria-labelledby="import-controls-title">
+			<h2 id="import-controls-title">Import Controls</h2>
+			<p class="section-copy">
+				Preview incoming rows and choose whether imports merge with existing shelf entries or replace them.
+			</p>
+			<div class="danger-form">
+				<label for="import-mode">Default import mode</label>
+				<select id="import-mode">
+					<option value="merge">Merge with existing shelf</option>
+					<option value="replace">Replace existing shelf</option>
+				</select>
+				<label class="checkbox-row">
+					<input type="checkbox" id="import-dry-run-first" checked />
+					<span>Show dry-run preview before writing data</span>
+				</label>
+				<button type="button" id="preview-import-button" class="secondary">Preview Current CSV</button>
+			</div>
+			<p id="import-controls-feedback" class="feedback" hidden></p>
+		</section>
+
 		<section class="settings-section" id="account-settings" aria-labelledby="account-settings-title">
 			<h2 id="account-settings-title">Account</h2>
 			<p class="section-copy">
 				Sign in with a magic link delivered through Brevo, sign out, or permanently delete your account.
 			</p>
 
-			<div id="account-authenticated" hidden>
-				<p class="account-meta">Signed in as <strong id="account-email"></strong></p>
-				<div class="account-actions">
-					<button type="button" id="logout-button" class="secondary">Log Out</button>
+			<div class="account-blocks">
+				<div class="account-panel">
+					<h3>Authentication</h3>
+					<div id="account-signed-in-state" hidden>
+						<p class="account-meta">Signed in as <strong id="account-email"></strong></p>
+						<div class="account-actions">
+							<button type="button" id="logout-button" class="secondary">Log Out</button>
+						</div>
+					</div>
+					<form id="magic-link-form" class="import-form" hidden>
+						<label for="magic-email">Email</label>
+						<input id="magic-email" type="email" autocomplete="email" required placeholder="you@example.com" />
+						<button type="submit">Send Magic Link</button>
+					</form>
 				</div>
-				<hr />
-				<p class="danger-copy">
-					Delete account permanently removes your account and synced shelf data.
-				</p>
-				<form id="delete-account-form" class="danger-form">
-					<label for="delete-confirm">Type <code>DELETE</code> to confirm</label>
-					<input id="delete-confirm" type="text" autocomplete="off" />
-					<button type="submit" class="danger">Delete Account</button>
-				</form>
+
+				<div id="account-danger-zone" class="account-panel account-panel-danger" hidden>
+					<h3>Danger Zone</h3>
+					<p class="danger-copy">
+						Delete account permanently removes your account and synced shelf data.
+					</p>
+					<form id="delete-account-form" class="danger-form">
+						<label for="delete-confirm">Type <code>DELETE</code> to confirm</label>
+						<input id="delete-confirm" type="text" autocomplete="off" />
+						<button type="submit" class="danger">Delete Account</button>
+					</form>
+				</div>
 			</div>
 
-			<form id="magic-link-form" class="import-form" hidden>
-				<label for="magic-email">Email</label>
-				<input id="magic-email" type="email" autocomplete="email" required placeholder="you@example.com" />
-				<button type="submit">Send Magic Link</button>
-			</form>
-
 			<p id="account-feedback" class="feedback" hidden></p>
+		</section>
+
+		<section class="settings-section" id="privacy-settings" aria-labelledby="privacy-settings-title">
+			<h2 id="privacy-settings-title">Privacy</h2>
+			<p class="section-copy">Control profile visibility and what appears to other readers.</p>
+			<div class="danger-form">
+				<label for="profile-visibility">Profile visibility</label>
+				<select id="profile-visibility">
+					<option value="public">Public profile</option>
+					<option value="private">Private profile</option>
+				</select>
+				<label class="checkbox-row">
+					<input type="checkbox" id="share-location" checked />
+					<span>Show my location on profile and metrics</span>
+				</label>
+				<label class="checkbox-row">
+					<input type="checkbox" id="share-activity" checked />
+					<span>Show my shelf activity in activity feed</span>
+				</label>
+			</div>
+		</section>
+
+		<section class="settings-section" id="reading-defaults" aria-labelledby="reading-defaults-title">
+			<h2 id="reading-defaults-title">Reading Defaults</h2>
+			<p class="section-copy">Choose default shelf behavior and list sorting.</p>
+			<div class="danger-form">
+				<label for="default-shelf">Default shelf when adding books</label>
+				<select id="default-shelf">
+					<option value="want_to_read">Want to Read</option>
+					<option value="reading">Currently Reading</option>
+					<option value="finished">Read</option>
+				</select>
+				<label for="home-sort">Default home/profile sort</label>
+				<select id="home-sort">
+					<option value="relevance">Relevance</option>
+					<option value="recent">Most Recent</option>
+					<option value="rating">Highest Rated</option>
+				</select>
+			</div>
+		</section>
+
+		<section class="settings-section" id="personalization-settings" aria-labelledby="personalization-settings-title">
+			<h2 id="personalization-settings-title">Personalization</h2>
+			<p class="section-copy">Set preferences that shape search, ranking, and recommendations.</p>
+			<div class="danger-form">
+				<label for="favorite-genres-input">Favorite genres (comma separated)</label>
+				<input id="favorite-genres-input" type="text" placeholder="Fantasy, Science Fiction" />
+				<label for="excluded-genres-input">Excluded genres (comma separated)</label>
+				<input id="excluded-genres-input" type="text" placeholder="Horror" />
+			</div>
 		</section>
 
 		<section class="settings-section" id="api-settings" aria-labelledby="api-settings-title">
@@ -108,6 +191,46 @@ const sectionLinks = [
 			</p>
 			<p id="api-feedback" class="feedback" hidden></p>
 		</section>
+
+		<section class="settings-section" id="data-export" aria-labelledby="data-export-title">
+			<h2 id="data-export-title">Data Export</h2>
+			<p class="section-copy">
+				Download a JSON export of your account profile and shelved books.
+			</p>
+			<div class="account-actions">
+				<button type="button" id="download-data-button" disabled>Download My Data (JSON)</button>
+			</div>
+			<div class="danger-form">
+				<label for="preferred-export-format">Preferred export format</label>
+				<select id="preferred-export-format">
+					<option value="json">JSON</option>
+					<option value="csv" disabled>CSV (Coming Soon)</option>
+				</select>
+			</div>
+			<hr />
+			<p class="danger-copy">Delete all shelf entries while keeping your account.</p>
+			<div class="account-actions">
+				<button type="button" id="clear-shelf-button" class="danger">Delete All Shelf Entries</button>
+			</div>
+			<p id="export-feedback" class="feedback" hidden></p>
+		</section>
+
+		<section class="settings-section" id="security-settings" aria-labelledby="security-settings-title">
+			<h2 id="security-settings-title">Security</h2>
+			<p class="section-copy">Review active sessions and recent activity.</p>
+			<div class="account-actions">
+				<button type="button" id="refresh-security-button" class="secondary">Refresh</button>
+				<button type="button" id="revoke-sessions-button" class="secondary">Revoke Other Sessions</button>
+			</div>
+			<div id="session-list" class="summary"></div>
+			<div id="recent-activity-list" class="summary"></div>
+			<p id="security-feedback" class="feedback" hidden></p>
+		</section>
+
+		<div class="account-actions">
+			<button type="button" id="save-preferences-button">Save Preferences</button>
+		</div>
+		<p id="preferences-feedback" class="feedback" hidden></p>
 	</div>
 </Layout>
 
@@ -162,6 +285,31 @@ const sectionLinks = [
 		font-size: 0.95rem;
 	}
 
+	input[type="text"],
+	input[type="email"],
+	select {
+		width: 100%;
+		max-width: 100%;
+		box-sizing: border-box;
+		border: 1px solid #d1d5db;
+		border-radius: 8px;
+		padding: 0.6rem 0.7rem;
+		font: inherit;
+		background: #fff;
+	}
+
+	.checkbox-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-weight: 400;
+	}
+
+	.checkbox-row input[type="checkbox"] {
+		width: 1rem;
+		height: 1rem;
+	}
+
 	button {
 		border: none;
 		border-radius: 8px;
@@ -209,6 +357,28 @@ const sectionLinks = [
 
 	.account-meta {
 		margin: 0 0 0.6rem;
+	}
+
+	.account-blocks {
+		display: grid;
+		gap: 1.1rem;
+	}
+
+	.account-panel {
+		border: 1px solid #e5e7eb;
+		border-radius: 10px;
+		background: #fafafa;
+		padding: 0.85rem;
+	}
+
+	.account-panel h3 {
+		margin: 0 0 0.5rem;
+		font-size: 1rem;
+	}
+
+	.account-panel-danger {
+		border-color: #f1b4b4;
+		background: #fff7f7;
 	}
 
 	.account-actions {
@@ -293,7 +463,8 @@ const sectionLinks = [
 	const feedback = document.getElementById("import-feedback");
 	const summary = document.getElementById("import-summary");
 	const accountFeedback = document.getElementById("account-feedback");
-	const accountAuthenticated = document.getElementById("account-authenticated");
+	const accountSignedInState = document.getElementById("account-signed-in-state");
+	const accountDangerZone = document.getElementById("account-danger-zone");
 	const accountEmail = document.getElementById("account-email");
 	const magicLinkForm = document.getElementById("magic-link-form");
 	const magicEmail = document.getElementById("magic-email");
@@ -304,6 +475,28 @@ const sectionLinks = [
 	const shelfApiInput = document.getElementById("api-shelf-url");
 	const searchApiInput = document.getElementById("api-search-url");
 	const topApiInput = document.getElementById("api-top-url");
+	const exportFeedback = document.getElementById("export-feedback");
+	const downloadDataButton = document.getElementById("download-data-button");
+	const clearShelfButton = document.getElementById("clear-shelf-button");
+	const preferredExportFormat = document.getElementById("preferred-export-format");
+	const preferencesFeedback = document.getElementById("preferences-feedback");
+	const savePreferencesButton = document.getElementById("save-preferences-button");
+	const importModeSelect = document.getElementById("import-mode");
+	const importDryRunFirst = document.getElementById("import-dry-run-first");
+	const previewImportButton = document.getElementById("preview-import-button");
+	const importControlsFeedback = document.getElementById("import-controls-feedback");
+	const profileVisibilitySelect = document.getElementById("profile-visibility");
+	const shareLocationCheckbox = document.getElementById("share-location");
+	const shareActivityCheckbox = document.getElementById("share-activity");
+	const defaultShelfSelect = document.getElementById("default-shelf");
+	const homeSortSelect = document.getElementById("home-sort");
+	const favoriteGenresInput = document.getElementById("favorite-genres-input");
+	const excludedGenresInput = document.getElementById("excluded-genres-input");
+	const refreshSecurityButton = document.getElementById("refresh-security-button");
+	const revokeSessionsButton = document.getElementById("revoke-sessions-button");
+	const sessionList = document.getElementById("session-list");
+	const recentActivityList = document.getElementById("recent-activity-list");
+	const securityFeedback = document.getElementById("security-feedback");
 	const copyButtons = Array.from(document.querySelectorAll(".copy-button"));
 
 	function showFeedback(message, isError = false) {
@@ -333,6 +526,34 @@ const sectionLinks = [
 		apiFeedback.textContent = message;
 		apiFeedback.hidden = !message;
 		apiFeedback.classList.toggle("error", isError);
+	}
+
+	function showExportFeedback(message, isError = false) {
+		if (!(exportFeedback instanceof HTMLElement)) return;
+		exportFeedback.textContent = message;
+		exportFeedback.hidden = !message;
+		exportFeedback.classList.toggle("error", isError);
+	}
+
+	function showPreferencesFeedback(message, isError = false) {
+		if (!(preferencesFeedback instanceof HTMLElement)) return;
+		preferencesFeedback.textContent = message;
+		preferencesFeedback.hidden = !message;
+		preferencesFeedback.classList.toggle("error", isError);
+	}
+
+	function showImportControlsFeedback(message, isError = false) {
+		if (!(importControlsFeedback instanceof HTMLElement)) return;
+		importControlsFeedback.textContent = message;
+		importControlsFeedback.hidden = !message;
+		importControlsFeedback.classList.toggle("error", isError);
+	}
+
+	function showSecurityFeedback(message, isError = false) {
+		if (!(securityFeedback instanceof HTMLElement)) return;
+		securityFeedback.textContent = message;
+		securityFeedback.hidden = !message;
+		securityFeedback.classList.toggle("error", isError);
 	}
 
 	function normalizeText(value) {
@@ -632,6 +853,98 @@ const sectionLinks = [
 		}
 	}
 
+	function parseGenreList(value) {
+		return String(value || "")
+			.split(",")
+			.map((item) => normalizeText(item))
+			.filter(Boolean)
+			.slice(0, 20);
+	}
+
+	function formatGenreList(values) {
+		return Array.isArray(values) ? values.join(", ") : "";
+	}
+
+	function collectPreferences() {
+		return {
+			privacy: {
+				profileVisibility: String(profileVisibilitySelect instanceof HTMLSelectElement ? profileVisibilitySelect.value : "public"),
+				shareLocation: !!(shareLocationCheckbox instanceof HTMLInputElement && shareLocationCheckbox.checked),
+				shareActivity: !!(shareActivityCheckbox instanceof HTMLInputElement && shareActivityCheckbox.checked)
+			},
+			readingDefaults: {
+				defaultShelf: String(defaultShelfSelect instanceof HTMLSelectElement ? defaultShelfSelect.value : "want_to_read"),
+				homeSort: String(homeSortSelect instanceof HTMLSelectElement ? homeSortSelect.value : "relevance")
+			},
+			notifications: {
+				browserEnabled: false,
+				releaseEmail: false,
+				weeklySummary: false
+			},
+			dataControls: {
+				preferredExportFormat: String(preferredExportFormat instanceof HTMLSelectElement ? preferredExportFormat.value : "json")
+			},
+			importControls: {
+				defaultMode: String(importModeSelect instanceof HTMLSelectElement ? importModeSelect.value : "merge"),
+				dryRunFirst: !!(importDryRunFirst instanceof HTMLInputElement && importDryRunFirst.checked)
+			},
+			personalization: {
+				favoriteGenres: parseGenreList(favoriteGenresInput instanceof HTMLInputElement ? favoriteGenresInput.value : ""),
+				excludedGenres: parseGenreList(excludedGenresInput instanceof HTMLInputElement ? excludedGenresInput.value : ""),
+				preferredLanguage: "en"
+			}
+		};
+	}
+
+	function applyPreferences(preferences) {
+		const privacy = preferences?.privacy || {};
+		if (profileVisibilitySelect instanceof HTMLSelectElement) profileVisibilitySelect.value = String(privacy.profileVisibility || "public");
+		if (shareLocationCheckbox instanceof HTMLInputElement) shareLocationCheckbox.checked = !!privacy.shareLocation;
+		if (shareActivityCheckbox instanceof HTMLInputElement) shareActivityCheckbox.checked = !!privacy.shareActivity;
+
+		const readingDefaults = preferences?.readingDefaults || {};
+		if (defaultShelfSelect instanceof HTMLSelectElement) defaultShelfSelect.value = String(readingDefaults.defaultShelf || "want_to_read");
+		if (homeSortSelect instanceof HTMLSelectElement) homeSortSelect.value = String(readingDefaults.homeSort || "relevance");
+
+		const dataControls = preferences?.dataControls || {};
+		if (preferredExportFormat instanceof HTMLSelectElement) preferredExportFormat.value = String(dataControls.preferredExportFormat || "json");
+
+		const importControls = preferences?.importControls || {};
+		if (importModeSelect instanceof HTMLSelectElement) importModeSelect.value = String(importControls.defaultMode || "merge");
+		if (importDryRunFirst instanceof HTMLInputElement) importDryRunFirst.checked = importControls.dryRunFirst !== false;
+
+		const personalization = preferences?.personalization || {};
+		if (favoriteGenresInput instanceof HTMLInputElement) favoriteGenresInput.value = formatGenreList(personalization.favoriteGenres);
+		if (excludedGenresInput instanceof HTMLInputElement) excludedGenresInput.value = formatGenreList(personalization.excludedGenres);
+
+	}
+
+	async function loadPreferences() {
+		try {
+			const response = await fetch("/api/account/preferences");
+			if (!response.ok) return;
+			const data = await response.json().catch(() => ({}));
+			applyPreferences(data?.preferences || {});
+		} catch {
+			// keep defaults
+		}
+	}
+
+	async function savePreferences() {
+		const payload = collectPreferences();
+		const response = await fetch("/api/account/preferences", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ preferences: payload })
+		});
+		if (!response.ok) {
+			const data = await response.json().catch(() => ({}));
+			throw new Error(String(data?.error || "Failed to save preferences."));
+		}
+		const data = await response.json().catch(() => ({}));
+		applyPreferences(data?.preferences || payload);
+	}
+
 	function populateApiEndpoints() {
 		const origin = window.location.origin;
 		const userKey = getUserKey();
@@ -768,14 +1081,50 @@ const sectionLinks = [
 		return results;
 	}
 
-	async function importGoodreadsCsv(file) {
+	async function clearShelfOnServer() {
+		const userKey = getUserKey();
+		const response = await fetch("/api/account/clear-shelf", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ userKey })
+		});
+		return response.ok;
+	}
+
+	function buildImportSummary(candidates) {
+		const totals = { total: candidates.length, wantToRead: 0, reading: 0, finished: 0 };
+		for (const row of candidates) {
+			if (row.status === "reading") totals.reading += 1;
+			else if (row.status === "finished") totals.finished += 1;
+			else totals.wantToRead += 1;
+		}
+		return totals;
+	}
+
+	async function importGoodreadsCsv(file, options = { mode: "merge", dryRun: false }) {
 		const text = await file.text();
 		const candidates = toImportCandidates(text);
 		if (candidates.length === 0) {
 			throw new Error("No importable rows found. Confirm this is a Goodreads export CSV.");
 		}
+		if (options?.dryRun) {
+			const preview = buildImportSummary(candidates);
+			return {
+				imported: 0,
+				updated: 0,
+				skipped: 0,
+				wantToRead: preview.wantToRead,
+				reading: preview.reading,
+				finished: preview.finished,
+				localCache: "full",
+				syncFailed: 0,
+				previewOnly: true,
+				totalPreview: preview.total
+			};
+		}
 
-		const existingEntries = loadEntries();
+		const mode = options?.mode === "replace" ? "replace" : "merge";
+		const existingEntries = mode === "replace" ? [] : loadEntries();
 		const byKey = new Map();
 		for (const existing of existingEntries) {
 			byKey.set(canonicalWorkKey(existing), existing);
@@ -835,10 +1184,14 @@ const sectionLinks = [
 			else wantToRead += 1;
 		}
 
+		if (mode === "replace") {
+			await clearShelfOnServer();
+		}
+
 		const localCache = saveEntriesWithFallback(existingEntries);
 		const syncFailed = await syncEntriesToServer(changedEntries);
 
-		return { imported, updated, skipped, wantToRead, reading, finished, localCache, syncFailed };
+		return { imported, updated, skipped, wantToRead, reading, finished, localCache, syncFailed, previewOnly: false };
 	}
 
 	importForm?.addEventListener("submit", async (event) => {
@@ -849,9 +1202,27 @@ const sectionLinks = [
 			showFeedback("Choose a Goodreads CSV file first.", true);
 			return;
 		}
+		const mode = importModeSelect instanceof HTMLSelectElement && importModeSelect.value === "replace" ? "replace" : "merge";
+		const dryRunFirst = importDryRunFirst instanceof HTMLInputElement ? importDryRunFirst.checked : false;
 		showFeedback("Importing Goodreads data...");
 		try {
-			const result = await importGoodreadsCsv(file);
+			if (dryRunFirst) {
+				const preview = await importGoodreadsCsv(file, { mode, dryRun: true });
+				showSummary({
+					imported: preview.totalPreview,
+					updated: 0,
+					skipped: 0,
+					wantToRead: preview.wantToRead,
+					reading: preview.reading,
+					finished: preview.finished
+				});
+				const proceed = window.confirm(`Preview found ${preview.totalPreview} rows. Continue with ${mode === "replace" ? "replace" : "merge"} import?`);
+				if (!proceed) {
+					showFeedback("Import canceled after preview.");
+					return;
+				}
+			}
+			const result = await importGoodreadsCsv(file, { mode, dryRun: false });
 			const statusParts = [
 				`${result.imported} imported`,
 				`${result.updated} updated`,
@@ -873,23 +1244,69 @@ const sectionLinks = [
 		}
 	});
 
+	previewImportButton?.addEventListener("click", async () => {
+		const file = csvInput?.files?.[0];
+		if (!file) {
+			showImportControlsFeedback("Choose a Goodreads CSV file first.", true);
+			return;
+		}
+		showImportControlsFeedback("Building preview...");
+		try {
+			const mode = importModeSelect instanceof HTMLSelectElement && importModeSelect.value === "replace" ? "replace" : "merge";
+			const preview = await importGoodreadsCsv(file, { mode, dryRun: true });
+			showSummary({
+				imported: preview.totalPreview,
+				updated: 0,
+				skipped: 0,
+				wantToRead: preview.wantToRead,
+				reading: preview.reading,
+				finished: preview.finished
+			});
+			showImportControlsFeedback(`Preview ready: ${preview.totalPreview} rows detected.`);
+		} catch (error) {
+			showImportControlsFeedback(error instanceof Error ? error.message : "Preview failed.", true);
+		}
+	});
+
 	async function loadAuthState() {
 		try {
 			const response = await fetch("/api/auth/me");
 			const data = await response.json();
 			const authenticated = !!data?.authenticated;
-			if (accountAuthenticated instanceof HTMLElement) {
-				accountAuthenticated.hidden = !authenticated;
-			}
-			if (magicLinkForm instanceof HTMLFormElement) {
-				magicLinkForm.hidden = authenticated;
-			}
+			if (accountSignedInState instanceof HTMLElement) accountSignedInState.hidden = !authenticated;
+			if (accountDangerZone instanceof HTMLElement) accountDangerZone.hidden = !authenticated;
+			if (magicLinkForm instanceof HTMLFormElement) magicLinkForm.hidden = authenticated;
 			if (authenticated && accountEmail instanceof HTMLElement) {
 				accountEmail.textContent = String(data?.user?.email || "");
 			}
+			if (downloadDataButton instanceof HTMLButtonElement) {
+				downloadDataButton.disabled = !authenticated;
+			}
+			if (clearShelfButton instanceof HTMLButtonElement) clearShelfButton.disabled = !authenticated;
+			if (savePreferencesButton instanceof HTMLButtonElement) savePreferencesButton.disabled = !authenticated;
+			if (revokeSessionsButton instanceof HTMLButtonElement) revokeSessionsButton.disabled = !authenticated;
+			if (refreshSecurityButton instanceof HTMLButtonElement) refreshSecurityButton.disabled = !authenticated;
+			if (!authenticated) {
+				showExportFeedback("Sign in to download your account data.", true);
+				showPreferencesFeedback("Sign in to save settings.", true);
+				showSecurityFeedback("Sign in to view security details.", true);
+			} else {
+				showExportFeedback("");
+				showPreferencesFeedback("");
+				showSecurityFeedback("");
+			}
 		} catch {
-			if (accountAuthenticated instanceof HTMLElement) accountAuthenticated.hidden = true;
+			if (accountSignedInState instanceof HTMLElement) accountSignedInState.hidden = true;
+			if (accountDangerZone instanceof HTMLElement) accountDangerZone.hidden = true;
 			if (magicLinkForm instanceof HTMLFormElement) magicLinkForm.hidden = false;
+			if (downloadDataButton instanceof HTMLButtonElement) downloadDataButton.disabled = true;
+			if (clearShelfButton instanceof HTMLButtonElement) clearShelfButton.disabled = true;
+			if (savePreferencesButton instanceof HTMLButtonElement) savePreferencesButton.disabled = true;
+			if (revokeSessionsButton instanceof HTMLButtonElement) revokeSessionsButton.disabled = true;
+			if (refreshSecurityButton instanceof HTMLButtonElement) refreshSecurityButton.disabled = true;
+			showExportFeedback("Sign in to download your account data.", true);
+			showPreferencesFeedback("Sign in to save settings.", true);
+			showSecurityFeedback("Sign in to view security details.", true);
 		}
 	}
 
@@ -967,6 +1384,129 @@ const sectionLinks = [
 		});
 	}
 
+	downloadDataButton?.addEventListener("click", async () => {
+		const button = downloadDataButton instanceof HTMLButtonElement ? downloadDataButton : null;
+		showExportFeedback("Preparing your data export...");
+		if (button) button.disabled = true;
+		try {
+			const response = await fetch("/api/account/export");
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				showExportFeedback(String(data?.error || "Failed to generate export."), true);
+				return;
+			}
+			const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+			const url = URL.createObjectURL(blob);
+			const datePart = new Date().toISOString().slice(0, 10);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = `dogeared-export-${datePart}.json`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			URL.revokeObjectURL(url);
+			showExportFeedback("Export downloaded.");
+		} catch {
+			showExportFeedback("Failed to generate export.", true);
+		} finally {
+			if (button) button.disabled = false;
+		}
+	});
+
+	clearShelfButton?.addEventListener("click", async () => {
+		const confirmed = window.confirm("Delete all shelf entries? This keeps your account but removes all saved books.");
+		if (!confirmed) return;
+		showExportFeedback("Deleting all shelf entries...");
+		const button = clearShelfButton instanceof HTMLButtonElement ? clearShelfButton : null;
+		if (button) button.disabled = true;
+		try {
+			const ok = await clearShelfOnServer();
+			if (!ok) {
+				showExportFeedback("Failed to delete shelf entries.", true);
+				return;
+			}
+			localStorage.setItem(STORAGE_KEY, "[]");
+			localStorage.setItem(UPDATES_KEY, "[]");
+			showExportFeedback("All shelf entries deleted.");
+		} catch {
+			showExportFeedback("Failed to delete shelf entries.", true);
+		} finally {
+			if (button) button.disabled = false;
+		}
+	});
+
+	savePreferencesButton?.addEventListener("click", async () => {
+		const button = savePreferencesButton instanceof HTMLButtonElement ? savePreferencesButton : null;
+		showPreferencesFeedback("Saving preferences...");
+		if (button) button.disabled = true;
+		try {
+			await savePreferences();
+			showPreferencesFeedback("Preferences saved.");
+		} catch (error) {
+			showPreferencesFeedback(error instanceof Error ? error.message : "Failed to save preferences.", true);
+		} finally {
+			if (button) button.disabled = false;
+		}
+	});
+
+	async function loadSecurityView() {
+		try {
+			const [sessionsRes, activityRes] = await Promise.all([
+				fetch("/api/account/sessions"),
+				fetch(`/api/activity/recent?userKey=${encodeURIComponent(getUserKey())}&limit=8`)
+			]);
+			if (sessionsRes.ok && sessionList instanceof HTMLElement) {
+				const data = await sessionsRes.json().catch(() => ({}));
+				const sessions = Array.isArray(data?.sessions) ? data.sessions : [];
+				if (!sessions.length) {
+					sessionList.innerHTML = "<p><strong>Active sessions:</strong> none</p>";
+				} else {
+					sessionList.innerHTML = `
+						<p><strong>Active sessions:</strong></p>
+						<ul>${sessions.map((item) => `<li>${item.label}${item.isCurrent ? " (current)" : ""} · expires ${new Date(item.expiresAt).toLocaleString()}</li>`).join("")}</ul>
+					`;
+				}
+			}
+			if (activityRes.ok && recentActivityList instanceof HTMLElement) {
+				const data = await activityRes.json().catch(() => ({}));
+				const updates = Array.isArray(data?.updates) ? data.updates : [];
+				if (!updates.length) {
+					recentActivityList.innerHTML = "<p><strong>Recent activity:</strong> none</p>";
+				} else {
+					recentActivityList.innerHTML = `
+						<p><strong>Recent activity:</strong></p>
+						<ul>${updates.map((item) => `<li>${item.status} · ${item.title} · ${new Date(item.timestamp).toLocaleString()}</li>`).join("")}</ul>
+					`;
+				}
+			}
+			showSecurityFeedback("");
+		} catch {
+			showSecurityFeedback("Failed to load security details.", true);
+		}
+	}
+
+	refreshSecurityButton?.addEventListener("click", () => {
+		void loadSecurityView();
+	});
+
+	revokeSessionsButton?.addEventListener("click", async () => {
+		showSecurityFeedback("Revoking other sessions...");
+		try {
+			const response = await fetch("/api/account/sessions", { method: "POST" });
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				showSecurityFeedback(String(data?.error || "Failed to revoke sessions."), true);
+				return;
+			}
+			showSecurityFeedback("Other sessions revoked.");
+			await loadSecurityView();
+		} catch {
+			showSecurityFeedback("Failed to revoke sessions.", true);
+		}
+	});
+
 	populateApiEndpoints();
 	void loadAuthState();
+	void loadPreferences();
+	void loadSecurityView();
 </script>

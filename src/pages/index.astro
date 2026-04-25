@@ -243,9 +243,8 @@ try {
 <Layout title="Home" sectionLinks={sections.map((section) => ({ id: section.id, label: section.title }))}>
 	<div slot="right" class="browse-page" id="browse-page" data-authenticated={String(isAuthenticated)}>
 		<header class="intro">
-			<p class="eyebrow">Dogeared</p>
-			<h1>Find your next book and keep a reading life that still feels like your own.</h1>
-			<p class="subhead">Browse curated shelves, save what matters, and build a reading history without the usual clutter.</p>
+			<h1>Find your next book.<br/>Keep your reading life your own.</h1>
+			<p class="subhead">Browse curated shelves, save what matters, and build your reading history without the noise.</p>
 		</header>
 
 		{errorMessage && <p class="error">Home shelves unavailable: {errorMessage}</p>}
@@ -342,9 +341,9 @@ try {
 
 	.browse-page h1 {
 		margin: 0;
-		/* max-width: 18ch; */
-		line-height: 1.02;
-		font-size: clamp(2rem, 3.6vw, 3.15rem);
+		line-height: 1.08;
+		font-weight: 760;
+		font-size: clamp(1.85rem, 3.2vw, 2.75rem);
 	}
 
 	.subhead {
@@ -554,7 +553,11 @@ try {
 	@media (max-width: 860px) {
 		.browse-page h1 {
 			max-width: 100%;
+			font-size: clamp(1.95rem, 7.2vw, 2.4rem);
+			line-height: 1.1;
+			font-weight: 720;
 		}
+		.subhead { font-size: 0.95rem; line-height: 1.45; max-width: 36ch; }
 
 		.book-grid {
 			grid-template-columns: 1fr;

@@ -70,7 +70,6 @@ function detectFormat(input: {
 		input.description || "",
 		Array.isArray(input.categories) ? input.categories.join(" ") : ""
 	].join(" "));
-	if (/\b(audiobook|audio book|audio cd|audible)\b/.test(haystack)) return "Audiobook";
 	if (/\b(ebook|e-book|kindle|digital edition)\b/.test(haystack)) return "Ebook";
 	if (/\bpaperback\b/.test(haystack)) return "Paperback";
 	if (/\b(hardcover|hardback)\b/.test(haystack)) return "Hardcover";
@@ -216,12 +215,9 @@ export const GET: APIRoute = async ({ url }) => {
 			return Array.isArray(data.items) ? data.items : [];
 		};
 
-		const [baseItems, audiobookItems] = await Promise.all([
-			fetchItems(query),
-			fetchItems(`${query} audiobook`)
-		]);
+		const baseItems = await fetchItems(query);
 		const byId = new Map<string, any>();
-		for (const item of [...baseItems, ...audiobookItems]) {
+		for (const item of baseItems) {
 			const id = String(item?.id || "");
 			if (!id) continue;
 			if (!byId.has(id)) byId.set(id, item);
@@ -254,7 +250,7 @@ export const GET: APIRoute = async ({ url }) => {
 			};
 		}).filter((result) => isLikelyMatch(result, query));
 		const results = dedupeVariants(mapped, query);
-		const hasMore = baseItems.length >= pageSize || audiobookItems.length >= pageSize;
+		const hasMore = baseItems.length >= pageSize;
 		return new Response(JSON.stringify({ results, hasMore, page }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" }

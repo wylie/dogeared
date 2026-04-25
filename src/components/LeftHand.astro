@@ -7,13 +7,18 @@ const isActive = (href: string) => normalize(current) === normalize(href);
 const query = Astro.url.searchParams.get("q") ?? "";
 ---
 
-<Widget style="height: 100%" background={true}>
+<Widget style="height: 100%; padding: 0;" background={true}>
   <div id="left-hand-nav" data-current={current}>
-    <h2><a href="/" class="special-font">Dogeared</a></h2>
+    <div class="mobile-top-row">
+      <h2><a href="/" class="special-font">Dogeared</a></h2>
+      <button type="button" id="left-hand-menu-toggle" class="mobile-menu-toggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="left-hand-primary-links">
+        ☰
+      </button>
+    </div>
     <form action="/search" method="get">
       <input type="search" name="q" placeholder="Search" value={query} />
     </form>
-    <ul>
+    <ul id="left-hand-primary-links" class="primary-links">
       <li id="left-hand-login-item"><button type="button" class="nav-text-button hover">Log In</button></li>
       <li id="left-hand-profile-item" hidden><a href={isActive('/profile') ? undefined : '/profile'} class={isActive('/profile') ? 'active' : 'hover'} aria-current={isActive('/profile') ? 'page' : undefined}>Profile</a></li>
       <li><a href={isActive('/mission') ? undefined : '/mission'} class={isActive('/mission') ? 'active' : 'hover'} aria-current={isActive('/mission') ? 'page' : undefined}>Mission</a></li>
@@ -47,6 +52,12 @@ const query = Astro.url.searchParams.get("q") ?? "";
 </Widget>
 
 <style>
+  #left-hand-nav {
+    padding: 1rem;
+  }
+  .mobile-top-row {
+    display: block;
+  }
   ul {
     list-style-type: none;
     margin: 1rem 0 0;
@@ -85,6 +96,20 @@ const query = Astro.url.searchParams.get("q") ?? "";
     font: inherit;
     cursor: pointer;
     border-radius: 5px;
+  }
+  .mobile-menu-toggle {
+    display: none;
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: #2a2a2a;
+    border-radius: 0;
+    padding: 0.2rem 0.3rem;
+    font: inherit;
+    font-weight: 800;
+    font-size: 1.8rem;
+    line-height: 1;
+    cursor: pointer;
   }
   input[type="search"] {
     font-size: 16px;
@@ -191,9 +216,111 @@ const query = Astro.url.searchParams.get("q") ?? "";
     background: #fef2f2;
     color: #991b1b;
   }
+  @media (max-width: 900px) {
+    #left-hand-nav {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      display: grid;
+      grid-template-areas:
+        "top"
+        "links"
+        "search";
+      background: #efefef;
+      border-bottom: 1px solid #ddd6c8;
+      padding: 0.6rem 0.5rem 0.55rem;
+    }
+    .mobile-top-row {
+      grid-area: top;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-bottom: 0.8rem;
+      min-height: 56px;
+    }
+    #left-hand-nav h2 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+    }
+    #left-hand-nav h2 a.special-font {
+      font-size: clamp(2.25rem, 10vw, 2.95rem);
+    }
+    #left-hand-nav form {
+      grid-area: search;
+      margin: 0.35rem 0 0.2rem;
+    }
+    #left-hand-nav input[type="search"] {
+      margin-top: 0;
+      padding: 0.4rem 0.8rem;
+    }
+    .mobile-menu-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 0;
+      align-self: center;
+      flex: 0 0 auto;
+    }
+    #left-hand-nav .primary-links {
+      display: none;
+      gap: 0.35rem;
+      border-top: none;
+      margin-top: 0;
+      padding-top: 0;
+      grid-area: links;
+    }
+    #left-hand-nav.menu-open .primary-links {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    #left-hand-nav .primary-links li {
+      width: auto;
+    }
+    #left-hand-nav .primary-links a,
+    #left-hand-nav .primary-links .nav-text-button {
+      display: inline-flex;
+      align-items: center;
+      border: none;
+      background: transparent;
+      border-radius: 0;
+      padding: 0.1rem 0.15rem;
+      line-height: 1.2;
+      text-decoration: none;
+      color: #202020;
+    }
+    #left-hand-nav .primary-links a.active {
+      background: transparent;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    #left-hand-nav .primary-links a.hover:hover,
+    #left-hand-nav .primary-links .nav-text-button.hover:hover,
+    #left-hand-nav .primary-links a:focus-visible,
+    #left-hand-nav .primary-links .nav-text-button:focus-visible {
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .quick-links {
+      display: none;
+    }
+  }
+  @media (max-width: 680px) {
+    .mobile-top-row {
+      margin-bottom: 0.72rem;
+      min-height: 52px;
+    }
+    #left-hand-nav h2 a.special-font {
+      font-size: clamp(2.1rem, 9.2vw, 2.6rem);
+    }
+  }
 </style>
 
 <script>
+  const leftHandNav = document.getElementById("left-hand-nav");
+  const leftHandMenuToggle = document.getElementById("left-hand-menu-toggle");
+  const leftHandPrimaryLinks = document.getElementById("left-hand-primary-links");
   const leftHandLoginItem = document.getElementById("left-hand-login-item");
   const leftHandLoginButton = leftHandLoginItem?.querySelector("button");
   const leftHandProfileItem = document.getElementById("left-hand-profile-item");
@@ -302,6 +429,30 @@ const query = Astro.url.searchParams.get("q") ?? "";
       showLoginFeedback("Check your email for a sign-in link.");
     } catch {
       showLoginFeedback("Failed to send magic link.", true);
+    }
+  });
+
+  leftHandMenuToggle?.addEventListener("click", () => {
+    if (!(leftHandNav instanceof HTMLElement)) return;
+    const willOpen = !leftHandNav.classList.contains("menu-open");
+    leftHandNav.classList.toggle("menu-open", willOpen);
+    if (leftHandMenuToggle instanceof HTMLButtonElement) {
+      leftHandMenuToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      leftHandMenuToggle.textContent = willOpen ? "✕" : "☰";
+      leftHandMenuToggle.setAttribute("aria-label", willOpen ? "Close navigation menu" : "Open navigation menu");
+    }
+  });
+
+  leftHandPrimaryLinks?.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (!target.closest("a,button")) return;
+    if (!(leftHandNav instanceof HTMLElement) || !(leftHandMenuToggle instanceof HTMLButtonElement)) return;
+    if (window.matchMedia("(max-width: 900px)").matches) {
+      leftHandNav.classList.remove("menu-open");
+      leftHandMenuToggle.setAttribute("aria-expanded", "false");
+      leftHandMenuToggle.textContent = "☰";
+      leftHandMenuToggle.setAttribute("aria-label", "Open navigation menu");
     }
   });
 

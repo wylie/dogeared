@@ -419,7 +419,6 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 <Layout title="Metrics" sectionLinks={sectionLinks}>
 	<div slot="right" class="metrics-page">
 		<header id="overview" class="metrics-hero">
-			<p class="eyebrow">Metrics</p>
 			<h1>Explore Dogeared data from readers to tastes to places.</h1>
 			{metricsPayload.dataSource === "sample" && metricsPayload.error && (
 				<p class="note">Live metrics unavailable. Showing sample data. ({metricsPayload.error})</p>

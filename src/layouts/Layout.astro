@@ -50,6 +50,7 @@ import '../assets/global.css';
 					</slot>
 				</div>
 			</div>
+			<a class="global-support-float" href="https://buymeacoffee.com/wylie" target="_blank" rel="noopener noreferrer">Support Dogeared</a>
 		</body>
 	</html>
 
@@ -65,7 +66,7 @@ import '../assets/global.css';
 		max-width: 1200px;
 		margin: auto;
 		display: grid;
-		grid-template-columns: 25% auto;
+		grid-template-columns: minmax(240px, 26%) minmax(0, 1fr);
 		min-height: 100vh;
 		align-items: start;
 	}
@@ -82,5 +83,48 @@ import '../assets/global.css';
 		align-self: start;
 		height: 100vh;
 		overflow-y: auto;
+	}
+	.global-support-float {
+		position: fixed;
+		right: 1rem;
+		bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+		z-index: 9999;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		text-decoration: none;
+		background: #151515;
+		color: #fff;
+		border-radius: 999px;
+		padding: 0.6rem 0.9rem;
+		font-size: 0.9rem;
+		font-weight: 700;
+		box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+	}
+	.global-support-float:hover {
+		background: #2f8f57;
+	}
+	@media (max-width: 900px) {
+		.container {
+			max-width: 100%;
+			grid-template-columns: 1fr;
+			padding: 0 0.5rem 1rem;
+			box-sizing: border-box;
+		}
+		.column {
+			padding: 0.6rem 0.5rem;
+		}
+		.container > .column:first-child {
+			position: static;
+			top: auto;
+			height: auto;
+			overflow: visible;
+		}
+		.global-support-float {
+			right: 0.6rem;
+			bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+			padding: 0.52rem 0.76rem;
+			font-size: 0.84rem;
+		}
 	}
 </style>

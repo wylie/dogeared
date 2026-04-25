@@ -2,8 +2,8 @@
 import Layout from '../layouts/Layout.astro';
 
 const sectionLinks = [
-	{ id: "roadmap", label: "Roadmap" },
-	{ id: "support", label: "Support" }
+	{ id: "support", label: "Support" },
+	{ id: "roadmap", label: "Roadmap" }
 ];
 
 const SUPPORT_LINKS = {
@@ -13,18 +13,48 @@ const SUPPORT_LINKS = {
 const roadmapItems = [
 	{
 		status: "Now",
+		title: "Core Site Setup & Stabilization",
+		description: "Finish baseline setup, tighten navigation and mobile UX, and make key pages feel consistent and reliable."
+	},
+	{
+		status: "Now",
+		title: "Shelf & Search Reliability",
+		description: "Improve add-to-shelf flows, deduplication, and search result quality so the core reading workflow is dependable."
+	},
+	{
+		status: "Now",
+		title: "Auth & Account Hardening",
+		description: "Tighten sign-in/session behavior, account recovery, and auth error handling so onboarding is stable."
+	},
+	{
+		status: "Now",
+		title: "Import Pipeline Reliability",
+		description: "Make Goodreads/CSV imports idempotent with clear progress, retries, and duplicate protection."
+	},
+	{
+		status: "Next",
+		title: "Profile & Library Polish",
+		description: "Refine profile pages, related views, and book metadata presentation for a cleaner first-run experience."
+	},
+	{
+		status: "Next",
+		title: "Data Quality & Metadata Backfills",
+		description: "Improve missing authors/genres/covers/published dates and run recurring metadata backfills."
+	},
+	{
+		status: "Next",
+		title: "Performance & Caching Pass",
+		description: "Speed up home/search/metrics queries and reduce client payloads, especially on mobile."
+	},
+	{
+		status: "Next",
+		title: "QA + Monitoring",
+		description: "Add smoke tests for shelf/search/profile flows and basic production monitoring with alerts."
+	},
+	{
+		status: "Later",
 		title: "Richer Metrics Views",
 		description: "Expand drill-downs from authors to genres, tags, and location snapshots with cleaner exportable views."
-	},
-	{
-		status: "Next",
-		title: "Reader Similarity",
-		description: "Show readers with overlapping taste using shared shelf activity and favorite-author overlap."
-	},
-	{
-		status: "Next",
-		title: "List & Collection Profiles",
-		description: "Support custom themed reading lists with sharable URLs and follower counts."
 	},
 	{
 		status: "Later",
@@ -33,8 +63,13 @@ const roadmapItems = [
 	},
 	{
 		status: "Later",
-		title: "Community Challenges",
-		description: "Seasonal reading challenges with progress tracking and opt-in public leaderboards."
+		title: "Audiobooks Support",
+		description: "Add audiobook-specific search, edition handling, and shelf views once core book workflows are fully stable."
+	},
+	{
+		status: "Later",
+		title: "Recommendations v1",
+		description: "Ship lightweight “because you shelved X” recommendations from genre and author overlap."
 	}
 ];
 
@@ -59,27 +94,18 @@ const supportOptions = [
 <Layout title="Roadmap" sectionLinks={sectionLinks}>
 	<div slot="right" class="roadmap-page">
 		<header class="hero">
-			<p class="eyebrow">Roadmap + Support</p>
 			<h1>What’s coming next for Dogeared, and how readers can help.</h1>
 		</header>
 
-		<section id="roadmap" class="panel">
-			<div class="panel-head">
-				<h2>Roadmap</h2>
-				<p>Upcoming additions planned for Dogeared.</p>
+		<section id="support" class="panel panel-plain support-panel">
+			<div class="support-feature">
+				<div>
+					<p class="feature-eyebrow">Support Dogeared</p>
+					<h2>Help keep Dogeared independent and improving.</h2>
+					<p>Your support helps cover hosting and gives me more time to ship the roadmap faster.</p>
+				</div>
+				<a class="support-feature-cta" href={SUPPORT_LINKS.buyMeACoffee} target="_blank" rel="noopener noreferrer">Buy Me a Coffee</a>
 			</div>
-			<div class="roadmap-grid">
-				{roadmapItems.map((item) => (
-					<article class="roadmap-item">
-						<p class={`status-pill status-${item.status.toLowerCase()}`}>{item.status}</p>
-						<h3>{item.title}</h3>
-						<p>{item.description}</p>
-					</article>
-				))}
-			</div>
-		</section>
-
-		<section id="support" class="panel">
 			<div class="panel-head">
 				<h2>Support Dogeared</h2>
 				<p>More ways readers can support the site and help fund new features.</p>
@@ -97,8 +123,24 @@ const supportOptions = [
 					</article>
 				))}
 			</div>
-			<p class="support-hint">Set your support URL in <code>SUPPORT_LINKS</code> at the top of this file.</p>
 		</section>
+
+		<section id="roadmap" class="panel panel-plain">
+			<div class="panel-head">
+				<h2>Roadmap</h2>
+				<p>Upcoming additions planned for Dogeared.</p>
+			</div>
+			<div class="roadmap-grid">
+				{roadmapItems.map((item) => (
+					<article class="roadmap-item">
+						<p class={`status-pill status-${item.status.toLowerCase()}`}>{item.status}</p>
+						<h3>{item.title}</h3>
+						<p>{item.description}</p>
+					</article>
+				))}
+			</div>
+		</section>
+
 	</div>
 </Layout>
 
@@ -134,6 +176,7 @@ const supportOptions = [
 	.eyebrow { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6a5c3d; }
 	.roadmap-page h1 { margin: 0; line-height: 1.05; font-size: clamp(2rem, 3.8vw, 3.4rem); }
 	.panel { margin-top: 0.9rem; border: 1px solid #d8d0c2; border-radius: 12px; background: #fff; padding: 0.8rem; }
+	.panel-plain { border: none; background: transparent; padding: 0; border-radius: 0; }
 	.panel-head h2 { margin: 0; }
 	.panel-head p { margin: 0.3rem 0 0; color: #515151; }
 	.roadmap-grid { margin-top: 0.7rem; display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -148,6 +191,12 @@ const supportOptions = [
 	.support-card { border: 1px solid #e1ded4; border-radius: 12px; padding: 0.75rem; background: #fcfbf8; display: flex; flex-direction: column; min-height: 180px; }
 	.support-card h3 { margin: 0; font-size: 1rem; }
 	.support-card p { margin: 0.45rem 0 0; color: #4f4f4f; line-height: 1.5; }
+	.support-feature { margin-bottom: 0.75rem; border: 1px solid #d4c5a7; background: linear-gradient(135deg, #f8f2e4 0%, #fdfaf3 100%); border-radius: 12px; padding: 0.8rem; display: flex; justify-content: space-between; gap: 0.75rem; align-items: center; }
+	.feature-eyebrow { margin: 0; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: #735d34; font-weight: 700; }
+	.support-feature h2 { margin: 0.24rem 0 0; font-size: clamp(1.15rem, 2.2vw, 1.6rem); }
+	.support-feature p { margin: 0.33rem 0 0; color: #4f4f4f; max-width: 54ch; }
+	.support-feature-cta { flex: 0 0 auto; text-decoration: none; border-radius: 999px; background: #121212; color: #fff; padding: 0.58rem 0.86rem; font-weight: 700; }
+	.support-feature-cta:hover { background: #2f8f57; }
 	.support-cta { margin-top: auto; align-self: flex-start; text-decoration: none; border: none; background: #1f1f1f; color: #fff; border-radius: 999px; padding: 0.5rem 0.75rem; font: inherit; font-size: 0.83rem; cursor: pointer; }
 	.support-cta:hover { background: #2f8f57; }
 	.support-cta.ghost { background: #efe9da; color: #4c3d21; }
@@ -158,6 +207,7 @@ const supportOptions = [
 		.support-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	}
 	@media (max-width: 720px) {
+		.support-feature { flex-direction: column; align-items: flex-start; }
 		.roadmap-grid,
 		.support-grid { grid-template-columns: 1fr; }
 	}
