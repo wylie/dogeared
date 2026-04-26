@@ -1,6 +1,7 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { getNeonSql } from "../lib/neon";
+import { formatGenreLabel } from "../lib/genres";
 
 export const prerender = false;
 
@@ -89,7 +90,7 @@ if (value) {
 				order by shelves desc, readers desc, b.title asc
 			`;
 		} else if (kind === "genre") {
-			pageTitle = value;
+			pageTitle = formatGenreLabel(value, value);
 			subtitle = "Books in this genre in Dogeared.";
 			books = await sql<BookRow[]>`
 				select
@@ -252,7 +253,7 @@ if (!distinctReaders) distinctReaders = Math.max(...books.map((row) => Number(ro
 										<p class="meta">Readers: {book.readers} · Shelf entries: {book.shelves}</p>
 										<div class="genre-chips">
 											{(book.genres.length > 0 ? book.genres : ["Uncategorized"]).slice(0, 4).map((genre) => (
-												<a class="genre-chip" href={`/related?kind=genre&value=${encodeURIComponent(genre)}`}>{genre}</a>
+												<a class="genre-chip" href={`/related?kind=genre&value=${encodeURIComponent(genre)}`}>{formatGenreLabel(genre, "Uncategorized")}</a>
 											))}
 										</div>
 										<div

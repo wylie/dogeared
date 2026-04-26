@@ -2,6 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import { resolveUserBySession } from '../lib/auth';
 import { getNeonSql } from '../lib/neon';
+import { formatGenreLabel } from '../lib/genres';
 
 export const prerender = false;
 const session = await resolveUserBySession(Astro.request);
@@ -71,13 +72,7 @@ function isGenreSlug(slug: string) {
 
 function formatGenreTitle(slug: string, fallback: string) {
 	const source = String(fallback || slug || "").trim();
-	if (!source) return "Genre";
-	return source
-		.replace(/[-_]+/g, " ")
-		.replace(/\band\b/gi, "&")
-		.replace(/\bya\b/gi, "YA")
-		.replace(/\bmg\b/gi, "MG")
-		.replace(/\b\w/g, (match) => match.toUpperCase());
+	return formatGenreLabel(source, "Genre");
 }
 
 function formatPublishedLabel(value: string) {
@@ -244,7 +239,7 @@ try {
 	<div slot="right" class="browse-page" id="browse-page" data-authenticated={String(isAuthenticated)}>
 		<header class="intro">
 			<h1>Find your next book.<br/>Keep your reading life your own.</h1>
-			<p class="subhead">Browse curated shelves, save what matters, and build your reading history without the noise.</p>
+			<p class="subhead">Browse popular shelves, save what matters, and build your reading history without the noise.</p>
 		</header>
 
 		{errorMessage && <p class="error">Home shelves unavailable: {errorMessage}</p>}
@@ -550,6 +545,59 @@ try {
 		color: #666;
 	}
 
+	.login-confirm-overlay {
+		position: fixed;
+		inset: 0;
+		width: 100%;
+		height: 100dvh;
+		min-height: 100vh;
+		background: rgba(0, 0, 0, 0.62);
+		z-index: 110;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1rem;
+	}
+
+	.login-confirm-dialog {
+		width: min(460px, 100%);
+		background: #111;
+		color: #fff;
+		border-radius: 18px;
+		padding: 1rem;
+		box-shadow: 0 24px 52px rgba(0, 0, 0, 0.45);
+	}
+
+	.login-confirm-dialog p {
+		margin: 0;
+		font-size: 1rem;
+		line-height: 1.45;
+	}
+
+	.login-confirm-actions {
+		margin-top: 0.95rem;
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.55rem;
+	}
+
+	.login-confirm-actions button {
+		border: 1px solid rgba(255, 255, 255, 0.22);
+		background: transparent;
+		color: #d9e3ff;
+		font: inherit;
+		font-weight: 600;
+		border-radius: 999px;
+		padding: 0.35rem 0.9rem;
+		cursor: pointer;
+	}
+
+	.login-confirm-actions .confirm {
+		background: #2e8f57;
+		border-color: #2e8f57;
+		color: #fff;
+	}
+
 	@media (max-width: 860px) {
 		.browse-page h1 {
 			max-width: 100%;
@@ -581,10 +629,53 @@ try {
 	};
 
 	function promptForLogin() {
-		const shouldRedirect = window.confirm("Log in or sign up to save books to your shelf. Go there now?");
-		if (shouldRedirect) {
+		const existing = document.getElementById("login-confirm-overlay");
+		if (existing) existing.remove();
+
+		const overlay = document.createElement("div");
+		overlay.id = "login-confirm-overlay";
+		overlay.className = "login-confirm-overlay";
+
+		const dialog = document.createElement("div");
+		dialog.className = "login-confirm-dialog";
+		dialog.setAttribute("role", "dialog");
+		dialog.setAttribute("aria-modal", "true");
+
+		const message = document.createElement("p");
+		message.textContent = "Log in or sign up to save books to your shelf. Go there now?";
+
+		const actions = document.createElement("div");
+		actions.className = "login-confirm-actions";
+
+		const cancelButton = document.createElement("button");
+		cancelButton.type = "button";
+		cancelButton.className = "cancel";
+		cancelButton.textContent = "Cancel";
+
+		const okButton = document.createElement("button");
+		okButton.type = "button";
+		okButton.className = "confirm";
+		okButton.textContent = "OK";
+
+		const close = () => overlay.remove();
+
+		cancelButton.addEventListener("click", close);
+		okButton.addEventListener("click", () => {
+			close();
 			window.location.href = "/settings#account-settings";
-		}
+		});
+		overlay.addEventListener("click", (event) => {
+			if (event.target === overlay) close();
+		});
+		document.addEventListener("keydown", (event) => {
+			if (event.key === "Escape" && document.body.contains(overlay)) close();
+		}, { once: true });
+
+		actions.append(cancelButton, okButton);
+		dialog.append(message, actions);
+		overlay.append(dialog);
+		document.body.append(overlay);
+		okButton.focus();
 	}
 
 	function getUserKey() {

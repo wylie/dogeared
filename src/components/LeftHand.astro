@@ -7,10 +7,15 @@ const isActive = (href: string) => normalize(current) === normalize(href);
 const query = Astro.url.searchParams.get("q") ?? "";
 ---
 
-<Widget style="height: 100%; padding: 0;" background={true}>
+<Widget style="height: 100%; padding: 0; overflow: visible;" background={true}>
   <div id="left-hand-nav" data-current={current}>
     <div class="mobile-top-row">
-      <h2><a href="/" class="special-font">Dogeared</a></h2>
+      <h2>
+        <a href="/" class="special-font">
+          <img src="/logo.png" alt="" class="title-logo" aria-hidden="true" />
+          <span>Dogeared</span>
+        </a>
+      </h2>
       <button type="button" id="left-hand-menu-toggle" class="mobile-menu-toggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="left-hand-primary-links">
         ☰
       </button>
@@ -34,6 +39,9 @@ const query = Astro.url.searchParams.get("q") ?? "";
         ))}
       </ul>
     )}
+    <div class="left-hand-footer-logo" aria-hidden="true">
+      <img src="/logo.png" alt="Dogeared logo" loading="lazy" />
+    </div>
   </div>
   <div id="left-hand-login-modal" class="login-modal" hidden>
     <div class="login-modal-backdrop" data-action="close-login-modal"></div>
@@ -54,6 +62,10 @@ const query = Astro.url.searchParams.get("q") ?? "";
 <style>
   #left-hand-nav {
     padding: 1rem;
+    min-height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
   }
   .mobile-top-row {
     display: block;
@@ -66,8 +78,22 @@ const query = Astro.url.searchParams.get("q") ?? "";
   }
   .quick-links {
     margin-top: 1rem;
-    max-height: calc(100vh - 340px);
     overflow: auto;
+  }
+  .left-hand-footer-logo {
+    margin-top: auto;
+    width: 90%;
+    align-self: center;
+    padding-top: 0.9rem;
+    display: flex;
+    justify-content: center;
+    margin-bottom: -2rem;
+  }
+  .left-hand-footer-logo img {
+    width: 100%;
+    height: auto;
+    display: block;
+    opacity: 0.95;
   }
   li {
     text-align: left;
@@ -128,10 +154,19 @@ const query = Astro.url.searchParams.get("q") ?? "";
     container-type: inline-size;
   }
   h2 a.special-font {
-    display: block;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
     width: 100%;
     font-size: clamp(0rem, 22cqw, 4rem);
     line-height: 1;
+  }
+  .title-logo {
+    display: none;
+    width: clamp(24px, 3.3cqw, 34px);
+    height: clamp(24px, 3.3cqw, 34px);
+    object-fit: contain;
+    flex: 0 0 auto;
   }
   .login-modal[hidden] {
     display: none !important;
@@ -246,6 +281,12 @@ const query = Astro.url.searchParams.get("q") ?? "";
     }
     #left-hand-nav h2 a.special-font {
       font-size: clamp(2.25rem, 10vw, 2.95rem);
+      gap: 0.4rem;
+    }
+    #left-hand-nav h2 a.special-font .title-logo {
+      display: inline-block;
+      width: clamp(54px, 7vw, 30px);
+      height: clamp(54px, 7vw, 30px);
     }
     #left-hand-nav form {
       grid-area: search;
@@ -303,6 +344,9 @@ const query = Astro.url.searchParams.get("q") ?? "";
       text-underline-offset: 2px;
     }
     .quick-links {
+      display: none;
+    }
+    .left-hand-footer-logo {
       display: none;
     }
   }

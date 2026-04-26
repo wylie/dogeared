@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { getNeonSql } from '../lib/neon';
+import { formatGenreLabel } from '../lib/genres';
 
 function normalizeLabel(value: string, fallback = "Unknown") {
 	const text = String(value || "").trim();
@@ -68,13 +69,7 @@ function slugify(value: string) {
 
 function formatGenreTitle(slug: string, fallback: string) {
 	const source = String(fallback || slug || "").trim();
-	if (!source) return "Genre";
-	return source
-		.replace(/[-_]+/g, " ")
-		.replace(/\band\b/gi, "&")
-		.replace(/\bya\b/gi, "YA")
-		.replace(/\bmg\b/gi, "MG")
-		.replace(/\b\w/g, (match) => match.toUpperCase());
+	return formatGenreLabel(source, "Genre");
 }
 
 function classifyGenreType(value: string) {
@@ -391,7 +386,7 @@ try {
 				userId: String(row.user_id || ""),
 				status: row.status === "want_to_read" ? "Want to Read" : row.status === "reading" ? "Currently Reading" : row.status === "finished" ? "Read" : formatGenreTitle(row.status, row.status),
 				author: normalizeLabel(row.author),
-				genre: normalizeLabel(row.genre, "Uncategorized"),
+				genre: formatGenreLabel(normalizeLabel(row.genre, "Uncategorized"), "Uncategorized"),
 				book: normalizeLabel(row.book),
 				location: normalizeLocationRegion(row.location),
 				language: normalizeLabel(row.language),
@@ -651,24 +646,50 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 				const cards = [
 					{
 						title: "Top Genre",
-						body: topGenre
-							? `${topGenre.label} leads tagged genres at ${pct(topGenre.value, taggedCount)}% of tagged books. Coverage: ${pct(taggedCount, totalShelved)}% tagged, ${pct(uncategorizedCount, totalShelved)}% uncategorized.`
-							: "No tagged genre data yet."
+						points: topGenre
+							? [
+								{ label: "Leader", value: `${topGenre.label} (${pct(topGenre.value, taggedCount)}%)` },
+								{ label: "Tagged coverage", value: `${pct(taggedCount, totalShelved)}%` },
+								{ label: "Uncategorized", value: `${pct(uncategorizedCount, totalShelved)}%` }
+							]
+							: [
+								{ label: "Status", value: "No tagged genre data yet." }
+							]
 					},
 					{
 						title: "Reading Behavior",
-						body: topStatus ? `${topStatus.label} is the biggest shelf status at ${pct(topStatus.value, totalShelved)}%.` : "No status data yet."
+						points: topStatus
+							? [
+								{ label: "Top shelf", value: `${topStatus.label} (${pct(topStatus.value, totalShelved)}%)` }
+							]
+							: [
+								{ label: "Status", value: "No status data yet." }
+							]
 					},
 					{
 						title: "Reader Footprint",
-						body: topRegion ? `${regions.length} regions tracked, led by ${topRegion.label} (${pct(topRegion.value, totalShelved)}%).` : "No region data yet."
+						points: topRegion
+							? [
+								{ label: "Regions tracked", value: String(regions.length) },
+								{ label: "Leading region", value: `${topRegion.label} (${pct(topRegion.value, totalShelved)}%)` }
+							]
+							: [
+								{ label: "Status", value: "No region data yet." }
+							]
 					}
 				];
 
 				insightsRoot.innerHTML = cards.map((card) => `
 					<article class="insight-card">
 						<h3>${escapeHtml(card.title)}</h3>
-						<p>${escapeHtml(card.body)}</p>
+						<ul class="insight-points">
+							${card.points.map((point) => `
+								<li>
+									<span class="insight-label">${escapeHtml(point.label)}:</span>
+									<span class="insight-value">${escapeHtml(point.value)}</span>
+								</li>
+							`).join("")}
+						</ul>
 					</article>
 				`).join("");
 			}
@@ -1280,7 +1301,10 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 	.insight-grid { margin-top: 0.65rem; display: grid; gap: 0.65rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 	.insight-card { border: 1px solid #e3dbcd; border-radius: 12px; background: #fcfbf8; padding: 0.72rem; }
 	.insight-card h3 { margin: 0; font-size: 0.98rem; color: #2b2b2b; }
-	.insight-card p { margin: 0.32rem 0 0; color: #545454; line-height: 1.45; font-size: 0.9rem; }
+	.insight-points { margin: 0.4rem 0 0; padding: 0 0 0 1rem; display: grid; gap: 0.28rem; color: #464646; }
+	.insight-points li { margin: 0; line-height: 1.38; font-size: 0.9rem; }
+	.insight-label { font-weight: 700; color: #2c2c2c; }
+	.insight-value { color: #4b4b4b; }
 	:global(.pie-widget-grid) { margin-top: 0.65rem; display: grid; gap: 0.65rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 	:global(.pie-widget) { border: 1px solid #e3dbcd; border-radius: 12px; background: #fcfbf8; padding: 0.72rem; }
 	:global(.pie-widget h3) { margin: 0; font-size: 1rem; }

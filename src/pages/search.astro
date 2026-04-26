@@ -567,6 +567,59 @@ if (query && apiKey) {
 		color: #1f7a45;
 		line-height: 1.25;
 	}
+
+	.login-confirm-overlay {
+		position: fixed;
+		inset: 0;
+		width: 100%;
+		height: 100dvh;
+		min-height: 100vh;
+		background: rgba(0, 0, 0, 0.62);
+		z-index: 110;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1rem;
+	}
+
+	.login-confirm-dialog {
+		width: min(460px, 100%);
+		background: #111;
+		color: #fff;
+		border-radius: 18px;
+		padding: 1rem;
+		box-shadow: 0 24px 52px rgba(0, 0, 0, 0.45);
+	}
+
+	.login-confirm-dialog p {
+		margin: 0;
+		font-size: 1rem;
+		line-height: 1.45;
+	}
+
+	.login-confirm-actions {
+		margin-top: 0.95rem;
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.55rem;
+	}
+
+	.login-confirm-actions button {
+		border: 1px solid rgba(255, 255, 255, 0.22);
+		background: transparent;
+		color: #d9e3ff;
+		font: inherit;
+		font-weight: 600;
+		border-radius: 999px;
+		padding: 0.35rem 0.9rem;
+		cursor: pointer;
+	}
+
+	.login-confirm-actions .confirm {
+		background: #2e8f57;
+		border-color: #2e8f57;
+		color: #fff;
+	}
 </style>
 
 <script>
@@ -585,10 +638,53 @@ if (query && apiKey) {
 	};
 
 	function promptForLogin() {
-		const shouldRedirect = window.confirm("Log in or sign up to save books to your shelf. Go there now?");
-		if (shouldRedirect) {
+		const existing = document.getElementById("login-confirm-overlay");
+		if (existing) existing.remove();
+
+		const overlay = document.createElement("div");
+		overlay.id = "login-confirm-overlay";
+		overlay.className = "login-confirm-overlay";
+
+		const dialog = document.createElement("div");
+		dialog.className = "login-confirm-dialog";
+		dialog.setAttribute("role", "dialog");
+		dialog.setAttribute("aria-modal", "true");
+
+		const message = document.createElement("p");
+		message.textContent = "Log in or sign up to save books to your shelf. Go there now?";
+
+		const actions = document.createElement("div");
+		actions.className = "login-confirm-actions";
+
+		const cancelButton = document.createElement("button");
+		cancelButton.type = "button";
+		cancelButton.className = "cancel";
+		cancelButton.textContent = "Cancel";
+
+		const okButton = document.createElement("button");
+		okButton.type = "button";
+		okButton.className = "confirm";
+		okButton.textContent = "OK";
+
+		const close = () => overlay.remove();
+
+		cancelButton.addEventListener("click", close);
+		okButton.addEventListener("click", () => {
+			close();
 			window.location.href = "/settings#account-settings";
-		}
+		});
+		overlay.addEventListener("click", (event) => {
+			if (event.target === overlay) close();
+		});
+		document.addEventListener("keydown", (event) => {
+			if (event.key === "Escape" && document.body.contains(overlay)) close();
+		}, { once: true });
+
+		actions.append(cancelButton, okButton);
+		dialog.append(message, actions);
+		overlay.append(dialog);
+		document.body.append(overlay);
+		okButton.focus();
 	}
 
 	function getUserKey() {
