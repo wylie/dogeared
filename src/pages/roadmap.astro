@@ -33,6 +33,11 @@ const roadmapItems = [
 	},
 	{
 		status: "Next",
+		title: "Book Ratings",
+		description: "Let readers rate books from key surfaces and feed those ratings into profile, activity, and book pages."
+	},
+	{
+		status: "Next",
 		title: "Profile & Library Polish",
 		description: "Refine profile pages, related views, and book metadata presentation for a cleaner first-run experience."
 	},
@@ -70,8 +75,26 @@ const roadmapItems = [
 		status: "Later",
 		title: "Recommendations v1",
 		description: "Ship lightweight “because you shelved X” recommendations from genre and author overlap."
+	},
+	{
+		status: "Finished",
+		title: "Centralized Auth State + Local Auth Preview",
+		description: "Unified auth handling across the site with localhost-only auth state preview switching for fast UX checks."
+	},
+	{
+		status: "Finished",
+		title: "Reusable Book Card System",
+		description: "Standardized book display UI across index, profile, search, and book pages with shared components."
+	},
+	{
+		status: "Finished",
+		title: "Public Profiles + Follow Graph Foundations",
+		description: "Shipped public profile privacy gates, follow relationships, and profile activity views for multi-user groundwork."
 	}
 ];
+
+const activeRoadmapItems = roadmapItems.filter((item) => item.status !== "Finished");
+const finishedRoadmapItems = roadmapItems.filter((item) => item.status === "Finished");
 
 const supportOptions = [
 	{
@@ -131,7 +154,7 @@ const supportOptions = [
 				<p>Upcoming additions planned for Dogeared.</p>
 			</div>
 			<div class="roadmap-grid">
-				{roadmapItems.map((item) => (
+				{activeRoadmapItems.map((item) => (
 					<article class="roadmap-item">
 						<p class={`status-pill status-${item.status.toLowerCase()}`}>{item.status}</p>
 						<h3>{item.title}</h3>
@@ -139,6 +162,22 @@ const supportOptions = [
 					</article>
 				))}
 			</div>
+			{finishedRoadmapItems.length > 0 && (
+				<>
+					<div class="panel-head finished-head">
+						<h3>Finished</h3>
+					</div>
+					<div class="roadmap-grid finished-grid">
+						{finishedRoadmapItems.map((item) => (
+							<article class="roadmap-item roadmap-item-finished">
+								<p class="status-pill status-finished">Finished</p>
+								<h3>{item.title}</h3>
+								<p>{item.description}</p>
+							</article>
+						))}
+					</div>
+				</>
+			)}
 		</section>
 
 	</div>
@@ -187,6 +226,11 @@ const supportOptions = [
 	.status-now { background: #d7f1df; color: #176339; }
 	.status-next { background: #f6ebcf; color: #7a5a19; }
 	.status-later { background: #e8e8e8; color: #5e5e5e; }
+	.status-finished { background: #dbeafe; color: #1e40af; }
+	.finished-head { margin-top: 0.9rem; }
+	.finished-head h3 { margin: 0; font-size: 1rem; }
+	.finished-grid { margin-top: 0.45rem; }
+	.roadmap-item-finished { background: #f8fbff; }
 	.support-grid { margin-top: 0.7rem; display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.support-card { border: 1px solid #e1ded4; border-radius: 12px; padding: 0.75rem; background: #fcfbf8; display: flex; flex-direction: column; min-height: 180px; }
 	.support-card h3 { margin: 0; font-size: 1rem; }
