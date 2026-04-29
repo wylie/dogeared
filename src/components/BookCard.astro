@@ -1,0 +1,114 @@
+---
+type Props = {
+	title: string;
+	titleHref?: string;
+	author?: string;
+	thumbnail?: string;
+	description?: string;
+};
+
+const {
+	title,
+	titleHref = "",
+	author = "",
+	thumbnail = "",
+	description = ""
+} = Astro.props as Props;
+
+const hasTopRight = Astro.slots.has("topRight");
+---
+
+<li class="book-card">
+	{hasTopRight && <div class="top-right"><slot name="topRight" /></div>}
+	<div class="cover-wrap">
+		{thumbnail
+			? <img class="cover" src={thumbnail} alt={`${title} cover`} loading="lazy" />
+			: <div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>}
+	</div>
+	<div class="card-body">
+		<slot name="preTitle" />
+		<h3>{titleHref ? <a href={titleHref}>{title}</a> : title}</h3>
+		{author && <p class="meta">{author}</p>}
+		<slot name="meta" />
+		{description && <p class="description">{description}</p>}
+		<slot />
+		<div class="card-actions">
+			<slot name="actions" />
+		</div>
+	</div>
+</li>
+
+<style>
+	.book-card {
+		border: 1px solid #d7d7d7;
+		border-radius: 12px;
+		background: #fff;
+		padding: 0.65rem;
+		position: relative;
+		display: grid;
+		grid-template-columns: 56px auto;
+		gap: 0.65rem;
+	}
+	.top-right {
+		position: absolute;
+		top: 0.65rem;
+		right: 0.65rem;
+		display: inline-flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.28rem;
+	}
+	.cover-wrap {
+		width: 56px;
+		height: 84px;
+	}
+	.cover {
+		width: 56px;
+		height: 84px;
+		object-fit: cover;
+		border-radius: 6px;
+		background: #f1f1f1;
+	}
+	.cover-placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #8a8a8a;
+		border: 1px solid #d7d7d7;
+	}
+	.card-body {
+		display: flex;
+		flex-direction: column;
+		min-height: 100%;
+	}
+	.card-body h3 {
+		margin: 0;
+		padding-right: 3.25rem;
+		font-size: 1rem;
+	}
+	.card-body h3 a {
+		color: inherit;
+		text-decoration: none;
+	}
+	.card-body h3 a:hover {
+		text-decoration: underline;
+	}
+	.meta,
+	:global(.book-card .meta) {
+		margin: 0.2rem 0;
+		font-size: 0.87rem;
+		color: #4d4d4d;
+	}
+	:global(.book-card .meta + .meta) {
+		margin-top: 0.1rem;
+	}
+	.description {
+		margin: 0.25rem 0 0;
+		font-size: 0.85rem;
+		color: #575757;
+	}
+	.card-actions {
+		margin-top: auto;
+		padding-top: 0.45rem;
+	}
+</style>

@@ -1,5 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import BookCard from '../components/BookCard.astro';
+import ShelfDropdown from '../components/ShelfDropdown.astro';
 import { resolveUserBySession } from '../lib/auth';
 
 export const prerender = false;
@@ -43,6 +45,16 @@ const query = Astro.url.searchParams.get("q")?.trim() ?? "";
 let results: SearchResult[] = [];
 let errorMessage = "";
 
+function truncateDescription(value: string, maxLength = 280) {
+	const text = String(value || "")
+		.replace(/<[^>]+>/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+	if (!text) return "";
+	if (text.length <= maxLength) return text;
+	return `${text.slice(0, maxLength).trimEnd()}…`;
+}
+
 if (query) {
 	try {
 		const endpoint = new URL("/api/books/search", Astro.url);
@@ -72,17 +84,18 @@ if (query) {
 
 		<ul class="search-results" id="search-results">
 			{results.map((result) => (
-				<li class="search-result">
-						<div class="search-cover-frame">
-							{result.thumbnail
-								? <img class="search-cover" src={result.thumbnail} alt={`${result.title} cover`} />
-								: <div class="search-cover search-cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></div>}
-						</div>
-						<div class="search-content">
-							<h2>{result.title}</h2>
-							<p class="meta">{result.authors.length > 0 ? result.authors.join(", ") : "Unknown author"}</p>
+				<BookCard
+					title={result.title}
+					titleHref={`/book?title=${encodeURIComponent(result.title)}&author=${encodeURIComponent(result.authors[0] ?? "")}&isbn13=${encodeURIComponent(result.isbn13 || "")}&isbn10=${encodeURIComponent(result.isbn10 || "")}&googleBooksId=${encodeURIComponent(result.googleBooksId || "")}`}
+					author={result.authors.length > 0 ? result.authors.join(", ") : "Unknown author"}
+					thumbnail={result.thumbnail}
+					description={truncateDescription(result.description)}
+				>
+						<div slot="meta">
 							{result.pageCount !== null && <p class="meta">{result.pageCount} pages</p>}
 							{(result.variantCount ?? 1) > 1 && <p class="meta">{result.variantCount} editions/formats combined</p>}
+						</div>
+						<div>
 							<div class="variant-picker">
 								<div class="variant-dropdown" aria-label={`Edition and format for ${result.title}`}>
 									<button type="button" class="variant-trigger" data-action="toggle-variant" aria-expanded="false">
@@ -117,29 +130,18 @@ if (query) {
 								</div>
 								<p class="variant-meta"></p>
 							</div>
-							<div
-								class="shelf-dropdown"
-								data-title={result.title}
-								data-author={result.authors[0] ?? ""}
-								data-description={result.description}
-								data-pages={String(result.pageCount ?? 0)}
-								data-cover={result.thumbnail}
-								data-categories={JSON.stringify(result.categories ?? [])}
-							>
-								<button type="button" class="shelf-trigger" data-action="toggle-shelf" aria-expanded="false">
-									<span class="material-icons shelf-check" aria-hidden="true">check</span>
-									<span class="shelf-label">Want to Read</span>
-									<span class="material-icons shelf-icon" aria-hidden="true">arrow_drop_down</span>
-								</button>
-								<div class="shelf-menu" hidden>
-									<button type="button" class="shelf-option" data-action="set-shelf" data-status="want_to_read">Want to Read</button>
-									<button type="button" class="shelf-option" data-action="set-shelf" data-status="reading">Currently Reading</button>
-									<button type="button" class="shelf-option" data-action="set-shelf" data-status="finished">Read</button>
-								</div>
-								<p class="shelf-feedback" hidden></p>
-							</div>
 						</div>
-					</li>
+						<div slot="actions">
+							<ShelfDropdown attrs={{
+								'data-title': result.title,
+								'data-author': result.authors[0] ?? "",
+								'data-description': result.description,
+								'data-pages': String(result.pageCount ?? 0),
+								'data-cover': result.thumbnail,
+								'data-categories': JSON.stringify(result.categories ?? [])
+							}} />
+						</div>
+					</BookCard>
 				))}
 		</ul>
 		{query && !errorMessage && results.length > 0 && (
@@ -161,6 +163,7 @@ if (query) {
 		margin: 1rem 0 0;
 		padding: 0;
 		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.75rem;
 	}
 
@@ -170,42 +173,6 @@ if (query) {
 
 	#search-sentinel {
 		height: 1px;
-	}
-
-	.search-result {
-		display: grid;
-		grid-template-columns: 60px auto;
-		gap: 0.8rem;
-		padding: 0.75rem;
-		border: 1px solid #d8d8d8;
-		border-radius: 12px;
-		background: #fff;
-	}
-
-	.search-cover {
-		width: 60px;
-		height: 90px;
-		object-fit: cover;
-		border-radius: 6px;
-		background: #f1f1f1;
-	}
-
-	.search-cover-frame {
-		width: 60px;
-		height: 90px;
-	}
-
-	.search-cover-placeholder {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: #8a8a8a;
-		border: 1px solid #d6d6d6;
-	}
-
-	.search-content h2 {
-		margin: 0;
-		font-size: 1.05rem;
 	}
 
 	.meta {
@@ -429,104 +396,41 @@ if (query) {
 		border-color: #2e8f57;
 		color: #fff;
 	}
+
+	@media (max-width: 860px) {
+		.search-results {
+			grid-template-columns: 1fr;
+		}
+	}
 </style>
 
-<script>
+<script type="module">
+	import { resolveClientAuthState } from "../lib/clientAuth";
+	import {
+		buildShelfEntryFromRecord,
+		closeShelfMenus,
+		parseCategories,
+		promptForShelfLogin,
+		setDropdownLabel,
+		setShelvedState,
+		showShelfFeedback,
+		statusLabel,
+		syncShelfEntryToServer,
+		toggleShelfMenu
+	} from "../lib/shelfClient";
+	import {
+		loadShelfEntries,
+		loadShelfUpdates,
+		migrateShelfEntriesInPlace,
+		saveShelfEntries,
+		saveShelfUpdates
+	} from "../lib/shelfStorage";
+
 	const searchPage = document.getElementById("search-page");
-	const IS_AUTHENTICATED = searchPage?.dataset.authenticated === "true";
-	const STORAGE_KEY = "dogeared:myreads";
-	const UPDATES_KEY = "dogeared:updates";
-	const USER_KEY_STORAGE_KEY = "dogeared:user-key";
+	let isAuthenticated = searchPage?.dataset.authenticated === "true";
 	const feedbackTimers = new WeakMap();
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	const variantDropdowns = Array.from(document.querySelectorAll(".variant-dropdown"));
-	const STATUS_LABELS = {
-		want_to_read: "Want to Read",
-		reading: "Currently Reading",
-		finished: "Read"
-	};
-
-	function promptForLogin() {
-		const existing = document.getElementById("login-confirm-overlay");
-		if (existing) existing.remove();
-
-		const overlay = document.createElement("div");
-		overlay.id = "login-confirm-overlay";
-		overlay.className = "login-confirm-overlay";
-
-		const dialog = document.createElement("div");
-		dialog.className = "login-confirm-dialog";
-		dialog.setAttribute("role", "dialog");
-		dialog.setAttribute("aria-modal", "true");
-
-		const message = document.createElement("p");
-		message.textContent = "Log in or sign up to save books to your shelf. Go there now?";
-
-		const actions = document.createElement("div");
-		actions.className = "login-confirm-actions";
-
-		const cancelButton = document.createElement("button");
-		cancelButton.type = "button";
-		cancelButton.className = "cancel";
-		cancelButton.textContent = "Cancel";
-
-		const okButton = document.createElement("button");
-		okButton.type = "button";
-		okButton.className = "confirm";
-		okButton.textContent = "OK";
-
-		const close = () => overlay.remove();
-
-		cancelButton.addEventListener("click", close);
-		okButton.addEventListener("click", () => {
-			close();
-			window.location.href = "/settings#account-settings";
-		});
-		overlay.addEventListener("click", (event) => {
-			if (event.target === overlay) close();
-		});
-		document.addEventListener("keydown", (event) => {
-			if (event.key === "Escape" && document.body.contains(overlay)) close();
-		}, { once: true });
-
-		actions.append(cancelButton, okButton);
-		dialog.append(message, actions);
-		overlay.append(dialog);
-		document.body.append(overlay);
-		okButton.focus();
-	}
-
-	function getUserKey() {
-		try {
-			const existing = String(localStorage.getItem(USER_KEY_STORAGE_KEY) || "").trim();
-			if (existing) return existing;
-			const created = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-			localStorage.setItem(USER_KEY_STORAGE_KEY, created);
-			return created;
-		} catch {
-			return `usr_fallback_${Math.random().toString(36).slice(2, 10)}`;
-		}
-	}
-
-	function parseCategories(rawValue) {
-		try {
-			const parsed = JSON.parse(String(rawValue || "[]"));
-			return Array.isArray(parsed)
-				? parsed.map((item) => String(item || "").trim()).filter(Boolean)
-				: [];
-		} catch {
-			return [];
-		}
-	}
-
-	async function syncEntryToServer(entry) {
-		const userKey = getUserKey();
-		await fetch("/api/shelf/entries", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ userKey, entry })
-		});
-	}
 
 	function normalizeText(value) {
 		return String(value || "").trim().toLowerCase();
@@ -555,35 +459,9 @@ if (query) {
 			.trim();
 	}
 
-	function loadEntries() {
-		try {
-			const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-			return Array.isArray(parsed) ? parsed : [];
-		} catch {
-			return [];
-		}
-	}
-
-	function saveEntries(entries) {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-	}
-
-	function loadUpdates() {
-		try {
-			const parsed = JSON.parse(localStorage.getItem(UPDATES_KEY) || "[]");
-			return Array.isArray(parsed) ? parsed : [];
-		} catch {
-			return [];
-		}
-	}
-
-	function saveUpdates(updates) {
-		localStorage.setItem(UPDATES_KEY, JSON.stringify(updates.slice(0, 200)));
-	}
-
 	function logShelfUpdate(entry, status) {
 		if (!entry?.title) return;
-		const updates = loadUpdates();
+		const updates = loadShelfUpdates();
 		updates.unshift({
 			id: `upd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
 			timestamp: Date.now(),
@@ -594,7 +472,7 @@ if (query) {
 			format: entry.format || "",
 			language: entry.language || ""
 		});
-		saveUpdates(updates);
+		saveShelfUpdates(updates);
 	}
 
 	function findEntry(entries, title, author) {
@@ -605,36 +483,6 @@ if (query) {
 		));
 	}
 
-	function statusLabel(status) {
-		return STATUS_LABELS[status] || STATUS_LABELS.want_to_read;
-	}
-
-	function setDropdownLabel(dropdown, status) {
-		const label = dropdown.querySelector(".shelf-label");
-		if (label) label.textContent = statusLabel(status);
-	}
-
-	function setShelvedState(dropdown, isShelved) {
-		if (isShelved) {
-			dropdown.classList.add("is-shelved");
-		} else {
-			dropdown.classList.remove("is-shelved");
-		}
-	}
-
-	function showShelfFeedback(dropdown, message) {
-		const feedback = dropdown.querySelector(".shelf-feedback");
-		if (!feedback) return;
-		feedback.textContent = message;
-		feedback.hidden = false;
-		const existingTimer = feedbackTimers.get(dropdown);
-		if (existingTimer) clearTimeout(existingTimer);
-		const timer = setTimeout(() => {
-			feedback.hidden = true;
-		}, 1800);
-		feedbackTimers.set(dropdown, timer);
-	}
-
 	function updateVariantMeta(card) {
 		if (!card) return;
 		const variantDropdown = card.querySelector(".variant-dropdown");
@@ -642,15 +490,6 @@ if (query) {
 		if (!variantDropdown || !meta) return;
 		const detailLabel = String(variantDropdown.dataset.detailLabel || "").trim();
 		meta.textContent = detailLabel;
-	}
-
-	function closeShelfMenus() {
-		for (const dropdown of shelfDropdowns) {
-			const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
-			const menu = dropdown.querySelector(".shelf-menu");
-			if (menu) menu.hidden = true;
-			if (trigger) trigger.setAttribute("aria-expanded", "false");
-		}
 	}
 
 	function closeVariantMenus() {
@@ -663,18 +502,8 @@ if (query) {
 	}
 
 	function closeAllMenus() {
-		closeShelfMenus();
+		closeShelfMenus(shelfDropdowns);
 		closeVariantMenus();
-	}
-
-	function toggleMenu(dropdown) {
-		const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
-		const menu = dropdown.querySelector(".shelf-menu");
-		if (!trigger || !menu) return;
-		const willOpen = menu.hidden;
-		closeShelfMenus();
-		menu.hidden = !willOpen;
-		trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
 	}
 
 	function toggleVariantMenu(dropdown) {
@@ -701,7 +530,7 @@ if (query) {
 		dropdown.dataset.googleBooksId = String(optionButton.dataset.googleBooksId || "").trim();
 		dropdown.dataset.detailLabel = String(optionButton.dataset.detailLabel || "").trim();
 
-		const card = dropdown.closest(".search-content");
+		const card = dropdown.closest(".book-card");
 		updateVariantMeta(card);
 	}
 
@@ -724,11 +553,11 @@ if (query) {
 	}
 
 	function setShelf(dropdown, selectedStatus) {
-		if (!IS_AUTHENTICATED) {
-			promptForLogin();
+		if (!isAuthenticated) {
+			promptForShelfLogin();
 			return;
 		}
-		const resultCard = dropdown.closest(".search-content");
+		const resultCard = dropdown.closest(".book-card");
 		const variantDropdown = resultCard?.querySelector(".variant-dropdown");
 		const title = String(variantDropdown?.dataset?.title || dropdown.dataset.title || "").trim();
 		if (!title) return;
@@ -745,7 +574,7 @@ if (query) {
 		const googleBooksId = String(variantDropdown?.dataset?.googleBooksId || "").trim();
 		const categories = parseCategories(dropdown.dataset.categories);
 
-		const entries = loadEntries();
+		const entries = loadShelfEntries();
 		const existing = findEntry(entries, title, author);
 		if (existing) {
 			const previousStatus = existing.status;
@@ -762,27 +591,24 @@ if (query) {
 			if (description && !existing.description) existing.description = description;
 			applyStatus(existing, selectedStatus, totalPages || Number(existing.totalPages) || 0);
 			existing.updatedAt = Date.now();
-			saveEntries(entries);
+			saveShelfEntries(entries);
 			if (previousStatus !== selectedStatus) {
 				logShelfUpdate(existing, selectedStatus);
-				showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`);
+				showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`, feedbackTimers);
 			} else {
-				showShelfFeedback(dropdown, `Already on ${statusLabel(selectedStatus)}.`);
+				showShelfFeedback(dropdown, `Already on ${statusLabel(selectedStatus)}.`, feedbackTimers);
 			}
 			setDropdownLabel(dropdown, selectedStatus);
 			setShelvedState(dropdown, true);
-			void syncEntryToServer(existing);
+			void syncShelfEntryToServer(existing);
 			return;
 		}
 
-		const next = {
-			id: `book_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+		const next = buildShelfEntryFromRecord({
 			title,
 			author,
-			totalPages,
-			currentPage: 0,
-			status: selectedStatus,
-			finishedDate: "",
+			description,
+			pageCount: totalPages,
 			coverUrl,
 			format,
 			language,
@@ -791,32 +617,36 @@ if (query) {
 			isbn10,
 			isbn13,
 			googleBooksId,
-			description,
+			categories
+		}, {
+			status: selectedStatus,
+			totalPages,
+			currentPage: 0,
+			finishedDate: "",
 			source: "google_books",
 			sourceWorkId: googleBooksId,
 			sourceUrl: googleBooksId ? `https://books.google.com/books?id=${encodeURIComponent(googleBooksId)}` : "",
-			categories,
 			updatedAt: Date.now()
-		};
+		});
 		applyStatus(next, selectedStatus, totalPages);
 		entries.unshift(next);
-		saveEntries(entries);
+		saveShelfEntries(entries);
 		logShelfUpdate(next, selectedStatus);
 		setDropdownLabel(dropdown, selectedStatus);
 		setShelvedState(dropdown, true);
-		showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`);
-		void syncEntryToServer(next);
+		showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`, feedbackTimers);
+		void syncShelfEntryToServer(next);
 	}
 
 	function syncExistingState() {
-		if (!IS_AUTHENTICATED) {
+		if (!isAuthenticated) {
 			for (const dropdown of shelfDropdowns) {
 				setDropdownLabel(dropdown, "want_to_read");
 				setShelvedState(dropdown, false);
 			}
 			return;
 		}
-		const entries = loadEntries();
+		const entries = loadShelfEntries();
 		for (const dropdown of shelfDropdowns) {
 			const title = dropdown.dataset.title || "";
 			const author = dropdown.dataset.author || "";
@@ -829,6 +659,13 @@ if (query) {
 				setShelvedState(dropdown, false);
 			}
 		}
+	}
+
+	async function initAuthState() {
+		migrateShelfEntriesInPlace();
+		const state = await resolveClientAuthState({ ssrAuthenticated: isAuthenticated });
+		isAuthenticated = state.authenticated;
+		syncExistingState();
 	}
 
 	for (const dropdown of variantDropdowns) {
@@ -852,13 +689,13 @@ if (query) {
 		const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
 		const options = Array.from(dropdown.querySelectorAll('[data-action="set-shelf"]'));
 		if (trigger) {
-			trigger.addEventListener("click", () => toggleMenu(dropdown));
+			trigger.addEventListener("click", () => toggleShelfMenu(dropdown, shelfDropdowns));
 		}
 		for (const option of options) {
 			option.addEventListener("click", () => {
 				const status = option.dataset.status || "want_to_read";
 				setShelf(dropdown, status);
-				closeShelfMenus();
+				closeShelfMenus(shelfDropdowns);
 			});
 		}
 	}
@@ -871,5 +708,5 @@ if (query) {
 		closeAllMenus();
 	});
 
-	syncExistingState();
+	void initAuthState();
 </script>

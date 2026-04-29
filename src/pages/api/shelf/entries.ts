@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { getNeonSql } from "../../../lib/neon";
-import { resolveActiveUserId } from "../../../lib/auth";
+import { resolveUserBySession } from "../../../lib/auth";
+import { fromShelfEntryInput } from "../../../lib/bookPayload";
 import {
 	normalizeCatalogText,
 	normalizeCatalogIsbn,
@@ -318,17 +319,11 @@ async function ensureShelfSchema() {
 }
 
 export const GET: APIRoute = async ({ request, url }) => {
-	const userKey = normalizeText(url.searchParams.get("userKey"));
-
 	try {
 		await ensureShelfSchema();
-		const userId = await resolveActiveUserId(request, userKey);
-		if (!userId) {
-			return new Response(JSON.stringify({ entries: [] }), {
-				status: 200,
-				headers: { "Content-Type": "application/json" }
-			});
-		}
+		const session = await resolveUserBySession(request);
+		if (!session?.userId) return new Response(JSON.stringify({ error: "You must be logged in to load shelf entries." }), { status: 401, headers: { "Content-Type": "application/json" } });
+		const userId = session.userId;
 		const sql = getNeonSql();
 		const rows = await sql<Array<{
 			book_id: number;
@@ -408,10 +403,12 @@ export const GET: APIRoute = async ({ request, url }) => {
 export const POST: APIRoute = async ({ request }) => {
 	try {
 		await ensureShelfSchema();
-		const body = await request.json() as { userKey?: unknown; entry?: ShelfEntryInput };
-		const userKey = normalizeText(body?.userKey);
+		const session = await resolveUserBySession(request);
+		if (!session?.userId) return new Response(JSON.stringify({ error: "You must be logged in to save shelf entries." }), { status: 401, headers: { "Content-Type": "application/json" } });
+		const body = await request.json() as { entry?: ShelfEntryInput };
 		const entry = body?.entry || {};
-		const title = normalizeText(entry.title);
+		const bookPayload = fromShelfEntryInput(entry);
+		const title = bookPayload.title;
 		if (!title) {
 			return new Response(JSON.stringify({ error: "Missing title." }), {
 				status: 400,
@@ -419,24 +416,24 @@ export const POST: APIRoute = async ({ request }) => {
 			});
 		}
 
-		const author = normalizeText(entry.author);
+		const author = bookPayload.author;
 		const status = normalizeStatus(entry.status);
 		const rating = status === "finished" ? normalizeRating(entry.rating) : null;
 		const totalPages = normalizePositiveInt(entry.totalPages);
 		const currentPage = normalizePositiveInt(entry.currentPage);
 		const finishedDateRaw = normalizeText(entry.finishedDate);
 		const finishedDate = status === "finished" && finishedDateRaw ? finishedDateRaw : "";
-		const coverUrl = normalizeText(entry.coverUrl);
-		const language = normalizeText(entry.language);
-		const synopsis = normalizeText(entry.description);
-		const isbn10 = normalizeIsbn(entry.isbn10);
-		const isbn13 = normalizeIsbn(entry.isbn13);
-		const publishedDate = normalizeText(entry.publishedDate);
+		const coverUrl = bookPayload.coverUrl;
+		const language = bookPayload.language;
+		const synopsis = bookPayload.description;
+		const isbn10 = bookPayload.isbn10;
+		const isbn13 = bookPayload.isbn13;
+		const publishedDate = bookPayload.publishedDate;
 		const publishedYearMatch = publishedDate.match(/\d{4}/);
 		const publishedYear = publishedYearMatch ? Number(publishedYearMatch[0]) : null;
-		const genres = parseGenres(entry.categories);
+		const genres = parseGenres(bookPayload.categories);
 		const workKey = canonicalWorkKey({ title, author, isbn10, isbn13 });
-		const googleBooksId = normalizeCatalogText(entry.googleBooksId);
+		const googleBooksId = bookPayload.googleBooksId;
 		const source = normalizeCatalogText(entry.source);
 		const sourceWorkId = normalizeCatalogText(entry.sourceWorkId);
 		const sourceEditionId = normalizeCatalogText(entry.sourceEditionId);
@@ -464,8 +461,7 @@ export const POST: APIRoute = async ({ request }) => {
 				sourceUrl
 			});
 		}
-		const userId = await resolveActiveUserId(request, userKey);
-		if (!userId) throw new Error("User resolution failed.");
+		const userId = session.userId;
 		const sql = getNeonSql();
 		const previousRows = await sql<Array<{ status: ShelfStatus; rating: number | null }>>`
 			select status, rating
@@ -636,8 +632,9 @@ export const POST: APIRoute = async ({ request }) => {
 export const DELETE: APIRoute = async ({ request }) => {
 	try {
 		await ensureShelfSchema();
-		const body = await request.json() as { userKey?: unknown; entry?: ShelfEntryInput };
-		const userKey = normalizeText(body?.userKey);
+		const session = await resolveUserBySession(request);
+		if (!session?.userId) return new Response(JSON.stringify({ error: "You must be logged in to delete shelf entries." }), { status: 401, headers: { "Content-Type": "application/json" } });
+		const body = await request.json() as { entry?: ShelfEntryInput };
 		const entry = body?.entry || {};
 		const title = normalizeText(entry.title);
 		const author = normalizeText(entry.author);
@@ -645,8 +642,7 @@ export const DELETE: APIRoute = async ({ request }) => {
 		const isbn13 = normalizeIsbn(entry.isbn13);
 		const workKey = canonicalWorkKey({ title, author, isbn10, isbn13 });
 
-		const userId = await resolveActiveUserId(request, userKey);
-		if (!userId) throw new Error("User resolution failed.");
+		const userId = session.userId;
 		const sql = getNeonSql();
 		await sql`
 			delete from user_book ub

@@ -1,0 +1,24 @@
+---
+type Props = {
+	attrs?: Record<string, string | number | boolean | null | undefined>;
+};
+
+const { attrs = {} } = Astro.props as Props;
+---
+
+<div
+	class="shelf-dropdown"
+	{...attrs}
+>
+	<button type="button" class="shelf-trigger" data-action="toggle-shelf" aria-expanded="false">
+		<span class="material-icons shelf-check" aria-hidden="true">check</span>
+		<span class="shelf-label">Want to Read</span>
+		<span class="material-icons shelf-icon" aria-hidden="true">arrow_drop_down</span>
+	</button>
+	<div class="shelf-menu" hidden>
+		<button type="button" class="shelf-option" data-action="set-shelf" data-status="want_to_read">Want to Read</button>
+		<button type="button" class="shelf-option" data-action="set-shelf" data-status="reading">Currently Reading</button>
+		<button type="button" class="shelf-option" data-action="set-shelf" data-status="finished">Read</button>
+	</div>
+	<p class="shelf-feedback" hidden></p>
+</div>

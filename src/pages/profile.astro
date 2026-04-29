@@ -178,12 +178,17 @@ const isAuthenticated = !!session?.userId;
 	</div>
 </Layout>
 
-<script>
+<script type="module">
+	import { renderProfileBookCard } from "../lib/profileBookCardTemplate";
+	import {
+		loadShelfUpdates as loadSharedShelfUpdates,
+		migrateShelfEntriesInPlace,
+		saveShelfEntries,
+		saveShelfUpdates as saveSharedShelfUpdates
+	} from "../lib/shelfStorage";
+
 	const profilePageRoot = document.querySelector(".reads-page");
 	if (profilePageRoot?.dataset.authenticated === "true") {
-	const STORAGE_KEY = "dogeared:myreads";
-	const UPDATES_KEY = "dogeared:updates";
-	const USER_KEY_STORAGE_KEY = "dogeared:user-key";
 	const PROFILE_INFO_KEY = "dogeared:profile-info";
 	const COVER_CACHE_KEY = "dogeared:cover-lookup-cache";
 	const LIST_SORTS_KEY = "dogeared:profile-list-sorts";
@@ -276,42 +281,31 @@ const isAuthenticated = !!session?.userId;
 		["sci-fi", "Sci-Fi"]
 	]);
 
-	function getUserKey() {
-		try {
-			const existing = String(localStorage.getItem(USER_KEY_STORAGE_KEY) || "").trim();
-			if (existing) return existing;
-			const created = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-			localStorage.setItem(USER_KEY_STORAGE_KEY, created);
-			return created;
-		} catch {
-			return `usr_fallback_${Math.random().toString(36).slice(2, 10)}`;
+	async function syncEntryToServer(entry) {
+		const response = await fetch("/api/shelf/entries", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ entry })
+		});
+		if (response.status === 401) {
+			window.location.href = "/settings#account-settings";
 		}
 	}
 
-	async function syncEntryToServer(entry) {
-		const userKey = getUserKey();
-		await fetch("/api/shelf/entries", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ userKey, entry })
-		});
-	}
-
 	async function deleteEntryFromServer(entry) {
-		const userKey = getUserKey();
-		await fetch("/api/shelf/entries", {
+		const response = await fetch("/api/shelf/entries", {
 			method: "DELETE",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ userKey, entry })
+			body: JSON.stringify({ entry })
 		});
+		if (response.status === 401) {
+			window.location.href = "/settings#account-settings";
+		}
 	}
 
 	async function hydrateProfileInfoFromServer() {
-		const userKey = getUserKey();
 		try {
-			const endpoint = new URL("/api/profile/info", window.location.origin);
-			endpoint.searchParams.set("userKey", userKey);
-			const response = await fetch(endpoint.toString());
+			const response = await fetch("/api/profile/info");
 			const data = await response.json().catch(() => ({}));
 			if (!response.ok || !data?.profile) return false;
 			profileInfo = saveProfileInfo(mergeProfileInfo(loadProfileInfo(), data.profile));
@@ -323,11 +317,10 @@ const isAuthenticated = !!session?.userId;
 	}
 
 	async function saveProfileInfoToServer(nextProfile) {
-		const userKey = getUserKey();
 		const response = await fetch("/api/profile/info", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ userKey, profile: nextProfile })
+			body: JSON.stringify({ profile: nextProfile })
 		});
 		const data = await response.json().catch(() => ({}));
 		if (!response.ok) {
@@ -337,8 +330,11 @@ const isAuthenticated = !!session?.userId;
 	}
 
 	async function hydrateEntriesFromServer() {
-		const userKey = getUserKey();
-		const response = await fetch(`/api/shelf/entries?userKey=${encodeURIComponent(userKey)}`);
+		const response = await fetch("/api/shelf/entries");
+		if (response.status === 401) {
+			window.location.href = "/settings#account-settings";
+			return;
+		}
 		if (!response.ok) return;
 		const data = await response.json();
 		if (!Array.isArray(data?.entries)) return;
@@ -353,12 +349,7 @@ const isAuthenticated = !!session?.userId;
 	}
 
 	function loadEntries() {
-		try {
-			const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-			entries = Array.isArray(parsed) ? parsed : [];
-		} catch {
-			entries = [];
-		}
+		entries = migrateShelfEntriesInPlace();
 		let changed = false;
 		for (const entry of entries) {
 			const existingAddedAt = normalizeNumber(entry?.addedAt);
@@ -376,7 +367,7 @@ const isAuthenticated = !!session?.userId;
 	}
 
 	function saveEntries() {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+		saveShelfEntries(entries);
 	}
 
 	function normalizeSortValue(value, panel) {
@@ -582,7 +573,9 @@ const isAuthenticated = !!session?.userId;
 				</div>
 				<div>
 					<h3>${escapeHtml(profileLabel(profileInfo?.name, "Reader"))}</h3>
-					<p class="meta">@${escapeHtml(profileLabel(profileInfo?.username, "username"))}</p>
+					<p class="meta">${String(profileInfo?.username || "").trim()
+						? `<a href="/u/${encodeURIComponent(String(profileInfo.username).trim())}">@${escapeHtml(String(profileInfo.username).trim())}</a>`
+						: "@username"}</p>
 				</div>
 			</div>
 			${details}
@@ -922,9 +915,7 @@ const isAuthenticated = !!session?.userId;
 		}
 		showUsernameStatus("Checking username...");
 		try {
-			const userKey = getUserKey();
 			const endpoint = new URL("/api/profile/username", window.location.origin);
-			endpoint.searchParams.set("userKey", userKey);
 			endpoint.searchParams.set("username", username);
 			const response = await fetch(endpoint.toString());
 			const data = await response.json();
@@ -951,11 +942,10 @@ const isAuthenticated = !!session?.userId;
 
 	async function claimUsername(rawUsername) {
 		const username = normalizeUsernameInput(rawUsername);
-		const userKey = getUserKey();
 		const response = await fetch("/api/profile/username", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ userKey, username })
+			body: JSON.stringify({ username })
 		});
 		const data = await response.json().catch(() => ({}));
 		if (!response.ok) {
@@ -1910,16 +1900,11 @@ const isAuthenticated = !!session?.userId;
 		}
 
 	function loadUpdates() {
-		try {
-			const parsed = JSON.parse(localStorage.getItem(UPDATES_KEY) || "[]");
-			return Array.isArray(parsed) ? parsed : [];
-		} catch {
-			return [];
-		}
+		return loadSharedShelfUpdates();
 	}
 
 	function saveUpdates(updates) {
-		localStorage.setItem(UPDATES_KEY, JSON.stringify(updates.slice(0, 200)));
+		saveSharedShelfUpdates(updates);
 	}
 
 	function normalizeRating(value) {
@@ -2193,103 +2178,18 @@ const isAuthenticated = !!session?.userId;
 	}
 
 	function renderEntryCard(entry) {
-		const author = entry.author ? `<p class="meta">${escapeHtml(entry.author)}</p>` : "";
-		const formatMeta = entry.format ? `<p class="meta">${escapeHtml(entry.format)}${entry.language ? ` • ${escapeHtml(String(entry.language).toUpperCase())}` : ""}</p>` : "";
-		const publishedMeta = entry.publishedDate ? `<p class="meta">Published: ${escapeHtml(formatPublishedLabel(entry.publishedDate))}</p>` : "";
-		const total = normalizeNumber(entry.totalPages);
-		const current = normalizeNumber(entry.currentPage);
-		const rating = normalizeRating(entry.rating);
-		const percent = progressPercent(entry);
-		const progress = (entry.status !== "want_to_read" && total > 0)
-			? `<div class="progress-wrap"><div class="progress-bar" style="width:${percent}%"></div></div><p class="meta">${current}/${total} pages (${percent}%)</p>`
-			: "";
-		const progressEditor = entry.status === "reading"
-			? `<div class="progress-editor">
-				<label class="progress-label" for="progress-${escapeHtml(entry.id)}">Update progress</label>
-				<div class="progress-controls">
-					<input
-						id="progress-${escapeHtml(entry.id)}"
-						class="progress-input"
-						type="number"
-						min="0"
-						${total > 0 ? `max="${total}"` : ""}
-						step="1"
-						inputmode="numeric"
-						placeholder="Page #"
-						value="${current}"
-					/>
-					<button type="button" class="secondary progress-save" data-action="update-progress">Save</button>
-				</div>
-			</div>`
-			: "";
-		const finishedDate = entry.finishedDate
-			? `<p class="meta">Finished: ${escapeHtml(formatFinishedLabel(entry.finishedDate))}</p>`
-			: "";
-		const coverUrl = entry.coverUrl || coverFromIsbn(entry.isbn13, entry.isbn10);
-		const cover = coverUrl
-			? `<img class="cover" src="${escapeHtml(coverUrl)}" alt="" loading="lazy" data-cover-image onerror="this.hidden=true; if (this.nextElementSibling) this.nextElementSibling.hidden=false;" />
-			   <div class="cover cover-placeholder" data-cover-placeholder hidden>
-				   <span class="material-icons cover-placeholder-icon" aria-hidden="true">menu_book</span>
-			   </div>`
-			: `<div class="cover cover-placeholder">
-				<span class="material-icons cover-placeholder-icon" aria-hidden="true">menu_book</span>
-			</div>`;
-		const actionButtons = [
-			entry.status === "want_to_read" ? `<button type="button" data-action="start" class="secondary">Start Reading</button>` : "",
-			entry.status === "reading" ? `<button type="button" data-action="finish" class="secondary">Mark Finished</button>` : ""
-		].filter(Boolean).join("");
-		const inlineActions = actionButtons
-			? `<div class="entry-actions">${actionButtons}</div>`
-			: "";
-		const finishPrompt = entry.status === "reading" && pendingFinishEntryId === entry.id
-			? `<div class="rating-block finish-rating-block">
-				<p class="rating-label">Rate this book before moving it to Read</p>
-				<div class="rating-stars">${renderRatingStars(pendingFinishRating, true)}</div>
-				<div class="entry-actions finish-rating-actions">
-					<button type="button" class="secondary" data-action="cancel-finish">Cancel</button>
-					<button type="button" data-action="confirm-finish" ${pendingFinishRating > 0 ? "" : "disabled"}>Save Rating & Move to Read</button>
-				</div>
-			</div>`
-			: "";
-		const ratingBlock = entry.status === "finished"
-			? `<div class="rating-block">
-				<p class="rating-label">${rating > 0 ? `Your rating: ${rating}/5` : "Rate this book"}</p>
-				<div class="rating-stars">${renderRatingStars(rating, true)}</div>
-			</div>`
-			: "";
-
-		return `
-			<article class="entry-card" data-id="${escapeHtml(entry.id)}">
-				<div class="card-menu-wrap">
-					<button type="button" class="card-menu-trigger" data-action="toggle-card-menu" aria-expanded="false" aria-label="More actions">
-						<span class="material-icons" aria-hidden="true">more_vert</span>
-					</button>
-					<div class="card-menu" hidden>
-						<p class="card-menu-label">Move to shelf</p>
-						<button type="button" class="card-menu-item" data-action="move-shelf" data-status="want_to_read">Want to Read</button>
-						<button type="button" class="card-menu-item" data-action="move-shelf" data-status="reading">Currently Reading</button>
-						<button type="button" class="card-menu-item" data-action="move-shelf" data-status="finished">Read</button>
-						<div class="card-menu-divider"></div>
-						<button type="button" class="card-menu-item danger-text" data-action="delete">Delete</button>
-					</div>
-				</div>
-				<div class="cover-wrap">
-					${cover}
-				</div>
-				<div class="card-body">
-					<h3>${escapeHtml(entry.title)}</h3>
-					${author}
-					${formatMeta}
-					${publishedMeta}
-					${progress}
-					${progressEditor}
-					${finishedDate}
-					${finishPrompt}
-					${ratingBlock}
-					${inlineActions}
-				</div>
-			</article>
-		`;
+		return renderProfileBookCard(entry, {
+			escapeHtml,
+			formatPublishedLabel,
+			formatFinishedLabel,
+			progressPercent,
+			normalizeNumber,
+			normalizeRating,
+			renderRatingStars,
+			coverFromIsbn,
+			pendingFinishEntryId,
+			pendingFinishRating
+		});
 	}
 
 	function renderEmptyState(message) {
@@ -3230,6 +3130,21 @@ const isAuthenticated = !!session?.userId;
 		padding-right: 1.4rem;
 	}
 
+	.reads-page .card-body h3 a {
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.reads-page .card-body h3 a:hover {
+		text-decoration: underline;
+	}
+
+	.reads-page .card-body {
+		display: flex;
+		flex-direction: column;
+		min-height: 100%;
+	}
+
 	.reads-page .meta {
 		margin: 0.2rem 0;
 		font-size: 0.87rem;
@@ -3285,6 +3200,11 @@ const isAuthenticated = !!session?.userId;
 		gap: 0.45rem;
 		margin-top: 0.5rem;
 		flex-wrap: wrap;
+	}
+
+	.reads-page .card-actions {
+		margin-top: auto;
+		padding-top: 0.45rem;
 	}
 
 	.reads-page .rating-block {

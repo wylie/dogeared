@@ -1,0 +1,633 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BookCard from "../components/BookCard.astro";
+import ShelfDropdown from "../components/ShelfDropdown.astro";
+import { getNeonSql } from "../lib/neon";
+import { getEncryptionKey, resolveUserBySession } from "../lib/auth";
+
+export const prerender = false;
+
+function normalizeText(value: unknown) {
+	return String(value || "").trim();
+}
+
+function canonicalizeTitle(value: unknown) {
+	return normalizeText(value)
+		.toLowerCase()
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/\([^)]*\)/g, " ")
+		.replace(/\b(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition)\b/g, " ")
+		.split(":")[0]
+		.replace(/^(the|a|an)\s+/g, "")
+		.replace(/[^a-z0-9\s]/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+function canonicalizeAuthor(value: unknown) {
+	return normalizeText(value)
+		.toLowerCase()
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/^(by\s+)/, "")
+		.replace(/[^a-z0-9\s]/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+function sanitizeSynopsis(value: unknown) {
+	return String(value || "")
+		.replace(/<[^>]+>/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+function synopsisParagraphs(value: string) {
+	const text = sanitizeSynopsis(value);
+	if (!text) return [] as string[];
+	const chunks: string[] = [];
+	let current = "";
+	for (const sentence of text.split(/(?<=[.!?])\s+/)) {
+		const next = current ? `${current} ${sentence}` : sentence;
+		if (next.length > 320 && current) {
+			chunks.push(current);
+			current = sentence;
+		} else {
+			current = next;
+		}
+	}
+	if (current) chunks.push(current);
+	return chunks;
+}
+
+function formatPublishedLabel(input: string) {
+	const text = normalizeText(input);
+	if (!text) return "";
+	if (/^\d{4}$/.test(text)) return text;
+	if (/^\d{4}-\d{2}$/.test(text)) {
+		const parsed = new Date(`${text}-01`);
+		if (!Number.isFinite(parsed.getTime())) return text;
+		return parsed.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+	}
+	const parsed = new Date(text);
+	if (!Number.isFinite(parsed.getTime())) return text;
+	return parsed.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+
+function renderAverageStars(value: number) {
+	const clamped = Math.max(0, Math.min(5, Number(value) || 0));
+	const rounded = Math.round(clamped);
+	return Array.from({ length: 5 }, (_, i) => (i < rounded ? "★" : "☆")).join("");
+}
+
+function formatActivityDate(value: string) {
+	const parsed = new Date(normalizeText(value));
+	if (!Number.isFinite(parsed.getTime())) return "";
+	return parsed.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+
+function activityHeading(eventType: string) {
+	const type = normalizeText(eventType).toLowerCase();
+	if (type === "reading") return { prefix: "Added to", shelf: "Currently Reading" };
+	if (type === "finished") return { prefix: "Finished Reading", shelf: "" };
+	if (type === "want_to_read") return { prefix: "Added to", shelf: "Want to Read" };
+	if (type === "rating") return { prefix: "Rated this book", shelf: "" };
+	return { prefix: "Updated shelf", shelf: "" };
+}
+
+type BookDetails = {
+	id: number;
+	title: string;
+	author: string;
+	synopsis: string;
+	coverUrl: string;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+	googleBooksId: string;
+	publishedLabel: string;
+	shelves: number;
+	averageRating: number;
+	ratingCount: number;
+};
+
+const params = Astro.url.searchParams;
+const queryBookId = Number(params.get("bookId") || 0);
+const queryIsbn13 = normalizeText(params.get("isbn13"));
+const queryIsbn10 = normalizeText(params.get("isbn10"));
+const queryGoogleBooksId = normalizeText(params.get("googleBooksId"));
+const queryTitle = normalizeText(params.get("title"));
+const queryAuthor = normalizeText(params.get("author"));
+
+let book: BookDetails | null = null;
+let activity: Array<{ eventType: string; timestamp: string; actorName: string; actorUsername: string }> = [];
+let errorMessage = "";
+const session = await resolveUserBySession(Astro.request);
+const isAuthenticated = !!session?.userId;
+
+async function fetchGoogleBook() {
+	const apiKey = normalizeText(import.meta.env.GOOGLE_BOOKS_API_KEY);
+	if (!apiKey) return null;
+
+	const fetchJson = async (url: string) => {
+		try {
+			const response = await fetch(url);
+			if (!response.ok) return null;
+			return await response.json();
+		} catch {
+			return null;
+		}
+	};
+
+	if (queryGoogleBooksId) {
+		const data = await fetchJson(`https://www.googleapis.com/books/v1/volumes/${encodeURIComponent(queryGoogleBooksId)}?key=${encodeURIComponent(apiKey)}`);
+		if (data?.volumeInfo) return data;
+	}
+
+	const queryParts = [
+		queryIsbn13 ? `isbn:${queryIsbn13}` : "",
+		queryIsbn10 ? `isbn:${queryIsbn10}` : "",
+		queryTitle && queryAuthor ? `intitle:${queryTitle} inauthor:${queryAuthor}` : "",
+		queryTitle ? `intitle:${queryTitle}` : ""
+	].filter(Boolean);
+
+	for (const q of queryParts) {
+		const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&key=${encodeURIComponent(apiKey)}&maxResults=5&printType=books`;
+		const data = await fetchJson(url);
+		const items = Array.isArray(data?.items) ? data.items : [];
+		if (items.length > 0) return items[0];
+	}
+	return null;
+}
+
+async function fetchOpenLibraryBook() {
+	const fetchJson = async (url: string) => {
+		try {
+			const response = await fetch(url);
+			if (!response.ok) return null;
+			return await response.json();
+		} catch {
+			return null;
+		}
+	};
+
+	for (const isbn of [queryIsbn13, queryIsbn10].filter(Boolean)) {
+		const key = `ISBN:${isbn}`;
+		const data = await fetchJson(`https://openlibrary.org/api/books?bibkeys=${encodeURIComponent(key)}&format=json&jscmd=data`);
+		const row = data?.[key];
+		if (!row) continue;
+		return {
+			title: normalizeText(row.title),
+			author: normalizeText(Array.isArray(row.authors) ? row.authors[0]?.name : ""),
+			synopsis: sanitizeSynopsis(typeof row.description === "string" ? row.description : row.description?.value),
+			coverUrl: normalizeText(row.cover?.large || row.cover?.medium || row.cover?.small),
+			publishedLabel: formatPublishedLabel(normalizeText(row.publish_date))
+		};
+	}
+	return null;
+}
+
+try {
+	const sql = getNeonSql();
+	let rows: Array<{
+		id: number;
+		title: string;
+		author: string;
+		synopsis: string;
+		cover_url: string;
+		language: string;
+		isbn10: string;
+		isbn13: string;
+		google_books_id: string;
+		published_year: number | null;
+		shelves: number;
+		average_rating: number | null;
+		rating_count: number;
+	}> = [];
+
+	if (queryBookId > 0) {
+		rows = await sql`
+			select
+				b.id,
+				b.title,
+				coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+				coalesce(nullif(trim(b.language), ''), '') as language,
+				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+				b.published_year,
+				coalesce(sc.shelves, 0)::int as shelves,
+				coalesce(rt.average_rating, 0) as average_rating,
+				coalesce(rt.rating_count, 0)::int as rating_count
+			from book b
+			left join lateral (
+				select count(*)::int as shelves
+				from user_book ub
+				where ub.book_id = b.id
+			) sc on true
+			left join lateral (
+				select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count
+				from user_book ub
+				where ub.book_id = b.id
+			) rt on true
+			where b.id = ${queryBookId}
+			limit 1
+		`;
+	}
+
+	if (!rows[0] && queryIsbn13) {
+		rows = await sql`
+			select b.id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+				coalesce(nullif(trim(b.language), ''), '') as language,
+				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+				b.published_year,
+				coalesce(sc.shelves, 0)::int as shelves,
+				coalesce(rt.average_rating, 0) as average_rating,
+				coalesce(rt.rating_count, 0)::int as rating_count
+			from book b
+			left join lateral (select count(*)::int as shelves from user_book ub where ub.book_id = b.id) sc on true
+			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
+			where b.isbn13 = ${queryIsbn13}
+			limit 1
+		`;
+	}
+
+	if (!rows[0] && queryIsbn10) {
+		rows = await sql`
+			select b.id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+				coalesce(nullif(trim(b.language), ''), '') as language,
+				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+				b.published_year,
+				coalesce(sc.shelves, 0)::int as shelves,
+				coalesce(rt.average_rating, 0) as average_rating,
+				coalesce(rt.rating_count, 0)::int as rating_count
+			from book b
+			left join lateral (select count(*)::int as shelves from user_book ub where ub.book_id = b.id) sc on true
+			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
+			where b.isbn10 = ${queryIsbn10}
+			limit 1
+		`;
+	}
+
+	if (!rows[0] && queryGoogleBooksId) {
+		rows = await sql`
+			select b.id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+				coalesce(nullif(trim(b.language), ''), '') as language,
+				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+				b.published_year,
+				coalesce(sc.shelves, 0)::int as shelves,
+				coalesce(rt.average_rating, 0) as average_rating,
+				coalesce(rt.rating_count, 0)::int as rating_count
+			from book b
+			left join lateral (select count(*)::int as shelves from user_book ub where ub.book_id = b.id) sc on true
+			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
+			where b.google_books_id = ${queryGoogleBooksId}
+			limit 1
+		`;
+	}
+
+	if (!rows[0] && queryTitle) {
+		const ct = canonicalizeTitle(queryTitle);
+		const ca = canonicalizeAuthor(queryAuthor);
+		rows = await sql`
+			select b.id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+				coalesce(nullif(trim(b.language), ''), '') as language,
+				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+				b.published_year,
+				coalesce(sc.shelves, 0)::int as shelves,
+				coalesce(rt.average_rating, 0) as average_rating,
+				coalesce(rt.rating_count, 0)::int as rating_count
+			from book b
+			left join lateral (select count(*)::int as shelves from user_book ub where ub.book_id = b.id) sc on true
+			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
+			where lower(regexp_replace(coalesce(b.title, ''), '[^[:alnum:]]+', '', 'g')) = ${ct.replace(/[^a-z0-9]+/g, "")}
+				and (${ca} = '' or lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${ca.replace(/[^a-z0-9]+/g, "")})
+			limit 1
+		`;
+	}
+
+	const row = rows[0];
+	if (row?.id) {
+		book = {
+			id: Number(row.id),
+			title: normalizeText(row.title),
+			author: normalizeText(row.author),
+			synopsis: sanitizeSynopsis(row.synopsis),
+			coverUrl: normalizeText(row.cover_url),
+			language: normalizeText(row.language),
+			isbn10: normalizeText(row.isbn10),
+			isbn13: normalizeText(row.isbn13),
+			googleBooksId: normalizeText(row.google_books_id),
+			publishedLabel: row.published_year ? String(row.published_year) : "",
+			shelves: Number(row.shelves || 0),
+			averageRating: Number(row.average_rating || 0),
+			ratingCount: Number(row.rating_count || 0)
+		};
+
+		const encryptionKey = getEncryptionKey();
+		const activityRows = await sql<Array<{
+			event_type: string;
+			created_at: string;
+			username: string | null;
+			email_local: string | null;
+		}>>`
+			select
+				ua.event_type,
+				ua.created_at::text as created_at,
+				au.username,
+				nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local
+			from user_activity ua
+			join app_user au on au.id = ua.user_id
+			where ua.book_id = ${book.id}
+			order by ua.created_at desc, ua.id desc
+			limit 40
+		`;
+		activity = activityRows.map((item) => ({
+			eventType: normalizeText(item.event_type),
+			timestamp: item.created_at,
+			actorUsername: normalizeText(item.username),
+			actorName: normalizeText(item.username) || normalizeText(item.email_local) || "A Reader"
+		}));
+	} else {
+		const google = await fetchGoogleBook();
+		if (google) {
+			const info = google.volumeInfo || {};
+			book = {
+				id: 0,
+				title: normalizeText(info.title || queryTitle),
+				author: normalizeText(Array.isArray(info.authors) ? info.authors[0] : queryAuthor),
+				synopsis: sanitizeSynopsis(info.description || ""),
+				coverUrl: normalizeText(info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail),
+				language: normalizeText(info.language),
+				isbn10: normalizeText(queryIsbn10),
+				isbn13: normalizeText(queryIsbn13),
+				googleBooksId: normalizeText(google.id || queryGoogleBooksId),
+				publishedLabel: formatPublishedLabel(normalizeText(info.publishedDate || "")),
+				shelves: 0,
+				averageRating: Number(info.averageRating || 0),
+				ratingCount: Number(info.ratingsCount || 0)
+			};
+		} else {
+			const open = await fetchOpenLibraryBook();
+			if (open) {
+				book = {
+					id: 0,
+					title: open.title || queryTitle,
+					author: open.author || queryAuthor,
+					synopsis: open.synopsis,
+					coverUrl: open.coverUrl,
+					language: "",
+					isbn10: queryIsbn10,
+					isbn13: queryIsbn13,
+					googleBooksId: queryGoogleBooksId,
+					publishedLabel: open.publishedLabel,
+					shelves: 0,
+					averageRating: 0,
+					ratingCount: 0
+				};
+			}
+		}
+	}
+} catch (error) {
+	errorMessage = error instanceof Error ? error.message : "Failed to load book.";
+}
+
+const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
+---
+
+<Layout title={book?.title || "Book"}>
+	<div slot="right" class="book-page" data-authenticated={String(isAuthenticated)}>
+		{errorMessage && <p class="error">{errorMessage}</p>}
+		{!errorMessage && !book && <p>Book not found.</p>}
+		{book && (
+			<>
+				<section class="book-head">
+					<div class="cover-large">
+						{book.coverUrl
+							? <img src={book.coverUrl} alt={`${book.title} cover`} />
+							: <div class="cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>}
+					</div>
+					<div>
+						<h1>{book.title}</h1>
+						<p class="meta">{book.author || "Unknown author"}</p>
+						{book.publishedLabel && <p class="meta">Published: {book.publishedLabel}</p>}
+						<p class="meta">Shelves: {book.shelves.toLocaleString()}</p>
+						{book.ratingCount > 0 && <p class="meta rating">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>}
+						<ShelfDropdown attrs={{
+							"data-title": book.title,
+							"data-author": book.author,
+							"data-description": book.synopsis,
+							"data-cover": book.coverUrl,
+							"data-pages": "0",
+							"data-categories": "[]",
+							"data-isbn10": book.isbn10,
+							"data-isbn13": book.isbn13,
+							"data-google-books-id": book.googleBooksId
+						}} />
+					</div>
+				</section>
+
+				<section class="panel synopsis-panel">
+					<h2>Synopsis</h2>
+					{synopsisBlocks.length === 0 ? (
+						<p class="synopsis-text">Synopsis unavailable.</p>
+					) : (
+						synopsisBlocks.map((paragraph) => <p class="synopsis-text">{paragraph}</p>)
+					)}
+				</section>
+
+				<section class="panel activity-panel">
+					<h2>Recent Activity</h2>
+					{activity.length === 0 ? (
+						<p>No recent activity for this book yet.</p>
+					) : (
+						<ul class="activity-grid">
+							{activity.map((item) => (
+								<BookCard
+									title={book.title}
+									author={book.author}
+									thumbnail={book.coverUrl}
+								>
+									<p slot="preTitle" class="meta activity-headline">
+										{item.actorUsername && <span class="activity-user"><a href={`/u/${encodeURIComponent(item.actorUsername)}`}>@{item.actorUsername}</a>&nbsp;</span>}
+										{!item.actorUsername && item.actorName && <span class="activity-user">{item.actorName}&nbsp;</span>}
+										<span class="activity-prefix">{activityHeading(item.eventType).prefix}</span>
+										{activityHeading(item.eventType).shelf && <>&nbsp;<em>{activityHeading(item.eventType).shelf}</em></>}
+										{formatActivityDate(item.timestamp) && <>&nbsp;<span class="activity-date">· {formatActivityDate(item.timestamp)}</span></>}
+									</p>
+									<div slot="meta">
+										{!item.actorUsername && <p class="meta">{item.actorName}</p>}
+									</div>
+								</BookCard>
+							))}
+						</ul>
+					)}
+				</section>
+			</>
+		)}
+	</div>
+</Layout>
+
+<style>
+	.book-page { max-width: 980px; }
+	.book-head { display: grid; grid-template-columns: 180px auto; gap: 1rem; border: 1px solid #ddd4c7; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.cover-large img, .cover-placeholder { width: 180px; height: 270px; border-radius: 10px; object-fit: cover; background: #f1f1f1; }
+	.cover-placeholder { display: flex; align-items: center; justify-content: center; color: #8a8a8a; border: 1px solid #d7d7d7; }
+	.meta { margin: 0.24rem 0; color: #4d4d4d; }
+	.rating { color: #8a6a15; font-weight: 700; }
+	.shelf-dropdown { position: relative; display: inline-flex; flex-direction: column; align-items: flex-start; margin-top: 0.6rem; }
+	.book-head .shelf-trigger { border: none !important; border-radius: 8px !important; padding: 0.55rem 0.85rem !important; font-size: 0.95rem !important; background: #2f8f57 !important; color: #fff !important; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; }
+	.book-head .shelf-trigger:hover { background: #267647 !important; }
+	.book-head .shelf-trigger .material-icons { color: #fff !important; }
+	.shelf-icon { font-size: 1.15rem; line-height: 1; }
+	.shelf-check { font-size: 1rem; line-height: 1; opacity: 0; transition: opacity 120ms ease-in-out; }
+	.shelf-dropdown.is-shelved .shelf-check { opacity: 1; }
+	.shelf-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 170px; background: #fff; border: 1px solid #c9c9c9; border-radius: 8px; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12); padding: 0.2rem; z-index: 35; }
+	.shelf-option { width: 100%; border: none; background: transparent; text-align: left; padding: 0.45rem 0.55rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer; color: #222; }
+	.shelf-option:hover { background: #f2f2f2; }
+	.shelf-feedback { margin: 0.33rem 0 0; color: #2f8f57; font-size: 0.82rem; font-weight: 700; }
+	.panel { margin-top: 0.8rem; border: 1px solid #ddd4c7; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.panel h2 { margin: 0 0 0.55rem; }
+	.synopsis-panel { line-height: 1.7; }
+	.synopsis-text { margin: 0.75rem 0 0; font-size: 1.04rem; color: #252525; }
+	.synopsis-text:first-of-type { margin-top: 0.2rem; }
+	.activity-panel { border: none; background: transparent; padding: 0; }
+	.activity-grid { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.activity-headline { font-weight: 700; color: #2f2f2f; }
+	.activity-prefix { color: #1d4ed8; }
+	.activity-user { color: #4a5565; font-weight: 600; }
+	.activity-user a { color: #1d4ed8; text-decoration: none; }
+	.activity-user a:hover { text-decoration: underline; }
+	.activity-date { color: #5b6470; font-weight: 600; }
+	.error { color: #991b1b; }
+	@media (max-width: 860px) {
+		.activity-grid { grid-template-columns: 1fr; }
+	}
+	@media (max-width: 760px) {
+		.book-head { grid-template-columns: 1fr; }
+		.cover-large img, .cover-placeholder { width: 130px; height: 195px; }
+	}
+</style>
+
+<script type="module">
+	import { resolveClientAuthState } from "../lib/clientAuth";
+	import {
+		buildShelfEntryFromRecord,
+		closeShelfMenus,
+		promptForShelfLogin,
+		setDropdownLabel,
+		setShelvedState,
+		showShelfFeedback,
+		statusLabel,
+		syncShelfEntryToServer,
+		toggleShelfMenu
+	} from "../lib/shelfClient";
+	import { normalizeBookPayload } from "../lib/bookPayload";
+
+	const page = document.querySelector(".book-page");
+	let isAuthenticated = page?.dataset.authenticated === "true";
+	const dropdown = document.querySelector(".shelf-dropdown");
+	const feedbackTimers = new WeakMap();
+	function buildEntry(status) {
+		if (!dropdown) return null;
+		const bookPayload = normalizeBookPayload({
+			title: String(dropdown.dataset.title || "").trim(),
+			author: String(dropdown.dataset.author || "").trim(),
+			description: String(dropdown.dataset.description || "").trim(),
+			pageCount: Number(dropdown.dataset.pages || 0) || 0,
+			coverUrl: String(dropdown.dataset.cover || "").trim(),
+			categories: [],
+			format: "",
+			language: "",
+			publisher: "",
+			publishedDate: "",
+			isbn10: String(dropdown.dataset.isbn10 || "").trim(),
+			isbn13: String(dropdown.dataset.isbn13 || "").trim(),
+			googleBooksId: String(dropdown.dataset.googleBooksId || "").trim()
+		});
+		return buildShelfEntryFromRecord({
+			title: bookPayload.title,
+			author: bookPayload.author,
+			description: bookPayload.description,
+			pageCount: bookPayload.pageCount,
+			coverUrl: bookPayload.coverUrl,
+			categories: bookPayload.categories,
+			format: bookPayload.format,
+			language: bookPayload.language,
+			publisher: bookPayload.publisher,
+			publishedDate: bookPayload.publishedDate,
+			isbn10: bookPayload.isbn10,
+			isbn13: bookPayload.isbn13,
+			googleBooksId: bookPayload.googleBooksId
+		}, {
+			status,
+			addedAt: Date.now(),
+			updatedAt: Date.now()
+		});
+	}
+
+	function setSelected(status) {
+		if (!dropdown) return;
+		setShelvedState(dropdown, true);
+		setDropdownLabel(dropdown, status);
+	}
+
+	if (dropdown) {
+		resolveClientAuthState().then((state) => {
+			isAuthenticated = !!state.isAuthenticated;
+		}).catch(() => {});
+
+		dropdown.addEventListener("click", async (event) => {
+			const target = event.target instanceof HTMLElement ? event.target : null;
+			if (!target) return;
+
+			const toggle = target.closest('[data-action="toggle-shelf"]');
+			if (toggle) {
+				toggleShelfMenu(dropdown, [dropdown]);
+				return;
+			}
+
+			const option = target.closest('[data-action="set-shelf"]');
+			if (!option) return;
+			const status = String(option.getAttribute("data-status") || "want_to_read");
+			closeShelfMenus([dropdown]);
+			if (!isAuthenticated) {
+				promptForShelfLogin();
+				return;
+			}
+			const entry = buildEntry(status);
+			if (!entry?.title) return;
+			const result = await syncShelfEntryToServer(entry);
+			const ok = !!result.ok;
+			if (ok) {
+				setSelected(status);
+				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
+			}
+		});
+
+		document.addEventListener("click", (event) => {
+			const target = event.target instanceof HTMLElement ? event.target : null;
+			if (!target) return;
+			if (!target.closest(".shelf-dropdown")) closeShelfMenus([dropdown]);
+		});
+	}
+</script>
