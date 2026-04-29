@@ -39,218 +39,26 @@ type SearchResult = {
 	}>;
 };
 
-function normalizeText(value: string) {
-	return String(value || "")
-		.toLowerCase()
-		.normalize("NFKD")
-		.replace(/[\u0300-\u036f]/g, "")
-		.replace(/[^a-z0-9\s:]/g, " ")
-		.replace(/\s+/g, " ")
-		.trim();
-}
-
-function canonicalizeTitle(value: string) {
-	let text = normalizeText(value);
-	text = text.replace(/\([^)]*\)/g, " ");
-	text = text.replace(/\b(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition|spanish edition|french edition|german edition)\b/g, " ");
-	text = text.split(":")[0] || text;
-	text = text.replace(/^(the|a|an)\s+/g, "");
-	return text.replace(/\s+/g, " ").trim();
-}
-
-function canonicalizeAuthor(value: string) {
-	return normalizeText(value).replace(/^(by\s+)/, "").trim();
-}
-
-function detectFormat(input: {
-	title?: string;
-	subtitle?: string;
-	description?: string;
-	categories?: string[];
-}): string {
-	const haystack = normalizeText([
-		input.title || "",
-		input.subtitle || "",
-		input.description || "",
-		Array.isArray(input.categories) ? input.categories.join(" ") : ""
-	].join(" "));
-	if (/\b(ebook|e-book|kindle|digital edition)\b/.test(haystack)) return "Ebook";
-	if (/\bpaperback\b/.test(haystack)) return "Paperback";
-	if (/\b(hardcover|hardback)\b/.test(haystack)) return "Hardcover";
-	return "Book";
-}
-
-function toVariant(result: SearchResult) {
-	const language = String(result.language || "").trim().toUpperCase();
-	const year = String(result.publishedDate || "").match(/\d{4}/)?.[0] || "";
-	const format = detectFormat({
-		title: result.title,
-		subtitle: result.subtitle,
-		description: result.description,
-		categories: result.categories
-	});
-	const summaryParts = [
-		format,
-		language || "Unknown language",
-		year || "Unknown year"
-	].filter(Boolean);
-	const detailParts = [
-		result.publisher ? `Publisher: ${result.publisher}` : "",
-		result.pageCount && result.pageCount > 0 ? `${result.pageCount} pages` : "",
-		result.isbn13 ? `ISBN-13 ${result.isbn13}` : (result.isbn10 ? `ISBN-10 ${result.isbn10}` : ""),
-		String(result.publishedDate || "").trim() ? `Published ${String(result.publishedDate || "").trim()}` : ""
-	].filter(Boolean);
-	return {
-		title: result.title,
-		author: result.authors[0] || "",
-		pageCount: Math.max(0, Number(result.pageCount) || 0),
-		thumbnail: result.thumbnail || "",
-		language: String(result.language || "").trim(),
-		publishedDate: String(result.publishedDate || "").trim(),
-		publisher: String(result.publisher || "").trim(),
-		isbn10: String(result.isbn10 || "").trim(),
-		isbn13: String(result.isbn13 || "").trim(),
-		googleBooksId: String(result.googleBooksId || "").trim(),
-		format,
-		optionLabel: summaryParts.join(" • "),
-		detailLabel: [format, ...detailParts].join(" • ")
-	};
-}
-
-function scoreResult(result: SearchResult, queryText: string) {
-	let score = 0;
-	const q = normalizeText(queryText);
-	const title = normalizeText(result.title);
-	if (q && title.includes(q)) score += 140;
-	if (q && title.startsWith(q)) score += 120;
-	if (result.thumbnail) score += 50;
-	if (result.pageCount && result.pageCount > 0) score += 20;
-	if (String(result.language || "").toLowerCase() === "en") score += 10;
-	return score;
-}
-
-function tokenizeQuery(queryText: string) {
-	return normalizeText(queryText)
-		.split(" ")
-		.filter((token) => token.length >= 2);
-}
-
-function isLikelyMatch(result: SearchResult, queryText: string) {
-	const tokens = tokenizeQuery(queryText);
-	if (tokens.length === 0) return true;
-	const haystack = normalizeText([
-		result.title,
-		result.subtitle,
-		...(Array.isArray(result.authors) ? result.authors : [])
-	].join(" "));
-	const strongTokens = tokens.filter((token) => token.length >= 4);
-	if (strongTokens.length > 0) {
-		return strongTokens.some((token) => haystack.includes(token));
-	}
-	return tokens.some((token) => haystack.includes(token));
-}
-
-function dedupeVariants(input: SearchResult[], queryText: string) {
-	const grouped = new Map<string, SearchResult[]>();
-	for (const [index, result] of input.entries()) {
-		const primaryAuthor = result.authors[0] || "";
-		const canonicalTitle = canonicalizeTitle(result.title);
-		const canonicalAuthor = canonicalizeAuthor(primaryAuthor);
-		const key = canonicalTitle
-			? `${canonicalTitle}|${canonicalAuthor}`
-			: `ungrouped_${index}`;
-		const existing = grouped.get(key) || [];
-		existing.push(result);
-		grouped.set(key, existing);
-	}
-
-	const deduped: SearchResult[] = [];
-	for (const items of grouped.values()) {
-		const sorted = [...items].sort((a, b) => scoreResult(b, queryText) - scoreResult(a, queryText));
-		const seenVariantKeys = new Set<string>();
-		const variants = sorted.map((item) => toVariant(item)).filter((variant) => {
-			const key = [
-				canonicalizeTitle(variant.title),
-				canonicalizeAuthor(variant.author),
-				normalizeText(variant.format),
-				normalizeText(variant.language),
-				normalizeText(variant.publishedDate)
-			].join("|");
-			if (seenVariantKeys.has(key)) return false;
-			seenVariantKeys.add(key);
-			return true;
-		});
-		const best = { ...sorted[0], variantCount: variants.length, variants };
-		deduped.push(best);
-	}
-
-	return deduped.sort((a, b) => scoreResult(b, queryText) - scoreResult(a, queryText));
-}
-
 const query = Astro.url.searchParams.get("q")?.trim() ?? "";
-const apiKey = String(import.meta.env.GOOGLE_BOOKS_API_KEY ?? "").trim();
-
 let results: SearchResult[] = [];
 let errorMessage = "";
 
-if (query && apiKey) {
+if (query) {
 	try {
-		const fetchItems = async (q: string) => {
-			const params = new URLSearchParams({
-				q,
-				key: apiKey,
-				maxResults: "20",
-				printType: "books",
-				orderBy: "relevance",
-				langRestrict: "en",
-			});
-			const response = await fetch(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
-			if (!response.ok) return [];
-			const data = await response.json();
-			return Array.isArray(data.items) ? data.items : [];
-		};
-
-		const baseItems = await fetchItems(query);
-		const byId = new Map<string, any>();
-		for (const item of baseItems) {
-			const id = String(item?.id || "");
-			if (!id) continue;
-			if (!byId.has(id)) byId.set(id, item);
+		const endpoint = new URL("/api/books/search", Astro.url);
+		endpoint.searchParams.set("q", query);
+		endpoint.searchParams.set("page", "1");
+		endpoint.searchParams.set("pageSize", "20");
+		const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
+		if (!response.ok) {
+			errorMessage = `Search failed (${response.status}).`;
+		} else {
+			const payload = await response.json();
+			results = Array.isArray(payload?.results) ? payload.results : [];
 		}
-		const items = Array.from(byId.values());
-
-		const mapped = items.map((item) => {
-			const info = item.volumeInfo ?? {};
-			const identifiers = Array.isArray(info.industryIdentifiers) ? info.industryIdentifiers : [];
-			const isbn13 = String(
-				(identifiers.find((entry) => String(entry?.type || "") === "ISBN_13")?.identifier || "")
-			).replace(/[^0-9Xx]/g, "").toUpperCase();
-			const isbn10 = String(
-				(identifiers.find((entry) => String(entry?.type || "") === "ISBN_10")?.identifier || "")
-			).replace(/[^0-9Xx]/g, "").toUpperCase();
-			return {
-				title: info.title ?? "Untitled",
-				subtitle: info.subtitle ?? "",
-				authors: Array.isArray(info.authors) ? info.authors : [],
-				description: info.description ?? "",
-				publisher: info.publisher ?? "",
-				publishedDate: info.publishedDate ?? "",
-				printType: info.printType ?? "",
-				pageCount: typeof info.pageCount === "number" ? info.pageCount : null,
-				categories: Array.isArray(info.categories) ? info.categories : [],
-				language: info.language ?? "",
-				thumbnail: info.imageLinks?.thumbnail ?? "",
-				isbn10,
-				isbn13,
-				googleBooksId: String(item?.id || "").trim()
-			};
-		}).filter((result) => isLikelyMatch(result, query));
-		results = dedupeVariants(mapped, query);
 	} catch (error) {
 		errorMessage = error instanceof Error ? error.message : "Unknown error";
 	}
-} else if (query && !apiKey) {
-	errorMessage = "Missing Google Books API key.";
 }
 ---
 
@@ -313,6 +121,7 @@ if (query && apiKey) {
 								class="shelf-dropdown"
 								data-title={result.title}
 								data-author={result.authors[0] ?? ""}
+								data-description={result.description}
 								data-pages={String(result.pageCount ?? 0)}
 								data-cover={result.thumbnail}
 								data-categories={JSON.stringify(result.categories ?? [])}
@@ -930,6 +739,7 @@ if (query && apiKey) {
 		const language = String(variantDropdown?.dataset?.language || "").trim();
 		const publisher = String(variantDropdown?.dataset?.publisher || "").trim();
 		const publishedDate = String(variantDropdown?.dataset?.publishedDate || "").trim();
+		const description = String(dropdown.dataset.description || "").trim();
 		const isbn10 = String(variantDropdown?.dataset?.isbn10 || "").trim();
 		const isbn13 = String(variantDropdown?.dataset?.isbn13 || "").trim();
 		const googleBooksId = String(variantDropdown?.dataset?.googleBooksId || "").trim();
@@ -949,6 +759,7 @@ if (query && apiKey) {
 			if (isbn13) existing.isbn13 = isbn13;
 			if (googleBooksId) existing.googleBooksId = googleBooksId;
 			if (categories.length > 0) existing.categories = categories;
+			if (description && !existing.description) existing.description = description;
 			applyStatus(existing, selectedStatus, totalPages || Number(existing.totalPages) || 0);
 			existing.updatedAt = Date.now();
 			saveEntries(entries);
@@ -980,6 +791,7 @@ if (query && apiKey) {
 			isbn10,
 			isbn13,
 			googleBooksId,
+			description,
 			source: "google_books",
 			sourceWorkId: googleBooksId,
 			sourceUrl: googleBooksId ? `https://books.google.com/books?id=${encodeURIComponent(googleBooksId)}` : "",

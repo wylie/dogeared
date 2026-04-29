@@ -12,6 +12,7 @@ type BrowseBook = {
 	id: string;
 	title: string;
 	authors: string[];
+	shelfCount: number;
 	thumbnail: string;
 	publishedDate: string;
 	description: string;
@@ -102,6 +103,16 @@ function renderAverageStars(value: number) {
 	return Array.from({ length: 5 }, (_, index) => (index < rounded ? "★" : "☆")).join("");
 }
 
+function sanitizeDescription(value: string, maxLength = 220) {
+	const text = String(value || "")
+		.replace(/<[^>]+>/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+	if (!text) return "";
+	if (text.length <= maxLength) return text;
+	return `${text.slice(0, maxLength).trimEnd()}…`;
+}
+
 let sections: BrowseSection[] = [];
 let errorMessage = "";
 
@@ -141,6 +152,8 @@ try {
 			book_id: number;
 			title: string;
 			primary_author: string;
+			shelf_count: number;
+			synopsis: string;
 			cover_url: string;
 			published_year: number | null;
 			language: string;
@@ -162,6 +175,8 @@ try {
 				b.id as book_id,
 				b.title,
 				b.primary_author,
+				coalesce(sc.shelf_count, 0)::int as shelf_count,
+				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 				b.cover_url,
 				b.published_year,
 				b.language,
@@ -176,6 +191,11 @@ try {
 				bs.source_url
 			from ranked r
 			join book b on b.id = r.book_id
+			left join lateral (
+				select count(*)::int as shelf_count
+				from user_book ub
+				where ub.book_id = b.id
+			) sc on true
 			left join lateral (
 				select
 					round(avg(ub.rating)::numeric, 1) as average_rating,
@@ -201,15 +221,17 @@ try {
 					id asc
 				limit 1
 			) bs on true
+			order by coalesce(sc.shelf_count, 0) desc, b.title asc
 		`;
 
 		const books: BrowseBook[] = rows.map((row) => ({
 			id: `book_${row.book_id}`,
 			title: String(row.title || "").trim(),
 			authors: [String(row.primary_author || "").trim()].filter(Boolean),
+			shelfCount: Number(row.shelf_count || 0),
 			thumbnail: String(row.cover_url || "").trim(),
 			publishedDate: row.published_year ? String(row.published_year) : "",
-			description: "",
+			description: sanitizeDescription(String(row.synopsis || "")),
 			pageCount: 0,
 			format: "Book",
 			language: String(row.language || "").trim().toUpperCase(),
@@ -262,7 +284,12 @@ try {
 							<ul class="book-grid">
 								{section.books.map((book, index) => (
 									<li class="book-card">
-										<div class="rank-badge" aria-label={`Rank ${index + 1}`}>#{index + 1}</div>
+										<div class="rank-stack">
+											<div class="rank-badge" aria-label={`Rank ${index + 1}`}>#{index + 1}</div>
+											<div class="shelf-count-badge" aria-label={`${book.shelfCount} shelves`}>
+												{book.shelfCount.toLocaleString()} {book.shelfCount === 1 ? "shelf" : "shelves"}
+											</div>
+										</div>
 										<div class="cover-wrap">
 											{book.thumbnail
 												? <img class="cover" src={book.thumbnail} alt={`${book.title} cover`} loading="lazy" />
@@ -281,6 +308,7 @@ try {
 												class="shelf-dropdown"
 												data-title={book.title}
 												data-author={book.authors[0] ?? ""}
+												data-description={book.description}
 												data-pages={String(book.pageCount ?? 0)}
 												data-cover={book.thumbnail}
 												data-format={book.format}
@@ -405,9 +433,6 @@ try {
 	}
 
 	.rank-badge {
-		position: absolute;
-		top: 0.65rem;
-		right: 0.65rem;
 		padding: 0.14rem 0.42rem;
 		border-radius: 999px;
 		background: #f4efe2;
@@ -415,6 +440,26 @@ try {
 		font-size: 0.76rem;
 		font-weight: 700;
 		letter-spacing: 0.04em;
+		line-height: 1.2;
+	}
+
+	.rank-stack {
+		position: absolute;
+		top: 0.65rem;
+		right: 0.65rem;
+		display: inline-flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.28rem;
+	}
+
+	.shelf-count-badge {
+		padding: 0.12rem 0.42rem;
+		border-radius: 999px;
+		background: #f7f7f7;
+		color: #5f5f5f;
+		font-size: 0.7rem;
+		font-weight: 600;
 		line-height: 1.2;
 	}
 
@@ -445,6 +490,12 @@ try {
 		font-size: 1rem;
 	}
 
+	.card-body {
+		display: flex;
+		flex-direction: column;
+		min-height: 100%;
+	}
+
 	.meta {
 		margin: 0.2rem 0;
 		font-size: 0.87rem;
@@ -467,7 +518,8 @@ try {
 		display: inline-flex;
 		flex-direction: column;
 		align-items: flex-start;
-		margin-top: 0.5rem;
+		margin-top: auto;
+		padding-top: 0.5rem;
 	}
 
 	.shelf-trigger {
@@ -846,6 +898,7 @@ try {
 		const title = String(dropdown.dataset.title || "").trim();
 		if (!title) return;
 		const author = String(dropdown.dataset.author || "").trim();
+		const description = String(dropdown.dataset.description || "").trim();
 		const totalPages = Math.max(0, Number(dropdown.dataset.pages || 0) || 0);
 		const coverUrl = String(dropdown.dataset.cover || "").trim();
 		const format = String(dropdown.dataset.format || "").trim();
@@ -871,6 +924,7 @@ try {
 			if (sourceWorkId) existing.sourceWorkId = sourceWorkId;
 			if (sourceEditionId) existing.sourceEditionId = sourceEditionId;
 			if (sourceUrl) existing.sourceUrl = sourceUrl;
+			if (description && !existing.description) existing.description = description;
 			applyStatus(existing, selectedStatus, totalPages || Number(existing.totalPages) || 0);
 			existing.updatedAt = Date.now();
 			saveEntries(entries);
@@ -903,6 +957,7 @@ try {
 			sourceWorkId,
 			sourceEditionId,
 			sourceUrl,
+			description,
 			updatedAt: Date.now()
 		};
 		applyStatus(next, selectedStatus, totalPages);

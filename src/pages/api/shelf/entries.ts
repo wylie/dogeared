@@ -15,6 +15,7 @@ type ShelfStatus = "want_to_read" | "reading" | "finished";
 type ShelfEntryInput = {
 	title?: unknown;
 	author?: unknown;
+	description?: unknown;
 	status?: unknown;
 	rating?: unknown;
 	totalPages?: unknown;
@@ -313,6 +314,7 @@ async function inferGenresForBook(input: {
 async function ensureShelfSchema() {
 	const sql = getNeonSql();
 	await sql`alter table user_book add column if not exists rating int`;
+	await sql`alter table book add column if not exists synopsis text not null default ''`;
 }
 
 export const GET: APIRoute = async ({ request, url }) => {
@@ -426,6 +428,7 @@ export const POST: APIRoute = async ({ request }) => {
 		const finishedDate = status === "finished" && finishedDateRaw ? finishedDateRaw : "";
 		const coverUrl = normalizeText(entry.coverUrl);
 		const language = normalizeText(entry.language);
+		const synopsis = normalizeText(entry.description);
 		const isbn10 = normalizeIsbn(entry.isbn10);
 		const isbn13 = normalizeIsbn(entry.isbn13);
 		const publishedDate = normalizeText(entry.publishedDate);
@@ -487,6 +490,7 @@ export const POST: APIRoute = async ({ request }) => {
 				isbn13,
 				isbn10,
 				google_books_id,
+				synopsis,
 				cover_url,
 				language,
 				published_year
@@ -498,6 +502,7 @@ export const POST: APIRoute = async ({ request }) => {
 				${isbn13},
 				${isbn10},
 				${googleBooksId},
+				${synopsis},
 				${coverUrl},
 				${language},
 				${publishedYear}
@@ -508,6 +513,7 @@ export const POST: APIRoute = async ({ request }) => {
 				isbn13 = case when excluded.isbn13 <> '' then excluded.isbn13 else book.isbn13 end,
 				isbn10 = case when excluded.isbn10 <> '' then excluded.isbn10 else book.isbn10 end,
 				google_books_id = case when excluded.google_books_id <> '' then excluded.google_books_id else book.google_books_id end,
+				synopsis = case when excluded.synopsis <> '' then excluded.synopsis else book.synopsis end,
 				cover_url = case when excluded.cover_url <> '' then excluded.cover_url else book.cover_url end,
 				language = case when excluded.language <> '' then excluded.language else book.language end,
 				published_year = coalesce(excluded.published_year, book.published_year),

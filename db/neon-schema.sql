@@ -51,6 +51,7 @@ create table if not exists book (
 	isbn13 text not null default '',
 	isbn10 text not null default '',
 	google_books_id text not null default '',
+	synopsis text not null default '',
 	cover_url text not null default '',
 	language text not null default '',
 	published_year int,

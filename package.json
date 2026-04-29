@@ -10,7 +10,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "backfill:genres": "node scripts/backfill-book-genres.mjs"
+    "backfill:genres": "node scripts/backfill-book-genres.mjs",
+    "backfill:synopsis": "node scripts/backfill-book-synopsis.mjs"
   },
   "dependencies": {
     "@astrojs/vercel": "^10.0.5",
