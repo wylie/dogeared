@@ -457,7 +457,6 @@ const sectionLinks = [
 <script>
 	const STORAGE_KEY = "dogeared:myreads";
 	const UPDATES_KEY = "dogeared:updates";
-	const USER_KEY_STORAGE_KEY = "dogeared:user-key";
 	const importForm = document.getElementById("goodreads-import-form");
 	const csvInput = document.getElementById("goodreads-csv");
 	const feedback = document.getElementById("import-feedback");
@@ -841,18 +840,6 @@ const sectionLinks = [
 		void saveUpdates(updates);
 	}
 
-	function getUserKey() {
-		try {
-			const existing = String(localStorage.getItem(USER_KEY_STORAGE_KEY) || "").trim();
-			if (existing) return existing;
-			const created = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-			localStorage.setItem(USER_KEY_STORAGE_KEY, created);
-			return created;
-		} catch {
-			return `usr_fallback_${Math.random().toString(36).slice(2, 10)}`;
-		}
-	}
-
 	function parseGenreList(value) {
 		return String(value || "")
 			.split(",")
@@ -947,9 +934,8 @@ const sectionLinks = [
 
 	function populateApiEndpoints() {
 		const origin = window.location.origin;
-		const userKey = getUserKey();
 		if (shelfApiInput instanceof HTMLInputElement) {
-			shelfApiInput.value = `${origin}/api/shelf/entries?userKey=${encodeURIComponent(userKey)}`;
+			shelfApiInput.value = `${origin}/api/shelf/entries`;
 		}
 		if (searchApiInput instanceof HTMLInputElement) {
 			searchApiInput.value = `${origin}/api/books/search?q=${encodeURIComponent("parable of the sower")}`;
@@ -975,13 +961,16 @@ const sectionLinks = [
 	}
 
 	async function syncEntryToServer(entry) {
-		const userKey = getUserKey();
 		try {
 			const response = await fetch("/api/shelf/entries", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ userKey, entry })
+				body: JSON.stringify({ entry })
 			});
+			if (response.status === 401) {
+				window.location.href = "/settings#account-settings";
+				return false;
+			}
 			return response.ok;
 		} catch {
 			return false;
@@ -1082,12 +1071,15 @@ const sectionLinks = [
 	}
 
 	async function clearShelfOnServer() {
-		const userKey = getUserKey();
 		const response = await fetch("/api/account/clear-shelf", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ userKey })
+			body: JSON.stringify({})
 		});
+		if (response.status === 401) {
+			window.location.href = "/settings#account-settings";
+			return false;
+		}
 		return response.ok;
 	}
 
@@ -1453,7 +1445,7 @@ const sectionLinks = [
 		try {
 			const [sessionsRes, activityRes] = await Promise.all([
 				fetch("/api/account/sessions"),
-				fetch(`/api/activity/recent?userKey=${encodeURIComponent(getUserKey())}&limit=8`)
+				fetch("/api/activity/recent?limit=8")
 			]);
 			if (sessionsRes.ok && sessionList instanceof HTMLElement) {
 				const data = await sessionsRes.json().catch(() => ({}));
@@ -1475,7 +1467,13 @@ const sectionLinks = [
 				} else {
 					recentActivityList.innerHTML = `
 						<p><strong>Recent activity:</strong></p>
-						<ul>${updates.map((item) => `<li>${item.status} · ${item.title} · ${new Date(item.timestamp).toLocaleString()}</li>`).join("")}</ul>
+						<ul>${updates.map((item) => {
+							const actorUsername = String(item?.actorUsername || "").trim();
+							const actor = actorUsername
+								? `<a href="/u/${encodeURIComponent(actorUsername)}">@${actorUsername}</a>`
+								: String(item?.actorName || "A User");
+							return `<li>${actor} · ${item.status} · ${item.title} · ${new Date(item.timestamp).toLocaleString()}</li>`;
+						}).join("")}</ul>
 					`;
 				}
 			}

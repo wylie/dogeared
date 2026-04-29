@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { resolveUserBySession } from "../../../lib/auth";
-import { getNeonSql } from "../../../lib/neon";
+import { resolvePublicProfileBundle } from "../../../lib/publicProfile";
 
 export const prerender = false;
 
@@ -11,22 +11,16 @@ function json(status: number, body: unknown) {
 	});
 }
 
-export const POST: APIRoute = async ({ request }) => {
+export const GET: APIRoute = async ({ request, url }) => {
 	try {
 		const session = await resolveUserBySession(request);
-		if (!session?.userId) return json(401, { error: "You must be logged in to clear shelf entries." });
-		const userId = session.userId;
-
-		const sql = getNeonSql();
-		await sql`
-			delete from user_book
-			where user_id = ${userId}::uuid
-		`;
-
-		return json(200, { ok: true });
+		const viewerUserId = String(session?.userId || "");
+		const username = String(url.searchParams.get("username") || "").trim();
+		const profile = await resolvePublicProfileBundle({ username, viewerUserId });
+		return json(200, profile);
 	} catch (error) {
 		return json(500, {
-			error: "Failed to clear shelf entries.",
+			error: "Failed to load public profile.",
 			detail: error instanceof Error ? error.message : "Unknown error"
 		});
 	}

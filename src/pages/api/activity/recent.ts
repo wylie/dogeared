@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { getNeonSql } from "../../../lib/neon";
-import { getEncryptionKey, resolveActiveUserId } from "../../../lib/auth";
+import { getEncryptionKey, resolveUserBySession } from "../../../lib/auth";
 
 export const prerender = false;
 
@@ -9,17 +9,12 @@ function normalizeText(value: unknown) {
 }
 
 export const GET: APIRoute = async ({ request, url }) => {
-	const userKey = normalizeText(url.searchParams.get("userKey"));
 	const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit") || 20) || 20));
 
 	try {
-		const userId = await resolveActiveUserId(request, userKey);
-		if (!userId) {
-			return new Response(JSON.stringify({ updates: [] }), {
-				status: 200,
-				headers: { "Content-Type": "application/json" }
-			});
-		}
+		const session = await resolveUserBySession(request);
+		if (!session?.userId) return new Response(JSON.stringify({ error: "You must be logged in to load recent activity." }), { status: 401, headers: { "Content-Type": "application/json" } });
+		const userId = session.userId;
 
 		const sql = getNeonSql();
 		const encryptionKey = getEncryptionKey();
@@ -60,7 +55,8 @@ export const GET: APIRoute = async ({ request, url }) => {
 			author: row.primary_author || "",
 			coverUrl: row.cover_url || "",
 			language: row.language || "",
-			actorName: normalizeText(row.username) || normalizeText(row.email_local) || "A User"
+			actorName: normalizeText(row.username) || normalizeText(row.email_local) || "A User",
+			actorUsername: normalizeText(row.username)
 		}));
 
 		return new Response(JSON.stringify({ updates }), {

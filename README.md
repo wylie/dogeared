@@ -53,6 +53,18 @@ Set this in local `.env` and in Vercel Project Settings:
 - `want_to_read` weighted baseline
 - plus unique reader count
 
+## Auth State Preview (Local)
+
+Client auth state is now centralized in `src/lib/clientAuth.ts` and used across navigation and shelf actions.
+
+For local UI checks, you can force view mode per URL:
+
+- `?authView=logged-in`
+- `?authView=logged-out`
+- `?authView=live` (or remove the param)
+
+The override is stored in local storage (`dogeared:auth-preview`) so you can quickly refresh and compare authenticated vs unauthenticated views while building profile/privacy/follow flows.
+
 ## Support Dogeared
 
 If you find Dogeared useful and want to help it grow, this is a simple way to do that.

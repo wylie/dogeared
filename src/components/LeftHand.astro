@@ -362,6 +362,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
 </style>
 
 <script>
+  import { resolveClientAuthState, subscribeAuthStateChange, setAuthPreviewMode } from "../lib/clientAuth";
+
   const leftHandNav = document.getElementById("left-hand-nav");
   const leftHandMenuToggle = document.getElementById("left-hand-menu-toggle");
   const leftHandPrimaryLinks = document.getElementById("left-hand-primary-links");
@@ -403,26 +405,22 @@ const query = Astro.url.searchParams.get("q") ?? "";
     }
   }
 
+  function applyLeftHandAuthState(authenticated) {
+    if (leftHandLoginItem instanceof HTMLElement) leftHandLoginItem.hidden = authenticated;
+    if (leftHandProfileItem instanceof HTMLElement) leftHandProfileItem.hidden = !authenticated;
+    if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = !authenticated;
+    if (leftHandLogoutItem instanceof HTMLElement) leftHandLogoutItem.hidden = !authenticated;
+  }
+
   async function syncLeftHandAuthState() {
-    try {
-      const response = await fetch("/api/auth/me");
-      const data = await response.json().catch(() => ({}));
-      const authenticated = !!data?.authenticated;
-      if (leftHandLoginItem instanceof HTMLElement) leftHandLoginItem.hidden = authenticated;
-      if (leftHandProfileItem instanceof HTMLElement) leftHandProfileItem.hidden = !authenticated;
-      if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = !authenticated;
-      if (leftHandLogoutItem instanceof HTMLElement) leftHandLogoutItem.hidden = !authenticated;
-    } catch {
-      if (leftHandLoginItem instanceof HTMLElement) leftHandLoginItem.hidden = false;
-      if (leftHandProfileItem instanceof HTMLElement) leftHandProfileItem.hidden = true;
-      if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = true;
-      if (leftHandLogoutItem instanceof HTMLElement) leftHandLogoutItem.hidden = true;
-    }
+    const state = await resolveClientAuthState();
+    applyLeftHandAuthState(state.authenticated);
   }
 
   leftHandLogoutButton?.addEventListener("click", async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
+      setAuthPreviewMode("live");
     } finally {
       window.location.href = "/";
     }
@@ -500,5 +498,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
     }
   });
 
+  subscribeAuthStateChange(() => {
+    void syncLeftHandAuthState();
+  });
   void syncLeftHandAuthState();
 </script>

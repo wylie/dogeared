@@ -1,12 +1,9 @@
 import type { APIRoute } from "astro";
-import { resolveActiveUserId } from "../../../lib/auth";
+import { resolveUserBySession } from "../../../lib/auth";
 import { getNeonSql } from "../../../lib/neon";
+import { canSetUsername } from "../../../lib/usernamePolicy";
 
 export const prerender = false;
-
-function normalizeText(value: unknown) {
-	return String(value || "").trim();
-}
 
 function normalizeUsername(value: unknown) {
 	return String(value || "")
@@ -44,13 +41,13 @@ function json(status: number, body: unknown) {
 export const GET: APIRoute = async ({ request, url }) => {
 	try {
 		await ensureUsernameSchema();
-		const userKey = normalizeText(url.searchParams.get("userKey"));
 		const normalized = normalizeUsername(url.searchParams.get("username"));
 		if (!normalized) return json(200, { available: false, normalized, reason: "Username is required." });
 		if (normalized.length < 3) return json(200, { available: false, normalized, reason: "Use at least 3 characters." });
 
-		const currentUserId = await resolveActiveUserId(request, userKey);
-		if (!currentUserId) return json(500, { error: "Failed to resolve user." });
+		const session = await resolveUserBySession(request);
+		if (!session?.userId) return json(401, { error: "You must be logged in to validate usernames." });
+		const currentUserId = session.userId;
 		const existingUserId = await lookupByUsername(normalized);
 		const ownedByCurrentUser = !!existingUserId && existingUserId === currentUserId;
 		const available = !existingUserId || ownedByCurrentUser;
@@ -71,19 +68,33 @@ export const GET: APIRoute = async ({ request, url }) => {
 export const POST: APIRoute = async ({ request }) => {
 	try {
 		await ensureUsernameSchema();
-		const body = await request.json() as { userKey?: unknown; username?: unknown };
-		const userKey = normalizeText(body?.userKey);
+		const session = await resolveUserBySession(request);
+		if (!session?.userId) return json(401, { error: "You must be logged in to save usernames." });
+		const body = await request.json() as { username?: unknown };
 		const normalized = normalizeUsername(body?.username);
-		const userId = await resolveActiveUserId(request, userKey);
-		if (!userId) return json(500, { error: "Failed to resolve user." });
+		const userId = session.userId;
 
 		const sql = getNeonSql();
+		const currentRows = await sql<Array<{ username: string | null }>>`
+			select username
+			from app_user
+			where id = ${userId}::uuid
+			limit 1
+		`;
 		if (!normalized) {
+			const mutableCheck = canSetUsername(currentRows[0]?.username, normalized);
+			if (!mutableCheck.ok) {
+				return json(409, { error: mutableCheck.error, username: normalizeUsername(currentRows[0]?.username) });
+			}
 			await sql`update app_user set username = null where id = ${userId}::uuid`;
 			return json(200, { ok: true, username: "" });
 		}
 		if (normalized.length < 3) {
 			return json(400, { error: "Username must be at least 3 characters.", username: normalized });
+		}
+		const mutableCheck = canSetUsername(currentRows[0]?.username, normalized);
+		if (!mutableCheck.ok) {
+			return json(409, { error: mutableCheck.error, username: normalizeUsername(currentRows[0]?.username) });
 		}
 
 		const existingUserId = await lookupByUsername(normalized);

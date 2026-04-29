@@ -1,0 +1,351 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BookCard from "../../components/BookCard.astro";
+import ShelfDropdown from "../../components/ShelfDropdown.astro";
+import { resolveUserBySession } from "../../lib/auth";
+import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicShelfSummary } from "../../lib/publicProfile";
+
+export const prerender = false;
+
+const requestedUsername = String(Astro.params.username || "").trim().toLowerCase();
+const session = await resolveUserBySession(Astro.request);
+const viewerUserId = String(session?.userId || "");
+
+let notFound = false;
+let privateProfile = false;
+let profile = {
+	avatar: "",
+	name: "",
+	location: "",
+	readingGoal: "",
+	favoriteBook: "",
+	favoriteAuthor: "",
+	blurb: "",
+	genres: [] as string[],
+	username: ""
+};
+let canViewActivity = false;
+let shelfStats = { wantToRead: 0, reading: 0, finished: 0, total: 0 };
+let recentActivity: Array<{
+	bookId: number;
+	title: string;
+	author: string;
+	status: string;
+	eventType: string;
+	thumbnail: string;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+	description: string;
+	rating: number;
+	updatedAt: string;
+}> = [];
+let followState = {
+	followersCount: 0,
+	followingCount: 0,
+	isViewerFollowing: false,
+	canFollow: false
+};
+
+const bundle = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
+if (bundle.status === "not_found") notFound = true;
+if (bundle.status === "private") privateProfile = true;
+if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
+	profile = bundle.profile;
+	canViewActivity = bundle.canViewActivity;
+	followState = {
+		followersCount: bundle.followersCount,
+		followingCount: bundle.followingCount,
+		isViewerFollowing: bundle.isViewerFollowing,
+		canFollow: !!viewerUserId && viewerUserId !== bundle.targetUserId
+	};
+	const [summary, updates] = await Promise.all([
+		resolvePublicShelfSummary(bundle.targetUserId),
+		bundle.canViewActivity ? resolvePublicRecentActivity(bundle.targetUserId, 10) : Promise.resolve([])
+	]);
+	shelfStats = summary;
+	recentActivity = updates;
+}
+
+function activityHeading(eventType: string) {
+	const type = String(eventType || "").trim().toLowerCase();
+	if (type === "reading") return { prefix: "Added to", shelf: "Currently Reading" };
+	if (type === "finished") return { prefix: "Finished Reading", shelf: "" };
+	if (type === "want_to_read") return { prefix: "Added to", shelf: "Want to Read" };
+	return { prefix: "Added to", shelf: "Shelf" };
+}
+
+function renderRatingStars(value: number) {
+	const clamped = Math.max(0, Math.min(5, Number(value) || 0));
+	return Array.from({ length: 5 }, (_, index) => (index < clamped ? "★" : "☆")).join("");
+}
+
+function formatActivityDate(value: string) {
+	const parsed = new Date(String(value || "").trim());
+	if (!Number.isFinite(parsed.getTime())) return "";
+	return parsed.toLocaleDateString("en-US", {
+		month: "long",
+		day: "numeric",
+		year: "numeric"
+	});
+}
+---
+
+<Layout title={profile.username ? `${profile.username} • Profile` : "Profile"}>
+	<div slot="right" class="public-profile-page">
+		{notFound && (
+			<section class="state-card">
+				<h1>Profile not found</h1>
+				<p>That username does not exist.</p>
+			</section>
+		)}
+		{!notFound && privateProfile && (
+			<section class="state-card">
+				<h1>@{requestedUsername}</h1>
+				<p>This profile is private.</p>
+			</section>
+		)}
+		{!notFound && !privateProfile && (
+			<>
+				<section class="profile-card">
+					<div class="profile-head">
+						{profile.avatar ? <img src={profile.avatar} alt="" class="avatar" /> : <div class="avatar-fallback" aria-hidden="true">@</div>}
+						<div>
+							<h1>{profile.name || `@${profile.username}`}</h1>
+							<p class="username">@{profile.username}</p>
+							<p class="meta">Followers: <span id="follow-count-followers">{followState.followersCount}</span> · Following: <span id="follow-count-following">{followState.followingCount}</span></p>
+						</div>
+					</div>
+					{followState.canFollow && (
+						<div class="follow-actions">
+							<button
+								id="follow-toggle"
+								type="button"
+								data-username={profile.username}
+								data-following={String(followState.isViewerFollowing)}
+							>
+								{followState.isViewerFollowing ? "Following" : "Follow"}
+							</button>
+							<p id="follow-feedback" class="meta" hidden></p>
+						</div>
+					)}
+					{profile.blurb && <p class="blurb">{profile.blurb}</p>}
+					<div class="meta-grid">
+						{profile.location && <p><strong>Location:</strong> {profile.location}</p>}
+						{profile.readingGoal && <p><strong>Reading goal:</strong> {profile.readingGoal}</p>}
+						{profile.favoriteBook && <p><strong>Favorite book:</strong> {profile.favoriteBook}</p>}
+						{profile.favoriteAuthor && <p><strong>Favorite author:</strong> {profile.favoriteAuthor}</p>}
+					</div>
+					{profile.genres.length > 0 && (
+						<ul class="genre-list">
+							{profile.genres.map((genre) => <li>{genre}</li>)}
+						</ul>
+					)}
+				</section>
+
+				<section class="shelf-card">
+					<h2>Shelf Summary</h2>
+					<ul>
+						<li>Want to Read: {shelfStats.wantToRead}</li>
+						<li>Currently Reading: {shelfStats.reading}</li>
+						<li>Read: {shelfStats.finished}</li>
+						<li>Total: {shelfStats.total}</li>
+					</ul>
+				</section>
+
+				{canViewActivity && (
+					<section class="activity-card activity-card-plain">
+						<h2>Recent Activity</h2>
+						{recentActivity.length === 0 ? (
+							<p>No recent activity.</p>
+						) : (
+							<ul class="activity-grid">
+								{recentActivity.map((item) => (
+									<BookCard
+										title={item.title}
+										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}&isbn13=${encodeURIComponent(item.isbn13 || "")}&isbn10=${encodeURIComponent(item.isbn10 || "")}&title=${encodeURIComponent(item.title)}&author=${encodeURIComponent(item.author)}`}
+										author={item.author}
+										thumbnail={item.thumbnail}
+									>
+										<p slot="preTitle" class="meta activity-headline">
+											<span class="activity-prefix">{activityHeading(item.eventType).prefix}</span>
+											{activityHeading(item.eventType).shelf && <>&nbsp;<em>{activityHeading(item.eventType).shelf}</em></>}
+											{formatActivityDate(item.updatedAt) && <>&nbsp;<span class="activity-date">· {formatActivityDate(item.updatedAt)}</span></>}
+										</p>
+										<div slot="meta">
+											{item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>}
+										</div>
+										<div slot="actions">
+											<ShelfDropdown attrs={{
+												"data-title": item.title,
+												"data-author": item.author,
+												"data-description": item.description,
+												"data-pages": "0",
+												"data-cover": item.thumbnail,
+												"data-format": "Book",
+												"data-language": item.language,
+												"data-isbn10": item.isbn10,
+												"data-isbn13": item.isbn13
+											}} />
+										</div>
+									</BookCard>
+								))}
+							</ul>
+						)}
+					</section>
+				)}
+			</>
+		)}
+	</div>
+</Layout>
+
+<style>
+	.public-profile-page { max-width: 860px; display: grid; gap: 0.9rem; }
+	.state-card, .profile-card, .shelf-card, .activity-card { border: 1px solid #ddd4c7; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.activity-card-plain { border: none; background: transparent; border-radius: 0; padding: 0; }
+	.profile-head { display: flex; gap: 0.75rem; align-items: center; }
+	.avatar, .avatar-fallback { width: 64px; height: 64px; border-radius: 999px; object-fit: cover; }
+	.avatar-fallback { display: grid; place-items: center; background: #ece7dc; font-weight: 700; color: #4f4a40; }
+	.profile-head h1 { margin: 0; font-size: 1.45rem; }
+	.username { margin: 0.15rem 0 0; color: #5d5a53; }
+	.blurb { margin: 0.7rem 0 0; }
+	.follow-actions { margin-top: 0.55rem; display: flex; align-items: center; gap: 0.6rem; }
+	.follow-actions button { border: 1px solid #d1c8ba; border-radius: 999px; padding: 0.35rem 0.8rem; background: #1d1d1d; color: #fff; font: inherit; cursor: pointer; }
+	.follow-actions button[disabled] { opacity: 0.6; cursor: default; }
+	.meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem 0.8rem; margin-top: 0.7rem; }
+	.meta-grid p { margin: 0; }
+	.genre-list { list-style: none; margin: 0.7rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+	.genre-list li { background: #f3efe7; border-radius: 999px; padding: 0.2rem 0.6rem; font-size: 0.86rem; }
+	.shelf-card ul { margin: 0.6rem 0 0; }
+	.activity-grid { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.activity-headline { font-weight: 700; color: #2f2f2f; }
+	.activity-prefix { color: #1d4ed8; }
+	.activity-date { color: #5b6470; font-weight: 600; }
+	.rating-meta { color: #8a6a15; font-weight: 700; }
+	.shelf-dropdown { position: relative; display: inline-flex; flex-direction: column; align-items: flex-start; min-width: 150px; }
+	.shelf-trigger { border: none; border-radius: 8px; padding: 0.55rem 0.85rem; font-size: 0.95rem; background: #2f8f57; color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; }
+	.shelf-trigger:hover { background: #267647; }
+	.shelf-icon { font-size: 1.15rem; line-height: 1; }
+	.shelf-check { font-size: 1rem; line-height: 1; opacity: 0; transition: opacity 120ms ease-in-out; }
+	.shelf-dropdown.is-shelved .shelf-check { opacity: 1; }
+	.shelf-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 180px; background: #fff; border: 1px solid #c9c9c9; border-radius: 8px; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12); padding: 0.25rem 0; z-index: 25; }
+	.shelf-option { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 0.5rem 0.75rem; font-size: 0.92rem; cursor: pointer; color: #222; }
+	.shelf-option:hover { background: #f2f2f2; }
+	.shelf-feedback { margin-top: 0.25rem; font-size: 0.82rem; color: #1f7a45; line-height: 1.25; }
+	.status { text-transform: capitalize; }
+	@media (max-width: 740px) {
+		.meta-grid { grid-template-columns: 1fr; }
+		.activity-grid { grid-template-columns: 1fr; }
+	}
+</style>
+
+<script type="module">
+	import {
+		buildShelfEntryFromRecord,
+		closeShelfMenus,
+		setDropdownLabel,
+		setShelvedState,
+		showShelfFeedback,
+		statusLabel,
+		syncShelfEntryToServer,
+		toggleShelfMenu
+	} from "../../lib/shelfClient";
+	const followToggle = document.getElementById("follow-toggle");
+	const followFeedback = document.getElementById("follow-feedback");
+	const followersCountNode = document.getElementById("follow-count-followers");
+	const followingCountNode = document.getElementById("follow-count-following");
+	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
+	const feedbackTimers = new WeakMap();
+	function setFollowFeedback(message, isError = false) {
+		if (!(followFeedback instanceof HTMLElement)) return;
+		followFeedback.textContent = message;
+		followFeedback.hidden = !message;
+		followFeedback.style.color = isError ? "#991b1b" : "";
+	}
+
+	followToggle?.addEventListener("click", async () => {
+		if (!(followToggle instanceof HTMLButtonElement)) return;
+		const username = String(followToggle.dataset.username || "").trim();
+		const isFollowing = String(followToggle.dataset.following || "") === "true";
+		if (!username) return;
+		followToggle.disabled = true;
+		setFollowFeedback(isFollowing ? "Unfollowing..." : "Following...");
+		try {
+			const response = await fetch("/api/follow", {
+				method: isFollowing ? "DELETE" : "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ username })
+			});
+			const data = await response.json().catch(() => ({}));
+			if (response.status === 401) {
+				window.location.href = "/settings#account-settings";
+				return;
+			}
+			if (!response.ok) {
+				setFollowFeedback(String(data?.error || "Unable to update follow state."), true);
+				return;
+			}
+			const nextFollowing = !!data?.isViewerFollowing;
+			followToggle.dataset.following = nextFollowing ? "true" : "false";
+			followToggle.textContent = nextFollowing ? "Following" : "Follow";
+			if (followersCountNode instanceof HTMLElement) {
+				followersCountNode.textContent = String(Number(data?.followersCount || 0));
+			}
+			if (followingCountNode instanceof HTMLElement) {
+				followingCountNode.textContent = String(Number(data?.followingCount || 0));
+			}
+			setFollowFeedback(nextFollowing ? "You are now following this reader." : "You unfollowed this reader.");
+		} catch {
+			setFollowFeedback("Unable to update follow state.", true);
+		} finally {
+			followToggle.disabled = false;
+		}
+	});
+
+	for (const dropdown of shelfDropdowns) {
+		const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
+		const options = Array.from(dropdown.querySelectorAll('[data-action="set-shelf"]'));
+		if (trigger) {
+			trigger.addEventListener("click", () => toggleShelfMenu(dropdown, shelfDropdowns));
+		}
+		for (const option of options) {
+			option.addEventListener("click", async () => {
+				const status = option.dataset.status || "want_to_read";
+				const entry = buildShelfEntryFromRecord({
+					title: String(dropdown.dataset.title || "").trim(),
+					author: String(dropdown.dataset.author || "").trim(),
+					description: String(dropdown.dataset.description || "").trim(),
+					pageCount: 0,
+					coverUrl: String(dropdown.dataset.cover || "").trim(),
+					format: String(dropdown.dataset.format || "Book").trim(),
+					language: String(dropdown.dataset.language || "").trim(),
+					isbn10: String(dropdown.dataset.isbn10 || "").trim(),
+					isbn13: String(dropdown.dataset.isbn13 || "").trim()
+				}, {
+					status,
+					totalPages: 0,
+					currentPage: status === "reading" ? 1 : 0,
+					finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : ""
+				});
+				if (!entry.title) return;
+				try {
+					const result = await syncShelfEntryToServer(entry);
+					if (!result.ok) throw new Error("Failed to save shelf entry.");
+					setDropdownLabel(dropdown, status);
+					setShelvedState(dropdown, true);
+					showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
+					closeShelfMenus(shelfDropdowns);
+				} catch (error) {
+					showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
+				}
+			});
+		}
+	}
+
+	document.addEventListener("click", (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		if (target.closest(".shelf-dropdown")) return;
+		closeShelfMenus(shelfDropdowns);
+	});
+</script>

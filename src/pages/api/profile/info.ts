@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { getNeonSql } from "../../../lib/neon";
-import { resolveActiveUserId } from "../../../lib/auth";
+import { resolveUserBySession } from "../../../lib/auth";
+import { resolvePrivacySettings, resolveViewerProfileAccess } from "../../../lib/privacy";
 
 export const prerender = false;
 
@@ -45,24 +46,48 @@ async function ensureProfileSchema() {
 export const GET: APIRoute = async ({ request, url }) => {
 	try {
 		await ensureProfileSchema();
-		const userKey = normalizeText(url.searchParams.get("userKey"));
-		const userId = await resolveActiveUserId(request, userKey);
-		if (!userId) return json(200, { profile: null });
+		const session = await resolveUserBySession(request);
+		const viewerUserId = String(session?.userId || "");
+		const requestedUsername = normalizeText(url.searchParams.get("username")).toLowerCase();
 
 		const sql = getNeonSql();
-		const rows = await sql<Array<{ username: string | null; profile_data: unknown }>>`
-			select username, profile_data
-			from app_user
-			where id = ${userId}::uuid
-			limit 1
-		`;
+		let rows: Array<{ id: string; username: string | null; profile_data: unknown }> = [];
+		if (requestedUsername) {
+			rows = await sql<Array<{ id: string; username: string | null; profile_data: unknown }>>`
+				select id::text as id, username, profile_data
+				from app_user
+				where lower(coalesce(username, '')) = ${requestedUsername}
+				limit 1
+			`;
+		} else if (viewerUserId) {
+			rows = await sql<Array<{ id: string; username: string | null; profile_data: unknown }>>`
+				select id::text as id, username, profile_data
+				from app_user
+				where id = ${viewerUserId}::uuid
+				limit 1
+			`;
+		}
+
 		const row = rows[0];
+		if (!row?.id) return json(200, { profile: null });
+
+		const targetUserId = String(row.id || "");
+		const privacy = resolvePrivacySettings(row.profile_data);
+		const access = resolveViewerProfileAccess({
+			viewerUserId,
+			targetUserId,
+			privacy
+		});
+		if (!access.canViewProfile) return json(200, { profile: null, visibility: { access, privacy } });
+
 		const normalized = normalizeProfilePayload(row?.profile_data);
+		if (!access.canViewLocation) normalized.location = "";
 		return json(200, {
 			profile: {
 				...normalized,
 				username: normalizeProfileText(row?.username, 40)
-			}
+			},
+			visibility: { access, privacy }
 		});
 	} catch (error) {
 		return json(500, {
@@ -75,23 +100,32 @@ export const GET: APIRoute = async ({ request, url }) => {
 export const POST: APIRoute = async ({ request }) => {
 	try {
 		await ensureProfileSchema();
-		const body = await request.json() as { userKey?: unknown; profile?: unknown };
-		const userKey = normalizeText(body?.userKey);
-		const userId = await resolveActiveUserId(request, userKey);
-		if (!userId) return json(500, { error: "Failed to resolve user." });
+		const session = await resolveUserBySession(request);
+		if (!session?.userId) return json(401, { error: "You must be logged in to save profile info." });
+		const body = await request.json() as { profile?: unknown };
 
 		const profile = normalizeProfilePayload(body?.profile);
 		const sql = getNeonSql();
+		const existingRows = await sql<Array<{ settings: unknown }>>`
+			select coalesce(profile_data->'settings', '{}'::jsonb) as settings
+			from app_user
+			where id = ${session.userId}::uuid
+			limit 1
+		`;
+		const profileData = {
+			...profile,
+			settings: existingRows[0]?.settings || {}
+		};
 		await sql`
 			update app_user
-			set profile_data = ${JSON.stringify(profile)}::jsonb
-			where id = ${userId}::uuid
+			set profile_data = ${JSON.stringify(profileData)}::jsonb
+			where id = ${session.userId}::uuid
 		`;
 
 		const rows = await sql<Array<{ username: string | null }>>`
 			select username
 			from app_user
-			where id = ${userId}::uuid
+			where id = ${session.userId}::uuid
 			limit 1
 		`;
 
