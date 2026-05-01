@@ -538,7 +538,7 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 		setShelvedState,
 		showShelfFeedback,
 		statusLabel,
-		syncShelfEntryToServer,
+		saveShelfEntryWithRetry,
 		toggleShelfMenu
 	} from "../lib/shelfClient";
 	import { normalizeBookPayload } from "../lib/bookPayload";
@@ -616,11 +616,13 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 			}
 			const entry = buildEntry(status);
 			if (!entry?.title) return;
-			const result = await syncShelfEntryToServer(entry);
+			const result = await saveShelfEntryWithRetry(entry);
 			const ok = !!result.ok;
 			if (ok) {
 				setSelected(status);
 				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
+			} else if (result.message) {
+				showShelfFeedback(dropdown, result.message, feedbackTimers);
 			}
 		});
 

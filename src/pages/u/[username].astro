@@ -247,7 +247,7 @@ function formatActivityDate(value: string) {
 		setShelvedState,
 		showShelfFeedback,
 		statusLabel,
-		syncShelfEntryToServer,
+		saveShelfEntryWithRetry,
 		toggleShelfMenu
 	} from "../../lib/shelfClient";
 	const followToggle = document.getElementById("follow-toggle");
@@ -329,8 +329,8 @@ function formatActivityDate(value: string) {
 				});
 				if (!entry.title) return;
 				try {
-					const result = await syncShelfEntryToServer(entry);
-					if (!result.ok) throw new Error("Failed to save shelf entry.");
+					const result = await saveShelfEntryWithRetry(entry);
+					if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
 					setDropdownLabel(dropdown, status);
 					setShelvedState(dropdown, true);
 					showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);

@@ -301,7 +301,7 @@ if (!distinctReaders) distinctReaders = Math.max(...books.map((row) => Number(ro
 		setDropdownLabel,
 		showShelfFeedback,
 		statusLabel,
-		syncShelfEntryToServer,
+		saveShelfEntryWithRetry,
 		toggleShelfMenu
 	} from "../lib/shelfClient";
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
@@ -345,8 +345,8 @@ if (!distinctReaders) distinctReaders = Math.max(...books.map((row) => Number(ro
 				finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : ""
 			});
 			try {
-				const result = await syncShelfEntryToServer(entry);
-				if (!result.ok) throw new Error("Failed to save shelf entry.");
+				const result = await saveShelfEntryWithRetry(entry);
+				if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
 				setDropdownLabel(dropdown, status);
 				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
 				closeShelfMenus(shelfDropdowns);

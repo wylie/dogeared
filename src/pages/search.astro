@@ -415,7 +415,7 @@ if (query) {
 		setShelvedState,
 		showShelfFeedback,
 		statusLabel,
-		syncShelfEntryToServer,
+		saveShelfEntryWithRetry,
 		toggleShelfMenu
 	} from "../lib/shelfClient";
 	import {
@@ -624,13 +624,15 @@ if (query) {
 			setDropdownLabel(dropdown, selectedStatus);
 			setShelvedState(dropdown, true);
 			void (async () => {
-				const result = await syncShelfEntryToServer(existing);
+				const result = await saveShelfEntryWithRetry(existing);
 				const serverEntry = result?.data && typeof result.data === "object" ? result.data.entry : null;
 				if (result.ok && serverEntry) {
 					const latest = loadShelfEntries();
 					mergeServerEntry(latest, existing, serverEntry);
 					saveShelfEntries(latest);
 					syncExistingState();
+				} else if (!result.ok && result.message) {
+					showShelfFeedback(dropdown, result.message, feedbackTimers);
 				}
 			})();
 			return;
@@ -668,13 +670,15 @@ if (query) {
 		setShelvedState(dropdown, true);
 		showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`, feedbackTimers);
 		void (async () => {
-			const result = await syncShelfEntryToServer(next);
+			const result = await saveShelfEntryWithRetry(next);
 			const serverEntry = result?.data && typeof result.data === "object" ? result.data.entry : null;
 			if (result.ok && serverEntry) {
 				const latest = loadShelfEntries();
 				mergeServerEntry(latest, next, serverEntry);
 				saveShelfEntries(latest);
 				syncExistingState();
+			} else if (!result.ok && result.message) {
+				showShelfFeedback(dropdown, result.message, feedbackTimers);
 			}
 		})();
 	}

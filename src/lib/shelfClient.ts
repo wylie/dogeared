@@ -142,6 +142,65 @@ export async function syncShelfEntryToServer(entry: unknown, redirectPath = "/se
 	return { ok: response.ok, unauthorized: false, response, data };
 }
 
+export function resolveShelfSaveMessage(result: {
+	ok: boolean;
+	unauthorized?: boolean;
+	response?: Response;
+	data?: unknown;
+	error?: unknown;
+}) {
+	if (result.ok) return "";
+	if (result.unauthorized || result.response?.status === 401) return "Please log in to save books.";
+	if (result.response?.status === 400) return "Invalid book data. Please try again.";
+	if (result.response?.status === 409) return "Conflict while saving. Please retry.";
+	if (result.response && result.response.status >= 500) return "Server error while saving. Please retry.";
+	if (result.error) return "Network error while saving. Please retry.";
+	const apiError = (result.data && typeof result.data === "object")
+		? String((result.data as Record<string, unknown>).error || "").trim()
+		: "";
+	return apiError || "Failed to save shelf entry.";
+}
+
+export async function saveShelfEntryWithRetry(
+	entry: unknown,
+	options?: { redirectPath?: string; retries?: number; retryDelayMs?: number }
+) {
+	const redirectPath = String(options?.redirectPath || "/settings#account-settings");
+	const retries = Math.max(0, Number(options?.retries ?? 1) || 0);
+	const retryDelayMs = Math.max(0, Number(options?.retryDelayMs ?? 250) || 0);
+	let attempt = 0;
+	let lastResult: {
+		ok: boolean;
+		unauthorized?: boolean;
+		response?: Response;
+		data?: unknown;
+		error?: unknown;
+	} = { ok: false };
+
+	while (attempt <= retries) {
+		try {
+			const result = await syncShelfEntryToServer(entry, redirectPath);
+			lastResult = result;
+			if (result.ok) return { ...result, message: "" };
+			const status = Number(result.response?.status || 0);
+			const retriable = status >= 500 || status === 429;
+			if (!retriable || attempt >= retries || result.unauthorized) break;
+		} catch (error) {
+			lastResult = { ok: false, error };
+			if (attempt >= retries) break;
+		}
+		attempt += 1;
+		if (retryDelayMs > 0) {
+			await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+		}
+	}
+
+	return {
+		...lastResult,
+		message: resolveShelfSaveMessage(lastResult)
+	};
+}
+
 type ShelfEntryOptions = {
 	status: string;
 	totalPages?: number;
