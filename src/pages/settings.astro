@@ -1,5 +1,13 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { resolveUserBySession } from '../lib/auth';
+
+export const prerender = false;
+
+const session = await resolveUserBySession(Astro.request);
+if (!session?.userId) {
+	return Astro.redirect('/');
+}
 
 const sectionLinks = [
 	{ id: "goodreads-import", label: "Import Goodreads" },

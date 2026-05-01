@@ -51,7 +51,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       <p class="login-modal-copy">Enter your email and Dogeared will send you a magic link.</p>
       <form id="left-hand-login-form" class="login-modal-form">
         <label for="left-hand-login-email">Email</label>
-        <input id="left-hand-login-email" type="email" autocomplete="email" required placeholder="you@example.com" />
+        <input id="left-hand-login-email" type="email" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required placeholder="you@example.com" />
         <button type="submit" class="login-submit">Send Magic Link</button>
       </form>
       <p id="left-hand-login-feedback" class="login-feedback" hidden></p>
@@ -174,7 +174,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   .login-modal {
     position: fixed;
     inset: 0;
-    z-index: 80;
+    z-index: 12000;
   }
   .login-modal-backdrop {
     position: absolute;
@@ -378,6 +378,12 @@ const query = Astro.url.searchParams.get("q") ?? "";
   const leftHandLoginEmail = document.getElementById("left-hand-login-email");
   const leftHandLoginFeedback = document.getElementById("left-hand-login-feedback");
 
+  // Safari can clip fixed overlays when nested inside sticky/scroll containers.
+  // Portal the modal to <body> so it always covers the full viewport.
+  if (leftHandLoginModal instanceof HTMLElement && leftHandLoginModal.parentElement !== document.body) {
+    document.body.appendChild(leftHandLoginModal);
+  }
+
   function showLoginFeedback(message, isError = false) {
     if (!(leftHandLoginFeedback instanceof HTMLElement)) return;
     leftHandLoginFeedback.textContent = message;
@@ -389,11 +395,6 @@ const query = Astro.url.searchParams.get("q") ?? "";
     if (!(leftHandLoginModal instanceof HTMLElement)) return;
     leftHandLoginModal.hidden = false;
     showLoginFeedback("");
-    window.setTimeout(() => {
-      if (leftHandLoginEmail instanceof HTMLInputElement) {
-        leftHandLoginEmail.focus();
-      }
-    }, 0);
   }
 
   function closeLoginModal() {
