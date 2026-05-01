@@ -552,6 +552,29 @@ if (query) {
 		entry.finishedDate = "";
 	}
 
+	function mergeServerEntry(entries, localEntry, serverEntry) {
+		if (!serverEntry || typeof serverEntry !== "object") return;
+		const incoming = serverEntry;
+		const byId = String(incoming.id || "").trim();
+		const byTitle = String(incoming.title || localEntry?.title || "").trim();
+		const byAuthor = String(incoming.author || localEntry?.author || "").trim();
+		const existingById = byId ? entries.findIndex((item) => String(item?.id || "") === byId) : -1;
+		const existingByTitle = existingById === -1 ? entries.findIndex((item) => findEntry([item], byTitle, byAuthor)) : -1;
+		const nextEntry = {
+			...(localEntry || {}),
+			...incoming
+		};
+		if (existingById >= 0) {
+			entries[existingById] = nextEntry;
+			return;
+		}
+		if (existingByTitle >= 0) {
+			entries[existingByTitle] = nextEntry;
+			return;
+		}
+		entries.unshift(nextEntry);
+	}
+
 	function setShelf(dropdown, selectedStatus) {
 		if (!isAuthenticated) {
 			promptForShelfLogin();
@@ -600,7 +623,16 @@ if (query) {
 			}
 			setDropdownLabel(dropdown, selectedStatus);
 			setShelvedState(dropdown, true);
-			void syncShelfEntryToServer(existing);
+			void (async () => {
+				const result = await syncShelfEntryToServer(existing);
+				const serverEntry = result?.data && typeof result.data === "object" ? result.data.entry : null;
+				if (result.ok && serverEntry) {
+					const latest = loadShelfEntries();
+					mergeServerEntry(latest, existing, serverEntry);
+					saveShelfEntries(latest);
+					syncExistingState();
+				}
+			})();
 			return;
 		}
 
@@ -635,7 +667,16 @@ if (query) {
 		setDropdownLabel(dropdown, selectedStatus);
 		setShelvedState(dropdown, true);
 		showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`, feedbackTimers);
-		void syncShelfEntryToServer(next);
+		void (async () => {
+			const result = await syncShelfEntryToServer(next);
+			const serverEntry = result?.data && typeof result.data === "object" ? result.data.entry : null;
+			if (result.ok && serverEntry) {
+				const latest = loadShelfEntries();
+				mergeServerEntry(latest, next, serverEntry);
+				saveShelfEntries(latest);
+				syncExistingState();
+			}
+		})();
 	}
 
 	function syncExistingState() {

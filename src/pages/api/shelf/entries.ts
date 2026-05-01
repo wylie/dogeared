@@ -662,7 +662,78 @@ export const POST: APIRoute = async ({ request }) => {
 			`;
 		}
 
-		return new Response(JSON.stringify({ ok: true, bookId }), {
+		const persistedRows = await sql<Array<{
+			book_id: number;
+			title: string;
+			primary_author: string;
+			cover_url: string;
+			language: string;
+			status: ShelfStatus;
+			rating: number | null;
+			total_pages: number;
+			current_page: number;
+			finished_date: string | null;
+			first_added_at: string;
+			updated_at: string;
+			genres: string[] | null;
+			isbn10: string;
+			isbn13: string;
+			google_books_id: string;
+			publisher: string | null;
+			synopsis: string;
+		}>>`
+			select
+				b.id as book_id,
+				b.title,
+				b.primary_author,
+				b.cover_url,
+				b.language,
+				ub.status,
+				ub.rating,
+				ub.total_pages,
+				ub.current_page,
+				ub.finished_date::text as finished_date,
+				ub.first_added_at::text as first_added_at,
+				ub.updated_at::text as updated_at,
+				array_agg(bg.genre_name order by bg.genre_name asc) filter (where bg.genre_name is not null) as genres,
+				b.isbn10,
+				b.isbn13,
+				b.google_books_id,
+				null::text as publisher,
+				coalesce(b.synopsis, '') as synopsis
+			from user_book ub
+			join book b on b.id = ub.book_id
+			left join book_genre bg on bg.book_id = b.id
+			where ub.user_id = ${userId}::uuid
+				and ub.book_id = ${bookId}
+			group by b.id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at
+			limit 1
+		`;
+		const persisted = persistedRows[0];
+		const persistedEntry = persisted ? {
+			id: `book_${persisted.book_id}`,
+			bookId: Number(persisted.book_id || 0),
+			title: persisted.title || "",
+			author: persisted.primary_author || "",
+			status: persisted.status,
+			rating: normalizeRating(persisted.rating),
+			totalPages: normalizePositiveInt(persisted.total_pages),
+			currentPage: normalizePositiveInt(persisted.current_page),
+			finishedDate: persisted.finished_date || "",
+			addedAt: Date.parse(persisted.first_added_at || "") || Date.now(),
+			coverUrl: persisted.cover_url || "",
+			format: "",
+			language: persisted.language || "",
+			isbn10: persisted.isbn10 || "",
+			isbn13: persisted.isbn13 || "",
+			googleBooksId: persisted.google_books_id || "",
+			publisher: persisted.publisher || "",
+			description: persisted.synopsis || "",
+			categories: Array.isArray(persisted.genres) ? persisted.genres : [],
+			updatedAt: Date.parse(persisted.updated_at || "") || Date.now()
+		} : null;
+
+		return new Response(JSON.stringify({ ok: true, bookId, entry: persistedEntry }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" }
 		});

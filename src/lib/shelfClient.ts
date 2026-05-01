@@ -131,9 +131,15 @@ export async function syncShelfEntryToServer(entry: unknown, redirectPath = "/se
 	});
 	if (response.status === 401) {
 		window.location.href = redirectPath;
-		return { ok: false, unauthorized: true, response };
+		return { ok: false, unauthorized: true, response, data: null };
 	}
-	return { ok: response.ok, unauthorized: false, response };
+	let data: unknown = null;
+	try {
+		data = await response.json();
+	} catch {
+		data = null;
+	}
+	return { ok: response.ok, unauthorized: false, response, data };
 }
 
 type ShelfEntryOptions = {
