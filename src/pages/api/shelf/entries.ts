@@ -318,6 +318,34 @@ async function ensureShelfSchema() {
 	await sql`alter table book add column if not exists synopsis text not null default ''`;
 }
 
+async function resolveBestBookId(
+	sql: ReturnType<typeof getNeonSql>,
+	input: { canonicalWorkKey: string; isbn10: string; isbn13: string; googleBooksId: string }
+) {
+	const rows = await sql<Array<{ id: number }>>`
+		select b.id
+		from book b
+		where (
+			(${input.googleBooksId} <> '' and b.google_books_id = ${input.googleBooksId})
+			or (${input.isbn13} <> '' and b.isbn13 = ${input.isbn13})
+			or (${input.isbn10} <> '' and b.isbn10 = ${input.isbn10})
+			or b.canonical_work_key = ${input.canonicalWorkKey}
+		)
+		order by
+			case
+				when ${input.googleBooksId} <> '' and b.google_books_id = ${input.googleBooksId} then 1
+				when ${input.isbn13} <> '' and b.isbn13 = ${input.isbn13} then 2
+				when ${input.isbn10} <> '' and b.isbn10 = ${input.isbn10} then 3
+				when b.canonical_work_key = ${input.canonicalWorkKey} then 4
+				else 9
+			end asc,
+			b.updated_at desc,
+			b.id desc
+		limit 1
+	`;
+	return Number(rows[0]?.id || 0);
+}
+
 export const GET: APIRoute = async ({ request, url }) => {
 	try {
 		await ensureShelfSchema();
@@ -463,61 +491,81 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 		const userId = session.userId;
 		const sql = getNeonSql();
+		const resolvedBookId = await resolveBestBookId(sql, {
+			canonicalWorkKey: workKey,
+			isbn10,
+			isbn13,
+			googleBooksId
+		});
+
 		const previousRows = await sql<Array<{ status: ShelfStatus; rating: number | null }>>`
 			select status, rating
 			from user_book
 			where user_id = ${userId}::uuid
-				and book_id in (
-					select id
-					from book
-					where canonical_work_key = ${workKey}
-					limit 1
-				)
+				and book_id = ${resolvedBookId || 0}
 			limit 1
 		`;
 		const previousStatus = String(previousRows[0]?.status || "").trim() as ShelfStatus | "";
 		const previousRating = normalizeRating(previousRows[0]?.rating);
 
-		const bookRows = await sql<{ id: number }[]>`
-			insert into book (
-				canonical_work_key,
-				title,
-				primary_author,
-				isbn13,
-				isbn10,
-				google_books_id,
-				synopsis,
-				cover_url,
-				language,
-				published_year
-			)
-			values (
-				${workKey},
-				${title},
-				${author},
-				${isbn13},
-				${isbn10},
-				${googleBooksId},
-				${synopsis},
-				${coverUrl},
-				${language},
-				${publishedYear}
-			)
-			on conflict (canonical_work_key) do update set
-				title = excluded.title,
-				primary_author = excluded.primary_author,
-				isbn13 = case when excluded.isbn13 <> '' then excluded.isbn13 else book.isbn13 end,
-				isbn10 = case when excluded.isbn10 <> '' then excluded.isbn10 else book.isbn10 end,
-				google_books_id = case when excluded.google_books_id <> '' then excluded.google_books_id else book.google_books_id end,
-				synopsis = case when excluded.synopsis <> '' then excluded.synopsis else book.synopsis end,
-				cover_url = case when excluded.cover_url <> '' then excluded.cover_url else book.cover_url end,
-				language = case when excluded.language <> '' then excluded.language else book.language end,
-				published_year = coalesce(excluded.published_year, book.published_year),
-				updated_at = now()
-			returning id
-		`;
-
-		const bookId = Number(bookRows[0]?.id || 0);
+		let bookId = resolvedBookId;
+		if (bookId > 0) {
+			await sql`
+				update book
+				set
+					title = ${title},
+					primary_author = ${author},
+					isbn13 = case when ${isbn13} <> '' then ${isbn13} else book.isbn13 end,
+					isbn10 = case when ${isbn10} <> '' then ${isbn10} else book.isbn10 end,
+					google_books_id = case when ${googleBooksId} <> '' then ${googleBooksId} else book.google_books_id end,
+					synopsis = case when ${synopsis} <> '' then ${synopsis} else book.synopsis end,
+					cover_url = case when ${coverUrl} <> '' then ${coverUrl} else book.cover_url end,
+					language = case when ${language} <> '' then ${language} else book.language end,
+					published_year = coalesce(${publishedYear}, book.published_year),
+					updated_at = now()
+				where id = ${bookId}
+			`;
+		} else {
+			const bookRows = await sql<{ id: number }[]>`
+				insert into book (
+					canonical_work_key,
+					title,
+					primary_author,
+					isbn13,
+					isbn10,
+					google_books_id,
+					synopsis,
+					cover_url,
+					language,
+					published_year
+				)
+				values (
+					${workKey},
+					${title},
+					${author},
+					${isbn13},
+					${isbn10},
+					${googleBooksId},
+					${synopsis},
+					${coverUrl},
+					${language},
+					${publishedYear}
+				)
+				on conflict (canonical_work_key) do update set
+					title = excluded.title,
+					primary_author = excluded.primary_author,
+					isbn13 = case when excluded.isbn13 <> '' then excluded.isbn13 else book.isbn13 end,
+					isbn10 = case when excluded.isbn10 <> '' then excluded.isbn10 else book.isbn10 end,
+					google_books_id = case when excluded.google_books_id <> '' then excluded.google_books_id else book.google_books_id end,
+					synopsis = case when excluded.synopsis <> '' then excluded.synopsis else book.synopsis end,
+					cover_url = case when excluded.cover_url <> '' then excluded.cover_url else book.cover_url end,
+					language = case when excluded.language <> '' then excluded.language else book.language end,
+					published_year = coalesce(excluded.published_year, book.published_year),
+					updated_at = now()
+				returning id
+			`;
+			bookId = Number(bookRows[0]?.id || 0);
+		}
 		if (!bookId) throw new Error("Book upsert failed.");
 		await upsertBookSources(sql, bookId, sources);
 
@@ -644,12 +692,17 @@ export const DELETE: APIRoute = async ({ request }) => {
 
 		const userId = session.userId;
 		const sql = getNeonSql();
+		const googleBooksId = normalizeCatalogText(entry.googleBooksId);
+		const bookId = await resolveBestBookId(sql, {
+			canonicalWorkKey: workKey,
+			isbn10,
+			isbn13,
+			googleBooksId
+		});
 		await sql`
 			delete from user_book ub
-			using book b
-			where ub.book_id = b.id
-				and ub.user_id = ${userId}::uuid
-				and b.canonical_work_key = ${workKey}
+			where ub.user_id = ${userId}::uuid
+				and ub.book_id = ${bookId || 0}
 		`;
 
 		return new Response(JSON.stringify({ ok: true }), {
