@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { resolveUserBySession } from '../lib/auth';
+import { getNeonSql } from '../lib/neon';
 
 export const prerender = false;
 
@@ -9,12 +10,175 @@ const sectionLinks = [
 	{ id: "want_to_read", label: "Want to Read" },
 	{ id: "finished", label: "Read" }
 ];
+function normalizeSeedText(value: unknown, maxLength: number) {
+	return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function normalizeSeedAvatar(value: unknown) {
+	const text = String(value || "").trim().slice(0, 500000);
+	if (!text) return "";
+	if (text.startsWith("data:image/")) return text;
+	if (/^https?:\/\//i.test(text)) return text;
+	return "";
+}
+
+function normalizeSeedGenres(value: unknown) {
+	const list = Array.isArray(value) ? value : [];
+	const dedupe = new Set<string>();
+	const out: string[] = [];
+	for (const raw of list) {
+		const text = normalizeSeedText(raw, 40);
+		if (!text) continue;
+		const key = text.toLowerCase();
+		if (dedupe.has(key)) continue;
+		dedupe.add(key);
+		out.push(text);
+		if (out.length >= 12) break;
+	}
+	return out;
+}
+
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
+const editMode = String(Astro.url.searchParams.get("edit") || "").trim() === "1";
+let initialProfileSeed: Record<string, unknown> = {};
+let initialProfileFormValues = {
+	avatar: "",
+	name: "",
+	username: "",
+	location: "",
+	readingGoal: "",
+	favoriteBook: "",
+	favoriteAuthor: "",
+	blurb: "",
+	genres: [] as string[]
+};
+let initialAccountUsername = "";
+let liveProfilePath = "/profile";
+
+function normalizeUsernameForSave(value: unknown) {
+	const raw = normalizeSeedText(value, 40).replace(/^@+/, "").toLowerCase();
+	if (!raw) return "";
+	const sanitized = raw.replace(/[^a-z0-9._-]/g, "");
+	if (!sanitized) return "";
+	return sanitized.slice(0, 40);
+}
+if (isAuthenticated && !editMode) {
+	const sql = getNeonSql();
+	const rows = await sql<Array<{ username: string | null }>>`
+		select nullif(trim(username), '') as username
+		from app_user
+		where id = ${session!.userId}::uuid
+		limit 1
+	`;
+	const username = String(rows[0]?.username || "").trim();
+	if (username) {
+		return Astro.redirect(`/u/${encodeURIComponent(username)}`);
+	}
+}
+if (isAuthenticated) {
+	const sql = getNeonSql();
+	if (Astro.request.method === "POST") {
+		const formData = await Astro.request.formData();
+		const incomingName = normalizeSeedText(formData.get("name"), 80);
+		const incomingUsername = normalizeUsernameForSave(formData.get("username"));
+		const incomingLocation = normalizeSeedText(formData.get("location"), 80);
+		const incomingReadingGoal = normalizeSeedText(formData.get("readingGoal"), 80);
+		const incomingFavoriteBook = normalizeSeedText(formData.get("favoriteBook"), 120);
+		const incomingFavoriteAuthor = normalizeSeedText(formData.get("favoriteAuthor"), 120);
+		const incomingBlurb = normalizeSeedText(formData.get("blurb"), 400);
+		const incomingGenres = normalizeSeedGenres(String(formData.get("genres") || "").split(","));
+		const avatarHidden = normalizeSeedAvatar(formData.get("avatar"));
+		const avatarFromUrl = normalizeSeedAvatar(formData.get("avatarUrl"));
+		const incomingAvatar = avatarHidden || avatarFromUrl;
+
+		const accountRows = await sql<Array<{ username: string | null; profile_data: unknown }>>`
+			select username, profile_data
+			from app_user
+			where id = ${session!.userId}::uuid
+			limit 1
+		`;
+		const currentUsername = normalizeUsernameForSave(accountRows[0]?.username);
+		const currentProfile = accountRows[0]?.profile_data && typeof accountRows[0]?.profile_data === "object"
+			? accountRows[0]?.profile_data as Record<string, unknown>
+			: {};
+		let finalUsername = currentUsername;
+
+		if (incomingUsername && incomingUsername !== currentUsername) {
+			const usernameRows = await sql<Array<{ id: string }>>`
+				select id
+				from app_user
+				where lower(username) = lower(${incomingUsername})
+				  and id <> ${session!.userId}::uuid
+				limit 1
+			`;
+			if (usernameRows.length === 0) {
+				finalUsername = incomingUsername;
+			}
+		}
+
+		const nextProfile = {
+			avatar: incomingAvatar,
+			name: incomingName,
+			username: finalUsername ? `@${finalUsername}` : normalizeSeedText(currentProfile.username, 40),
+			location: incomingLocation,
+			readingGoal: incomingReadingGoal,
+			favoriteBook: incomingFavoriteBook,
+			favoriteAuthor: incomingFavoriteAuthor,
+			blurb: incomingBlurb,
+			genres: incomingGenres
+		};
+
+		await sql`
+			update app_user
+			set
+				username = ${finalUsername || null},
+				profile_data = ${JSON.stringify(nextProfile)}::jsonb
+			where id = ${session!.userId}::uuid
+		`;
+
+		const redirectUsername = finalUsername || currentUsername;
+		if (redirectUsername) {
+			return Astro.redirect(`/u/${encodeURIComponent(redirectUsername)}`);
+		}
+		return Astro.redirect("/profile");
+	}
+
+	const rows = await sql<Array<{ profile_data: unknown; username: string | null }>>`
+		select profile_data, username
+		from app_user
+		where id = ${session!.userId}::uuid
+		limit 1
+	`;
+	const raw = rows[0]?.profile_data;
+	initialAccountUsername = normalizeSeedText(rows[0]?.username, 40).replace(/^@+/, "");
+	initialProfileSeed = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+	initialProfileFormValues = {
+		avatar: normalizeSeedAvatar(initialProfileSeed.avatar),
+		name: normalizeSeedText(initialProfileSeed.name, 80),
+		username: initialAccountUsername
+			? `@${initialAccountUsername}`
+			: normalizeSeedText(initialProfileSeed.username, 40),
+		location: normalizeSeedText(initialProfileSeed.location, 80),
+		readingGoal: normalizeSeedText(initialProfileSeed.readingGoal, 80),
+		favoriteBook: normalizeSeedText(initialProfileSeed.favoriteBook, 120),
+		favoriteAuthor: normalizeSeedText(initialProfileSeed.favoriteAuthor, 120),
+		blurb: normalizeSeedText(initialProfileSeed.blurb, 400),
+		genres: normalizeSeedGenres(initialProfileSeed.genres)
+	};
+	liveProfilePath = initialAccountUsername ? `/u/${encodeURIComponent(initialAccountUsername)}` : "/profile";
+}
 ---
 
 <Layout title="Profile" sectionLinks={sectionLinks}>
-	<div slot="right" class="reads-page" data-authenticated={String(isAuthenticated)}>
+	<div
+		slot="right"
+		class="reads-page"
+		data-authenticated={String(isAuthenticated)}
+		data-force-edit={String(editMode)}
+		data-live-profile-path={liveProfilePath}
+		data-initial-profile={encodeURIComponent(JSON.stringify(initialProfileSeed))}
+	>
 		{!isAuthenticated && (
 			<section class="auth-required">
 				<h1>Profile</h1>
@@ -30,53 +194,61 @@ const isAuthenticated = !!session?.userId;
 		<section class="profile-details" aria-labelledby="profile-details-title">
 			<div class="profile-details-head">
 				<h2 id="profile-details-title">About You</h2>
-				<button type="button" id="profile-edit-toggle" class="secondary">Edit Profile</button>
+				<button type="button" id="profile-edit-toggle" class="secondary" hidden={editMode}>Edit Profile</button>
 			</div>
 
-			<div id="profile-view" class="profile-view"></div>
+			<div id="profile-view" class="profile-view" hidden={editMode}></div>
 
-				<form id="profile-form" class="profile-form" hidden>
+				<form id="profile-form" class="profile-form" hidden={!editMode} method="post" action="/profile?edit=1">
 					<div class="profile-grid">
 						<label class="full-span">
 							Avatar
 							<div class="avatar-editor">
-								<div id="profile-avatar-preview" class="avatar-preview"></div>
+								<div id="profile-avatar-preview" class="avatar-preview">
+									{initialProfileFormValues.avatar ? (
+										<img class="avatar-preview-image" src={initialProfileFormValues.avatar} alt="" loading="lazy" />
+									) : (
+										<span class="avatar-preview-fallback" aria-hidden="true">
+											{(initialProfileFormValues.name || "R").trim().slice(0, 1).toUpperCase()}
+										</span>
+									)}
+								</div>
 								<div class="avatar-controls">
-									<input type="text" name="avatarUrl" maxlength="500" placeholder="Image URL (https://...)" />
+									<input type="text" name="avatarUrl" maxlength="500" placeholder="Image URL (https://...)" value={/^https?:\/\//i.test(initialProfileFormValues.avatar) ? initialProfileFormValues.avatar : ""} />
 									<div class="avatar-buttons">
 										<input id="profile-avatar-file" type="file" accept="image/*" />
 										<button type="button" id="profile-avatar-remove" class="secondary">Remove</button>
 									</div>
-									<input type="hidden" name="avatar" />
+									<input type="hidden" name="avatar" value={initialProfileFormValues.avatar} />
 									<p class="field-hint">Upload an image or paste an image URL.</p>
 								</div>
 							</div>
 						</label>
 						<label>
 							Name
-							<input type="text" name="name" maxlength="80" placeholder="e.g. Wylie Reader" required />
+							<input type="text" name="name" maxlength="80" placeholder="e.g. Wylie Reader" required value={initialProfileFormValues.name} />
 						</label>
 						<label>
 							Username
-							<input type="text" name="username" maxlength="40" placeholder="e.g. wylie_reads" required />
+							<input type="text" name="username" maxlength="40" placeholder="e.g. wylie_reads" required value={initialProfileFormValues.username} />
 							<p id="profile-username-status" class="field-status" hidden></p>
 						</label>
 						<label>
 							Location
 							<div class="location-autocomplete">
-								<input type="text" name="location" maxlength="80" autocomplete="off" placeholder="City, State or ZIP (e.g. Austin, TX or 78701)" required />
+								<input type="text" name="location" maxlength="80" autocomplete="off" placeholder="City, State or ZIP (e.g. Austin, TX or 78701)" required value={initialProfileFormValues.location} />
 								<div id="profile-location-options" class="location-options" hidden></div>
 							</div>
 							<p id="profile-location-status" class="location-status" hidden></p>
 						</label>
 					<label>
 						Reading Goal
-						<input type="text" name="readingGoal" maxlength="80" placeholder="e.g. 24 books in 2026" />
+						<input type="text" name="readingGoal" maxlength="80" placeholder="e.g. 24 books in 2026" value={initialProfileFormValues.readingGoal} />
 					</label>
 					<label>
 						Favorite Book
 						<div class="favorite-book-autocomplete">
-							<input type="text" name="favoriteBook" maxlength="120" autocomplete="off" placeholder="Search title" />
+							<input type="text" name="favoriteBook" maxlength="120" autocomplete="off" placeholder="Search title" value={initialProfileFormValues.favoriteBook} />
 							<div id="profile-favorite-book-options" class="favorite-book-options" hidden></div>
 						</div>
 						<p id="profile-favorite-book-status" class="field-status" hidden></p>
@@ -84,7 +256,7 @@ const isAuthenticated = !!session?.userId;
 					<label>
 						Favorite Author
 						<div class="favorite-author-autocomplete">
-							<input type="text" name="favoriteAuthor" maxlength="120" autocomplete="off" placeholder="Search author" />
+							<input type="text" name="favoriteAuthor" maxlength="120" autocomplete="off" placeholder="Search author" value={initialProfileFormValues.favoriteAuthor} />
 							<div id="profile-favorite-author-options" class="favorite-author-options" hidden></div>
 						</div>
 						<p id="profile-favorite-author-status" class="field-status" hidden></p>
@@ -95,7 +267,7 @@ const isAuthenticated = !!session?.userId;
 								<div class="genre-input-row">
 									<input id="profile-genre-input" type="text" placeholder="Start typing a genre" />
 								</div>
-								<input type="hidden" name="genres" />
+								<input type="hidden" name="genres" value={initialProfileFormValues.genres.join(", ")} />
 								<p class="field-hint">Add one at a time. Press Enter or comma.</p>
 								<div id="profile-genre-selected" class="genre-list genre-edit-list"></div>
 							</div>
@@ -103,11 +275,11 @@ const isAuthenticated = !!session?.userId;
 					</div>
 				<label>
 					Blurb
-					<textarea name="blurb" rows="3" maxlength="400" placeholder="Tell people about your reading taste."></textarea>
+					<textarea name="blurb" rows="3" maxlength="400" placeholder="Tell people about your reading taste.">{initialProfileFormValues.blurb}</textarea>
 				</label>
 				<div class="profile-actions">
 					<button type="submit">Save Profile</button>
-					<button type="button" id="profile-edit-cancel" class="secondary">Cancel</button>
+					<a id="profile-edit-cancel" class="secondary" href={liveProfilePath}>Cancel</a>
 				</div>
 			</form>
 		</section>
@@ -310,6 +482,10 @@ const isAuthenticated = !!session?.userId;
 			if (!response.ok || !data?.profile) return false;
 			profileInfo = saveProfileInfo(mergeProfileInfo(loadProfileInfo(), data.profile));
 			renderProfileInfo();
+			// If we're already in edit mode, refresh inputs with hydrated server data.
+			if (profileForm instanceof HTMLFormElement && !profileForm.hidden) {
+				fillProfileForm();
+			}
 			return true;
 		} catch {
 			return false;
@@ -510,6 +686,17 @@ const isAuthenticated = !!session?.userId;
 	function loadProfileInfo() {
 		try {
 			const parsed = JSON.parse(localStorage.getItem(PROFILE_INFO_KEY) || "{}");
+			return normalizeProfileInfo(parsed);
+		} catch {
+			return normalizeProfileInfo({});
+		}
+	}
+
+	function loadInitialProfileSeed() {
+		try {
+			const encoded = String(profilePageRoot?.dataset.initialProfile || "").trim();
+			if (!encoded) return normalizeProfileInfo({});
+			const parsed = JSON.parse(decodeURIComponent(encoded));
 			return normalizeProfileInfo(parsed);
 		} catch {
 			return normalizeProfileInfo({});
@@ -736,7 +923,7 @@ const isAuthenticated = !!session?.userId;
 			}
 		};
 		setField("name", data.name);
-		setField("username", data.username);
+		setField("username", data.username ? `@${String(data.username).replace(/^@+/, "")}` : "");
 		setField("location", data.location);
 		setField("readingGoal", data.readingGoal);
 		setField("favoriteBook", data.favoriteBook);
@@ -1463,7 +1650,7 @@ const isAuthenticated = !!session?.userId;
 		return query;
 	}
 
-	function scheduleFavoriteBookLookup(favoriteBookField, options = { immediate: false }) {
+	function scheduleFavoriteBookLookup(favoriteBookField, options = { immediate: false, showOptionsOnExact: false }) {
 		if (!(favoriteBookField instanceof HTMLInputElement)) return;
 		const query = String(favoriteBookField.value || "").trim();
 		if (favoriteBookLookupTimer) {
@@ -1492,7 +1679,7 @@ const isAuthenticated = !!session?.userId;
 					return;
 				}
 				const exact = matches.find((item) => item.formatted.toLowerCase() === query.toLowerCase());
-				if (exact) {
+				if (exact && !options.showOptionsOnExact) {
 					favoriteBookField.dataset.resolvedFavoriteBook = exact.formatted;
 					showFavoriteBookStatus(`Matched: ${exact.formatted}`);
 					hideFavoriteBookOptions();
@@ -1517,7 +1704,7 @@ const isAuthenticated = !!session?.userId;
 		}
 	}
 
-	function scheduleFavoriteAuthorLookup(favoriteAuthorField, options = { immediate: false }) {
+	function scheduleFavoriteAuthorLookup(favoriteAuthorField, options = { immediate: false, showOptionsOnExact: false }) {
 		if (!(favoriteAuthorField instanceof HTMLInputElement)) return;
 		const query = String(favoriteAuthorField.value || "").trim();
 		if (favoriteAuthorLookupTimer) {
@@ -1546,7 +1733,7 @@ const isAuthenticated = !!session?.userId;
 					return;
 				}
 				const exact = matches.find((item) => item.name.toLowerCase() === query.toLowerCase());
-				if (exact) {
+				if (exact && !options.showOptionsOnExact) {
 					favoriteAuthorField.dataset.resolvedFavoriteAuthor = exact.name;
 					showFavoriteAuthorStatus(`Matched: ${exact.name}`);
 					hideFavoriteAuthorOptions();
@@ -1572,9 +1759,18 @@ const isAuthenticated = !!session?.userId;
 	}
 
 	function initializeProfileInfo() {
-		profileInfo = loadProfileInfo();
+		profileInfo = mergeProfileInfo(loadProfileInfo(), loadInitialProfileSeed());
 		renderProfileInfo();
-		setProfileEditMode(false);
+		const forceEditMode = profilePageRoot?.dataset.forceEdit === "true"
+			|| new URLSearchParams(window.location.search).get("edit") === "1";
+		setProfileEditMode(forceEditMode);
+		if (forceEditMode) {
+			try {
+				fillProfileForm();
+			} catch (error) {
+				console.error("Failed to hydrate profile form:", error);
+			}
+		}
 
 		if (profileEditToggle instanceof HTMLButtonElement) {
 			profileEditToggle.addEventListener("click", () => {
@@ -1585,11 +1781,17 @@ const isAuthenticated = !!session?.userId;
 
 		if (profileEditCancel instanceof HTMLButtonElement) {
 			profileEditCancel.addEventListener("click", () => {
-				setProfileEditMode(false);
+				const destination = String(profilePageRoot?.dataset.liveProfilePath || "/profile");
+				window.location.href = destination;
 			});
 		}
 
 		if (profileForm instanceof HTMLFormElement) {
+			// Defensive guard: never allow native GET form navigation on this page.
+			profileForm.addEventListener("submit", (event) => {
+				event.preventDefault();
+			}, { capture: true });
+
 			const avatarUrlField = profileForm.elements.namedItem("avatarUrl");
 			const nameField = profileForm.elements.namedItem("name");
 			const usernameField = profileForm.elements.namedItem("username");
@@ -1770,7 +1972,8 @@ const isAuthenticated = !!session?.userId;
 						})();
 					});
 					favoriteBookField.addEventListener("focus", () => {
-						if (favoriteBookMatches.length > 0) renderFavoriteBookOptions(favoriteBookField);
+						favoriteBookField.dataset.resolvedFavoriteBook = "";
+						scheduleFavoriteBookLookup(favoriteBookField, { immediate: true, showOptionsOnExact: true });
 					});
 				}
 
@@ -1818,7 +2021,8 @@ const isAuthenticated = !!session?.userId;
 						})();
 					});
 					favoriteAuthorField.addEventListener("focus", () => {
-						if (favoriteAuthorMatches.length > 0) renderFavoriteAuthorOptions(favoriteAuthorField);
+						favoriteAuthorField.dataset.resolvedFavoriteAuthor = "";
+						scheduleFavoriteAuthorLookup(favoriteAuthorField, { immediate: true, showOptionsOnExact: true });
 					});
 				}
 
@@ -2813,9 +3017,9 @@ const isAuthenticated = !!session?.userId;
 		position: relative;
 	}
 
-	.reads-page .favorite-book-autocomplete {
+	.reads-page .favorite-book-autocomplete,
+	.reads-page .favorite-author-autocomplete {
 		position: relative;
-		margin-top: -2.65rem;
 	}
 
 	.reads-page .favorite-book-autocomplete input {
@@ -2872,7 +3076,32 @@ const isAuthenticated = !!session?.userId;
 		padding: 0.2rem 0;
 	}
 
+	.reads-page .favorite-author-options {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 0;
+		right: 0;
+		z-index: 40;
+		background: #fff;
+		border: 1px solid #d1d1d1;
+		border-radius: 8px;
+		box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+		max-height: 260px;
+		overflow: auto;
+		padding: 0.2rem 0;
+	}
+
 	.reads-page .favorite-book-option {
+		display: block;
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: transparent;
+		padding: 0.45rem 0.6rem;
+		cursor: pointer;
+	}
+
+	.reads-page .favorite-author-option {
 		display: block;
 		width: 100%;
 		text-align: left;
@@ -2886,7 +3115,15 @@ const isAuthenticated = !!session?.userId;
 		background: #f3f4f6;
 	}
 
+	.reads-page .favorite-author-option:hover {
+		background: #f3f4f6;
+	}
+
 	.reads-page .favorite-book-option.is-active {
+		background: #e5eefc;
+	}
+
+	.reads-page .favorite-author-option.is-active {
 		background: #e5eefc;
 	}
 
@@ -2898,7 +3135,23 @@ const isAuthenticated = !!session?.userId;
 		color: #222;
 	}
 
+	.reads-page .favorite-author-option-title {
+		display: block;
+		font-size: 0.9rem;
+		line-height: 1.25;
+		font-weight: 600;
+		color: #222;
+	}
+
 	.reads-page .favorite-book-option-meta {
+		display: block;
+		margin-top: 0.1rem;
+		font-size: 0.8rem;
+		line-height: 1.25;
+		color: #5a5a5a;
+	}
+
+	.reads-page .favorite-author-option-meta {
 		display: block;
 		margin-top: 0.1rem;
 		font-size: 0.8rem;
@@ -3258,6 +3511,19 @@ const isAuthenticated = !!session?.userId;
 	.reads-page button.secondary {
 		background: #efefef;
 		color: #222;
+	}
+
+	.reads-page a.secondary {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		border-radius: 8px;
+		padding: 0.55rem 0.85rem;
+		font-size: 0.95rem;
+		background: #efefef;
+		color: #222;
+		text-decoration: none;
 	}
 
 	.reads-page button.danger {
