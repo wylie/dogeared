@@ -76,6 +76,21 @@ function detectFormat(input: {
 	return "Book";
 }
 
+function normalizedCoverKey(url: string) {
+	const value = String(url || "").trim();
+	if (!value) return "";
+	try {
+		const parsed = new URL(value);
+		parsed.searchParams.delete("zoom");
+		parsed.searchParams.delete("edge");
+		parsed.searchParams.delete("source");
+		parsed.searchParams.delete("imgtk");
+		return parsed.toString();
+	} catch {
+		return value;
+	}
+}
+
 function toVariant(result: SearchResult) {
 	const language = String(result.language || "").trim().toUpperCase();
 	const year = String(result.publishedDate || "").match(/\d{4}/)?.[0] || "";
@@ -115,8 +130,15 @@ function scoreResult(result: SearchResult, queryText: string) {
 	const title = normalizeText(result.title);
 	if (q && title.includes(q)) score += 140;
 	if (q && title.startsWith(q)) score += 120;
-	if (result.thumbnail) score += 50;
+	if (result.thumbnail) score += 65;
+	if (result.isbn13) score += 55;
+	else if (result.isbn10) score += 35;
+	if (result.googleBooksId) score += 40;
 	if (result.pageCount && result.pageCount > 0) score += 20;
+	if (result.publisher) score += 14;
+	if (result.publishedDate) score += 12;
+	if (Array.isArray(result.authors) && result.authors.length > 0) score += 12;
+	if (Array.isArray(result.categories) && result.categories.length > 0) score += 10;
 	if (String(result.language || "").toLowerCase() === "en") score += 10;
 	return score;
 }
@@ -148,7 +170,13 @@ function dedupeVariants(input: SearchResult[], queryText: string) {
 		const primaryAuthor = result.authors[0] || "";
 		const canonicalTitle = canonicalizeTitle(result.title);
 		const canonicalAuthor = canonicalizeAuthor(primaryAuthor);
-		const key = canonicalTitle ? `${canonicalTitle}|${canonicalAuthor}` : `ungrouped_${index}`;
+		const isbnGroup = String(result.isbn13 || result.isbn10 || "").trim();
+		const googleGroup = String(result.googleBooksId || "").trim();
+		const key = isbnGroup
+			? `isbn:${isbnGroup}`
+			: (googleGroup
+				? `gid:${googleGroup}`
+				: (canonicalTitle ? `${canonicalTitle}|${canonicalAuthor}` : `ungrouped_${index}`));
 		const existing = grouped.get(key) || [];
 		existing.push(result);
 		grouped.set(key, existing);
@@ -160,11 +188,14 @@ function dedupeVariants(input: SearchResult[], queryText: string) {
 		const seenVariantKeys = new Set<string>();
 		const variants = sorted.map((item) => toVariant(item)).filter((variant) => {
 			const key = [
+				normalizeText(variant.googleBooksId),
+				normalizeText(variant.isbn13 || variant.isbn10),
 				canonicalizeTitle(variant.title),
 				canonicalizeAuthor(variant.author),
 				normalizeText(variant.format),
 				normalizeText(variant.language),
-				normalizeText(variant.publishedDate)
+				normalizeText(variant.publishedDate),
+				normalizedCoverKey(variant.thumbnail)
 			].join("|");
 			if (seenVariantKeys.has(key)) return false;
 			seenVariantKeys.add(key);
