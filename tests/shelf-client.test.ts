@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
 	buildShelfEntryFromRecord,
 	parseCategories,
+	resolveShelfSaveMessage,
+	saveShelfEntryWithRetry,
 	statusLabel,
 	syncShelfEntryToServer
 } from "../src/lib/shelfClient.ts";
@@ -52,6 +54,93 @@ test("syncShelfEntryToServer reports unauthorized and sets redirect", async () =
 		const result = await syncShelfEntryToServer({ title: "X" }, "/settings#account-settings");
 		assert.equal(result.ok, false);
 		assert.equal(result.unauthorized, true);
+		const href = ((globalThis as Record<string, unknown>).window as { location: { href: string } }).location.href;
+		assert.equal(href, "/settings#account-settings");
+	} finally {
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
+		(globalThis as Record<string, unknown>).window = originalWindow;
+	}
+});
+
+test("resolveShelfSaveMessage maps status codes and network failures", () => {
+	assert.equal(resolveShelfSaveMessage({ ok: false, unauthorized: true }), "Please log in to save books.");
+	assert.equal(resolveShelfSaveMessage({
+		ok: false,
+		response: new Response("{}", { status: 400 })
+	}), "Invalid book data. Please try again.");
+	assert.equal(resolveShelfSaveMessage({
+		ok: false,
+		response: new Response("{}", { status: 409 })
+	}), "Conflict while saving. Please retry.");
+	assert.equal(resolveShelfSaveMessage({
+		ok: false,
+		response: new Response("{}", { status: 500 })
+	}), "Server error while saving. Please retry.");
+	assert.equal(resolveShelfSaveMessage({
+		ok: false,
+		error: new Error("network")
+	}), "Network error while saving. Please retry.");
+	assert.equal(resolveShelfSaveMessage({
+		ok: false,
+		data: { error: "custom message" }
+	}), "custom message");
+});
+
+test("saveShelfEntryWithRetry retries transient server failures and succeeds", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWindow = (globalThis as Record<string, unknown>).window;
+	let attempts = 0;
+
+	(globalThis as unknown as { fetch: typeof fetch }).fetch = (async () => {
+		attempts += 1;
+		if (attempts === 1) {
+			return new Response(JSON.stringify({ error: "retry me" }), {
+				status: 500,
+				headers: { "Content-Type": "application/json" }
+			});
+		}
+		return new Response(JSON.stringify({ ok: true, entry: { id: "entry_1" } }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" }
+		});
+	}) as typeof fetch;
+	(globalThis as Record<string, unknown>).window = { location: { href: "" } };
+
+	try {
+		const result = await saveShelfEntryWithRetry({ title: "Retry Book" }, { retries: 1, retryDelayMs: 0 });
+		assert.equal(result.ok, true);
+		assert.equal(attempts, 2);
+		assert.equal(result.message, "");
+	} finally {
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
+		(globalThis as Record<string, unknown>).window = originalWindow;
+	}
+});
+
+test("saveShelfEntryWithRetry does not retry unauthorized responses", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWindow = (globalThis as Record<string, unknown>).window;
+	let attempts = 0;
+
+	(globalThis as unknown as { fetch: typeof fetch }).fetch = (async () => {
+		attempts += 1;
+		return new Response("{}", {
+			status: 401,
+			headers: { "Content-Type": "application/json" }
+		});
+	}) as typeof fetch;
+	(globalThis as Record<string, unknown>).window = { location: { href: "http://localhost/" } };
+
+	try {
+		const result = await saveShelfEntryWithRetry({ title: "Auth Book" }, {
+			retries: 3,
+			retryDelayMs: 0,
+			redirectPath: "/settings#account-settings"
+		});
+		assert.equal(result.ok, false);
+		assert.equal(result.unauthorized, true);
+		assert.equal(attempts, 1);
+		assert.equal(result.message, "Please log in to save books.");
 		const href = ((globalThis as Record<string, unknown>).window as { location: { href: string } }).location.href;
 		assert.equal(href, "/settings#account-settings");
 	} finally {
