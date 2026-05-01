@@ -312,6 +312,98 @@ async function inferGenresForBook(input: {
 	return (await fetchOpenLibraryWorkSubjects(bestDoc.key || "")).slice(0, 8);
 }
 
+async function inferMetadataForBook(input: {
+	title: string;
+	author: string;
+	isbn10: string;
+	isbn13: string;
+	googleBooksId: string;
+}) {
+	const out = {
+		synopsis: "",
+		coverUrl: "",
+		language: "",
+		publishedYear: null as number | null,
+		isbn10: "",
+		isbn13: "",
+		googleBooksId: ""
+	};
+
+	const queryParts = [
+		input.isbn13 ? `isbn:${input.isbn13}` : "",
+		input.isbn10 ? `isbn:${input.isbn10}` : "",
+		input.title && input.author ? `intitle:${input.title} inauthor:${input.author}` : "",
+		input.title ? `intitle:${input.title}` : ""
+	].filter(Boolean);
+
+	if (GOOGLE_BOOKS_API_KEY) {
+		let bestVolume: any = null;
+		let bestScore = -1;
+		if (input.googleBooksId) {
+			const params = new URLSearchParams({ key: GOOGLE_BOOKS_API_KEY });
+			const direct = await fetchGoogleBooksJson(
+				`https://www.googleapis.com/books/v1/volumes/${encodeURIComponent(input.googleBooksId)}?${params.toString()}`
+			);
+			if (direct?.volumeInfo) {
+				bestVolume = direct;
+				bestScore = scoreGoogleVolume(direct, input);
+			}
+		}
+		for (const q of queryParts) {
+			const params = new URLSearchParams({
+				key: GOOGLE_BOOKS_API_KEY,
+				q,
+				maxResults: "5",
+				printType: "books"
+			});
+			const data = await fetchGoogleBooksJson(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
+			const items = Array.isArray(data?.items) ? data.items : [];
+			for (const item of items) {
+				const score = scoreGoogleVolume(item, input);
+				if (score > bestScore) {
+					bestScore = score;
+					bestVolume = item;
+				}
+			}
+		}
+		const info = bestVolume?.volumeInfo || {};
+		const ids = Array.isArray(info.industryIdentifiers) ? info.industryIdentifiers : [];
+		const matchedIsbn13 = normalizeIsbn(ids.find((id: any) => String(id?.type || "") === "ISBN_13")?.identifier || "");
+		const matchedIsbn10 = normalizeIsbn(ids.find((id: any) => String(id?.type || "") === "ISBN_10")?.identifier || "");
+		const publishedMatch = String(info.publishedDate || "").match(/\d{4}/);
+		out.synopsis = normalizeText(info.description);
+		out.coverUrl = normalizeText(info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail);
+		out.language = normalizeText(info.language);
+		out.publishedYear = publishedMatch ? Number(publishedMatch[0]) : null;
+		out.isbn13 = matchedIsbn13;
+		out.isbn10 = matchedIsbn10;
+		out.googleBooksId = normalizeCatalogText(bestVolume?.id || "");
+	}
+
+	if ((!out.synopsis || !out.coverUrl || !out.publishedYear) && (input.isbn13 || input.isbn10)) {
+		const bibkey = input.isbn13 ? `ISBN:${input.isbn13}` : `ISBN:${input.isbn10}`;
+		try {
+			const response = await fetch(`https://openlibrary.org/api/books?bibkeys=${encodeURIComponent(bibkey)}&format=json&jscmd=data`);
+			if (response.ok) {
+				const data = await response.json();
+				const row = data?.[bibkey];
+				if (row) {
+					if (!out.synopsis) out.synopsis = normalizeText(typeof row.description === "string" ? row.description : row.description?.value);
+					if (!out.coverUrl) out.coverUrl = normalizeText(row.cover?.large || row.cover?.medium || row.cover?.small);
+					if (!out.publishedYear) {
+						const y = normalizeText(row.publish_date).match(/\d{4}/);
+						out.publishedYear = y ? Number(y[0]) : null;
+					}
+				}
+			}
+		} catch {
+			// best effort enrichment only
+		}
+	}
+
+	return out;
+}
+
 async function ensureShelfSchema() {
 	const sql = getNeonSql();
 	await sql`alter table user_book add column if not exists rating int`;
@@ -451,17 +543,27 @@ export const POST: APIRoute = async ({ request }) => {
 		const currentPage = normalizePositiveInt(entry.currentPage);
 		const finishedDateRaw = normalizeText(entry.finishedDate);
 		const finishedDate = status === "finished" && finishedDateRaw ? finishedDateRaw : "";
-		const coverUrl = bookPayload.coverUrl;
-		const language = bookPayload.language;
-		const synopsis = bookPayload.description;
-		const isbn10 = bookPayload.isbn10;
-		const isbn13 = bookPayload.isbn13;
+		let coverUrl = bookPayload.coverUrl;
+		let language = bookPayload.language;
+		let synopsis = bookPayload.description;
+		let isbn10 = bookPayload.isbn10;
+		let isbn13 = bookPayload.isbn13;
 		const publishedDate = bookPayload.publishedDate;
 		const publishedYearMatch = publishedDate.match(/\d{4}/);
-		const publishedYear = publishedYearMatch ? Number(publishedYearMatch[0]) : null;
+		let publishedYear = publishedYearMatch ? Number(publishedYearMatch[0]) : null;
 		const genres = parseGenres(bookPayload.categories);
+		let googleBooksId = bookPayload.googleBooksId;
+		if (!synopsis || !coverUrl || !publishedYear || !language || (!isbn10 && !isbn13) || !googleBooksId) {
+			const enriched = await inferMetadataForBook({ title, author, isbn10, isbn13, googleBooksId });
+			if (!synopsis) synopsis = enriched.synopsis || synopsis;
+			if (!coverUrl) coverUrl = enriched.coverUrl || coverUrl;
+			if (!language) language = enriched.language || language;
+			if (!publishedYear) publishedYear = enriched.publishedYear || publishedYear;
+			if (!isbn13) isbn13 = enriched.isbn13 || isbn13;
+			if (!isbn10) isbn10 = enriched.isbn10 || isbn10;
+			if (!googleBooksId) googleBooksId = enriched.googleBooksId || googleBooksId;
+		}
 		const workKey = canonicalWorkKey({ title, author, isbn10, isbn13 });
-		const googleBooksId = bookPayload.googleBooksId;
 		const source = normalizeCatalogText(entry.source);
 		const sourceWorkId = normalizeCatalogText(entry.sourceWorkId);
 		const sourceEditionId = normalizeCatalogText(entry.sourceEditionId);
