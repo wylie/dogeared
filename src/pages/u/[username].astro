@@ -66,6 +66,7 @@ let recentActivity: Array<{
 	rating: number;
 	updatedAt: string;
 }> = [];
+let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let followState = {
 	followersCount: 0,
 	followingCount: 0,
@@ -93,6 +94,21 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 	]);
 	shelfStats = summary;
 	recentActivity = updates;
+	if (viewerUserId && recentActivity.length > 0) {
+		const sql = getNeonSql();
+		const bookIds = Array.from(new Set(recentActivity.map((item) => Number(item.bookId || 0)).filter((value) => value > 0)));
+		if (bookIds.length > 0) {
+			const rows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished" }>>`
+				select book_id, status
+				from user_book
+				where user_id = ${viewerUserId}::uuid
+					and book_id = any(${bookIds}::bigint[])
+			`;
+			viewerStatusByBookId = new Map(
+				rows.map((row) => [Number(row.book_id || 0), row.status])
+			);
+		}
+	}
 }
 
 function activityHeading(eventType: string) {
@@ -116,6 +132,10 @@ function formatActivityDate(value: string) {
 		day: "numeric",
 		year: "numeric"
 	});
+}
+
+function shelfHrefForOwner(sectionId: string) {
+	return `/profile?edit=1#${encodeURIComponent(sectionId)}`;
 }
 ---
 
@@ -181,12 +201,24 @@ function formatActivityDate(value: string) {
 
 				<section class="shelf-card">
 					<h2>Shelf Summary</h2>
-					<ul>
-						<li>Want to Read: {shelfStats.wantToRead}</li>
-						<li>Currently Reading: {shelfStats.reading}</li>
-						<li>Read: {shelfStats.finished}</li>
-						<li>Total: {shelfStats.total}</li>
-					</ul>
+					<div class="shelf-summary-grid">
+						<a class="shelf-summary-item" href={shelfHrefForOwner("want_to_read")}>
+							<p class="shelf-summary-label">Want to Read</p>
+							<p class="shelf-summary-value">{shelfStats.wantToRead}</p>
+						</a>
+						<a class="shelf-summary-item" href={shelfHrefForOwner("reading")}>
+							<p class="shelf-summary-label">Currently Reading</p>
+							<p class="shelf-summary-value">{shelfStats.reading}</p>
+						</a>
+						<a class="shelf-summary-item" href={shelfHrefForOwner("finished")}>
+							<p class="shelf-summary-label">Read</p>
+							<p class="shelf-summary-value">{shelfStats.finished}</p>
+						</a>
+						<a class="shelf-summary-item shelf-summary-item-total" href={shelfHrefForOwner("reading")}>
+							<p class="shelf-summary-label">Total</p>
+							<p class="shelf-summary-value">{shelfStats.total}</p>
+						</a>
+					</div>
 				</section>
 
 				{canViewActivity && (
@@ -213,6 +245,8 @@ function formatActivityDate(value: string) {
 										</div>
 										<div slot="actions">
 											<ShelfDropdown attrs={{
+												"data-book-id": String(item.bookId || 0),
+												"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "want_to_read",
 												"data-title": item.title,
 												"data-author": item.author,
 												"data-description": item.description,
@@ -261,7 +295,45 @@ function formatActivityDate(value: string) {
 	.meta-grid p { margin: 0; }
 	.genre-list { list-style: none; margin: 0.7rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
 	.genre-list li { background: #f3efe7; border-radius: 999px; padding: 0.2rem 0.6rem; font-size: 0.86rem; }
-	.shelf-card ul { margin: 0.6rem 0 0; }
+	.shelf-summary-grid {
+		margin-top: 0.7rem;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.75rem;
+	}
+	.shelf-card {
+		border: none;
+		background: transparent;
+		border-radius: 0;
+		padding: 0;
+	}
+	.shelf-summary-item {
+		border: 1px solid #ddd4c7;
+		border-radius: 12px;
+		background: #fff;
+		padding: 0.8rem 0.9rem;
+		text-decoration: none;
+		display: block;
+		transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+	}
+	.shelf-summary-item:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+		border-color: #b9ad97;
+	}
+	.shelf-summary-label {
+		margin: 0;
+		font-size: 0.9rem;
+		color: #5b6470;
+		font-weight: 600;
+	}
+	.shelf-summary-value {
+		margin: 0.28rem 0 0;
+		font-size: 1.6rem;
+		font-weight: 800;
+		line-height: 1;
+		color: #1f2937;
+	}
 	.activity-grid { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.activity-headline { font-weight: 700; color: #2f2f2f; }
 	.activity-prefix { color: #1d4ed8; }
@@ -280,6 +352,7 @@ function formatActivityDate(value: string) {
 	.status { text-transform: capitalize; }
 	@media (max-width: 740px) {
 		.meta-grid { grid-template-columns: 1fr; }
+		.shelf-summary-grid { grid-template-columns: 1fr; }
 		.activity-grid { grid-template-columns: 1fr; }
 		.profile-card-actions { position: static; margin-bottom: 0.6rem; justify-content: flex-start; }
 	}
@@ -296,12 +369,111 @@ function formatActivityDate(value: string) {
 		saveShelfEntryWithRetry,
 		toggleShelfMenu
 	} from "../../lib/shelfClient";
+	import {
+		loadShelfEntries,
+		migrateShelfEntriesInPlace
+	} from "../../lib/shelfStorage";
 	const followToggle = document.getElementById("follow-toggle");
 	const followFeedback = document.getElementById("follow-feedback");
 	const followersCountNode = document.getElementById("follow-count-followers");
 	const followingCountNode = document.getElementById("follow-count-following");
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	const feedbackTimers = new WeakMap();
+
+	function normalizeText(value) {
+		return String(value || "").trim().toLowerCase();
+	}
+
+	function canonicalizeTitle(value) {
+		return normalizeText(value)
+			.normalize("NFKD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/\([^)]*\)/g, " ")
+			.replace(/\b(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition)\b/g, " ")
+			.split(":")[0]
+			.replace(/^(the|a|an)\s+/g, "")
+			.replace(/[^a-z0-9\s]/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+	}
+
+	function canonicalizeAuthor(value) {
+		return normalizeText(value)
+			.normalize("NFKD")
+			.replace(/[\u0300-\u036f]/g, "")
+			.replace(/^(by\s+)/, "")
+			.replace(/[^a-z0-9\s]/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+	}
+
+	function findEntry(entries, input) {
+		const bookId = Number(input?.bookId || 0);
+		if (bookId > 0) {
+			const byBookId = entries.find((entry) => Number(entry?.bookId || 0) === bookId);
+			if (byBookId) return byBookId;
+		}
+		const isbn13 = normalizeText(input?.isbn13 || "");
+		const isbn10 = normalizeText(input?.isbn10 || "");
+		const googleBooksId = normalizeText(input?.googleBooksId || "");
+		if (isbn13 || isbn10 || googleBooksId) {
+			const byIdentifier = entries.find((entry) => {
+				const entryIsbn13 = normalizeText(entry?.isbn13 || "");
+				const entryIsbn10 = normalizeText(entry?.isbn10 || "");
+				const entryGoogleBooksId = normalizeText(entry?.googleBooksId || "");
+				if (isbn13 && entryIsbn13 && isbn13 === entryIsbn13) return true;
+				if (isbn10 && entryIsbn10 && isbn10 === entryIsbn10) return true;
+				if (googleBooksId && entryGoogleBooksId && googleBooksId === entryGoogleBooksId) return true;
+				return false;
+			});
+			if (byIdentifier) return byIdentifier;
+		}
+		const t = canonicalizeTitle(input?.title || "");
+		const a = canonicalizeAuthor(input?.author || "");
+		return entries.find((entry) => (
+			canonicalizeTitle(entry?.title) === t && canonicalizeAuthor(entry?.author) === a
+		));
+	}
+
+	function syncExistingState() {
+		const entries = loadShelfEntries();
+		for (const dropdown of shelfDropdowns) {
+			const seededStatus = String(dropdown.dataset.initialStatus || "").trim();
+			let appliedSeed = false;
+			if (seededStatus === "want_to_read" || seededStatus === "reading" || seededStatus === "finished") {
+				setDropdownLabel(dropdown, seededStatus);
+				setShelvedState(dropdown, true);
+				appliedSeed = true;
+			}
+			const existing = findEntry(entries, {
+				bookId: Number(dropdown.dataset.bookId || 0),
+				title: String(dropdown.dataset.title || ""),
+				author: String(dropdown.dataset.author || ""),
+				isbn10: String(dropdown.dataset.isbn10 || ""),
+				isbn13: String(dropdown.dataset.isbn13 || ""),
+				googleBooksId: String(dropdown.dataset.googleBooksId || "")
+			});
+			if (existing) {
+				setDropdownLabel(dropdown, String(existing.status || "want_to_read"));
+				setShelvedState(dropdown, true);
+			} else if (!appliedSeed) {
+				setDropdownLabel(dropdown, "want_to_read");
+				setShelvedState(dropdown, false);
+			}
+		}
+	}
+
+	async function hydrateShelfEntriesFromServer() {
+		try {
+			const response = await fetch("/api/shelf/entries");
+			if (!response.ok) return;
+			const data = await response.json().catch(() => ({}));
+			if (!Array.isArray(data?.entries)) return;
+			localStorage.setItem("dogeared:myreads", JSON.stringify(data.entries));
+		} catch {
+			// Keep local data if network hydration fails.
+		}
+	}
 	function setFollowFeedback(message, isError = false) {
 		if (!(followFeedback instanceof HTMLElement)) return;
 		followFeedback.textContent = message;
@@ -352,10 +524,16 @@ function formatActivityDate(value: string) {
 		const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
 		const options = Array.from(dropdown.querySelectorAll('[data-action="set-shelf"]'));
 		if (trigger) {
-			trigger.addEventListener("click", () => toggleShelfMenu(dropdown, shelfDropdowns));
+			trigger.addEventListener("click", (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				toggleShelfMenu(dropdown, shelfDropdowns);
+			});
 		}
 		for (const option of options) {
-			option.addEventListener("click", async () => {
+			option.addEventListener("click", async (event) => {
+				event.preventDefault();
+				event.stopPropagation();
 				const status = option.dataset.status || "want_to_read";
 				const entry = buildShelfEntryFromRecord({
 					title: String(dropdown.dataset.title || "").trim(),
@@ -388,10 +566,62 @@ function formatActivityDate(value: string) {
 		}
 	}
 
-	document.addEventListener("click", (event) => {
+	document.addEventListener("click", async (event) => {
 		const target = event.target;
 		if (!(target instanceof HTMLElement)) return;
+		const toggle = target.closest('[data-action="toggle-shelf"]');
+		if (toggle) {
+			event.preventDefault();
+			event.stopPropagation();
+			const dropdown = toggle.closest(".shelf-dropdown");
+			if (dropdown) toggleShelfMenu(dropdown, shelfDropdowns);
+			return;
+		}
+		const option = target.closest('[data-action="set-shelf"]');
+		if (option) {
+			event.preventDefault();
+			event.stopPropagation();
+			const dropdown = option.closest(".shelf-dropdown");
+			if (!dropdown) return;
+			const status = option.dataset.status || "want_to_read";
+			const entry = buildShelfEntryFromRecord({
+				title: String(dropdown.dataset.title || "").trim(),
+				author: String(dropdown.dataset.author || "").trim(),
+				description: String(dropdown.dataset.description || "").trim(),
+				pageCount: 0,
+				coverUrl: String(dropdown.dataset.cover || "").trim(),
+				format: String(dropdown.dataset.format || "Book").trim(),
+				language: String(dropdown.dataset.language || "").trim(),
+				isbn10: String(dropdown.dataset.isbn10 || "").trim(),
+				isbn13: String(dropdown.dataset.isbn13 || "").trim()
+			}, {
+				status,
+				totalPages: 0,
+				currentPage: status === "reading" ? 1 : 0,
+				finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : ""
+			});
+			if (!entry.title) return;
+			try {
+				const result = await saveShelfEntryWithRetry(entry);
+				if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
+				setDropdownLabel(dropdown, status);
+				setShelvedState(dropdown, true);
+				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
+				closeShelfMenus(shelfDropdowns);
+				await hydrateShelfEntriesFromServer();
+				syncExistingState();
+			} catch (error) {
+				showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
+			}
+			return;
+		}
 		if (target.closest(".shelf-dropdown")) return;
 		closeShelfMenus(shelfDropdowns);
 	});
+
+	void (async () => {
+		migrateShelfEntriesInPlace();
+		await hydrateShelfEntriesFromServer();
+		syncExistingState();
+	})();
 </script>

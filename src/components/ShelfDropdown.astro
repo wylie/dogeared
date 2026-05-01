@@ -4,15 +4,25 @@ type Props = {
 };
 
 const { attrs = {} } = Astro.props as Props;
+const initialStatusRaw = String(attrs["data-initial-status"] || "").trim();
+const initialStatus = (
+	initialStatusRaw === "reading" || initialStatusRaw === "finished" || initialStatusRaw === "want_to_read"
+)
+	? initialStatusRaw
+	: "want_to_read";
+const hasInitialStatus = initialStatusRaw === "reading" || initialStatusRaw === "finished" || initialStatusRaw === "want_to_read";
+const initialLabel = initialStatus === "reading"
+	? "Currently Reading"
+	: (initialStatus === "finished" ? "Read" : "Want to Read");
 ---
 
 <div
-	class="shelf-dropdown"
+	class={`shelf-dropdown${hasInitialStatus ? " is-shelved" : ""}`}
 	{...attrs}
 >
 	<button type="button" class="shelf-trigger" data-action="toggle-shelf" aria-expanded="false">
 		<span class="material-icons shelf-check" aria-hidden="true">check</span>
-		<span class="shelf-label">Want to Read</span>
+		<span class="shelf-label">{initialLabel}</span>
 		<span class="material-icons shelf-icon" aria-hidden="true">arrow_drop_down</span>
 	</button>
 	<div class="shelf-menu" hidden>
@@ -22,3 +32,77 @@ const { attrs = {} } = Astro.props as Props;
 	</div>
 	<p class="shelf-feedback" hidden></p>
 </div>
+
+<style>
+	.shelf-dropdown {
+		position: relative;
+		display: inline-flex;
+		flex-direction: column;
+		align-items: flex-start;
+		min-width: 150px;
+	}
+	.shelf-trigger {
+		border: none;
+		border-radius: 14px;
+		padding: 0.55rem 0.9rem;
+		font-size: 0.95rem;
+		background: #2f8f57;
+		color: #fff;
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		line-height: 1;
+	}
+	.shelf-trigger:hover {
+		background: #267647;
+	}
+	.shelf-label {
+		font-weight: 700;
+	}
+	.shelf-icon {
+		font-size: 1.2rem;
+		line-height: 1;
+	}
+	.shelf-check {
+		font-size: 1.1rem;
+		line-height: 1;
+		opacity: 0;
+		transition: opacity 120ms ease-in-out;
+	}
+	.shelf-dropdown.is-shelved .shelf-check {
+		opacity: 1;
+	}
+	.shelf-menu {
+		position: absolute;
+		top: calc(100% + 4px);
+		left: 0;
+		min-width: 180px;
+		background: #fff;
+		border: 1px solid #c9c9c9;
+		border-radius: 8px;
+		box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+		padding: 0.25rem 0;
+		z-index: 25;
+	}
+	.shelf-option {
+		display: block;
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: transparent;
+		padding: 0.5rem 0.75rem;
+		font-size: 0.92rem;
+		cursor: pointer;
+		color: #222;
+	}
+	.shelf-option:hover {
+		background: #f2f2f2;
+	}
+	.shelf-feedback {
+		margin-top: 0.25rem;
+		font-size: 0.82rem;
+		color: #1f7a45;
+		line-height: 1.25;
+	}
+</style>

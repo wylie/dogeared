@@ -117,6 +117,7 @@ function sanitizeDescription(value: string, maxLength = 220) {
 
 let sections: BrowseSection[] = [];
 let errorMessage = "";
+let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 
 try {
 	const sql = getNeonSql();
@@ -254,6 +255,25 @@ try {
 	}));
 
 	sections = results.filter((section) => section.books.length > 0);
+	if (session?.userId && sections.length > 0) {
+		const bookIds = Array.from(new Set(
+			sections
+				.flatMap((section) => section.books)
+				.map((book) => Number(String(book.id || "").replace(/^book_/, "")))
+				.filter((value) => Number.isFinite(value) && value > 0)
+		));
+		if (bookIds.length > 0) {
+			const statusRows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished" }>>`
+				select book_id, status
+				from user_book
+				where user_id = ${session.userId}::uuid
+					and book_id = any(${bookIds}::bigint[])
+			`;
+			viewerStatusByBookId = new Map(
+				statusRows.map((row) => [Number(row.book_id || 0), row.status])
+			);
+		}
+	}
 } catch (error) {
 	errorMessage = error instanceof Error ? error.message : "Failed to load shelves from Dogeared.";
 }
@@ -306,6 +326,8 @@ try {
 										</div>
 										<div slot="actions">
 											<ShelfDropdown attrs={{
+												'data-book-id': String(book.id || "").replace(/^book_/, ""),
+												'data-initial-status': viewerStatusByBookId.get(Number(String(book.id || "").replace(/^book_/, ""))) || "",
 												'data-title': book.title,
 												'data-author': book.authors[0] ?? "",
 												'data-description': book.description,
@@ -652,11 +674,31 @@ try {
 			.trim();
 	}
 
-	function findEntry(entries, title, author) {
-		const t = canonicalizeTitle(title);
-		const a = canonicalizeAuthor(author);
+	function findEntry(entries, input) {
+		const bookId = Number(input?.bookId || 0);
+		if (bookId > 0) {
+			const byBookId = entries.find((entry) => Number(entry?.bookId || 0) === bookId);
+			if (byBookId) return byBookId;
+		}
+		const isbn13 = normalizeText(input?.isbn13 || "");
+		const isbn10 = normalizeText(input?.isbn10 || "");
+		const googleBooksId = normalizeText(input?.googleBooksId || "");
+		if (isbn13 || isbn10 || googleBooksId) {
+			const byIdentifier = entries.find((entry) => {
+				const entryIsbn13 = normalizeText(entry?.isbn13 || "");
+				const entryIsbn10 = normalizeText(entry?.isbn10 || "");
+				const entryGoogleBooksId = normalizeText(entry?.googleBooksId || "");
+				if (isbn13 && entryIsbn13 && isbn13 === entryIsbn13) return true;
+				if (isbn10 && entryIsbn10 && isbn10 === entryIsbn10) return true;
+				if (googleBooksId && entryGoogleBooksId && googleBooksId === entryGoogleBooksId) return true;
+				return false;
+			});
+			if (byIdentifier) return byIdentifier;
+		}
+		const t = canonicalizeTitle(input?.title || "");
+		const a = canonicalizeAuthor(input?.author || "");
 		return entries.find((entry) => (
-			canonicalizeTitle(entry.title) === t && canonicalizeAuthor(entry.author) === a
+			canonicalizeTitle(entry?.title) === t && canonicalizeAuthor(entry?.author) === a
 		));
 	}
 
@@ -699,7 +741,7 @@ try {
 		const byTitle = String(incoming.title || localEntry?.title || "").trim();
 		const byAuthor = String(incoming.author || localEntry?.author || "").trim();
 		const existingById = byId ? entries.findIndex((item) => String(item?.id || "") === byId) : -1;
-		const existingByTitle = existingById === -1 ? entries.findIndex((item) => findEntry([item], byTitle, byAuthor)) : -1;
+		const existingByTitle = existingById === -1 ? entries.findIndex((item) => findEntry([item], { title: byTitle, author: byAuthor })) : -1;
 		const nextEntry = {
 			...(localEntry || {}),
 			...incoming
@@ -736,7 +778,14 @@ try {
 		const sourceUrl = String(dropdown.dataset.sourceUrl || "").trim();
 
 		const entries = loadShelfEntries();
-		const existing = findEntry(entries, title, author);
+		const existing = findEntry(entries, {
+			bookId: Number(dropdown.dataset.bookId || 0),
+			title,
+			author,
+			isbn10: String(dropdown.dataset.isbn10 || "").trim(),
+			isbn13: String(dropdown.dataset.isbn13 || "").trim(),
+			googleBooksId: String(dropdown.dataset.googleBooksId || "").trim()
+		});
 		if (existing) {
 			const previousStatus = existing.status;
 			if (!existing.totalPages && totalPages > 0) existing.totalPages = totalPages;
@@ -828,13 +877,25 @@ try {
 		}
 		const entries = loadShelfEntries();
 		for (const dropdown of shelfDropdowns) {
-			const title = dropdown.dataset.title || "";
-			const author = dropdown.dataset.author || "";
-			const existing = findEntry(entries, title, author);
+			const seededStatus = String(dropdown.dataset.initialStatus || "").trim();
+			let appliedSeed = false;
+			if (seededStatus === "want_to_read" || seededStatus === "reading" || seededStatus === "finished") {
+				setDropdownLabel(dropdown, seededStatus);
+				setShelvedState(dropdown, true);
+				appliedSeed = true;
+			}
+			const existing = findEntry(entries, {
+				bookId: Number(dropdown.dataset.bookId || 0),
+				title: dropdown.dataset.title || "",
+				author: dropdown.dataset.author || "",
+				isbn10: String(dropdown.dataset.isbn10 || "").trim(),
+				isbn13: String(dropdown.dataset.isbn13 || "").trim(),
+				googleBooksId: String(dropdown.dataset.googleBooksId || "").trim()
+			});
 			if (existing) {
 				setDropdownLabel(dropdown, existing.status || "want_to_read");
 				setShelvedState(dropdown, true);
-			} else {
+			} else if (!appliedSeed) {
 				setDropdownLabel(dropdown, "want_to_read");
 				setShelvedState(dropdown, false);
 			}

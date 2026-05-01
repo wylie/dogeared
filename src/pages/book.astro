@@ -125,6 +125,7 @@ let activity: Array<{ eventType: string; timestamp: string; actorName: string; a
 let errorMessage = "";
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
+let viewerShelfStatus: "want_to_read" | "reading" | "finished" | "" = "";
 
 async function fetchGoogleBook() {
 	const apiKey = normalizeText(import.meta.env.GOOGLE_BOOKS_API_KEY);
@@ -407,6 +408,55 @@ try {
 			}
 		}
 	}
+
+	if (book && session?.userId) {
+		const directBookId = Number(book.id || 0);
+		if (directBookId > 0) {
+			const rows = await sql<Array<{ status: "want_to_read" | "reading" | "finished" }>>`
+				select ub.status
+				from user_book ub
+				where ub.user_id = ${session.userId}::uuid
+					and ub.book_id = ${directBookId}
+				limit 1
+			`;
+			const status = String(rows[0]?.status || "").trim();
+			if (status === "want_to_read" || status === "reading" || status === "finished") {
+				viewerShelfStatus = status;
+			}
+		}
+		if (!viewerShelfStatus) {
+			const isbn13 = normalizeText(book.isbn13);
+			const isbn10 = normalizeText(book.isbn10);
+			const googleBooksId = normalizeText(book.googleBooksId);
+			const normalizedTitle = canonicalizeTitle(book.title).replace(/[^a-z0-9]+/g, "");
+			const normalizedAuthor = canonicalizeAuthor(book.author).replace(/[^a-z0-9]+/g, "");
+			const rows = await sql<Array<{ status: "want_to_read" | "reading" | "finished" }>>`
+				select ub.status
+				from user_book ub
+				join book b on b.id = ub.book_id
+				where ub.user_id = ${session.userId}::uuid
+					and (
+						(${isbn13} <> '' and b.isbn13 = ${isbn13})
+						or (${isbn10} <> '' and b.isbn10 = ${isbn10})
+						or (${googleBooksId} <> '' and b.google_books_id = ${googleBooksId})
+						or (
+							${normalizedTitle} <> ''
+							and lower(regexp_replace(coalesce(b.title, ''), '[^[:alnum:]]+', '', 'g')) = ${normalizedTitle}
+							and (
+								${normalizedAuthor} = ''
+								or lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${normalizedAuthor}
+							)
+						)
+					)
+				order by ub.updated_at desc nulls last, ub.id desc
+				limit 1
+			`;
+			const status = String(rows[0]?.status || "").trim();
+			if (status === "want_to_read" || status === "reading" || status === "finished") {
+				viewerShelfStatus = status;
+			}
+		}
+	}
 } catch (error) {
 	errorMessage = error instanceof Error ? error.message : "Failed to load book.";
 }
@@ -441,7 +491,9 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 							"data-categories": "[]",
 							"data-isbn10": book.isbn10,
 							"data-isbn13": book.isbn13,
-							"data-google-books-id": book.googleBooksId
+							"data-google-books-id": book.googleBooksId,
+							"data-book-id": String(book.id || 0),
+							"data-initial-status": viewerShelfStatus
 						}} />
 					</div>
 				</section>

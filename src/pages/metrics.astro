@@ -189,29 +189,61 @@ try {
 	const sql = getNeonSql();
 	const [summaryRows, statusRows, topLocationRows, authorRows, genreRows, locationRows, factsRows] = await Promise.all([
 		sql<Array<{ total_users: number; total_shelved_books: number; distinct_books: number; tracked_genres: number; active_locations: number }>>`
+			with valid_users as (
+				select id
+				from app_user
+				where username is not null
+					and length(trim(username)) > 0
+			)
 			select
-				(select count(*)::int from app_user) as total_users,
-				(select count(*)::int from user_book) as total_shelved_books,
-				(select count(distinct ub.book_id)::int from user_book ub) as distinct_books,
+				(select count(*)::int from valid_users) as total_users,
+				(select count(*)::int from user_book ub join valid_users vu on vu.id = ub.user_id) as total_shelved_books,
+				(select count(distinct ub.book_id)::int from user_book ub join valid_users vu on vu.id = ub.user_id) as distinct_books,
 				(select count(distinct bg.genre_slug)::int from book_genre bg) as tracked_genres,
-				(select count(distinct lower(trim(au.profile_data->>'location')))::int from app_user au where trim(coalesce(au.profile_data->>'location', '')) <> '') as active_locations
+				(
+					select count(distinct lower(trim(au.profile_data->>'location')))::int
+					from app_user au
+					join valid_users vu on vu.id = au.id
+					where trim(coalesce(au.profile_data->>'location', '')) <> ''
+				) as active_locations
 		`,
 		sql<Array<{ status: string; users: number }>>`
+			with valid_users as (
+				select id
+				from app_user
+				where username is not null
+					and length(trim(username)) > 0
+			)
 			select ub.status, count(distinct ub.user_id)::int as users
 			from user_book ub
+			join valid_users vu on vu.id = ub.user_id
 			group by ub.status
 			order by users desc, ub.status asc
 		`,
 		sql<Array<{ location: string; users: number }>>`
+			with valid_users as (
+				select id
+				from app_user
+				where username is not null
+					and length(trim(username)) > 0
+			)
 			select trim(au.profile_data->>'location') as location, count(*)::int as users
 			from app_user au
+			join valid_users vu on vu.id = au.id
 			where trim(coalesce(au.profile_data->>'location', '')) <> ''
 			group by trim(au.profile_data->>'location')
 			order by users desc, location asc
 		`,
 		sql<Array<{ author: string; readers: number }>>`
+			with valid_users as (
+				select id
+				from app_user
+				where username is not null
+					and length(trim(username)) > 0
+			)
 			select b.primary_author as author, count(distinct ub.user_id)::int as readers
 			from user_book ub
+			join valid_users vu on vu.id = ub.user_id
 			join book b on b.id = ub.book_id
 			where trim(coalesce(b.primary_author, '')) <> ''
 			group by b.primary_author
@@ -219,9 +251,15 @@ try {
 			limit 16
 		`,
 		sql<Array<{ author: string; genre_slug: string; genre_name: string; readers: number }>>`
-			with top_authors as (
+			with valid_users as (
+				select id
+				from app_user
+				where username is not null
+					and length(trim(username)) > 0
+			), top_authors as (
 				select b.primary_author as author, count(distinct ub.user_id)::int as readers
 				from user_book ub
+				join valid_users vu on vu.id = ub.user_id
 				join book b on b.id = ub.book_id
 				where trim(coalesce(b.primary_author, '')) <> ''
 				group by b.primary_author
@@ -230,6 +268,7 @@ try {
 			)
 			select b.primary_author as author, bg.genre_slug, min(bg.genre_name) as genre_name, count(distinct ub.user_id)::int as readers
 			from user_book ub
+			join valid_users vu on vu.id = ub.user_id
 			join book b on b.id = ub.book_id
 			join top_authors ta on ta.author = b.primary_author
 			join book_genre bg on bg.book_id = b.id
@@ -237,9 +276,15 @@ try {
 			group by b.primary_author, bg.genre_slug
 		`,
 		sql<Array<{ author: string; genre_slug: string; location: string; readers: number }>>`
-			with top_authors as (
+			with valid_users as (
+				select id
+				from app_user
+				where username is not null
+					and length(trim(username)) > 0
+			), top_authors as (
 				select b.primary_author as author, count(distinct ub.user_id)::int as readers
 				from user_book ub
+				join valid_users vu on vu.id = ub.user_id
 				join book b on b.id = ub.book_id
 				where trim(coalesce(b.primary_author, '')) <> ''
 				group by b.primary_author
@@ -252,6 +297,7 @@ try {
 					coalesce(nullif(trim(au.profile_data->>'location'), ''), 'Unknown') as location,
 					count(distinct ub.user_id)::int as readers
 				from user_book ub
+				join valid_users vu on vu.id = ub.user_id
 				join book b on b.id = ub.book_id
 				join top_authors ta on ta.author = b.primary_author
 				join book_genre bg on bg.book_id = b.id
@@ -276,6 +322,12 @@ try {
 			language: string;
 			published_year: number | null;
 		}>>`
+			with valid_users as (
+				select id
+				from app_user
+				where username is not null
+					and length(trim(username)) > 0
+			)
 			select
 				ub.user_id::text as user_id,
 				ub.status,
@@ -286,6 +338,7 @@ try {
 				coalesce(nullif(upper(trim(b.language)), ''), 'Unknown') as language,
 				b.published_year
 			from user_book ub
+			join valid_users vu on vu.id = ub.user_id
 			join book b on b.id = ub.book_id
 			join app_user au on au.id = ub.user_id
 			left join lateral (
