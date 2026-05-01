@@ -5,10 +5,11 @@ import { getNeonSql } from "../../../lib/neon";
 export const prerender = false;
 
 export const GET: APIRoute = async ({ url }) => {
+	const invalidRedirect = new URL("/?auth=invalid-link", url.origin);
 	try {
 		const token = String(url.searchParams.get("token") || "").trim();
 		if (!token) {
-			return Response.redirect(new URL("/settings?auth=invalid-link", url.origin), 302);
+			return Response.redirect(invalidRedirect, 302);
 		}
 
 		const tokenHash = sha256Hex(token);
@@ -24,7 +25,7 @@ export const GET: APIRoute = async ({ url }) => {
 		const linkId = String(linkRows[0]?.id || "");
 		const userId = String(linkRows[0]?.user_id || "");
 		if (!linkId || !userId) {
-			return Response.redirect(new URL("/settings?auth=invalid-link", url.origin), 302);
+			return Response.redirect(invalidRedirect, 302);
 		}
 
 		await sql`
@@ -41,10 +42,21 @@ export const GET: APIRoute = async ({ url }) => {
 			values (${userId}::uuid, ${sessionHash}, now() + interval '30 days')
 		`;
 
-		const headers = new Headers({ Location: "/profile?auth=success" });
+		const userRows = await sql<Array<{ username: string | null }>>`
+			select nullif(trim(username), '') as username
+			from app_user
+			where id = ${userId}::uuid
+			limit 1
+		`;
+		const username = String(userRows[0]?.username || "").trim();
+		const redirectPath = username
+			? `/u/${encodeURIComponent(username)}?auth=success`
+			: "/profile?auth=success";
+
+		const headers = new Headers({ Location: redirectPath });
 		headers.append("Set-Cookie", createSessionCookie(sessionToken));
 		return new Response(null, { status: 302, headers });
 	} catch {
-		return Response.redirect(new URL("/settings?auth=invalid-link", url.origin), 302);
+		return Response.redirect(invalidRedirect, 302);
 	}
 };

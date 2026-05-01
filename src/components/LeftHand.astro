@@ -370,6 +370,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   const leftHandLoginItem = document.getElementById("left-hand-login-item");
   const leftHandLoginButton = leftHandLoginItem?.querySelector("button");
   const leftHandProfileItem = document.getElementById("left-hand-profile-item");
+  const leftHandProfileLink = leftHandProfileItem?.querySelector("a");
   const leftHandSettingsItem = document.getElementById("left-hand-settings-item");
   const leftHandLogoutItem = document.getElementById("left-hand-logout-item");
   const leftHandLogoutButton = leftHandLogoutItem?.querySelector("button");
@@ -416,6 +417,17 @@ const query = Astro.url.searchParams.get("q") ?? "";
   async function syncLeftHandAuthState() {
     const state = await resolveClientAuthState();
     applyLeftHandAuthState(state.authenticated);
+    if (!state.authenticated || !(leftHandProfileLink instanceof HTMLAnchorElement)) return;
+    try {
+      const response = await fetch("/api/auth/me", { credentials: "same-origin" });
+      const data = await response.json().catch(() => ({}));
+      const username = String(data?.user?.username || "").trim();
+      leftHandProfileLink.href = username
+        ? `/u/${encodeURIComponent(username)}`
+        : "/profile?edit=1";
+    } catch {
+      leftHandProfileLink.href = "/profile?edit=1";
+    }
   }
 
   leftHandLogoutButton?.addEventListener("click", async () => {

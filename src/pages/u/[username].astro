@@ -3,6 +3,7 @@ import Layout from "../../layouts/Layout.astro";
 import BookCard from "../../components/BookCard.astro";
 import ShelfDropdown from "../../components/ShelfDropdown.astro";
 import { resolveUserBySession } from "../../lib/auth";
+import { getNeonSql } from "../../lib/neon";
 import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicShelfSummary } from "../../lib/publicProfile";
 
 export const prerender = false;
@@ -10,6 +11,31 @@ export const prerender = false;
 const requestedUsername = String(Astro.params.username || "").trim().toLowerCase();
 const session = await resolveUserBySession(Astro.request);
 const viewerUserId = String(session?.userId || "");
+
+if (Astro.request.method === "POST" && viewerUserId && requestedUsername) {
+	const formData = await Astro.request.formData();
+	const followIntent = String(formData.get("followIntent") || "").trim().toLowerCase();
+	if (followIntent === "follow" || followIntent === "unfollow") {
+		const target = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
+		if (target.targetUserId && target.targetUserId !== viewerUserId) {
+			const sql = getNeonSql();
+			if (followIntent === "follow") {
+				await sql`
+					insert into user_follow (follower_user_id, followed_user_id)
+					values (${viewerUserId}::uuid, ${target.targetUserId}::uuid)
+					on conflict (follower_user_id, followed_user_id) do nothing
+				`;
+			} else {
+				await sql`
+					delete from user_follow
+					where follower_user_id = ${viewerUserId}::uuid
+						and followed_user_id = ${target.targetUserId}::uuid
+				`;
+			}
+		}
+		return Astro.redirect(`/u/${encodeURIComponent(requestedUsername)}`);
+	}
+}
 
 let notFound = false;
 let privateProfile = false;
@@ -46,6 +72,7 @@ let followState = {
 	isViewerFollowing: false,
 	canFollow: false
 };
+let isOwnerViewer = false;
 
 const bundle = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
 if (bundle.status === "not_found") notFound = true;
@@ -53,6 +80,7 @@ if (bundle.status === "private") privateProfile = true;
 if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 	profile = bundle.profile;
 	canViewActivity = bundle.canViewActivity;
+	isOwnerViewer = !!viewerUserId && viewerUserId === bundle.targetUserId;
 	followState = {
 		followersCount: bundle.followersCount,
 		followingCount: bundle.followingCount,
@@ -108,6 +136,11 @@ function formatActivityDate(value: string) {
 		{!notFound && !privateProfile && (
 			<>
 				<section class="profile-card">
+					{isOwnerViewer && (
+						<div class="profile-card-actions">
+							<a class="owner-edit-link" href="/profile?edit=1">Edit Profile</a>
+						</div>
+					)}
 					<div class="profile-head">
 						{profile.avatar ? <img src={profile.avatar} alt="" class="avatar" /> : <div class="avatar-fallback" aria-hidden="true">@</div>}
 						<div>
@@ -118,14 +151,17 @@ function formatActivityDate(value: string) {
 					</div>
 					{followState.canFollow && (
 						<div class="follow-actions">
-							<button
-								id="follow-toggle"
-								type="button"
-								data-username={profile.username}
-								data-following={String(followState.isViewerFollowing)}
-							>
-								{followState.isViewerFollowing ? "Following" : "Follow"}
-							</button>
+							<form method="post" action={`/u/${encodeURIComponent(profile.username)}`}>
+								<input type="hidden" name="followIntent" value={followState.isViewerFollowing ? "unfollow" : "follow"} />
+								<button
+									id="follow-toggle"
+									type="submit"
+									data-username={profile.username}
+									data-following={String(followState.isViewerFollowing)}
+								>
+									{followState.isViewerFollowing ? "Following" : "Follow"}
+								</button>
+							</form>
 							<p id="follow-feedback" class="meta" hidden></p>
 						</div>
 					)}
@@ -203,6 +239,14 @@ function formatActivityDate(value: string) {
 	.public-profile-page { max-width: 860px; display: grid; gap: 0.9rem; }
 	.state-card, .profile-card, .shelf-card, .activity-card { border: 1px solid #ddd4c7; border-radius: 12px; background: #fff; padding: 0.9rem; }
 	.activity-card-plain { border: none; background: transparent; border-radius: 0; padding: 0; }
+	.profile-card { position: relative; }
+	.profile-card-actions {
+		position: absolute;
+		top: 0.9rem;
+		right: 0.9rem;
+		display: flex;
+		justify-content: flex-end;
+	}
 	.profile-head { display: flex; gap: 0.75rem; align-items: center; }
 	.avatar, .avatar-fallback { width: 64px; height: 64px; border-radius: 999px; object-fit: cover; }
 	.avatar-fallback { display: grid; place-items: center; background: #ece7dc; font-weight: 700; color: #4f4a40; }
@@ -212,6 +256,7 @@ function formatActivityDate(value: string) {
 	.follow-actions { margin-top: 0.55rem; display: flex; align-items: center; gap: 0.6rem; }
 	.follow-actions button { border: 1px solid #d1c8ba; border-radius: 999px; padding: 0.35rem 0.8rem; background: #1d1d1d; color: #fff; font: inherit; cursor: pointer; }
 	.follow-actions button[disabled] { opacity: 0.6; cursor: default; }
+	.owner-edit-link { border: 1px solid #d1c8ba; border-radius: 999px; padding: 0.35rem 0.8rem; background: #f3efe7; color: #222; text-decoration: none; font-weight: 700; }
 	.meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem 0.8rem; margin-top: 0.7rem; }
 	.meta-grid p { margin: 0; }
 	.genre-list { list-style: none; margin: 0.7rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
@@ -236,6 +281,7 @@ function formatActivityDate(value: string) {
 	@media (max-width: 740px) {
 		.meta-grid { grid-template-columns: 1fr; }
 		.activity-grid { grid-template-columns: 1fr; }
+		.profile-card-actions { position: static; margin-bottom: 0.6rem; justify-content: flex-start; }
 	}
 </style>
 
