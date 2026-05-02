@@ -190,7 +190,12 @@ function shelfHrefForOwner(sectionId: string) {
 						{profile.location && <p><strong>Location:</strong> {profile.location}</p>}
 						{profile.readingGoal && <p><strong>Reading goal:</strong> {profile.readingGoal}</p>}
 						{profile.favoriteBook && <p><strong>Favorite book:</strong> {profile.favoriteBook}</p>}
-						{profile.favoriteAuthor && <p><strong>Favorite author:</strong> {profile.favoriteAuthor}</p>}
+						{profile.favoriteAuthor && (
+							<p>
+								<strong>Favorite author:</strong>{" "}
+								<a href={`/related?kind=author&value=${encodeURIComponent(profile.favoriteAuthor)}`}>{profile.favoriteAuthor}</a>
+							</p>
+						)}
 					</div>
 					{profile.genres.length > 0 && (
 						<ul class="genre-list">
@@ -233,6 +238,7 @@ function shelfHrefForOwner(sectionId: string) {
 										title={item.title}
 										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}&isbn13=${encodeURIComponent(item.isbn13 || "")}&isbn10=${encodeURIComponent(item.isbn10 || "")}&title=${encodeURIComponent(item.title)}&author=${encodeURIComponent(item.author)}`}
 										author={item.author}
+										authorHref={item.author ? `/related?kind=author&value=${encodeURIComponent(item.author)}` : ""}
 										thumbnail={item.thumbnail}
 									>
 										<p slot="preTitle" class="meta activity-headline">

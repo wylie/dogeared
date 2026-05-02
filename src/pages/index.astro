@@ -309,6 +309,7 @@ try {
 										title={book.title}
 										titleHref={`/book?bookId=${encodeURIComponent(String(book.id).replace(/^book_/, ""))}`}
 										author={book.authors.length > 0 ? book.authors.join(", ") : "Unknown author"}
+										authorHref={book.authors.length === 1 && book.authors[0] ? `/related?kind=author&value=${encodeURIComponent(book.authors[0])}` : ""}
 										thumbnail={book.thumbnail}
 										description={book.description || "Synopsis unavailable for this edition."}
 									>

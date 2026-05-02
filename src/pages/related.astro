@@ -2,6 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import BookCard from "../components/BookCard.astro";
 import ShelfDropdown from "../components/ShelfDropdown.astro";
+import { resolveUserBySession } from "../lib/auth";
 import { getNeonSql } from "../lib/neon";
 import { formatGenreLabel } from "../lib/genres";
 
@@ -63,6 +64,10 @@ let subtitle = "Explore related books in Dogeared.";
 let error = "";
 let activeShelves = 0;
 let distinctReaders = 0;
+let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
+
+const session = await resolveUserBySession(Astro.request);
+const viewerUserId = String(session?.userId || "");
 
 if (value) {
 	try {
@@ -197,6 +202,19 @@ if (value) {
 			activeShelves = Number(totals[0]?.active_shelves || 0);
 			distinctReaders = Number(totals[0]?.readers || 0);
 		}
+
+		if (viewerUserId && books.length > 0) {
+			const bookIds = Array.from(new Set(books.map((book) => Number(book.id || 0)).filter((id) => id > 0)));
+			if (bookIds.length > 0) {
+				const rows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished" }>>`
+					select book_id, status
+					from user_book
+					where user_id = ${viewerUserId}::uuid
+						and book_id = any(${bookIds}::bigint[])
+				`;
+				viewerStatusByBookId = new Map(rows.map((row) => [Number(row.book_id || 0), row.status]));
+			}
+		}
 	} catch (cause) {
 		error = cause instanceof Error ? cause.message : "Failed to load related data.";
 	}
@@ -257,6 +275,8 @@ if (!distinctReaders) distinctReaders = Math.max(...books.map((row) => Number(ro
 									</div>
 									<div slot="actions">
 										<ShelfDropdown attrs={{
+											"data-book-id": String(book.id || 0),
+											"data-initial-status": viewerStatusByBookId.get(Number(book.id || 0)) || "",
 											"data-title": book.title,
 											"data-author": book.author,
 											"data-cover": book.coverUrl,
