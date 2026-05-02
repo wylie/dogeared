@@ -1,0 +1,27 @@
+---
+type Props = {
+	label: string;
+	href?: string;
+	className?: string;
+	tone?: "highlight" | "secondary";
+	variant?: "clickable" | "static";
+};
+
+const {
+	label,
+	href = "",
+	className = "",
+	tone = "highlight",
+	variant = href ? "clickable" : "static"
+} = Astro.props as Props;
+
+const toneClass = tone === "secondary" ? "chip--secondary" : "chip--highlight";
+const variantClass = variant === "static" ? "chip--static" : "";
+const classes = `chip ${toneClass} ${variantClass} ${className}`.trim();
+---
+
+{variant === "clickable" && href ? (
+	<a class={classes} href={href}>{label}</a>
+) : (
+	<span class={classes}>{label}</span>
+)}

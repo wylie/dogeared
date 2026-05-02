@@ -41,6 +41,7 @@ function normalizeSeedGenres(value: unknown) {
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
 const editMode = String(Astro.url.searchParams.get("edit") || "").trim() === "1";
+const shelfView = String(Astro.url.searchParams.get("shelf") || "").trim().toLowerCase();
 let initialProfileSeed: Record<string, unknown> = {};
 let initialProfileFormValues = {
 	avatar: "",
@@ -55,6 +56,7 @@ let initialProfileFormValues = {
 };
 let initialAccountUsername = "";
 let liveProfilePath = "/profile";
+let initialEntriesSeed: Array<Record<string, unknown>> = [];
 
 function normalizeUsernameForSave(value: unknown) {
 	const raw = normalizeSeedText(value, 40).replace(/^@+/, "").toLowerCase();
@@ -63,7 +65,7 @@ function normalizeUsernameForSave(value: unknown) {
 	if (!sanitized) return "";
 	return sanitized.slice(0, 40);
 }
-if (isAuthenticated && !editMode) {
+if (isAuthenticated && !editMode && !shelfView) {
 	const sql = getNeonSql();
 	const rows = await sql<Array<{ username: string | null }>>`
 		select nullif(trim(username), '') as username
@@ -167,6 +169,62 @@ if (isAuthenticated) {
 		genres: normalizeSeedGenres(initialProfileSeed.genres)
 	};
 	liveProfilePath = initialAccountUsername ? `/u/${encodeURIComponent(initialAccountUsername)}` : "/profile";
+
+	const entryRows = await sql<Array<{
+		book_id: number;
+		title: string;
+		primary_author: string;
+		cover_url: string;
+		language: string;
+		status: "want_to_read" | "reading" | "finished";
+		rating: number | null;
+		total_pages: number;
+		current_page: number;
+		finished_date: string | null;
+		first_added_at: string;
+		updated_at: string;
+		isbn10: string;
+		isbn13: string;
+	}>>`
+		select
+			b.id as book_id,
+			b.title,
+			b.primary_author,
+			b.cover_url,
+			b.language,
+			ub.status,
+			ub.rating,
+			ub.total_pages,
+			ub.current_page,
+			ub.finished_date::text as finished_date,
+			ub.first_added_at::text as first_added_at,
+			ub.updated_at::text as updated_at,
+			b.isbn10,
+			b.isbn13
+		from user_book ub
+		join book b on b.id = ub.book_id
+		where ub.user_id = ${session!.userId}::uuid
+		order by ub.updated_at desc
+	`;
+	initialEntriesSeed = entryRows.map((row) => ({
+		id: `book_${row.book_id}`,
+		bookId: Number(row.book_id || 0),
+		title: String(row.title || "").trim(),
+		author: String(row.primary_author || "").trim(),
+		status: row.status || "want_to_read",
+		rating: Number.isFinite(Number(row.rating)) ? Number(row.rating) : 0,
+		totalPages: Number.isFinite(Number(row.total_pages)) ? Number(row.total_pages) : 0,
+		currentPage: Number.isFinite(Number(row.current_page)) ? Number(row.current_page) : 0,
+		finishedDate: String(row.finished_date || "").trim(),
+		addedAt: Date.parse(String(row.first_added_at || "")) || Date.now(),
+		updatedAt: Date.parse(String(row.updated_at || "")) || Date.now(),
+		coverUrl: String(row.cover_url || "").trim(),
+		format: "",
+		language: String(row.language || "").trim(),
+		isbn10: String(row.isbn10 || "").trim(),
+		isbn13: String(row.isbn13 || "").trim(),
+		categories: []
+	}));
 }
 ---
 
@@ -176,8 +234,10 @@ if (isAuthenticated) {
 		class="reads-page"
 		data-authenticated={String(isAuthenticated)}
 		data-force-edit={String(editMode)}
+		data-shelf-view={shelfView}
 		data-live-profile-path={liveProfilePath}
 		data-initial-profile={encodeURIComponent(JSON.stringify(initialProfileSeed))}
+		data-initial-entries={encodeURIComponent(JSON.stringify(initialEntriesSeed))}
 	>
 		{!isAuthenticated && (
 			<section class="auth-required">
@@ -394,6 +454,8 @@ if (isAuthenticated) {
 	const profileAvatarRemove = document.getElementById("profile-avatar-remove");
 	const shelfPanels = Array.from(document.querySelectorAll("[data-panel]"));
 	const shelfFilterLinks = Array.from(document.querySelectorAll('.quick-links a[href^="#"]'));
+	const shelfViewParam = String(profilePageRoot?.dataset.shelfView || "").trim().toLowerCase();
+	const initialEntriesEncoded = String(profilePageRoot?.dataset.initialEntries || "").trim();
 	let activeTab = "reading";
 	let editingGenres = [];
 	let editingAvatar = "";
@@ -525,7 +587,20 @@ if (isAuthenticated) {
 	}
 
 	function loadEntries() {
-		entries = migrateShelfEntriesInPlace();
+		const localEntries = migrateShelfEntriesInPlace();
+		const hasLocalEntries = Array.isArray(localEntries) && localEntries.length > 0;
+		if (hasLocalEntries) {
+			entries = localEntries;
+		} else if (initialEntriesEncoded) {
+			try {
+				const parsed = JSON.parse(decodeURIComponent(initialEntriesEncoded));
+				entries = Array.isArray(parsed) ? parsed : [];
+			} catch {
+				entries = [];
+			}
+		} else {
+			entries = localEntries;
+		}
 		let changed = false;
 		for (const entry of entries) {
 			const existingAddedAt = normalizeNumber(entry?.addedAt);
@@ -533,7 +608,7 @@ if (isAuthenticated) {
 			entry.addedAt = entryAddedTimestamp(entry);
 			changed = true;
 		}
-		if (changed) {
+		if (changed || (!hasLocalEntries && entries.length > 0)) {
 			try {
 				saveEntries();
 			} catch {
@@ -747,7 +822,7 @@ if (isAuthenticated) {
 			favoriteAuthor ? `<p class="meta"><strong>Favorite Author:</strong> ${escapeHtml(favoriteAuthor)}</p>` : "",
 			blurb ? `<p class="profile-blurb">${escapeHtml(blurb)}</p>` : "",
 			genres.length > 0
-				? `<div class="genre-list">${genres.map((genre) => `<span class="genre-chip">${escapeHtml(genre)}</span>`).join("")}</div>`
+				? `<div class="genre-list">${genres.map((genre) => `<span class="chip chip--highlight genre-chip">${escapeHtml(genre)}</span>`).join("")}</div>`
 				: ""
 		].filter(Boolean).join("");
 
@@ -1145,7 +1220,7 @@ if (isAuthenticated) {
 		if (!(profileGenreSelected instanceof HTMLElement)) return;
 		profileGenreSelected.innerHTML = editingGenres.length > 0
 			? editingGenres.map((genre) => (
-				`<span class="genre-chip">${escapeHtml(genre)}<button type="button" class="genre-remove" data-remove-genre="${escapeHtml(genre)}" aria-label="Remove ${escapeHtml(genre)}">×</button></span>`
+				`<span class="chip chip--highlight genre-chip">${escapeHtml(genre)}<button type="button" class="genre-remove" data-remove-genre="${escapeHtml(genre)}" aria-label="Remove ${escapeHtml(genre)}">×</button></span>`
 			)).join("")
 			: `<span class="muted">No genres added yet.</span>`;
 		if (profileForm instanceof HTMLFormElement) {
@@ -2463,6 +2538,14 @@ if (isAuthenticated) {
 		return "reading";
 	}
 
+	function normalizeShelfParamToTab(value) {
+		const raw = String(value || "").trim().toLowerCase();
+		if (raw === "want_to_read" || raw === "to_read" || raw === "want-to-read") return "want_to_read";
+		if (raw === "reading" || raw === "currently_reading" || raw === "currently-reading") return "reading";
+		if (raw === "finished" || raw === "read") return "finished";
+		return "";
+	}
+
 	function syncSidebarFilterActive(nextTab) {
 		for (const link of shelfFilterLinks) {
 			const isActive = link.getAttribute("href") === `#${nextTab}`;
@@ -2747,7 +2830,11 @@ if (isAuthenticated) {
 	loadEntries();
 	cleanupLikelyImportedFinishedDates();
 	renderLists();
-	setActiveTab(normalizeHashToTab(window.location.hash));
+	const initialTab = normalizeShelfParamToTab(shelfViewParam) || normalizeHashToTab(window.location.hash);
+	setActiveTab(initialTab || "reading");
+	if (normalizeShelfParamToTab(shelfViewParam)) {
+		history.replaceState(null, "", `#${initialTab}`);
+	}
 	void enrichMissingCovers();
 	void hydrateProfileInfoFromServer();
 	void hydrateEntriesFromServer();
@@ -2911,14 +2998,8 @@ if (isAuthenticated) {
 	}
 
 	.reads-page .genre-chip {
-		display: inline-flex;
-		align-items: center;
 		padding: 0.25rem 0.55rem;
-		border-radius: 999px;
-		border: 1px solid #d1d1d1;
-		background: #f7f7f7;
 		font-size: 0.82rem;
-		color: #444;
 	}
 
 	.reads-page .profile-form {

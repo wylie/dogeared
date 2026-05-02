@@ -74,7 +74,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     list-style-type: none;
     margin: 1rem 0 0;
     padding: 1rem 0 0;
-    border-top: 1px solid #999;
+    border-top: 1px solid var(--color-divider);
   }
   .quick-links {
     margin-top: 1rem;
@@ -140,7 +140,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   input[type="search"] {
     font-size: 16px;
     width: 100%;
-    border: 1px solid #999;
+    border: none;
     border-radius: 50px;
     padding: .5rem 1rem;
     margin-top: 1rem;

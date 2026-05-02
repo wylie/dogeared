@@ -2,6 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import BookCard from '../components/BookCard.astro';
 import ShelfDropdown from '../components/ShelfDropdown.astro';
+import Chip from '../components/Chip.astro';
 import { resolveUserBySession } from '../lib/auth';
 import { getNeonSql } from '../lib/neon';
 import { formatGenreLabel } from '../lib/genres';
@@ -314,10 +315,8 @@ try {
 										description={book.description || "Synopsis unavailable for this edition."}
 									>
 										<div slot="topRight" class="rank-stack">
-											<div class="rank-badge" aria-label={`Rank ${index + 1}`}>#{index + 1}</div>
-											<div class="shelf-count-badge" aria-label={`${book.shelfCount} shelves`}>
-												{book.shelfCount.toLocaleString()} {book.shelfCount === 1 ? "shelf" : "shelves"}
-											</div>
+											<Chip className="rank-badge" label={`#${index + 1}`} />
+											<Chip className="shelf-count-badge" label={`${book.shelfCount.toLocaleString()} ${book.shelfCount === 1 ? "shelf" : "shelves"}`} />
 										</div>
 										<div slot="meta">
 											{book.publishedDate && <p class="meta">Published: {formatPublishedLabel(book.publishedDate)}</p>}
@@ -404,7 +403,7 @@ try {
 		position: sticky;
 		top: 0;
 		padding-bottom: .5rem;
-		background-color: #efefef;
+		background-color: var(--color-bg);
 		z-index: 100;
 	}
 	.section-head h2 {
@@ -432,17 +431,6 @@ try {
 		gap: 0.75rem;
 	}
 
-	.rank-badge {
-		padding: 0.14rem 0.42rem;
-		border-radius: 999px;
-		background: #f4efe2;
-		color: #6a5c3d;
-		font-size: 0.76rem;
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		line-height: 1.2;
-	}
-
 	.rank-stack {
 		position: absolute;
 		top: 0.65rem;
@@ -453,19 +441,12 @@ try {
 		gap: 0.28rem;
 	}
 
-	.shelf-count-badge {
-		padding: 0.12rem 0.42rem;
-		border-radius: 999px;
-		background: #f7f7f7;
-		color: #5f5f5f;
-		font-size: 0.7rem;
-		font-weight: 600;
-		line-height: 1.2;
+	:global(.shelf-count-badge) {
 		white-space: nowrap;
 	}
 
 	.rating-meta {
-		color: #8a6a15;
+		color: var(--color-rating);
 		font-weight: 600;
 	}
 
@@ -483,7 +464,7 @@ try {
 		border-radius: 8px;
 		padding: 0.5rem 0.8rem;
 		font-size: 0.92rem;
-		background: #2f8f57;
+		background: var(--color-primary);
 		color: #fff;
 		cursor: pointer;
 		display: inline-flex;
@@ -492,7 +473,7 @@ try {
 	}
 
 	.shelf-trigger:hover {
-		background: #267647;
+		background: var(--color-primary-hover);
 	}
 
 	.shelf-check {

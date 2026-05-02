@@ -546,14 +546,14 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 
 <style>
 	.book-page { max-width: 980px; }
-	.book-head { display: grid; grid-template-columns: 180px auto; gap: 1rem; border: 1px solid #ddd4c7; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.book-head { display: grid; grid-template-columns: 180px auto; gap: 1rem; border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
 	.cover-large img, .cover-placeholder { width: 180px; height: 270px; border-radius: 10px; object-fit: cover; background: #f1f1f1; }
 	.cover-placeholder { display: flex; align-items: center; justify-content: center; color: #8a8a8a; border: 1px solid #d7d7d7; }
 	.meta { margin: 0.24rem 0; color: #4d4d4d; }
-	.rating { color: #8a6a15; font-weight: 700; }
+	.rating { color: var(--color-rating); font-weight: 700; }
 	.shelf-dropdown { position: relative; display: inline-flex; flex-direction: column; align-items: flex-start; margin-top: 0.6rem; }
-	.book-head .shelf-trigger { border: none !important; border-radius: 8px !important; padding: 0.55rem 0.85rem !important; font-size: 0.95rem !important; background: #2f8f57 !important; color: #fff !important; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; }
-	.book-head .shelf-trigger:hover { background: #267647 !important; }
+	.book-head .shelf-trigger { border: none !important; border-radius: 8px !important; padding: 0.55rem 0.85rem !important; font-size: 0.95rem !important; background: var(--color-primary) !important; color: #fff !important; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; }
+	.book-head .shelf-trigger:hover { background: var(--color-primary-hover) !important; }
 	.book-head .shelf-trigger .material-icons { color: #fff !important; }
 	.shelf-icon { font-size: 1.15rem; line-height: 1; }
 	.shelf-check { font-size: 1rem; line-height: 1; opacity: 0; transition: opacity 120ms ease-in-out; }
@@ -561,8 +561,8 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 	.shelf-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 170px; background: #fff; border: 1px solid #c9c9c9; border-radius: 8px; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12); padding: 0.2rem; z-index: 35; }
 	.shelf-option { width: 100%; border: none; background: transparent; text-align: left; padding: 0.45rem 0.55rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer; color: #222; }
 	.shelf-option:hover { background: #f2f2f2; }
-	.shelf-feedback { margin: 0.33rem 0 0; color: #2f8f57; font-size: 0.82rem; font-weight: 700; }
-	.panel { margin-top: 0.8rem; border: 1px solid #ddd4c7; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.shelf-feedback { margin: 0.33rem 0 0; color: var(--color-secondary); font-size: 0.82rem; font-weight: 700; }
+	.panel { margin-top: 0.8rem; border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
 	.panel h2 { margin: 0 0 0.55rem; }
 	.synopsis-panel { line-height: 1.7; }
 	.synopsis-text { margin: 0.75rem 0 0; font-size: 1.04rem; color: #252525; }
@@ -570,12 +570,10 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 	.activity-panel { border: none; background: transparent; padding: 0; }
 	.activity-grid { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.activity-headline { font-weight: 700; color: #2f2f2f; }
-	.activity-prefix { color: #1d4ed8; }
+	.activity-prefix { color: var(--color-secondary); }
 	.activity-user { color: #4a5565; font-weight: 600; }
-	.activity-user a { color: #1d4ed8; text-decoration: none; }
+	.activity-user a { color: var(--color-secondary); text-decoration: none; }
 	.activity-user a:hover { text-decoration: underline; }
-	.author-link { color: inherit; text-decoration: none; }
-	.author-link:hover { text-decoration: underline; }
 	.activity-date { color: #5b6470; font-weight: 600; }
 	.error { color: #991b1b; }
 	@media (max-width: 860px) {

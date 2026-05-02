@@ -87,12 +87,23 @@ if (query) {
 				<BookCard
 					title={result.title}
 					titleHref={`/book?title=${encodeURIComponent(result.title)}&author=${encodeURIComponent(result.authors[0] ?? "")}&isbn13=${encodeURIComponent(result.isbn13 || "")}&isbn10=${encodeURIComponent(result.isbn10 || "")}&googleBooksId=${encodeURIComponent(result.googleBooksId || "")}`}
-					author={result.authors.length > 0 ? result.authors.join(", ") : "Unknown author"}
-					authorHref={result.authors.length === 1 && result.authors[0] ? `/related?kind=author&value=${encodeURIComponent(result.authors[0])}` : ""}
+					author={result.authors[0] || "Unknown author"}
+					authorHref={result.authors[0] ? `/related?kind=author&value=${encodeURIComponent(result.authors[0])}` : ""}
 					thumbnail={result.thumbnail}
 					description={truncateDescription(result.description)}
 				>
 						<div slot="meta">
+							{result.authors.length > 1 && (
+								<p class="meta">
+									With{" "}
+									{result.authors.slice(1).map((author, index) => (
+										<>
+											{index > 0 && ", "}
+											<a class="author-link" href={`/related?kind=author&value=${encodeURIComponent(author)}`}>{author}</a>
+										</>
+									))}
+								</p>
+							)}
 							{result.pageCount !== null && <p class="meta">{result.pageCount} pages</p>}
 							{(result.variantCount ?? 1) > 1 && <p class="meta">{result.variantCount} editions/formats combined</p>}
 						</div>
@@ -281,7 +292,7 @@ if (query) {
 		border-radius: 8px;
 		padding: 0.55rem 0.85rem;
 		font-size: 0.95rem;
-		background: #2f8f57;
+		background: var(--color-primary);
 		color: #fff;
 		cursor: pointer;
 		display: inline-flex;
@@ -306,7 +317,7 @@ if (query) {
 	}
 
 	.shelf-trigger:hover {
-		background: #267647;
+		background: var(--color-primary-hover);
 	}
 
 	.shelf-menu {

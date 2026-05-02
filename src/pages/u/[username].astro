@@ -2,6 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import BookCard from "../../components/BookCard.astro";
 import ShelfDropdown from "../../components/ShelfDropdown.astro";
+import Chip from "../../components/Chip.astro";
 import { resolveUserBySession } from "../../lib/auth";
 import { getNeonSql } from "../../lib/neon";
 import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicShelfSummary } from "../../lib/publicProfile";
@@ -135,7 +136,7 @@ function formatActivityDate(value: string) {
 }
 
 function shelfHrefForOwner(sectionId: string) {
-	return `/profile?edit=1#${encodeURIComponent(sectionId)}`;
+	return `/profile?shelf=${encodeURIComponent(sectionId)}#${encodeURIComponent(sectionId)}`;
 }
 ---
 
@@ -193,13 +194,15 @@ function shelfHrefForOwner(sectionId: string) {
 						{profile.favoriteAuthor && (
 							<p>
 								<strong>Favorite author:</strong>{" "}
-								<a href={`/related?kind=author&value=${encodeURIComponent(profile.favoriteAuthor)}`}>{profile.favoriteAuthor}</a>
+								<a class="author-link" href={`/related?kind=author&value=${encodeURIComponent(profile.favoriteAuthor)}`}>{profile.favoriteAuthor}</a>
 							</p>
 						)}
 					</div>
 					{profile.genres.length > 0 && (
 						<ul class="genre-list">
-							{profile.genres.map((genre) => <li>{genre}</li>)}
+							{profile.genres.map((genre) => (
+								<li><Chip label={genre} className="genre-chip" /></li>
+							))}
 						</ul>
 					)}
 				</section>
@@ -277,7 +280,7 @@ function shelfHrefForOwner(sectionId: string) {
 
 <style>
 	.public-profile-page { max-width: 860px; display: grid; gap: 0.9rem; }
-	.state-card, .profile-card, .shelf-card, .activity-card { border: 1px solid #ddd4c7; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.state-card, .profile-card, .shelf-card, .activity-card { border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
 	.activity-card-plain { border: none; background: transparent; border-radius: 0; padding: 0; }
 	.profile-card { position: relative; }
 	.profile-card-actions {
@@ -300,7 +303,7 @@ function shelfHrefForOwner(sectionId: string) {
 	.meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem 0.8rem; margin-top: 0.7rem; }
 	.meta-grid p { margin: 0; }
 	.genre-list { list-style: none; margin: 0.7rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
-	.genre-list li { background: #f3efe7; border-radius: 999px; padding: 0.2rem 0.6rem; font-size: 0.86rem; }
+	.genre-list li { list-style: none; }
 	.shelf-summary-grid {
 		margin-top: 0.7rem;
 		display: grid;
@@ -314,7 +317,7 @@ function shelfHrefForOwner(sectionId: string) {
 		padding: 0;
 	}
 	.shelf-summary-item {
-		border: 1px solid #ddd4c7;
+		border: none;
 		border-radius: 12px;
 		background: #fff;
 		padding: 0.8rem 0.9rem;
@@ -325,7 +328,6 @@ function shelfHrefForOwner(sectionId: string) {
 	.shelf-summary-item:hover {
 		transform: translateY(-1px);
 		box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
-		border-color: #b9ad97;
 	}
 	.shelf-summary-label {
 		margin: 0;
@@ -342,12 +344,12 @@ function shelfHrefForOwner(sectionId: string) {
 	}
 	.activity-grid { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.activity-headline { font-weight: 700; color: #2f2f2f; }
-	.activity-prefix { color: #1d4ed8; }
+	.activity-prefix { color: var(--color-secondary); }
 	.activity-date { color: #5b6470; font-weight: 600; }
-	.rating-meta { color: #8a6a15; font-weight: 700; }
+	.rating-meta { color: var(--color-rating); font-weight: 700; }
 	.shelf-dropdown { position: relative; display: inline-flex; flex-direction: column; align-items: flex-start; min-width: 150px; }
-	.shelf-trigger { border: none; border-radius: 8px; padding: 0.55rem 0.85rem; font-size: 0.95rem; background: #2f8f57; color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; }
-	.shelf-trigger:hover { background: #267647; }
+	.shelf-trigger { border: none; border-radius: 8px; padding: 0.55rem 0.85rem; font-size: 0.95rem; background: var(--color-primary); color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; }
+	.shelf-trigger:hover { background: var(--color-primary-hover); }
 	.shelf-icon { font-size: 1.15rem; line-height: 1; }
 	.shelf-check { font-size: 1rem; line-height: 1; opacity: 0; transition: opacity 120ms ease-in-out; }
 	.shelf-dropdown.is-shelved .shelf-check { opacity: 1; }
