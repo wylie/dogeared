@@ -19,7 +19,7 @@ const sectionLinks = [
 			</p>
 		</header>
 
-		<section id="why" class="mission-section">
+		<section id="why" class="mission-section mission-card">
 			<h2>Why Dogeared</h2>
 			<p>
 				Most reading tools are good at collecting data and much worse at helping someone stay close to the reason
@@ -35,7 +35,7 @@ const sectionLinks = [
 			</p>
 		</section>
 
-		<section id="broken" class="mission-section">
+		<section id="broken" class="mission-section mission-card">
 			<h2>What Feels Broken Elsewhere</h2>
 			<p>
 				Too many platforms are built to optimize engagement instead of usefulness. They push volume over reflection,
@@ -47,7 +47,7 @@ const sectionLinks = [
 			</p>
 		</section>
 
-		<section id="principles" class="mission-section">
+		<section id="principles" class="mission-section mission-card">
 			<h2>Principles</h2>
 			<ul class="principles">
 				<li>
@@ -87,7 +87,7 @@ const sectionLinks = [
 			</ul>
 		</section>
 
-		<section id="vision" class="mission-section">
+		<section id="vision" class="mission-section mission-card">
 			<h2>Long-Term Vision</h2>
 			<p>
 				Dogeared should become a trustworthy home base for readers: part notebook, part shelf, part discovery tool.
@@ -104,6 +104,12 @@ const sectionLinks = [
 <style>
 	.mission-page {
 		max-width: 860px;
+	}
+
+	.mission-card {
+		background: var(--color-surface);
+		border-radius: 16px;
+		padding: 1.1rem 1.2rem;
 	}
 
 	.mission-hero {

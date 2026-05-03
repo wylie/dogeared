@@ -106,7 +106,11 @@ const query = Astro.url.searchParams.get("q") ?? "";
     border-radius: 5px;
   }
   a.active {
-    background-color: #ddd;
+    background: transparent;
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 2px;
     cursor: default;
   }
   .hover:hover {

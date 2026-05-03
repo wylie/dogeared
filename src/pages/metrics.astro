@@ -1348,18 +1348,18 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 	:global(.context-v) { color: #2f2f2f; }
 	:global(.context-note) { margin-top: 0.15rem; color: #4d4d4d; }
 	.widget-grid { display: grid; gap: 0.65rem; grid-template-columns: repeat(5, minmax(0, 1fr)); }
-	.widget { border: 1px solid #d8d0c2; border-radius: 12px; background: #fff; padding: 0.75rem; }
+	.widget { border: 0; border-radius: 12px; background: #fff; padding: 0.75rem; }
 	.widget p { margin: 0; text-transform: uppercase; letter-spacing: 0.06em; color: #6d5d46; font-size: 0.74rem; font-weight: 700; }
 	.widget strong { display: block; margin-top: 0.35rem; font-size: clamp(1.1rem, 1.8vw, 1.65rem); }
 	.insight-grid { margin-top: 0.65rem; display: grid; gap: 0.65rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-	.insight-card { border: 1px solid #e3dbcd; border-radius: 12px; background: #fcfbf8; padding: 0.72rem; }
+	.insight-card { border: 0; border-radius: 12px; background: #fcfbf8; padding: 0.72rem; }
 	.insight-card h3 { margin: 0; font-size: 0.98rem; color: #2b2b2b; }
 	.insight-points { margin: 0.4rem 0 0; padding: 0 0 0 1rem; display: grid; gap: 0.28rem; color: #464646; }
 	.insight-points li { margin: 0; line-height: 1.38; font-size: 0.9rem; }
 	.insight-label { font-weight: 700; color: #2c2c2c; }
 	.insight-value { color: #4b4b4b; }
 	:global(.pie-widget-grid) { margin-top: 0.65rem; display: grid; gap: 0.65rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-	:global(.pie-widget) { border: 1px solid #e3dbcd; border-radius: 12px; background: #fcfbf8; padding: 0.72rem; }
+	:global(.pie-widget) { border: 0; border-radius: 12px; background: #fcfbf8; padding: 0.72rem; }
 	:global(.pie-widget h3) { margin: 0; font-size: 1rem; }
 	:global(.pie-widget-sub) { margin: 0.2rem 0 0; color: #5d5d5d; font-size: 0.88rem; }
 	:global(.pie-widget-body) { margin-top: 0.6rem; display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 0.6rem; align-items: center; }
@@ -1373,7 +1373,7 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 	:global(.mini-dot) { width: 9px; height: 9px; border-radius: 50%; }
 	:global(.mini-label) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #2f2f2f; }
 	:global(.mini-share) { color: #575757; font-variant-numeric: tabular-nums; }
-	.panel { margin-top: 0.9rem; border: 1px solid #d8d0c2; border-radius: 12px; background: #fff; padding: 0.8rem; }
+	.panel { margin-top: 0.9rem; border: 0; border-radius: 12px; background: #fff; padding: 0.8rem; }
 	.panel-head h2 { margin: 0; }
 	.panel-head p { margin: 0.3rem 0 0; color: #515151; }
 	.controls { margin-top: 0.55rem; display: flex; justify-content: space-between; gap: 0.5rem; align-items: center; }
@@ -1399,7 +1399,7 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 	:global(.metric-table tr.is-clickable) { cursor: pointer; }
 	:global(.metric-table tr.is-clickable:hover) { background: #f3f9f4; }
 	:global(.metric-table tr.is-not-drillable) { opacity: 0.9; }
-	:global(.bars-scroll-wrap) { margin-top: 0.6rem; border: 1px solid #e3ded2; border-radius: 10px; overflow: hidden; background: #fff; }
+	:global(.bars-scroll-wrap) { margin-top: 0.6rem; border: 0; border-radius: 10px; overflow: hidden; background: #fff; }
 	:global(.bars-scroll-head) { display: grid; grid-template-columns: minmax(180px, 1.4fr) minmax(260px, 2fr) minmax(140px, 1.2fr); gap: 0.5rem; align-items: center; padding: 0.5rem 0.65rem; background: #faf6ed; border-bottom: 1px solid #ece5d8; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #6a5c3d; }
 	:global(.bars-scroll-body) { max-height: 420px; overflow-y: auto; }
 	:global(.bars-row) { display: grid; grid-template-columns: minmax(180px, 1.4fr) minmax(260px, 2fr) minmax(140px, 1.2fr); gap: 0.5rem; align-items: center; padding: 0.45rem 0.65rem; border-bottom: 1px solid #f0ece4; }

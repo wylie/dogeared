@@ -10,15 +10,15 @@ if (!session?.userId) {
 }
 
 const sectionLinks = [
-	{ id: "goodreads-import", label: "Import Goodreads" },
-	{ id: "import-controls", label: "Import Controls" },
-	{ id: "account-settings", label: "Account" },
 	{ id: "privacy-settings", label: "Privacy" },
 	{ id: "reading-defaults", label: "Reading Defaults" },
 	{ id: "personalization-settings", label: "Personalization" },
 	{ id: "security-settings", label: "Security" },
+	{ id: "goodreads-import", label: "Import Goodreads" },
+	{ id: "import-controls", label: "Import Controls" },
+	{ id: "data-export", label: "Data Export" },
 	{ id: "api-settings", label: "API" },
-	{ id: "data-export", label: "Data Export" }
+	{ id: "account-settings", label: "Account" }
 ];
 ---
 
@@ -245,6 +245,8 @@ const sectionLinks = [
 <style>
 	.settings-page {
 		max-width: 860px;
+		display: flex;
+		flex-direction: column;
 	}
 
 	h1 {
@@ -254,7 +256,22 @@ const sectionLinks = [
 	.subhead {
 		margin: 0.5rem 0 1.25rem;
 		color: #444;
+		order: 1;
 	}
+
+	h1 {
+		order: 0;
+	}
+
+	#privacy-settings { order: 2; }
+	#reading-defaults { order: 3; }
+	#personalization-settings { order: 4; }
+	#security-settings { order: 5; }
+	#goodreads-import { order: 6; }
+	#import-controls { order: 7; }
+	#data-export { order: 8; }
+	#api-settings { order: 9; }
+	#account-settings { order: 10; }
 
 	.settings-section {
 		border: 1px solid #d8d8d8;
