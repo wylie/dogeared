@@ -43,11 +43,23 @@ create table if not exists auth_session (
 create index if not exists idx_auth_session_user on auth_session(user_id);
 create index if not exists idx_auth_session_expires on auth_session(expires_at);
 
+create table if not exists author (
+	id bigserial primary key,
+	name text not null unique,
+	bio text not null default '',
+	photo_url text not null default '',
+	bio_source text not null default '',
+	bio_source_url text not null default '',
+	created_at timestamptz not null default now(),
+	updated_at timestamptz not null default now()
+);
+
 create table if not exists book (
 	id bigserial primary key,
 	canonical_work_key text not null unique,
 	title text not null,
 	primary_author text not null default '',
+	author_id bigint references author(id) on delete set null,
 	isbn13 text not null default '',
 	isbn10 text not null default '',
 	google_books_id text not null default '',

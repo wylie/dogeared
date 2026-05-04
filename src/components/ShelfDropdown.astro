@@ -17,6 +17,7 @@ const initialLabel = initialStatus === "reading"
 const initialIcon = initialStatus === "reading"
 	? "menu_book"
 	: (initialStatus === "finished" ? "check" : "add");
+const hideLabel = String(attrs["data-hide-label"] || "").trim() === "true";
 ---
 
 <div
@@ -34,7 +35,7 @@ const initialIcon = initialStatus === "reading"
 	>
 		<span class="material-icons shelf-plus" aria-hidden="true">{initialIcon}</span>
 	</button>
-	<p class="shelf-state">{initialLabel}</p>
+	{!hideLabel && <p class="shelf-state">{initialLabel}</p>}
 	<div class="shelf-menu" hidden>
 		<button type="button" class="shelf-option" data-action="set-shelf" data-status="want_to_read">
 			<span class="material-icons shelf-option-icon" aria-hidden="true">add</span>

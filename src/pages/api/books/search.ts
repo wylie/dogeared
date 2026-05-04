@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { getNeonSql } from "../../../lib/neon";
 
 export const prerender = false;
 
@@ -17,6 +18,8 @@ type SearchResult = {
 	isbn10: string;
 	isbn13: string;
 	googleBooksId: string;
+	bookId?: number;
+	authorId?: number;
 	variantCount?: number;
 	variants?: Array<{
 		title: string;
@@ -29,6 +32,8 @@ type SearchResult = {
 		isbn10: string;
 		isbn13: string;
 		googleBooksId: string;
+		bookId?: number;
+		authorId?: number;
 		format: string;
 		optionLabel: string;
 		detailLabel: string;
@@ -118,6 +123,8 @@ function toVariant(result: SearchResult) {
 		isbn10: String(result.isbn10 || "").trim(),
 		isbn13: String(result.isbn13 || "").trim(),
 		googleBooksId: String(result.googleBooksId || "").trim(),
+		bookId: Number(result.bookId || 0) || 0,
+		authorId: Number(result.authorId || 0) || 0,
 		format,
 		optionLabel: summaryParts.join(" • "),
 		detailLabel: [format, ...detailParts].join(" • ")
@@ -280,7 +287,51 @@ export const GET: APIRoute = async ({ url }) => {
 				googleBooksId: String(item?.id || "").trim()
 			};
 		}).filter((result) => isLikelyMatch(result, query));
-		const results = dedupeVariants(mapped, query);
+		const sql = getNeonSql();
+		const googleIds = Array.from(new Set(mapped.map((item) => String(item.googleBooksId || "").trim()).filter(Boolean)));
+		const isbn13s = Array.from(new Set(mapped.map((item) => String(item.isbn13 || "").trim()).filter(Boolean)));
+		const isbn10s = Array.from(new Set(mapped.map((item) => String(item.isbn10 || "").trim()).filter(Boolean)));
+		const catalogRows = await sql<Array<{
+			id: number;
+			author_id: number | null;
+			google_books_id: string;
+			isbn13: string;
+			isbn10: string;
+		}>>`
+			select
+				b.id,
+				b.author_id,
+				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10
+			from book b
+			where
+				(array_length(${googleIds}::text[], 1) is not null and b.google_books_id = any(${googleIds}::text[]))
+				or (array_length(${isbn13s}::text[], 1) is not null and b.isbn13 = any(${isbn13s}::text[]))
+				or (array_length(${isbn10s}::text[], 1) is not null and b.isbn10 = any(${isbn10s}::text[]))
+		`;
+		const byGoogleId = new Map<string, { bookId: number; authorId: number }>();
+		const byIsbn13 = new Map<string, { bookId: number; authorId: number }>();
+		const byIsbn10 = new Map<string, { bookId: number; authorId: number }>();
+		for (const row of catalogRows) {
+			const pair = { bookId: Number(row.id || 0), authorId: Number(row.author_id || 0) || 0 };
+			if (pair.bookId <= 0) continue;
+			const gid = String(row.google_books_id || "").trim();
+			const i13 = String(row.isbn13 || "").trim();
+			const i10 = String(row.isbn10 || "").trim();
+			if (gid && !byGoogleId.has(gid)) byGoogleId.set(gid, pair);
+			if (i13 && !byIsbn13.has(i13)) byIsbn13.set(i13, pair);
+			if (i10 && !byIsbn10.has(i10)) byIsbn10.set(i10, pair);
+		}
+		const mappedWithIds = mapped.map((item) => {
+			const match = byGoogleId.get(item.googleBooksId) || byIsbn13.get(item.isbn13) || byIsbn10.get(item.isbn10);
+			return {
+				...item,
+				bookId: match?.bookId || 0,
+				authorId: match?.authorId || 0
+			};
+		});
+		const results = dedupeVariants(mappedWithIds, query);
 		const hasMore = baseItems.length >= pageSize;
 		return new Response(JSON.stringify({ results, hasMore, page }), {
 			status: 200,

@@ -2704,7 +2704,15 @@ if (isAuthenticated) {
 		if (!entry) return;
 		if (entry.status !== "reading") return;
 		const total = normalizeNumber(entry.totalPages);
-		let nextPage = normalizeNumber(nextPageValue);
+		const rawValue = String(nextPageValue || "").trim();
+		let nextPage = 0;
+		if (rawValue.endsWith("%")) {
+			const percent = Number(rawValue.slice(0, -1).trim());
+			const clampedPercent = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+			nextPage = total > 0 ? Math.round((clampedPercent / 100) * total) : 0;
+		} else {
+			nextPage = normalizeNumber(rawValue);
+		}
 		if (total > 0) {
 			nextPage = Math.min(nextPage, total);
 		}

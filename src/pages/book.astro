@@ -101,6 +101,7 @@ type BookDetails = {
 	id: number;
 	title: string;
 	author: string;
+	authorId: number;
 	synopsis: string;
 	coverUrl: string;
 	language: string;
@@ -196,6 +197,7 @@ try {
 		id: number;
 		title: string;
 		author: string;
+		author_id: number | null;
 		synopsis: string;
 		cover_url: string;
 		language: string;
@@ -214,6 +216,7 @@ try {
 				b.id,
 				b.title,
 				coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				b.author_id,
 				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
 				coalesce(nullif(trim(b.language), ''), '') as language,
@@ -243,6 +246,7 @@ try {
 	if (!rows[0] && queryIsbn13) {
 		rows = await sql`
 			select b.id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				b.author_id,
 				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
 				coalesce(nullif(trim(b.language), ''), '') as language,
@@ -264,6 +268,7 @@ try {
 	if (!rows[0] && queryIsbn10) {
 		rows = await sql`
 			select b.id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				b.author_id,
 				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
 				coalesce(nullif(trim(b.language), ''), '') as language,
@@ -285,6 +290,7 @@ try {
 	if (!rows[0] && queryGoogleBooksId) {
 		rows = await sql`
 			select b.id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				b.author_id,
 				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
 				coalesce(nullif(trim(b.language), ''), '') as language,
@@ -308,6 +314,7 @@ try {
 		const ca = canonicalizeAuthor(queryAuthor);
 		rows = await sql`
 			select b.id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				b.author_id,
 				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
 				coalesce(nullif(trim(b.language), ''), '') as language,
@@ -329,10 +336,15 @@ try {
 
 	const row = rows[0];
 	if (row?.id) {
+		const resolvedBookId = Number(row.id || 0);
+		if (resolvedBookId > 0 && queryBookId !== resolvedBookId) {
+			return Astro.redirect(`/book?bookId=${encodeURIComponent(String(resolvedBookId))}`, 302);
+		}
 		book = {
-			id: Number(row.id),
+			id: resolvedBookId,
 			title: normalizeText(row.title),
 			author: normalizeText(row.author),
+			authorId: Number(row.author_id || 0),
 			synopsis: sanitizeSynopsis(row.synopsis),
 			coverUrl: normalizeText(row.cover_url),
 			language: normalizeText(row.language),
@@ -377,6 +389,7 @@ try {
 				id: 0,
 				title: normalizeText(info.title || queryTitle),
 				author: normalizeText(Array.isArray(info.authors) ? info.authors[0] : queryAuthor),
+				authorId: 0,
 				synopsis: sanitizeSynopsis(info.description || ""),
 				coverUrl: normalizeText(info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail),
 				language: normalizeText(info.language),
@@ -395,6 +408,7 @@ try {
 					id: 0,
 					title: open.title || queryTitle,
 					author: open.author || queryAuthor,
+					authorId: 0,
 					synopsis: open.synopsis,
 					coverUrl: open.coverUrl,
 					language: "",
@@ -490,13 +504,14 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 								"data-isbn13": book.isbn13,
 								"data-google-books-id": book.googleBooksId,
 								"data-book-id": String(book.id || 0),
-								"data-initial-status": viewerShelfStatus
+								"data-initial-status": viewerShelfStatus,
+								"data-hide-label": "true"
 							}} />
 						</div>
 						<h1>{book.title}</h1>
 						<p class="meta">
 							{book.author
-								? <a class="author-link" href={authorHref(book.author)}>{book.author}</a>
+								? <a class="author-link" href={authorHref(book.author, book.authorId)}>{book.author}</a>
 								: "Unknown author"}
 						</p>
 						{book.publishedLabel && <p class="meta">Published: {book.publishedLabel}</p>}
@@ -524,7 +539,7 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 								<BookCard
 									title={book.title}
 									author={book.author}
-									authorHref={book.author ? authorHref(book.author) : ""}
+									authorHref={book.author ? authorHref(book.author, book.authorId) : ""}
 									thumbnail={book.coverUrl}
 								>
 									<p slot="preTitle" class="meta activity-headline">
@@ -561,18 +576,14 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 	.cover-placeholder { display: flex; align-items: center; justify-content: center; color: #8a8a8a; border: 1px solid #d7d7d7; }
 	.meta { margin: 0.24rem 0; color: #4d4d4d; }
 	.rating { color: var(--color-rating); font-weight: 700; }
-	.book-head-actions .shelf-dropdown {
+	.book-head-actions :global(.shelf-dropdown) {
 		margin-top: 0;
 		display: inline-flex;
 		flex-direction: column;
 		align-items: flex-end;
 	}
-	.book-head-actions .shelf-dropdown .shelf-state { display: none !important; }
-	.book-head-actions .shelf-dropdown .shelf-feedback { margin-top: 0.35rem; text-align: right; }
-	.shelf-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 170px; background: #fff; border: 1px solid #c9c9c9; border-radius: 8px; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12); padding: 0.2rem; z-index: 35; }
-	.shelf-option { width: 100%; border: none; background: transparent; text-align: left; padding: 0.45rem 0.55rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer; color: #222; }
-	.shelf-option:hover { background: #f2f2f2; }
-	.shelf-feedback { margin: 0.33rem 0 0; color: var(--color-secondary); font-size: 0.82rem; font-weight: 700; }
+	.book-head-actions :global(.shelf-state) { display: none !important; }
+	.book-head-actions :global(.shelf-feedback) { margin-top: 0.35rem; text-align: right; }
 	.panel { margin-top: 0.8rem; border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
 	.panel h2 { margin: 0 0 0.55rem; }
 	.synopsis-panel { line-height: 1.7; }
@@ -609,7 +620,7 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 		saveShelfEntryWithRetry,
 		toggleShelfMenu
 	} from "/src/lib/shelfClient.ts";
-	import { normalizeBookPayload } from "../lib/bookPayload";
+	import { normalizeBookPayload } from "/src/lib/bookPayload.ts";
 
 	const page = document.querySelector(".book-page");
 	let isAuthenticated = page?.dataset.authenticated === "true";

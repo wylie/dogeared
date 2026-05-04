@@ -24,6 +24,8 @@ type SearchResult = {
 	isbn10: string;
 	isbn13: string;
 	googleBooksId: string;
+	bookId?: number;
+	authorId?: number;
 	variantCount?: number;
 	variants?: Array<{
 		title: string;
@@ -36,6 +38,8 @@ type SearchResult = {
 		isbn10: string;
 		isbn13: string;
 		googleBooksId: string;
+		bookId?: number;
+		authorId?: number;
 		format: string;
 		optionLabel: string;
 		detailLabel: string;
@@ -87,9 +91,11 @@ if (query) {
 			{results.map((result) => (
 				<BookCard
 					title={result.title}
-					titleHref={`/book?title=${encodeURIComponent(result.title)}&author=${encodeURIComponent(result.authors[0] ?? "")}&isbn13=${encodeURIComponent(result.isbn13 || "")}&isbn10=${encodeURIComponent(result.isbn10 || "")}&googleBooksId=${encodeURIComponent(result.googleBooksId || "")}`}
+					titleHref={Number(result.bookId || 0) > 0
+						? `/book?bookId=${encodeURIComponent(String(result.bookId || 0))}`
+						: `/book?googleBooksId=${encodeURIComponent(result.googleBooksId || "")}&isbn13=${encodeURIComponent(result.isbn13 || "")}&isbn10=${encodeURIComponent(result.isbn10 || "")}&title=${encodeURIComponent(result.title)}&author=${encodeURIComponent(result.authors[0] ?? "")}`}
 					author={result.authors[0] || "Unknown author"}
-					authorHref={result.authors[0] ? authorHref(result.authors[0]) : ""}
+					authorHref={result.authors[0] ? authorHref(result.authors[0], result.authorId || 0) : ""}
 					thumbnail={result.thumbnail}
 					description={truncateDescription(result.description)}
 				>
@@ -97,12 +103,12 @@ if (query) {
 							{result.authors.length > 1 && (
 								<p class="meta">
 									With{" "}
-									{result.authors.slice(1).map((author, index) => (
-										<>
-											{index > 0 && ", "}
-											<a class="author-link" href={authorHref(author)}>{author}</a>
-										</>
-									))}
+										{result.authors.slice(1).map((author, index) => (
+											<>
+												{index > 0 && ", "}
+												<a class="author-link" href={authorHref(author, 0)}>{author}</a>
+											</>
+										))}
 								</p>
 							)}
 							{result.pageCount !== null && <p class="meta">{result.pageCount} pages</p>}

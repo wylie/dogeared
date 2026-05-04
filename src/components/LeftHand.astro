@@ -265,8 +265,10 @@ const query = Astro.url.searchParams.get("q") ?? "";
         "top"
         "links"
         "search";
-      background: #efefef;
+      background: #fff;
       border-bottom: 1px solid #ddd6c8;
+      border-bottom-left-radius: 18px;
+      border-bottom-right-radius: 18px;
       padding: 0.6rem 0.5rem 0.55rem;
     }
     .mobile-top-row {
@@ -299,6 +301,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     #left-hand-nav input[type="search"] {
       margin-top: 0;
       padding: 0.4rem 0.8rem;
+      border: 2px solid #d1d5db;
     }
     .mobile-menu-toggle {
       display: inline-flex;

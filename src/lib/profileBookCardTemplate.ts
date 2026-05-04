@@ -1,6 +1,9 @@
+import { authorHref } from "./author";
+
 type ProfileEntry = {
 	id: string;
 	bookId?: number;
+	authorId?: number;
 	title: string;
 	author?: string;
 	format?: string;
@@ -43,11 +46,13 @@ export function renderProfileBookCard(entry: ProfileEntry, options: RenderOption
 		pendingFinishRating
 	} = options;
 
-	const titleHref = `/book?bookId=${encodeURIComponent(String(entry.bookId || 0))}&isbn13=${encodeURIComponent(String(entry.isbn13 || ""))}&isbn10=${encodeURIComponent(String(entry.isbn10 || ""))}&title=${encodeURIComponent(String(entry.title || ""))}&author=${encodeURIComponent(String(entry.author || ""))}`;
-	const authorName = String(entry.author || "").trim();
-	const authorSlug = authorName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+	const titleHref = `/book?bookId=${encodeURIComponent(String(entry.bookId || 0))}`;
+	const authorId = Math.max(0, Number(entry.authorId || 0) || 0);
+	const authorUrl = authorHref(entry.author, authorId);
 	const author = entry.author
-		? `<p class="meta"><a class="author-link" href="/author/${encodeURIComponent(authorSlug)}?name=${encodeURIComponent(authorName)}">${escapeHtml(entry.author)}</a></p>`
+		? (authorUrl
+			? `<p class="meta"><a class="author-link" href="${escapeHtml(authorUrl)}">${escapeHtml(entry.author)}</a></p>`
+			: `<p class="meta">${escapeHtml(entry.author)}</p>`)
 		: "";
 	const formatMeta = entry.format ? `<p class="meta">${escapeHtml(entry.format)}${entry.language ? ` • ${escapeHtml(String(entry.language).toUpperCase())}` : ""}</p>` : "";
 	const publishedMeta = entry.publishedDate ? `<p class="meta">Published: ${escapeHtml(formatPublishedLabel(entry.publishedDate))}</p>` : "";
@@ -70,8 +75,8 @@ export function renderProfileBookCard(entry: ProfileEntry, options: RenderOption
 					${total > 0 ? `max="${total}"` : ""}
 					step="1"
 					inputmode="numeric"
-					placeholder="Page #"
-					value="${current}"
+					placeholder="Page # or %"
+					value="0"
 				/>
 				<button type="button" class="secondary progress-save" data-action="update-progress">Save</button>
 			</div>

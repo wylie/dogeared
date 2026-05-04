@@ -1,0 +1,217 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BookCard from "../components/BookCard.astro";
+import ShelfDropdown from "../components/ShelfDropdown.astro";
+import Chip from "../components/Chip.astro";
+import { getNeonSql } from "../lib/neon";
+import { resolveUserBySession } from "../lib/auth";
+import { authorHref } from "../lib/author";
+
+export const prerender = false;
+
+type BookRow = {
+	id: number;
+	title: string;
+	author: string;
+	authorId: number;
+	shelves: number;
+	readers: number;
+	genres: string[];
+	coverUrl: string;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+	googleBooksId: string;
+	synopsis: string;
+};
+
+const authorId = Number(Astro.url.searchParams.get("authorId") || 0);
+const session = await resolveUserBySession(Astro.request);
+const viewerUserId = String(session?.userId || "");
+
+let errorMessage = "";
+let author = {
+	id: 0,
+	name: "",
+	bio: "",
+	photoUrl: "",
+	bioSource: "",
+	bioSourceUrl: ""
+};
+let books: BookRow[] = [];
+let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
+let shelvesCount = 0;
+let readersCount = 0;
+
+if (authorId > 0) {
+	try {
+		const sql = getNeonSql();
+		const rows = await sql<Array<{
+			id: number;
+			name: string;
+			bio: string;
+			photo_url: string;
+			bio_source: string;
+			bio_source_url: string;
+		}>>`
+			select id, name, bio, photo_url, bio_source, bio_source_url
+			from author
+			where id = ${authorId}
+			limit 1
+		`;
+		const row = rows[0];
+		if (row) {
+			author = {
+				id: Number(row.id || 0),
+				name: String(row.name || "").trim(),
+				bio: String(row.bio || "").trim(),
+				photoUrl: String(row.photo_url || "").trim(),
+				bioSource: String(row.bio_source || "").trim(),
+				bioSourceUrl: String(row.bio_source_url || "").trim()
+			};
+		}
+
+		if (author.id > 0) {
+			const bookRows = await sql<BookRow[]>`
+				select
+					b.id,
+					b.title,
+					coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+					coalesce(b.author_id, 0)::bigint as "authorId",
+					count(distinct ub.user_id)::int as shelves,
+					count(distinct ub.user_id)::int as readers,
+					coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}') as genres,
+					coalesce(nullif(trim(b.cover_url), ''), '') as "coverUrl",
+					coalesce(nullif(trim(b.language), ''), '') as language,
+					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+					coalesce(nullif(trim(b.google_books_id), ''), '') as "googleBooksId",
+					coalesce(nullif(trim(b.synopsis), ''), '') as synopsis
+				from book b
+				left join user_book ub on ub.book_id = b.id
+				left join book_genre bg on bg.book_id = b.id
+				where b.author_id = ${author.id}
+				group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis
+				order by shelves desc, readers desc, b.title asc
+			`;
+			books = bookRows;
+			shelvesCount = bookRows.reduce((sum, item) => sum + Number(item.shelves || 0), 0);
+			readersCount = Math.max(...bookRows.map((item) => Number(item.readers || 0)), 0);
+		}
+
+		if (viewerUserId && books.length > 0) {
+			const bookIds = Array.from(new Set(books.map((book) => Number(book.id || 0)).filter((id) => id > 0)));
+			if (bookIds.length > 0) {
+				const statuses = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished" }>>`
+					select book_id, status
+					from user_book
+					where user_id = ${viewerUserId}::uuid
+						and book_id = any(${bookIds}::bigint[])
+				`;
+				viewerStatusByBookId = new Map(statuses.map((status) => [Number(status.book_id || 0), status.status]));
+			}
+		}
+	} catch (error) {
+		errorMessage = error instanceof Error ? error.message : "Failed to load author page.";
+	}
+}
+---
+
+<Layout title={author.name ? `${author.name} · Author` : "Author"}>
+	<div slot="right" class="author-page">
+		{errorMessage && <p class="error">{errorMessage}</p>}
+		{!errorMessage && author.id <= 0 && <p>Author not found.</p>}
+
+		{author.id > 0 && (
+			<>
+				<section class="panel author-head">
+					<div class="author-photo">
+						{author.photoUrl
+							? <img src={author.photoUrl} alt={`${author.name} photo`} loading="lazy" />
+							: <div class="photo-placeholder"><span class="material-icons" aria-hidden="true">person</span></div>}
+					</div>
+					<div class="author-meta">
+						<h1>{author.name}</h1>
+						<p class="meta">Books on Dogeared: {books.length.toLocaleString()}</p>
+						<p class="meta">Readers: {readersCount.toLocaleString()} · Shelf entries: {shelvesCount.toLocaleString()}</p>
+						{author.bio ? (
+							<p class="bio">
+								{author.bio}
+								{author.bioSourceUrl && <> <a class="author-link" href={author.bioSourceUrl} target="_blank" rel="noreferrer noopener">Source: {author.bioSource || "External source"}</a></>}
+							</p>
+						) : (
+							<p class="bio">Bio unavailable right now.</p>
+						)}
+					</div>
+				</section>
+
+				<section class="books-section">
+					<h2>Books</h2>
+					{books.length === 0 ? (
+						<p>No books found for this author yet.</p>
+					) : (
+						<ul class="book-grid">
+							{books.map((book) => (
+								<BookCard
+									title={book.title}
+									titleHref={`/book?bookId=${encodeURIComponent(String(book.id))}`}
+									author={book.author}
+									authorHref={book.author ? authorHref(book.author, book.authorId) : ""}
+									thumbnail={book.coverUrl}
+									description={book.synopsis || "Synopsis unavailable for this title."}
+								>
+									<div slot="preMeta">
+										<p class="meta">Readers: {book.readers} · Shelf entries: {book.shelves}</p>
+									</div>
+									<div slot="footer" class="book-card-footer">
+										<div class="chips">
+											{(book.genres.length > 0 ? book.genres : ["Uncategorized"]).slice(0, 4).map((genre) => (
+												<Chip className="genre-chip" label={genre} />
+											))}
+										</div>
+										<ShelfDropdown attrs={{
+											"data-book-id": String(book.id || 0),
+											"data-initial-status": viewerStatusByBookId.get(Number(book.id || 0)) || "",
+											"data-title": book.title,
+											"data-author": book.author,
+											"data-cover": book.coverUrl,
+											"data-language": book.language,
+											"data-isbn10": book.isbn10,
+											"data-isbn13": book.isbn13,
+											"data-google-books-id": book.googleBooksId,
+											"data-categories": JSON.stringify(book.genres ?? [])
+										}} />
+									</div>
+								</BookCard>
+							))}
+						</ul>
+					)}
+				</section>
+			</>
+		)}
+	</div>
+</Layout>
+
+<style>
+	.author-page { max-width: 980px; }
+	.panel { border: none; border-radius: 14px; background: var(--color-surface); padding: 1rem; }
+	.author-head { display: grid; grid-template-columns: 120px 1fr; gap: 1rem; }
+	.author-photo img, .photo-placeholder { width: 120px; height: 120px; border-radius: 12px; object-fit: cover; background: #f0f0f0; border: 1px solid #ddd; }
+	.photo-placeholder { display: grid; place-items: center; color: #8a8a8a; }
+	.author-meta h1 { margin: 0; }
+	.meta { margin: 0.2rem 0; color: #4d4d4d; }
+	.bio { margin-top: 0.6rem; line-height: 1.5; }
+	.books-section { margin-top: 0.8rem; }
+	.books-section h2 { margin: 0 0 0.6rem; }
+	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.book-card-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
+	.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+	.error { color: #991b1b; }
+	@media (max-width: 860px) {
+		.book-grid { grid-template-columns: 1fr; }
+	}
+	@media (max-width: 640px) {
+		.author-head { grid-template-columns: 1fr; }
+		.author-photo img, .photo-placeholder { width: 96px; height: 96px; }
+	}
+</style>

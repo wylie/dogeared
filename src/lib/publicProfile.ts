@@ -180,6 +180,7 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 		book_id: number;
 		title: string;
 		primary_author: string;
+		author_id: number | null;
 		cover_url: string;
 		language: string;
 		isbn10: string;
@@ -192,6 +193,7 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 			ua.book_id,
 			b.title,
 			b.primary_author,
+			b.author_id,
 			b.cover_url,
 			b.language,
 			b.isbn10,
@@ -211,6 +213,7 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 		bookId: number;
 		title: string;
 		author: string;
+		authorId: number;
 		status: string;
 		eventType: string;
 		thumbnail: string;
@@ -228,6 +231,7 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 			bookId,
 			title: normalizeText(row.title),
 			author: normalizeText(row.primary_author),
+			authorId: Math.max(0, Number(row.author_id || 0) || 0),
 			status: normalizeText(row.event_type).replaceAll("_", " "),
 			eventType: normalizeText(row.event_type),
 			thumbnail: normalizeText(row.cover_url),

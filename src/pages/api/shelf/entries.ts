@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { getNeonSql } from "../../../lib/neon";
 import { resolveUserBySession } from "../../../lib/auth";
 import { fromShelfEntryInput } from "../../../lib/bookPayload";
+import { ensureAuthorEnriched } from "../../../lib/authorEnrichment";
 import {
 	normalizeCatalogText,
 	normalizeCatalogIsbn,
@@ -537,6 +538,7 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 
 		const author = bookPayload.author;
+		const authorId = await ensureAuthorEnriched(author);
 		const status = normalizeStatus(entry.status);
 		const rating = status === "finished" ? normalizeRating(entry.rating) : null;
 		const totalPages = normalizePositiveInt(entry.totalPages);
@@ -617,6 +619,7 @@ export const POST: APIRoute = async ({ request }) => {
 				set
 					title = ${title},
 					primary_author = ${author},
+					author_id = case when ${authorId} > 0 then ${authorId} else book.author_id end,
 					isbn13 = case when ${isbn13} <> '' then ${isbn13} else book.isbn13 end,
 					isbn10 = case when ${isbn10} <> '' then ${isbn10} else book.isbn10 end,
 					google_books_id = case when ${googleBooksId} <> '' then ${googleBooksId} else book.google_books_id end,
@@ -633,6 +636,7 @@ export const POST: APIRoute = async ({ request }) => {
 					canonical_work_key,
 					title,
 					primary_author,
+					author_id,
 					isbn13,
 					isbn10,
 					google_books_id,
@@ -645,6 +649,7 @@ export const POST: APIRoute = async ({ request }) => {
 					${workKey},
 					${title},
 					${author},
+					${authorId > 0 ? authorId : null},
 					${isbn13},
 					${isbn10},
 					${googleBooksId},
@@ -656,6 +661,7 @@ export const POST: APIRoute = async ({ request }) => {
 				on conflict (canonical_work_key) do update set
 					title = excluded.title,
 					primary_author = excluded.primary_author,
+					author_id = coalesce(excluded.author_id, book.author_id),
 					isbn13 = case when excluded.isbn13 <> '' then excluded.isbn13 else book.isbn13 end,
 					isbn10 = case when excluded.isbn10 <> '' then excluded.isbn10 else book.isbn10 end,
 					google_books_id = case when excluded.google_books_id <> '' then excluded.google_books_id else book.google_books_id end,

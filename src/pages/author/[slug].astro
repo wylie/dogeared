@@ -5,7 +5,7 @@ import ShelfDropdown from "../../components/ShelfDropdown.astro";
 import Chip from "../../components/Chip.astro";
 import { getNeonSql } from "../../lib/neon";
 import { resolveUserBySession } from "../../lib/auth";
-import { authorHref, canonicalizeAuthor, normalizeAuthorName, slugifyAuthor } from "../../lib/author";
+import { authorHref, canonicalizeAuthor, normalizeAuthorName } from "../../lib/author";
 
 export const prerender = false;
 
@@ -13,6 +13,7 @@ type BookRow = {
 	id: number;
 	title: string;
 	author: string;
+	authorId: number;
 	shelves: number;
 	readers: number;
 	genres: string[];
@@ -73,11 +74,23 @@ async function fetchOpenLibraryBio(name: string) {
 
 try {
 	const sql = getNeonSql();
+	const canonicalAuthorRows = await sql<Array<{ id: number; name: string }>>`
+		select id, name
+		from author
+		where lower(regexp_replace(coalesce(name, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+		order by id asc
+		limit 1
+	`;
+	const canonicalAuthor = canonicalAuthorRows[0];
+	if (Number(canonicalAuthor?.id || 0) > 0) {
+		return Astro.redirect(`/author?authorId=${encodeURIComponent(String(canonicalAuthor.id))}`, 302);
+	}
 	const rows = await sql<BookRow[]>`
 		select
 			b.id,
 			b.title,
 			coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+			coalesce(b.author_id, 0)::bigint as "authorId",
 			count(distinct ub.user_id)::int as shelves,
 			count(distinct ub.user_id)::int as readers,
 			coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}') as genres,
@@ -91,7 +104,7 @@ try {
 		left join user_book ub on ub.book_id = b.id
 		left join book_genre bg on bg.book_id = b.id
 		where lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
-		group by b.id, b.title, b.primary_author, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis
+		group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis
 		order by shelves desc, readers desc, b.title asc
 	`;
 
@@ -131,10 +144,6 @@ try {
 }
 
 const displayName = authorName || requestedName || slug.replace(/-/g, " ");
-const canonicalHref = authorHref(displayName);
-if (displayName && canonicalHref && canonicalHref !== Astro.url.pathname + Astro.url.search) {
-	// no-op: keep canonical URL rendering simple; avoid forced redirect for now
-}
 ---
 
 <Layout title={displayName ? `${displayName} · Author` : "Author"}>
@@ -169,39 +178,37 @@ if (displayName && canonicalHref && canonicalHref !== Astro.url.pathname + Astro
 			) : (
 				<ul class="book-grid">
 					{books.map((book) => (
-						<li>
-							<BookCard
-								title={book.title}
-								titleHref={`/book?bookId=${encodeURIComponent(String(book.id))}&isbn13=${encodeURIComponent(book.isbn13 || "")}&isbn10=${encodeURIComponent(book.isbn10 || "")}&title=${encodeURIComponent(book.title)}&author=${encodeURIComponent(book.author)}`}
-								author={book.author}
-								authorHref={book.author ? authorHref(book.author) : ""}
-								thumbnail={book.coverUrl}
-								description={book.synopsis || "Synopsis unavailable for this title."}
-							>
-								<div slot="preMeta">
-									<p class="meta">Readers: {book.readers} · Shelf entries: {book.shelves}</p>
+						<BookCard
+							title={book.title}
+							titleHref={`/book?bookId=${encodeURIComponent(String(book.id))}`}
+							author={book.author}
+							authorHref={book.author ? authorHref(book.author, book.authorId) : ""}
+							thumbnail={book.coverUrl}
+							description={book.synopsis || "Synopsis unavailable for this title."}
+						>
+							<div slot="preMeta">
+								<p class="meta">Readers: {book.readers} · Shelf entries: {book.shelves}</p>
+							</div>
+							<div slot="footer" class="book-card-footer">
+								<div class="chips">
+									{(book.genres.length > 0 ? book.genres : ["Uncategorized"]).slice(0, 4).map((genre) => (
+										<Chip className="genre-chip" label={genre} />
+									))}
 								</div>
-								<div slot="footer" class="book-card-footer">
-									<div class="chips">
-										{(book.genres.length > 0 ? book.genres : ["Uncategorized"]).slice(0, 4).map((genre) => (
-											<Chip className="genre-chip" label={genre} />
-										))}
-									</div>
-									<ShelfDropdown attrs={{
-										"data-book-id": String(book.id || 0),
-										"data-initial-status": viewerStatusByBookId.get(Number(book.id || 0)) || "",
-										"data-title": book.title,
-										"data-author": book.author,
-										"data-cover": book.coverUrl,
-										"data-language": book.language,
-										"data-isbn10": book.isbn10,
-										"data-isbn13": book.isbn13,
-										"data-google-books-id": book.googleBooksId,
-										"data-categories": JSON.stringify(book.genres ?? [])
-									}} />
-								</div>
-							</BookCard>
-						</li>
+								<ShelfDropdown attrs={{
+									"data-book-id": String(book.id || 0),
+									"data-initial-status": viewerStatusByBookId.get(Number(book.id || 0)) || "",
+									"data-title": book.title,
+									"data-author": book.author,
+									"data-cover": book.coverUrl,
+									"data-language": book.language,
+									"data-isbn10": book.isbn10,
+									"data-isbn13": book.isbn13,
+									"data-google-books-id": book.googleBooksId,
+									"data-categories": JSON.stringify(book.genres ?? [])
+								}} />
+							</div>
+						</BookCard>
 					))}
 				</ul>
 			)}

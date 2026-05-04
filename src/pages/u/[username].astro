@@ -133,6 +133,7 @@ let recentActivity: Array<{
 	bookId: number;
 	title: string;
 	author: string;
+	authorId: number;
 	status: string;
 	eventType: string;
 	thumbnail: string;
@@ -147,10 +148,12 @@ let currentlyReading: Array<{
 	bookId: number;
 	title: string;
 	author: string;
+	authorId: number;
 	thumbnail: string;
 	language: string;
 	isbn10: string;
 	isbn13: string;
+	googleBooksId: string;
 	description: string;
 	currentPage: number;
 	totalPages: number;
@@ -160,6 +163,7 @@ let wantToReadBooks: Array<{
 	bookId: number;
 	title: string;
 	author: string;
+	authorId: number;
 	thumbnail: string;
 	language: string;
 	isbn10: string;
@@ -171,6 +175,7 @@ let finishedBooks: Array<{
 	bookId: number;
 	title: string;
 	author: string;
+	authorId: number;
 	thumbnail: string;
 	language: string;
 	isbn10: string;
@@ -188,6 +193,8 @@ let followState = {
 	canFollow: false
 };
 let isOwnerViewer = false;
+let favoriteBookHref = "";
+let favoriteAuthorHref = "";
 const PAGE_SIZE = 12;
 const recentPage = Math.max(1, Number(Astro.url.searchParams.get("ra_page") || "1") || 1);
 const readingPage = Math.max(1, Number(Astro.url.searchParams.get("cr_page") || "1") || 1);
@@ -208,30 +215,71 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		isViewerFollowing: bundle.isViewerFollowing,
 		canFollow: !!viewerUserId && viewerUserId !== bundle.targetUserId
 	};
+	if (profile.favoriteBook) {
+		const favoriteRaw = String(profile.favoriteBook || "").trim();
+		let favoriteTitle = favoriteRaw;
+		let favoriteAuthor = "";
+		const byMatch = favoriteRaw.match(/^(.*?)\s+by\s+(.+)$/i);
+		if (byMatch) {
+			favoriteTitle = String(byMatch[1] || "").trim();
+			favoriteAuthor = String(byMatch[2] || "").trim();
+		}
+		const favoriteMatch = await sql<Array<{ id: number }>>`
+			select b.id
+			from book b
+			where lower(trim(coalesce(b.title, ''))) = lower(${favoriteTitle})
+				and (
+					${favoriteAuthor} = ''
+					or lower(trim(coalesce(b.primary_author, ''))) = lower(${favoriteAuthor})
+				)
+			order by b.id desc
+			limit 1
+		`;
+		const bookId = Number(favoriteMatch[0]?.id || 0);
+		if (bookId > 0) favoriteBookHref = `/book?bookId=${encodeURIComponent(String(bookId))}`;
+		else if (favoriteTitle) {
+			favoriteBookHref = `/book?title=${encodeURIComponent(favoriteTitle)}${favoriteAuthor ? `&author=${encodeURIComponent(favoriteAuthor)}` : ""}`;
+		}
+	}
+	if (profile.favoriteAuthor) {
+		const favoriteAuthorMatch = await sql<Array<{ id: number }>>`
+			select a.id
+			from author a
+			where lower(trim(coalesce(a.name, ''))) = lower(${profile.favoriteAuthor})
+			order by a.id desc
+			limit 1
+		`;
+		const favoriteAuthorId = Number(favoriteAuthorMatch[0]?.id || 0);
+		favoriteAuthorHref = authorHref(profile.favoriteAuthor, favoriteAuthorId);
+	}
 	const [summary, updates, readingRows, wantToReadRows, finishedRows] = await Promise.all([
 		resolvePublicShelfSummary(bundle.targetUserId),
 		bundle.canViewActivity ? resolvePublicRecentActivity(bundle.targetUserId, 500) : Promise.resolve([]),
 		bundle.canViewActivity
-			? sql<Array<{
-				book_id: number;
-				title: string;
-				primary_author: string;
-				cover_url: string;
+				? sql<Array<{
+					book_id: number;
+					title: string;
+					primary_author: string;
+					author_id: number | null;
+					cover_url: string;
 				language: string;
 				isbn10: string;
 				isbn13: string;
+				google_books_id: string;
 				current_page: number;
 				total_pages: number;
 				updated_at: string;
 			}>>`
 				select
-					b.id as book_id,
-					b.title,
-					b.primary_author,
-					b.cover_url,
+						b.id as book_id,
+						b.title,
+						b.primary_author,
+						b.author_id,
+						b.cover_url,
 					b.language,
 					b.isbn10,
 					b.isbn13,
+					b.google_books_id,
 					ub.current_page,
 					ub.total_pages,
 					ub.updated_at::text as updated_at
@@ -244,21 +292,23 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			`
 			: Promise.resolve([]),
 		bundle.canViewActivity
-			? sql<Array<{
-				book_id: number;
-				title: string;
-				primary_author: string;
-				cover_url: string;
+				? sql<Array<{
+					book_id: number;
+					title: string;
+					primary_author: string;
+					author_id: number | null;
+					cover_url: string;
 				language: string;
 				isbn10: string;
 				isbn13: string;
 				updated_at: string;
 			}>>`
 				select
-					b.id as book_id,
-					b.title,
-					b.primary_author,
-					b.cover_url,
+						b.id as book_id,
+						b.title,
+						b.primary_author,
+						b.author_id,
+						b.cover_url,
 					b.language,
 					b.isbn10,
 					b.isbn13,
@@ -272,11 +322,12 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			`
 			: Promise.resolve([]),
 		bundle.canViewActivity
-			? sql<Array<{
-				book_id: number;
-				title: string;
-				primary_author: string;
-				cover_url: string;
+				? sql<Array<{
+					book_id: number;
+					title: string;
+					primary_author: string;
+					author_id: number | null;
+					cover_url: string;
 				language: string;
 				isbn10: string;
 				isbn13: string;
@@ -285,10 +336,11 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 				updated_at: string;
 			}>>`
 				select
-					b.id as book_id,
-					b.title,
-					b.primary_author,
-					b.cover_url,
+						b.id as book_id,
+						b.title,
+						b.primary_author,
+						b.author_id,
+						b.cover_url,
 					b.language,
 					b.isbn10,
 					b.isbn13,
@@ -310,10 +362,12 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		bookId: Number(row.book_id || 0),
 		title: String(row.title || "").trim(),
 		author: String(row.primary_author || "").trim(),
+		authorId: Math.max(0, Number(row.author_id || 0) || 0),
 		thumbnail: String(row.cover_url || "").trim(),
 		language: String(row.language || "").trim(),
 		isbn10: String(row.isbn10 || "").trim(),
 		isbn13: String(row.isbn13 || "").trim(),
+		googleBooksId: String(row.google_books_id || "").trim(),
 		description: "",
 		currentPage: Math.max(0, Number(row.current_page || 0) || 0),
 		totalPages: Math.max(0, Number(row.total_pages || 0) || 0),
@@ -323,6 +377,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		bookId: Number(row.book_id || 0),
 		title: String(row.title || "").trim(),
 		author: String(row.primary_author || "").trim(),
+		authorId: Math.max(0, Number(row.author_id || 0) || 0),
 		thumbnail: String(row.cover_url || "").trim(),
 		language: String(row.language || "").trim(),
 		isbn10: String(row.isbn10 || "").trim(),
@@ -334,6 +389,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		bookId: Number(row.book_id || 0),
 		title: String(row.title || "").trim(),
 		author: String(row.primary_author || "").trim(),
+		authorId: Math.max(0, Number(row.author_id || 0) || 0),
 		thumbnail: String(row.cover_url || "").trim(),
 		language: String(row.language || "").trim(),
 		isbn10: String(row.isbn10 || "").trim(),
@@ -505,13 +561,15 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 								{profile.favoriteBook && (
 									<p>
 										<strong>Favorite book:</strong>{" "}
-										<a class="author-link" href={`/book?title=${encodeURIComponent(profile.favoriteBook)}`}>{profile.favoriteBook}</a>
+										<a class="author-link" href={favoriteBookHref || `/book?title=${encodeURIComponent(profile.favoriteBook)}`}>{profile.favoriteBook}</a>
 									</p>
 								)}
 								{profile.favoriteAuthor && (
 									<p>
 										<strong>Favorite author:</strong>{" "}
-										<a class="author-link" href={authorHref(profile.favoriteAuthor)}>{profile.favoriteAuthor}</a>
+										{favoriteAuthorHref
+											? <a class="author-link" href={favoriteAuthorHref}>{profile.favoriteAuthor}</a>
+											: profile.favoriteAuthor}
 									</p>
 								)}
 							</div>
@@ -576,9 +634,9 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 								{pagedRecent.items.map((item) => (
 									<BookCard
 										title={item.title}
-										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}&isbn13=${encodeURIComponent(item.isbn13 || "")}&isbn10=${encodeURIComponent(item.isbn10 || "")}&title=${encodeURIComponent(item.title)}&author=${encodeURIComponent(item.author)}`}
+										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}`}
 										author={item.author}
-										authorHref={item.author ? authorHref(item.author) : ""}
+										authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
 										thumbnail={item.thumbnail}
 									>
 										<p slot="preTitle" class="meta activity-headline">
@@ -633,9 +691,9 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 								{pagedReading.items.map((item) => (
 									<BookCard
 										title={item.title}
-										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}&isbn13=${encodeURIComponent(item.isbn13 || "")}&isbn10=${encodeURIComponent(item.isbn10 || "")}&title=${encodeURIComponent(item.title)}&author=${encodeURIComponent(item.author)}`}
+										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}`}
 										author={item.author}
-										authorHref={item.author ? authorHref(item.author) : ""}
+										authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
 										thumbnail={item.thumbnail}
 									>
 										<p slot="preTitle" class="meta activity-headline">
@@ -669,7 +727,7 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 															type="text"
 															inputmode="text"
 															placeholder="154 or 31%"
-															value={String(Math.max(0, Number(item.currentPage || 0)))}
+															value="0"
 														/>
 														<button
 															type="button"
@@ -683,6 +741,7 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 															data-language={item.language}
 															data-isbn10={item.isbn10}
 															data-isbn13={item.isbn13}
+															data-google-books-id={item.googleBooksId}
 															data-total-pages={String(Math.max(0, Number(item.totalPages || 0)))}
 														>
 															Save
@@ -699,6 +758,7 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 															data-language={item.language}
 															data-isbn10={item.isbn10}
 															data-isbn13={item.isbn13}
+															data-google-books-id={item.googleBooksId}
 															data-total-pages={String(Math.max(0, Number(item.totalPages || 0)))}
 															data-current-page={String(Math.max(0, Number(item.currentPage || 0)))}
 															aria-label="Mark as Finished"
@@ -749,9 +809,9 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 								{pagedWantToRead.items.map((item) => (
 									<BookCard
 										title={item.title}
-										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}&isbn13=${encodeURIComponent(item.isbn13 || "")}&isbn10=${encodeURIComponent(item.isbn10 || "")}&title=${encodeURIComponent(item.title)}&author=${encodeURIComponent(item.author)}`}
+										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}`}
 										author={item.author}
-										authorHref={item.author ? authorHref(item.author) : ""}
+										authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
 										thumbnail={item.thumbnail}
 									>
 										<p slot="preTitle" class="meta activity-headline">
@@ -802,9 +862,9 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 								{pagedFinished.items.map((item) => (
 									<BookCard
 										title={item.title}
-										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}&isbn13=${encodeURIComponent(item.isbn13 || "")}&isbn10=${encodeURIComponent(item.isbn10 || "")}&title=${encodeURIComponent(item.title)}&author=${encodeURIComponent(item.author)}`}
+										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}`}
 										author={item.author}
-										authorHref={item.author ? authorHref(item.author) : ""}
+										authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
 										thumbnail={item.thumbnail}
 									>
 										<p slot="preTitle" class="meta activity-headline">
@@ -1104,6 +1164,79 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 	.shelf-option { display: flex; align-items: center; gap: 0.45rem; width: 100%; text-align: left; border: none; background: transparent; padding: 0.5rem 0.75rem; font-size: 0.92rem; cursor: pointer; color: #222; }
 	.shelf-option:hover { background: #f2f2f2; }
 	.shelf-feedback { margin-top: 0.25rem; font-size: 0.82rem; color: #1f7a45; line-height: 1.25; }
+	.finish-rating-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.45);
+		display: grid;
+		place-items: center;
+		z-index: 1200;
+		padding: 1rem;
+	}
+	.finish-rating-modal {
+		width: min(460px, 100%);
+		background: #fff;
+		border-radius: 14px;
+		padding: 1rem;
+		box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
+	}
+	.finish-rating-title {
+		margin: 0;
+		font-size: 1.15rem;
+		font-weight: 800;
+		color: #1f2937;
+	}
+	.finish-rating-subtitle {
+		margin: 0.2rem 0 0.75rem;
+		color: #5b6470;
+		font-size: 0.9rem;
+	}
+	.finish-rating-stars {
+		display: flex;
+		gap: 0.3rem;
+	}
+	.finish-rating-star {
+		border: none;
+		background: transparent;
+		font-size: 2rem;
+		line-height: 1;
+		padding: 0.1rem;
+		color: #f59e0b;
+		cursor: pointer;
+	}
+	.finish-rating-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.45rem;
+		margin-top: 0.8rem;
+	}
+	.finish-rating-cancel,
+	.finish-rating-skip,
+	.finish-rating-save {
+		border: none;
+		border-radius: 8px;
+		height: 34px;
+		padding: 0 0.8rem;
+		font: inherit;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.finish-rating-cancel {
+		background: #eceff3;
+		color: #1f2937;
+	}
+	.finish-rating-skip {
+		background: #f3efe7;
+		color: #374151;
+	}
+	.finish-rating-save {
+		background: var(--color-primary);
+		color: #fff;
+	}
+	.finish-rating-save:disabled {
+		opacity: 0.7;
+		cursor: default;
+	}
 	.public-profile-page :global(.shelf-state) { display: none !important; }
 	.status { text-transform: capitalize; }
 	@media (max-width: 740px) {
@@ -1269,6 +1402,175 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 		};
 	}
 
+	function promptForFinishRating() {
+		return new Promise((resolve) => {
+			const existing = document.getElementById("finish-rating-overlay");
+			if (existing) existing.remove();
+
+			const overlay = document.createElement("div");
+			overlay.id = "finish-rating-overlay";
+			overlay.className = "finish-rating-overlay";
+			Object.assign(overlay.style, {
+				position: "fixed",
+				inset: "0",
+				background: "rgba(0,0,0,0.45)",
+				display: "grid",
+				placeItems: "center",
+				zIndex: "1200",
+				padding: "1rem"
+			});
+
+			const modal = document.createElement("div");
+			modal.className = "finish-rating-modal";
+			modal.setAttribute("role", "dialog");
+			modal.setAttribute("aria-modal", "true");
+			modal.setAttribute("aria-label", "Rate this finished book");
+			Object.assign(modal.style, {
+				width: "min(460px, 100%)",
+				background: "#fff",
+				borderRadius: "14px",
+				padding: "1rem",
+				boxShadow: "0 10px 26px rgba(0,0,0,0.2)"
+			});
+
+			const title = document.createElement("p");
+			title.className = "finish-rating-title";
+			title.textContent = "Rate this book";
+			Object.assign(title.style, {
+				margin: "0",
+				fontSize: "1.75rem",
+				fontWeight: "800",
+				color: "#1f2937"
+			});
+
+			const subtitle = document.createElement("p");
+			subtitle.className = "finish-rating-subtitle";
+			subtitle.textContent = "";
+
+			const stars = document.createElement("div");
+			stars.className = "finish-rating-stars";
+			stars.setAttribute("aria-label", "Rating stars");
+			Object.assign(stars.style, {
+				display: "flex",
+				gap: "0.3rem"
+			});
+
+			const actions = document.createElement("div");
+			actions.className = "finish-rating-actions";
+			Object.assign(actions.style, {
+				display: "flex",
+				justifyContent: "flex-end",
+				gap: "0.45rem",
+				marginTop: "0.8rem"
+			});
+
+			const cancelButton = document.createElement("button");
+			cancelButton.type = "button";
+			cancelButton.className = "finish-rating-cancel";
+			cancelButton.textContent = "Cancel";
+
+			const skipButton = document.createElement("button");
+			skipButton.type = "button";
+			skipButton.className = "finish-rating-skip";
+			skipButton.textContent = "Skip";
+
+			const saveButton = document.createElement("button");
+			saveButton.type = "button";
+			saveButton.className = "finish-rating-save";
+			saveButton.textContent = "Save";
+			saveButton.disabled = true;
+
+			let selectedRating = 0;
+
+			const renderStars = (hoverValue = 0) => {
+				const active = hoverValue || selectedRating;
+				const buttons = stars.querySelectorAll("button");
+				buttons.forEach((button, index) => {
+					const value = index + 1;
+					button.textContent = value <= active ? "★" : "☆";
+					button.setAttribute("aria-pressed", value === selectedRating ? "true" : "false");
+				});
+				saveButton.disabled = selectedRating < 1 || selectedRating > 5;
+			};
+
+			const close = (result) => {
+				overlay.remove();
+				resolve(result);
+			};
+
+			for (let i = 1; i <= 5; i += 1) {
+				const star = document.createElement("button");
+				star.type = "button";
+				star.className = "finish-rating-star";
+				star.dataset.value = String(i);
+				star.setAttribute("aria-label", `${i} star${i === 1 ? "" : "s"}`);
+				star.textContent = "☆";
+				Object.assign(star.style, {
+					border: "none",
+					background: "transparent",
+					fontSize: "2rem",
+					lineHeight: "1",
+					padding: "0.1rem",
+					color: "#f59e0b",
+					cursor: "pointer"
+				});
+				star.addEventListener("mouseenter", () => renderStars(i));
+				star.addEventListener("mouseleave", () => renderStars());
+				star.addEventListener("click", () => {
+					selectedRating = i;
+					renderStars();
+				});
+				stars.append(star);
+			}
+
+			cancelButton.addEventListener("click", () => close({ cancelled: true, rating: null }));
+			skipButton.addEventListener("click", () => close({ cancelled: false, rating: null }));
+			saveButton.addEventListener("click", () => close({ cancelled: false, rating: selectedRating }));
+			Object.assign(cancelButton.style, {
+				border: "none",
+				borderRadius: "8px",
+				height: "34px",
+				padding: "0 0.8rem",
+				fontWeight: "700",
+				background: "#eceff3",
+				color: "#1f2937",
+				cursor: "pointer"
+			});
+			Object.assign(skipButton.style, {
+				border: "none",
+				borderRadius: "8px",
+				height: "34px",
+				padding: "0 0.8rem",
+				fontWeight: "700",
+				background: "#f3efe7",
+				color: "#374151",
+				cursor: "pointer"
+			});
+			Object.assign(saveButton.style, {
+				border: "none",
+				borderRadius: "8px",
+				height: "34px",
+				padding: "0 0.8rem",
+				fontWeight: "700",
+				background: "var(--color-primary)",
+				color: "#fff",
+				cursor: "pointer"
+			});
+			overlay.addEventListener("click", (event) => {
+				if (event.target === overlay) close({ cancelled: true, rating: null });
+			});
+			document.addEventListener("keydown", (event) => {
+				if (event.key === "Escape" && document.body.contains(overlay)) close({ cancelled: true, rating: null });
+			}, { once: true });
+
+			actions.append(cancelButton, skipButton, saveButton);
+			modal.append(title, stars, actions);
+			overlay.append(modal);
+			document.body.append(overlay);
+			renderStars();
+		});
+	}
+
 	function removeCardFromCurrentlyReading(dropdown, status) {
 		if (String(status || "").trim() === "reading") return;
 		const section = dropdown?.closest?.(".currently-reading-section");
@@ -1355,6 +1657,11 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 					currentPage: status === "reading" ? 1 : 0,
 					finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : ""
 				});
+				if (status === "finished") {
+					const finishRating = await promptForFinishRating();
+					if (finishRating.cancelled) return;
+					if (finishRating.rating) entry.rating = finishRating.rating;
+				}
 				if (!entry.title) return;
 				try {
 					const result = await saveShelfEntryWithRetry(entry);
@@ -1400,6 +1707,9 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 				currentPage: finishedPage,
 				finishedDate: new Date().toISOString().slice(0, 10)
 			});
+			const finishRating = await promptForFinishRating();
+			if (finishRating.cancelled) return;
+			if (finishRating.rating) entry.rating = finishRating.rating;
 			if (!entry.title) return;
 			quickFinish.disabled = true;
 			try {
@@ -1435,7 +1745,6 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 				return;
 			}
 			const currentPage = parsed.currentPage;
-			input.value = parsed.normalizedText;
 
 			const entry = buildShelfEntryFromRecord({
 				title: String(progressSave.dataset.title || "").trim(),
@@ -1446,13 +1755,16 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 				format: "Book",
 				language: String(progressSave.dataset.language || "").trim(),
 				isbn10: String(progressSave.dataset.isbn10 || "").trim(),
-				isbn13: String(progressSave.dataset.isbn13 || "").trim()
+				isbn13: String(progressSave.dataset.isbn13 || "").trim(),
+				googleBooksId: String(progressSave.dataset.googleBooksId || "").trim()
 			}, {
 				status: "reading",
 				totalPages,
 				currentPage,
 				finishedDate: ""
 			});
+			const directBookId = Math.max(0, Number(progressSave.dataset.bookId || 0) || 0);
+			if (directBookId > 0) entry.bookId = directBookId;
 			if (!entry.title) return;
 
 			const originalLabel = progressSave.textContent || "Save";
@@ -1470,6 +1782,11 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 					const percent = Math.max(0, Math.min(100, Math.round((currentPage / totalPages) * 100)));
 					progressFill.style.width = `${percent}%`;
 				}
+				const quickFinish = card?.querySelector('[data-action="mark-finished-quick"]');
+				if (quickFinish instanceof HTMLButtonElement) {
+					quickFinish.dataset.currentPage = String(currentPage);
+				}
+				input.value = "0";
 				progressSave.textContent = "Saved";
 				setTimeout(() => {
 					progressSave.textContent = originalLabel;
@@ -1515,6 +1832,11 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 				currentPage: status === "reading" ? 1 : 0,
 				finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : ""
 			});
+			if (status === "finished") {
+				const finishRating = await promptForFinishRating();
+				if (finishRating.cancelled) return;
+				if (finishRating.rating) entry.rating = finishRating.rating;
+			}
 			if (!entry.title) return;
 			try {
 				const result = await saveShelfEntryWithRetry(entry);
