@@ -6,6 +6,7 @@ import Chip from "../components/Chip.astro";
 import { resolveUserBySession } from "../lib/auth";
 import { getNeonSql } from "../lib/neon";
 import { formatGenreLabel } from "../lib/genres";
+import { authorHref } from "../lib/author";
 
 export const prerender = false;
 
@@ -265,7 +266,7 @@ if (!distinctReaders) distinctReaders = Math.max(...books.map((row) => Number(ro
 								>
 									<div slot="meta">
 										<p class="meta">
-											By <a class="author-link" href={`/related?kind=author&value=${encodeURIComponent(book.author)}`}>{book.author}</a>
+											By <a class="author-link" href={authorHref(book.author)}>{book.author}</a>
 										</p>
 										<p class="meta">Readers: {book.readers} · Shelf entries: {book.shelves}</p>
 									</div>
@@ -305,7 +306,7 @@ if (!distinctReaders) distinctReaders = Math.max(...books.map((row) => Number(ro
 						<ul class="author-grid">
 							{relatedAuthors.map((row) => (
 								<li class="author-card">
-									<h3><a class="author-link" href={`/related?kind=author&value=${encodeURIComponent(row.author)}`}>{row.author}</a></h3>
+									<h3><a class="author-link" href={authorHref(row.author)}>{row.author}</a></h3>
 									<p>{row.books} books</p>
 									<p>{row.shelves} shelf entries · {row.readers} readers</p>
 								</li>
@@ -328,7 +329,7 @@ if (!distinctReaders) distinctReaders = Math.max(...books.map((row) => Number(ro
 		statusLabel,
 		saveShelfEntryWithRetry,
 		toggleShelfMenu
-	} from "../lib/shelfClient";
+	} from "/src/lib/shelfClient.ts";
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	const feedbackTimers = new WeakMap();
 

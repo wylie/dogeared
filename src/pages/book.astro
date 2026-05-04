@@ -4,6 +4,7 @@ import BookCard from "../components/BookCard.astro";
 import ShelfDropdown from "../components/ShelfDropdown.astro";
 import { getNeonSql } from "../lib/neon";
 import { getEncryptionKey, resolveUserBySession } from "../lib/auth";
+import { authorHref } from "../lib/author";
 
 export const prerender = false;
 
@@ -448,7 +449,7 @@ try {
 							)
 						)
 					)
-				order by ub.updated_at desc nulls last, ub.id desc
+				order by ub.updated_at desc nulls last, ub.book_id desc
 				limit 1
 			`;
 			const status = String(rows[0]?.status || "").trim();
@@ -476,29 +477,31 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 							? <img src={book.coverUrl} alt={`${book.title} cover`} />
 							: <div class="cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>}
 					</div>
-					<div>
+					<div class="book-head-content">
+						<div class="book-head-actions">
+							<ShelfDropdown attrs={{
+								"data-title": book.title,
+								"data-author": book.author,
+								"data-description": book.synopsis,
+								"data-cover": book.coverUrl,
+								"data-pages": "0",
+								"data-categories": "[]",
+								"data-isbn10": book.isbn10,
+								"data-isbn13": book.isbn13,
+								"data-google-books-id": book.googleBooksId,
+								"data-book-id": String(book.id || 0),
+								"data-initial-status": viewerShelfStatus
+							}} />
+						</div>
 						<h1>{book.title}</h1>
 						<p class="meta">
 							{book.author
-								? <a class="author-link" href={`/related?kind=author&value=${encodeURIComponent(book.author)}`}>{book.author}</a>
+								? <a class="author-link" href={authorHref(book.author)}>{book.author}</a>
 								: "Unknown author"}
 						</p>
 						{book.publishedLabel && <p class="meta">Published: {book.publishedLabel}</p>}
 						<p class="meta">Shelves: {book.shelves.toLocaleString()}</p>
 						{book.ratingCount > 0 && <p class="meta rating">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>}
-						<ShelfDropdown attrs={{
-							"data-title": book.title,
-							"data-author": book.author,
-							"data-description": book.synopsis,
-							"data-cover": book.coverUrl,
-							"data-pages": "0",
-							"data-categories": "[]",
-							"data-isbn10": book.isbn10,
-							"data-isbn13": book.isbn13,
-							"data-google-books-id": book.googleBooksId,
-							"data-book-id": String(book.id || 0),
-							"data-initial-status": viewerShelfStatus
-						}} />
 					</div>
 				</section>
 
@@ -521,7 +524,7 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 								<BookCard
 									title={book.title}
 									author={book.author}
-									authorHref={book.author ? `/related?kind=author&value=${encodeURIComponent(book.author)}` : ""}
+									authorHref={book.author ? authorHref(book.author) : ""}
 									thumbnail={book.coverUrl}
 								>
 									<p slot="preTitle" class="meta activity-headline">
@@ -547,17 +550,25 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 <style>
 	.book-page { max-width: 980px; }
 	.book-head { display: grid; grid-template-columns: 180px auto; gap: 1rem; border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
+	.book-head-content { position: relative; padding-right: 6rem; }
+	.book-head-actions {
+		position: absolute;
+		top: 0.1rem;
+		right: 0;
+		z-index: 2;
+	}
 	.cover-large img, .cover-placeholder { width: 180px; height: 270px; border-radius: 10px; object-fit: cover; background: #f1f1f1; }
 	.cover-placeholder { display: flex; align-items: center; justify-content: center; color: #8a8a8a; border: 1px solid #d7d7d7; }
 	.meta { margin: 0.24rem 0; color: #4d4d4d; }
 	.rating { color: var(--color-rating); font-weight: 700; }
-	.shelf-dropdown { position: relative; display: inline-flex; flex-direction: column; align-items: flex-start; margin-top: 0.6rem; }
-	.book-head .shelf-trigger { border: none !important; border-radius: 8px !important; padding: 0.55rem 0.85rem !important; font-size: 0.95rem !important; background: var(--color-primary) !important; color: #fff !important; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; }
-	.book-head .shelf-trigger:hover { background: var(--color-primary-hover) !important; }
-	.book-head .shelf-trigger .material-icons { color: #fff !important; }
-	.shelf-icon { font-size: 1.15rem; line-height: 1; }
-	.shelf-check { font-size: 1rem; line-height: 1; opacity: 0; transition: opacity 120ms ease-in-out; }
-	.shelf-dropdown.is-shelved .shelf-check { opacity: 1; }
+	.book-head-actions .shelf-dropdown {
+		margin-top: 0;
+		display: inline-flex;
+		flex-direction: column;
+		align-items: flex-end;
+	}
+	.book-head-actions .shelf-dropdown .shelf-state { display: none !important; }
+	.book-head-actions .shelf-dropdown .shelf-feedback { margin-top: 0.35rem; text-align: right; }
 	.shelf-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 170px; background: #fff; border: 1px solid #c9c9c9; border-radius: 8px; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12); padding: 0.2rem; z-index: 35; }
 	.shelf-option { width: 100%; border: none; background: transparent; text-align: left; padding: 0.45rem 0.55rem; border-radius: 6px; font-size: 0.9rem; cursor: pointer; color: #222; }
 	.shelf-option:hover { background: #f2f2f2; }
@@ -586,7 +597,7 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 </style>
 
 <script type="module">
-	import { resolveClientAuthState } from "../lib/clientAuth";
+	import { resolveClientAuthState } from "/src/lib/clientAuth.ts";
 	import {
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
@@ -597,7 +608,7 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 		statusLabel,
 		saveShelfEntryWithRetry,
 		toggleShelfMenu
-	} from "../lib/shelfClient";
+	} from "/src/lib/shelfClient.ts";
 	import { normalizeBookPayload } from "../lib/bookPayload";
 
 	const page = document.querySelector(".book-page");

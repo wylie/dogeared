@@ -6,15 +6,91 @@ import Chip from "../../components/Chip.astro";
 import { resolveUserBySession } from "../../lib/auth";
 import { getNeonSql } from "../../lib/neon";
 import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicShelfSummary } from "../../lib/publicProfile";
+import { authorHref } from "../../lib/author";
 
 export const prerender = false;
 
 const requestedUsername = String(Astro.params.username || "").trim().toLowerCase();
 const session = await resolveUserBySession(Astro.request);
 const viewerUserId = String(session?.userId || "");
+const editMode = String(Astro.url.searchParams.get("edit") || "").trim() === "1";
+
+function normalizeText(value: unknown, maxLength: number) {
+	return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function normalizeUsernameForSave(value: unknown) {
+	const raw = normalizeText(value, 40).replace(/^@+/, "").toLowerCase();
+	if (!raw) return "";
+	return raw.replace(/[^a-z0-9._-]/g, "").slice(0, 40);
+}
+
+function normalizeGenres(value: unknown) {
+	const parts = String(value || "").split(",");
+	const dedupe = new Set<string>();
+	const out: string[] = [];
+	for (const part of parts) {
+		const next = normalizeText(part, 40);
+		if (!next) continue;
+		const key = next.toLowerCase();
+		if (dedupe.has(key)) continue;
+		dedupe.add(key);
+		out.push(next);
+		if (out.length >= 12) break;
+	}
+	return out;
+}
 
 if (Astro.request.method === "POST" && viewerUserId && requestedUsername) {
 	const formData = await Astro.request.formData();
+	const profileIntent = String(formData.get("profileIntent") || "").trim().toLowerCase();
+	if (profileIntent === "save") {
+		const target = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
+		if (target.targetUserId && target.targetUserId === viewerUserId) {
+			const sql = getNeonSql();
+			const existingRows = await sql<Array<{ username: string | null }>>`
+				select username
+				from app_user
+				where id = ${viewerUserId}::uuid
+				limit 1
+			`;
+			const currentUsername = normalizeUsernameForSave(existingRows[0]?.username);
+			let nextUsername = normalizeUsernameForSave(formData.get("username"));
+			if (!nextUsername) nextUsername = currentUsername;
+			if (nextUsername && nextUsername !== currentUsername) {
+				const takenRows = await sql<Array<{ id: string }>>`
+					select id
+					from app_user
+					where lower(username) = lower(${nextUsername})
+						and id <> ${viewerUserId}::uuid
+					limit 1
+				`;
+				if (takenRows.length > 0) {
+					nextUsername = currentUsername;
+				}
+			}
+			const nextProfile = {
+				avatar: normalizeText(formData.get("avatarUrl"), 500),
+				name: normalizeText(formData.get("name"), 80),
+				username: nextUsername ? `@${nextUsername}` : "",
+				location: normalizeText(formData.get("location"), 80),
+				readingGoal: normalizeText(formData.get("readingGoal"), 80),
+				favoriteBook: normalizeText(formData.get("favoriteBook"), 120),
+				favoriteAuthor: normalizeText(formData.get("favoriteAuthor"), 120),
+				blurb: normalizeText(formData.get("blurb"), 400),
+				genres: normalizeGenres(formData.get("genres"))
+			};
+			await sql`
+				update app_user
+				set
+					username = ${nextUsername || null},
+					profile_data = ${JSON.stringify(nextProfile)}::jsonb
+				where id = ${viewerUserId}::uuid
+			`;
+			return Astro.redirect(`/u/${encodeURIComponent(nextUsername || requestedUsername)}`);
+		}
+		return Astro.redirect(`/u/${encodeURIComponent(requestedUsername)}`);
+	}
 	const followIntent = String(formData.get("followIntent") || "").trim().toLowerCase();
 	if (followIntent === "follow" || followIntent === "unfollow") {
 		const target = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
@@ -67,6 +143,43 @@ let recentActivity: Array<{
 	rating: number;
 	updatedAt: string;
 }> = [];
+let currentlyReading: Array<{
+	bookId: number;
+	title: string;
+	author: string;
+	thumbnail: string;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+	description: string;
+	currentPage: number;
+	totalPages: number;
+	updatedAt: string;
+}> = [];
+let wantToReadBooks: Array<{
+	bookId: number;
+	title: string;
+	author: string;
+	thumbnail: string;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+	description: string;
+	updatedAt: string;
+}> = [];
+let finishedBooks: Array<{
+	bookId: number;
+	title: string;
+	author: string;
+	thumbnail: string;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+	description: string;
+	rating: number;
+	finishedDate: string;
+	updatedAt: string;
+}> = [];
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let followState = {
 	followersCount: 0,
@@ -75,11 +188,17 @@ let followState = {
 	canFollow: false
 };
 let isOwnerViewer = false;
+const PAGE_SIZE = 12;
+const recentPage = Math.max(1, Number(Astro.url.searchParams.get("ra_page") || "1") || 1);
+const readingPage = Math.max(1, Number(Astro.url.searchParams.get("cr_page") || "1") || 1);
+const wantToReadPage = Math.max(1, Number(Astro.url.searchParams.get("wr_page") || "1") || 1);
+const finishedPage = Math.max(1, Number(Astro.url.searchParams.get("rd_page") || "1") || 1);
 
 const bundle = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
 if (bundle.status === "not_found") notFound = true;
 if (bundle.status === "private") privateProfile = true;
 if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
+	const sql = getNeonSql();
 	profile = bundle.profile;
 	canViewActivity = bundle.canViewActivity;
 	isOwnerViewer = !!viewerUserId && viewerUserId === bundle.targetUserId;
@@ -89,15 +208,147 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		isViewerFollowing: bundle.isViewerFollowing,
 		canFollow: !!viewerUserId && viewerUserId !== bundle.targetUserId
 	};
-	const [summary, updates] = await Promise.all([
+	const [summary, updates, readingRows, wantToReadRows, finishedRows] = await Promise.all([
 		resolvePublicShelfSummary(bundle.targetUserId),
-		bundle.canViewActivity ? resolvePublicRecentActivity(bundle.targetUserId, 10) : Promise.resolve([])
+		bundle.canViewActivity ? resolvePublicRecentActivity(bundle.targetUserId, 500) : Promise.resolve([]),
+		bundle.canViewActivity
+			? sql<Array<{
+				book_id: number;
+				title: string;
+				primary_author: string;
+				cover_url: string;
+				language: string;
+				isbn10: string;
+				isbn13: string;
+				current_page: number;
+				total_pages: number;
+				updated_at: string;
+			}>>`
+				select
+					b.id as book_id,
+					b.title,
+					b.primary_author,
+					b.cover_url,
+					b.language,
+					b.isbn10,
+					b.isbn13,
+					ub.current_page,
+					ub.total_pages,
+					ub.updated_at::text as updated_at
+				from user_book ub
+				join book b on b.id = ub.book_id
+				where ub.user_id = ${bundle.targetUserId}::uuid
+					and ub.status = 'reading'
+				order by ub.updated_at desc
+				limit 500
+			`
+			: Promise.resolve([]),
+		bundle.canViewActivity
+			? sql<Array<{
+				book_id: number;
+				title: string;
+				primary_author: string;
+				cover_url: string;
+				language: string;
+				isbn10: string;
+				isbn13: string;
+				updated_at: string;
+			}>>`
+				select
+					b.id as book_id,
+					b.title,
+					b.primary_author,
+					b.cover_url,
+					b.language,
+					b.isbn10,
+					b.isbn13,
+					ub.updated_at::text as updated_at
+				from user_book ub
+				join book b on b.id = ub.book_id
+				where ub.user_id = ${bundle.targetUserId}::uuid
+					and ub.status = 'want_to_read'
+				order by ub.updated_at desc
+				limit 500
+			`
+			: Promise.resolve([]),
+		bundle.canViewActivity
+			? sql<Array<{
+				book_id: number;
+				title: string;
+				primary_author: string;
+				cover_url: string;
+				language: string;
+				isbn10: string;
+				isbn13: string;
+				rating: number | null;
+				finished_date: string | null;
+				updated_at: string;
+			}>>`
+				select
+					b.id as book_id,
+					b.title,
+					b.primary_author,
+					b.cover_url,
+					b.language,
+					b.isbn10,
+					b.isbn13,
+					ub.rating,
+					ub.finished_date::text as finished_date,
+					ub.updated_at::text as updated_at
+				from user_book ub
+				join book b on b.id = ub.book_id
+				where ub.user_id = ${bundle.targetUserId}::uuid
+					and ub.status = 'finished'
+				order by coalesce(ub.finished_date, ub.updated_at) desc
+				limit 500
+			`
+			: Promise.resolve([])
 	]);
 	shelfStats = summary;
 	recentActivity = updates;
-	if (viewerUserId && recentActivity.length > 0) {
-		const sql = getNeonSql();
-		const bookIds = Array.from(new Set(recentActivity.map((item) => Number(item.bookId || 0)).filter((value) => value > 0)));
+	currentlyReading = readingRows.map((row) => ({
+		bookId: Number(row.book_id || 0),
+		title: String(row.title || "").trim(),
+		author: String(row.primary_author || "").trim(),
+		thumbnail: String(row.cover_url || "").trim(),
+		language: String(row.language || "").trim(),
+		isbn10: String(row.isbn10 || "").trim(),
+		isbn13: String(row.isbn13 || "").trim(),
+		description: "",
+		currentPage: Math.max(0, Number(row.current_page || 0) || 0),
+		totalPages: Math.max(0, Number(row.total_pages || 0) || 0),
+		updatedAt: String(row.updated_at || "").trim()
+	}));
+	wantToReadBooks = wantToReadRows.map((row) => ({
+		bookId: Number(row.book_id || 0),
+		title: String(row.title || "").trim(),
+		author: String(row.primary_author || "").trim(),
+		thumbnail: String(row.cover_url || "").trim(),
+		language: String(row.language || "").trim(),
+		isbn10: String(row.isbn10 || "").trim(),
+		isbn13: String(row.isbn13 || "").trim(),
+		description: "",
+		updatedAt: String(row.updated_at || "").trim()
+	}));
+	finishedBooks = finishedRows.map((row) => ({
+		bookId: Number(row.book_id || 0),
+		title: String(row.title || "").trim(),
+		author: String(row.primary_author || "").trim(),
+		thumbnail: String(row.cover_url || "").trim(),
+		language: String(row.language || "").trim(),
+		isbn10: String(row.isbn10 || "").trim(),
+		isbn13: String(row.isbn13 || "").trim(),
+		description: "",
+		rating: Math.max(0, Math.min(5, Number(row.rating || 0) || 0)),
+		finishedDate: String(row.finished_date || "").trim(),
+		updatedAt: String(row.updated_at || "").trim()
+	}));
+	if (viewerUserId && (recentActivity.length > 0 || currentlyReading.length > 0 || finishedBooks.length > 0)) {
+		const bookIds = Array.from(new Set([
+			...recentActivity.map((item) => Number(item.bookId || 0)),
+			...currentlyReading.map((item) => Number(item.bookId || 0)),
+			...finishedBooks.map((item) => Number(item.bookId || 0))
+		].filter((value) => value > 0)));
 		if (bookIds.length > 0) {
 			const rows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished" }>>`
 				select book_id, status
@@ -136,11 +387,51 @@ function formatActivityDate(value: string) {
 }
 
 function shelfHrefForOwner(sectionId: string) {
-	return `/profile?shelf=${encodeURIComponent(sectionId)}#${encodeURIComponent(sectionId)}`;
+	const map: Record<string, string> = {
+		want_to_read: "want-to-read",
+		reading: "currently-reading",
+		finished: "read",
+		total: ""
+	};
+	const target = map[String(sectionId || "").trim()] || "recent-activity";
+	return target ? `#${encodeURIComponent(target)}` : "#";
 }
+
+function paginate<T>(items: T[], page: number, pageSize: number) {
+	const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+	const currentPage = Math.min(Math.max(1, page), totalPages);
+	const start = (currentPage - 1) * pageSize;
+	return {
+		items: items.slice(start, start + pageSize),
+		totalPages,
+		currentPage
+	};
+}
+
+function paginationHref(param: string, value: number, anchor: string) {
+	const params = new URLSearchParams(Astro.url.searchParams);
+	if (value <= 1) params.delete(param);
+	else params.set(param, String(value));
+	const query = params.toString();
+	return `${Astro.url.pathname}${query ? `?${query}` : ""}#${anchor}`;
+}
+
+const sectionLinks = [
+	{ id: "about", label: "About" },
+	{ id: "shelf-summary", label: "Shelf Summary" },
+	{ id: "recent-activity", label: "Recent Activity" },
+	{ id: "currently-reading", label: "Currently Reading" },
+	{ id: "want-to-read", label: "Want to Read" },
+	{ id: "read", label: "Read" }
+];
+
+const pagedRecent = paginate(recentActivity, recentPage, PAGE_SIZE);
+const pagedReading = paginate(currentlyReading, readingPage, PAGE_SIZE);
+const pagedWantToRead = paginate(wantToReadBooks, wantToReadPage, PAGE_SIZE);
+const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 ---
 
-<Layout title={profile.username ? `${profile.username} • Profile` : "Profile"}>
+<Layout title={profile.username ? `${profile.username} • Profile` : "Profile"} sectionLinks={sectionLinks}>
 	<div slot="right" class="public-profile-page">
 		{notFound && (
 			<section class="state-card">
@@ -156,10 +447,12 @@ function shelfHrefForOwner(sectionId: string) {
 		)}
 		{!notFound && !privateProfile && (
 			<>
-				<section class="profile-card">
+				<section id="about" class="profile-card">
 					{isOwnerViewer && (
 						<div class="profile-card-actions">
-							<a class="owner-edit-link" href="/profile?edit=1">Edit Profile</a>
+							<a class="owner-edit-link" href={`/u/${encodeURIComponent(profile.username)}?edit=1`}>
+								{editMode ? "Editing..." : "Edit Profile"}
+							</a>
 						</div>
 					)}
 					<div class="profile-head">
@@ -186,68 +479,117 @@ function shelfHrefForOwner(sectionId: string) {
 							<p id="follow-feedback" class="meta" hidden></p>
 						</div>
 					)}
-					{profile.blurb && <p class="blurb">{profile.blurb}</p>}
-					<div class="meta-grid">
-						{profile.location && <p><strong>Location:</strong> {profile.location}</p>}
-						{profile.readingGoal && <p><strong>Reading goal:</strong> {profile.readingGoal}</p>}
-						{profile.favoriteBook && <p><strong>Favorite book:</strong> {profile.favoriteBook}</p>}
-						{profile.favoriteAuthor && (
-							<p>
-								<strong>Favorite author:</strong>{" "}
-								<a class="author-link" href={`/related?kind=author&value=${encodeURIComponent(profile.favoriteAuthor)}`}>{profile.favoriteAuthor}</a>
-							</p>
-						)}
-					</div>
-					{profile.genres.length > 0 && (
-						<ul class="genre-list">
-							{profile.genres.map((genre) => (
-								<li><Chip label={genre} className="genre-chip" /></li>
-							))}
-						</ul>
+					{isOwnerViewer && editMode ? (
+						<form method="post" action={`/u/${encodeURIComponent(profile.username)}?edit=1`} class="inline-profile-form">
+							<input type="hidden" name="profileIntent" value="save" />
+							<label>Name<input type="text" name="name" maxlength="80" value={profile.name || ""} required /></label>
+							<label>Username<input type="text" name="username" maxlength="40" value={profile.username ? `@${profile.username}` : ""} required /></label>
+							<label>Avatar URL<input type="text" name="avatarUrl" maxlength="500" value={profile.avatar || ""} /></label>
+							<label>Location<input type="text" name="location" maxlength="80" value={profile.location || ""} /></label>
+							<label>Reading goal<input type="text" name="readingGoal" maxlength="80" value={profile.readingGoal || ""} /></label>
+							<label>Favorite book<input type="text" name="favoriteBook" maxlength="120" value={profile.favoriteBook || ""} /></label>
+							<label>Favorite author<input type="text" name="favoriteAuthor" maxlength="120" value={profile.favoriteAuthor || ""} /></label>
+							<label class="full-width">Blurb<textarea name="blurb" rows={3} maxlength={400}>{profile.blurb || ""}</textarea></label>
+							<label class="full-width">Genres (comma separated)<input type="text" name="genres" value={profile.genres.join(", ")} /></label>
+							<div class="inline-profile-actions">
+								<button type="submit">Save Profile</button>
+								<a class="secondary" href={`/u/${encodeURIComponent(profile.username)}`}>Cancel</a>
+							</div>
+						</form>
+					) : (
+						<>
+							{profile.blurb && <p class="blurb">{profile.blurb}</p>}
+							<div class="meta-grid">
+								{profile.location && <p><strong>Location:</strong> {profile.location}</p>}
+								{profile.readingGoal && <p><strong>Reading goal:</strong> {profile.readingGoal}</p>}
+								{profile.favoriteBook && (
+									<p>
+										<strong>Favorite book:</strong>{" "}
+										<a class="author-link" href={`/book?title=${encodeURIComponent(profile.favoriteBook)}`}>{profile.favoriteBook}</a>
+									</p>
+								)}
+								{profile.favoriteAuthor && (
+									<p>
+										<strong>Favorite author:</strong>{" "}
+										<a class="author-link" href={authorHref(profile.favoriteAuthor)}>{profile.favoriteAuthor}</a>
+									</p>
+								)}
+							</div>
+							{profile.genres.length > 0 && (
+								<ul class="genre-list">
+									{profile.genres.map((genre) => (
+										<li>
+											<Chip
+												label={genre}
+												className="genre-chip"
+												href={`/related?kind=genre&value=${encodeURIComponent(genre)}`}
+											/>
+										</li>
+									))}
+								</ul>
+							)}
+						</>
 					)}
 				</section>
 
-				<section class="shelf-card">
+				<section id="shelf-summary" class="shelf-card">
 					<h2>Shelf Summary</h2>
 					<div class="shelf-summary-grid">
-						<a class="shelf-summary-item" href={shelfHrefForOwner("want_to_read")}>
-							<p class="shelf-summary-label">Want to Read</p>
-							<p class="shelf-summary-value">{shelfStats.wantToRead}</p>
-						</a>
 						<a class="shelf-summary-item" href={shelfHrefForOwner("reading")}>
-							<p class="shelf-summary-label">Currently Reading</p>
+							<p class="shelf-summary-label">
+								<span class="material-icons shelf-summary-icon" aria-hidden="true">menu_book</span>
+								<span>Currently Reading</span>
+							</p>
 							<p class="shelf-summary-value">{shelfStats.reading}</p>
 						</a>
+						<a class="shelf-summary-item" href={shelfHrefForOwner("want_to_read")}>
+							<p class="shelf-summary-label">
+								<span class="material-icons shelf-summary-icon" aria-hidden="true">add</span>
+								<span>Want to Read</span>
+							</p>
+							<p class="shelf-summary-value">{shelfStats.wantToRead}</p>
+						</a>
 						<a class="shelf-summary-item" href={shelfHrefForOwner("finished")}>
-							<p class="shelf-summary-label">Read</p>
+							<p class="shelf-summary-label">
+								<span class="material-icons shelf-summary-icon" aria-hidden="true">check</span>
+								<span>Read</span>
+							</p>
 							<p class="shelf-summary-value">{shelfStats.finished}</p>
 						</a>
-						<a class="shelf-summary-item shelf-summary-item-total" href={shelfHrefForOwner("reading")}>
-							<p class="shelf-summary-label">Total</p>
+						<div class="shelf-summary-item shelf-summary-item-total" role="group" aria-label="Total books">
+							<p class="shelf-summary-label">
+								<span class="material-icons shelf-summary-icon" aria-hidden="true">library_books</span>
+								<span>Total</span>
+							</p>
 							<p class="shelf-summary-value">{shelfStats.total}</p>
-						</a>
+						</div>
 					</div>
 				</section>
 
 				{canViewActivity && (
-					<section class="activity-card activity-card-plain">
+					<section id="recent-activity" class="activity-card activity-card-plain">
 						<h2>Recent Activity</h2>
-						{recentActivity.length === 0 ? (
+						{pagedRecent.items.length === 0 ? (
 							<p>No recent activity.</p>
 						) : (
 							<ul class="activity-grid">
-								{recentActivity.map((item) => (
+								{pagedRecent.items.map((item) => (
 									<BookCard
 										title={item.title}
 										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}&isbn13=${encodeURIComponent(item.isbn13 || "")}&isbn10=${encodeURIComponent(item.isbn10 || "")}&title=${encodeURIComponent(item.title)}&author=${encodeURIComponent(item.author)}`}
 										author={item.author}
-										authorHref={item.author ? `/related?kind=author&value=${encodeURIComponent(item.author)}` : ""}
+										authorHref={item.author ? authorHref(item.author) : ""}
 										thumbnail={item.thumbnail}
 									>
 										<p slot="preTitle" class="meta activity-headline">
 											<span class="activity-prefix">{activityHeading(item.eventType).prefix}</span>
 											{activityHeading(item.eventType).shelf && <>&nbsp;<em>{activityHeading(item.eventType).shelf}</em></>}
-											{formatActivityDate(item.updatedAt) && <>&nbsp;<span class="activity-date">· {formatActivityDate(item.updatedAt)}</span></>}
+											{formatActivityDate(item.updatedAt) && (
+												<>
+													<br />
+													<span class="activity-date">Updated {formatActivityDate(item.updatedAt)}</span>
+												</>
+											)}
 										</p>
 										<div slot="meta">
 											{item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>}
@@ -270,6 +612,238 @@ function shelfHrefForOwner(sectionId: string) {
 									</BookCard>
 								))}
 							</ul>
+						)}
+						{pagedRecent.totalPages > 1 && (
+							<div class="section-pagination">
+								<a class="owner-edit-link" href={paginationHref("ra_page", pagedRecent.currentPage - 1, "recent-activity")} aria-disabled={pagedRecent.currentPage <= 1}>Previous</a>
+								<span>Page {pagedRecent.currentPage} of {pagedRecent.totalPages}</span>
+								<a class="owner-edit-link" href={paginationHref("ra_page", pagedRecent.currentPage + 1, "recent-activity")} aria-disabled={pagedRecent.currentPage >= pagedRecent.totalPages}>Next</a>
+							</div>
+						)}
+					</section>
+				)}
+
+				{canViewActivity && (
+					<section id="currently-reading" class="activity-card activity-card-plain currently-reading-section">
+						<h2>Currently Reading</h2>
+						{pagedReading.items.length === 0 ? (
+							<p>No books are currently marked as reading.</p>
+						) : (
+							<ul class="activity-grid currently-reading-grid">
+								{pagedReading.items.map((item) => (
+									<BookCard
+										title={item.title}
+										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}&isbn13=${encodeURIComponent(item.isbn13 || "")}&isbn10=${encodeURIComponent(item.isbn10 || "")}&title=${encodeURIComponent(item.title)}&author=${encodeURIComponent(item.author)}`}
+										author={item.author}
+										authorHref={item.author ? authorHref(item.author) : ""}
+										thumbnail={item.thumbnail}
+									>
+										<p slot="preTitle" class="meta activity-headline">
+											<span class="activity-prefix">Currently Reading</span>
+											{formatActivityDate(item.updatedAt) && (
+												<>
+													<br />
+													<span class="activity-date">Updated {formatActivityDate(item.updatedAt)}</span>
+												</>
+											)}
+										</p>
+										<div slot="meta" class="reading-progress-block">
+											{item.totalPages > 0 && (
+												<>
+													<p class="meta progress-current-value">Progress: {item.currentPage}/{item.totalPages} pages</p>
+													<div class="progress-track" aria-hidden="true">
+														<div
+															class="progress-fill"
+															style={`width:${Math.max(0, Math.min(100, Math.round((item.currentPage / Math.max(1, item.totalPages)) * 100)))}%`}
+														></div>
+													</div>
+												</>
+											)}
+											{isOwnerViewer && (
+												<div class="progress-inline">
+													<label class="progress-inline-label" for={`progress-inline-${item.bookId}`}>Update progress (page or %)</label>
+													<div class="progress-inline-controls">
+														<input
+															id={`progress-inline-${item.bookId}`}
+															class="progress-inline-input"
+															type="text"
+															inputmode="text"
+															placeholder="154 or 31%"
+															value={String(Math.max(0, Number(item.currentPage || 0)))}
+														/>
+														<button
+															type="button"
+															class="progress-inline-save"
+															data-action="save-reading-progress"
+															data-book-id={String(item.bookId || 0)}
+															data-title={item.title}
+															data-author={item.author}
+															data-description={item.description}
+															data-cover={item.thumbnail}
+															data-language={item.language}
+															data-isbn10={item.isbn10}
+															data-isbn13={item.isbn13}
+															data-total-pages={String(Math.max(0, Number(item.totalPages || 0)))}
+														>
+															Save
+														</button>
+														<button
+															type="button"
+															class="progress-inline-finish"
+															data-action="mark-finished-quick"
+															data-book-id={String(item.bookId || 0)}
+															data-title={item.title}
+															data-author={item.author}
+															data-description={item.description}
+															data-cover={item.thumbnail}
+															data-language={item.language}
+															data-isbn10={item.isbn10}
+															data-isbn13={item.isbn13}
+															data-total-pages={String(Math.max(0, Number(item.totalPages || 0)))}
+															data-current-page={String(Math.max(0, Number(item.currentPage || 0)))}
+															aria-label="Mark as Finished"
+															title="Mark as Finished"
+														>
+															<span class="material-icons" aria-hidden="true">done_all</span>
+														</button>
+													</div>
+												</div>
+											)}
+										</div>
+										<div slot="actions">
+											<ShelfDropdown attrs={{
+												"data-book-id": String(item.bookId || 0),
+												"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "want_to_read",
+												"data-title": item.title,
+												"data-author": item.author,
+												"data-description": item.description,
+												"data-pages": String(item.totalPages || 0),
+												"data-cover": item.thumbnail,
+												"data-format": "Book",
+												"data-language": item.language,
+												"data-isbn10": item.isbn10,
+												"data-isbn13": item.isbn13
+											}} />
+										</div>
+									</BookCard>
+								))}
+							</ul>
+						)}
+						{pagedReading.totalPages > 1 && (
+							<div class="section-pagination">
+								<a class="owner-edit-link" href={paginationHref("cr_page", pagedReading.currentPage - 1, "currently-reading")} aria-disabled={pagedReading.currentPage <= 1}>Previous</a>
+								<span>Page {pagedReading.currentPage} of {pagedReading.totalPages}</span>
+								<a class="owner-edit-link" href={paginationHref("cr_page", pagedReading.currentPage + 1, "currently-reading")} aria-disabled={pagedReading.currentPage >= pagedReading.totalPages}>Next</a>
+							</div>
+						)}
+					</section>
+				)}
+
+				{canViewActivity && (
+					<section id="want-to-read" class="activity-card activity-card-plain">
+						<h2>Want to Read</h2>
+						{pagedWantToRead.items.length === 0 ? (
+							<p>No books in Want to Read yet.</p>
+						) : (
+							<ul class="activity-grid">
+								{pagedWantToRead.items.map((item) => (
+									<BookCard
+										title={item.title}
+										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}&isbn13=${encodeURIComponent(item.isbn13 || "")}&isbn10=${encodeURIComponent(item.isbn10 || "")}&title=${encodeURIComponent(item.title)}&author=${encodeURIComponent(item.author)}`}
+										author={item.author}
+										authorHref={item.author ? authorHref(item.author) : ""}
+										thumbnail={item.thumbnail}
+									>
+										<p slot="preTitle" class="meta activity-headline">
+											<span class="activity-prefix">Want to Read</span>
+											{formatActivityDate(item.updatedAt) && (
+												<>
+													<br />
+													<span class="activity-date">Updated {formatActivityDate(item.updatedAt)}</span>
+												</>
+											)}
+										</p>
+										<div slot="actions">
+											<ShelfDropdown attrs={{
+												"data-book-id": String(item.bookId || 0),
+												"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "want_to_read",
+												"data-title": item.title,
+												"data-author": item.author,
+												"data-description": item.description,
+												"data-pages": "0",
+												"data-cover": item.thumbnail,
+												"data-format": "Book",
+												"data-language": item.language,
+												"data-isbn10": item.isbn10,
+												"data-isbn13": item.isbn13
+											}} />
+										</div>
+									</BookCard>
+								))}
+							</ul>
+						)}
+						{pagedWantToRead.totalPages > 1 && (
+							<div class="section-pagination">
+								<a class="owner-edit-link" href={paginationHref("wr_page", pagedWantToRead.currentPage - 1, "want-to-read")} aria-disabled={pagedWantToRead.currentPage <= 1}>Previous</a>
+								<span>Page {pagedWantToRead.currentPage} of {pagedWantToRead.totalPages}</span>
+								<a class="owner-edit-link" href={paginationHref("wr_page", pagedWantToRead.currentPage + 1, "want-to-read")} aria-disabled={pagedWantToRead.currentPage >= pagedWantToRead.totalPages}>Next</a>
+							</div>
+						)}
+					</section>
+				)}
+
+				{canViewActivity && (
+					<section id="read" class="activity-card activity-card-plain">
+						<h2>Read</h2>
+						{pagedFinished.items.length === 0 ? (
+							<p>No finished books yet.</p>
+						) : (
+							<ul class="activity-grid">
+								{pagedFinished.items.map((item) => (
+									<BookCard
+										title={item.title}
+										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}&isbn13=${encodeURIComponent(item.isbn13 || "")}&isbn10=${encodeURIComponent(item.isbn10 || "")}&title=${encodeURIComponent(item.title)}&author=${encodeURIComponent(item.author)}`}
+										author={item.author}
+										authorHref={item.author ? authorHref(item.author) : ""}
+										thumbnail={item.thumbnail}
+									>
+										<p slot="preTitle" class="meta activity-headline">
+											<span class="activity-prefix">Read</span>
+											{item.finishedDate && (
+												<>
+													<br />
+													<span class="activity-date">Updated {formatActivityDate(item.finishedDate || item.updatedAt)}</span>
+												</>
+											)}
+										</p>
+										<div slot="meta">
+											{item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>}
+										</div>
+										<div slot="actions">
+											<ShelfDropdown attrs={{
+												"data-book-id": String(item.bookId || 0),
+												"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "want_to_read",
+												"data-title": item.title,
+												"data-author": item.author,
+												"data-description": item.description,
+												"data-pages": "0",
+												"data-cover": item.thumbnail,
+												"data-format": "Book",
+												"data-language": item.language,
+												"data-isbn10": item.isbn10,
+												"data-isbn13": item.isbn13
+											}} />
+										</div>
+									</BookCard>
+								))}
+							</ul>
+						)}
+						{pagedFinished.totalPages > 1 && (
+							<div class="section-pagination">
+								<a class="owner-edit-link" href={paginationHref("rd_page", pagedFinished.currentPage - 1, "read")} aria-disabled={pagedFinished.currentPage <= 1}>Previous</a>
+								<span>Page {pagedFinished.currentPage} of {pagedFinished.totalPages}</span>
+								<a class="owner-edit-link" href={paginationHref("rd_page", pagedFinished.currentPage + 1, "read")} aria-disabled={pagedFinished.currentPage >= pagedFinished.totalPages}>Next</a>
+							</div>
 						)}
 					</section>
 				)}
@@ -300,6 +874,58 @@ function shelfHrefForOwner(sectionId: string) {
 	.follow-actions button { border: 1px solid #d1c8ba; border-radius: 999px; padding: 0.35rem 0.8rem; background: #1d1d1d; color: #fff; font: inherit; cursor: pointer; }
 	.follow-actions button[disabled] { opacity: 0.6; cursor: default; }
 	.owner-edit-link { border: 1px solid #d1c8ba; border-radius: 999px; padding: 0.35rem 0.8rem; background: #f3efe7; color: #222; text-decoration: none; font-weight: 700; }
+	.inline-profile-form {
+		margin-top: 0.75rem;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.6rem 0.75rem;
+	}
+	.inline-profile-form label {
+		display: grid;
+		gap: 0.25rem;
+		font-size: 0.86rem;
+		font-weight: 700;
+		color: #4b5563;
+	}
+	.inline-profile-form input,
+	.inline-profile-form textarea {
+		width: 100%;
+		box-sizing: border-box;
+		border: 1px solid #d1d5db;
+		border-radius: 8px;
+		padding: 0.5rem 0.6rem;
+		font: inherit;
+		font-size: 0.92rem;
+		color: #111827;
+		background: #fff;
+	}
+	.inline-profile-form .full-width {
+		grid-column: 1 / -1;
+	}
+	.inline-profile-actions {
+		grid-column: 1 / -1;
+		display: inline-flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+	.inline-profile-actions button,
+	.inline-profile-actions .secondary {
+		border: none;
+		border-radius: 8px;
+		padding: 0.5rem 0.8rem;
+		font: inherit;
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.inline-profile-actions button {
+		background: var(--color-primary);
+		color: #fff;
+		cursor: pointer;
+	}
+	.inline-profile-actions .secondary {
+		background: #eef0f3;
+		color: #1f2937;
+	}
 	.meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem 0.8rem; margin-top: 0.7rem; }
 	.meta-grid p { margin: 0; }
 	.genre-list { list-style: none; margin: 0.7rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
@@ -307,8 +933,11 @@ function shelfHrefForOwner(sectionId: string) {
 	.shelf-summary-grid {
 		margin-top: 0.7rem;
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: 0.75rem;
+	}
+	.shelf-summary-item-total {
+		grid-column: span 1;
 	}
 	.shelf-card {
 		border: none;
@@ -329,11 +958,29 @@ function shelfHrefForOwner(sectionId: string) {
 		transform: translateY(-1px);
 		box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
 	}
+	.shelf-summary-item-total:hover {
+		transform: none;
+		box-shadow: none;
+	}
 	.shelf-summary-label {
 		margin: 0;
 		font-size: 0.9rem;
 		color: #5b6470;
 		font-weight: 600;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		line-height: 1.15;
+	}
+	.shelf-summary-icon {
+		font-size: 1.35rem;
+		line-height: 1;
+		color: var(--color-primary) !important;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		font-variation-settings: "FILL" 1, "wght" 700, "GRAD" 0, "opsz" 24;
+		transform: translateY(-1px);
 	}
 	.shelf-summary-value {
 		margin: 0.28rem 0 0;
@@ -344,23 +991,126 @@ function shelfHrefForOwner(sectionId: string) {
 	}
 	.activity-grid { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.activity-headline { font-weight: 700; color: #2f2f2f; }
+	.public-profile-page :global(.activity-grid .book-card .card-body h3) {
+		padding-right: 4.5rem;
+	}
 	.activity-prefix { color: var(--color-secondary); }
 	.activity-date { color: #5b6470; font-weight: 600; }
+	.progress-inline {
+		margin-top: 0.35rem;
+	}
+	.currently-reading-grid :global(.book-card .card-body .reading-progress-block) {
+		margin-top: auto;
+	}
+	.progress-inline-label {
+		display: block;
+		font-size: 0.78rem;
+		color: #5b6470;
+		font-weight: 700;
+		margin-bottom: 0.22rem;
+	}
+	.progress-inline-controls {
+		display: inline-flex;
+		gap: 0.35rem;
+		align-items: center;
+	}
+	.progress-inline-input {
+		width: 92px;
+		height: 34px;
+		border: 1px solid #cfd4db;
+		border-radius: 8px;
+		padding: 0 0.45rem;
+		font-size: 0.85rem;
+		box-sizing: border-box;
+	}
+	.progress-inline-save,
+	.progress-inline-finish {
+		border: none;
+		border-radius: 8px;
+		height: 34px;
+		min-width: 88px;
+		padding: 0 0.7rem;
+		background: var(--color-primary);
+		color: #fff;
+		font-weight: 700;
+		font-size: 0.85rem;
+		cursor: pointer;
+		box-sizing: border-box;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.progress-inline-save {
+		min-width: 88px;
+	}
+	.progress-inline-save:disabled {
+		opacity: 0.75;
+		cursor: default;
+	}
+	.progress-inline-finish {
+		min-width: 0;
+		padding: 0 0.55rem;
+		background: var(--palette-4);
+	}
+	.progress-inline-finish .material-icons {
+		font-size: 1rem;
+		line-height: 1;
+		font-variation-settings: "FILL" 1, "wght" 700, "GRAD" 0, "opsz" 24;
+	}
+	.progress-inline-finish:hover {
+		filter: brightness(0.95);
+	}
+	.public-profile-page :global(.activity-grid .book-card .card-actions) {
+		margin-top: 0.4rem;
+		padding-top: 0;
+		display: inline-flex;
+		align-items: flex-start;
+		gap: 0.45rem;
+	}
+	.progress-track {
+		margin-top: 0.25rem;
+		width: min(320px, 100%);
+		height: 8px;
+		border-radius: 999px;
+		background: #dde2e8;
+		overflow: hidden;
+	}
+	.progress-fill {
+		height: 100%;
+		background: var(--color-primary);
+	}
 	.rating-meta { color: var(--color-rating); font-weight: 700; }
+	.section-pagination {
+		margin-top: 0.6rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.section-pagination span {
+		font-size: 0.85rem;
+		color: #4b5563;
+	}
+	.section-pagination a[aria-disabled="true"] {
+		pointer-events: none;
+		opacity: 0.55;
+	}
 	.shelf-dropdown { position: relative; display: inline-flex; flex-direction: column; align-items: flex-start; min-width: 150px; }
 	.shelf-trigger { border: none; border-radius: 8px; padding: 0.55rem 0.85rem; font-size: 0.95rem; background: var(--color-primary); color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; }
 	.shelf-trigger:hover { background: var(--color-primary-hover); }
 	.shelf-icon { font-size: 1.15rem; line-height: 1; }
 	.shelf-check { font-size: 1rem; line-height: 1; opacity: 0; transition: opacity 120ms ease-in-out; }
 	.shelf-dropdown.is-shelved .shelf-check { opacity: 1; }
-	.shelf-menu { position: absolute; top: calc(100% + 4px); left: 0; min-width: 180px; background: #fff; border: 1px solid #c9c9c9; border-radius: 8px; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12); padding: 0.25rem 0; z-index: 25; }
-	.shelf-option { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 0.5rem 0.75rem; font-size: 0.92rem; cursor: pointer; color: #222; }
+	.shelf-menu { position: absolute; top: calc(100% + 4px); right: 0; left: auto; min-width: 180px; background: #fff; border: 1px solid #c9c9c9; border-radius: 8px; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12); padding: 0.25rem 0; z-index: 25; }
+	.shelf-option { display: flex; align-items: center; gap: 0.45rem; width: 100%; text-align: left; border: none; background: transparent; padding: 0.5rem 0.75rem; font-size: 0.92rem; cursor: pointer; color: #222; }
 	.shelf-option:hover { background: #f2f2f2; }
 	.shelf-feedback { margin-top: 0.25rem; font-size: 0.82rem; color: #1f7a45; line-height: 1.25; }
+	.public-profile-page :global(.shelf-state) { display: none !important; }
 	.status { text-transform: capitalize; }
 	@media (max-width: 740px) {
 		.meta-grid { grid-template-columns: 1fr; }
+		.inline-profile-form { grid-template-columns: 1fr; }
 		.shelf-summary-grid { grid-template-columns: 1fr; }
+		.shelf-summary-item-total { grid-column: auto; }
 		.activity-grid { grid-template-columns: 1fr; }
 		.profile-card-actions { position: static; margin-bottom: 0.6rem; justify-content: flex-start; }
 	}
@@ -376,11 +1126,11 @@ function shelfHrefForOwner(sectionId: string) {
 		statusLabel,
 		saveShelfEntryWithRetry,
 		toggleShelfMenu
-	} from "../../lib/shelfClient";
+	} from "/src/lib/shelfClient.ts";
 	import {
 		loadShelfEntries,
 		migrateShelfEntriesInPlace
-	} from "../../lib/shelfStorage";
+	} from "/src/lib/shelfStorage.ts";
 	const followToggle = document.getElementById("follow-toggle");
 	const followFeedback = document.getElementById("follow-feedback");
 	const followersCountNode = document.getElementById("follow-count-followers");
@@ -489,6 +1239,52 @@ function shelfHrefForOwner(sectionId: string) {
 		followFeedback.style.color = isError ? "#991b1b" : "";
 	}
 
+	function parseProgressInput(rawValue, totalPages) {
+		const raw = String(rawValue || "").trim();
+		if (!raw) return { valid: false, currentPage: 0, mode: "page", normalizedText: "" };
+		const maxPages = Math.max(0, Number(totalPages || 0) || 0);
+		if (raw.endsWith("%")) {
+			const percentValue = Number(raw.slice(0, -1).trim());
+			if (!Number.isFinite(percentValue)) return { valid: false, currentPage: 0, mode: "percent", normalizedText: raw };
+			const clampedPercent = Math.max(0, Math.min(100, percentValue));
+			const currentPage = maxPages > 0
+				? Math.round((clampedPercent / 100) * maxPages)
+				: 0;
+			return {
+				valid: true,
+				currentPage,
+				mode: "percent",
+				normalizedText: `${clampedPercent}%`,
+				percent: clampedPercent
+			};
+		}
+		const numericPages = Number(raw);
+		if (!Number.isFinite(numericPages)) return { valid: false, currentPage: 0, mode: "page", normalizedText: raw };
+		const currentPage = Math.max(0, Math.min(maxPages > 0 ? maxPages : Number.MAX_SAFE_INTEGER, Math.round(numericPages)));
+		return {
+			valid: true,
+			currentPage,
+			mode: "page",
+			normalizedText: String(currentPage)
+		};
+	}
+
+	function removeCardFromCurrentlyReading(dropdown, status) {
+		if (String(status || "").trim() === "reading") return;
+		const section = dropdown?.closest?.(".currently-reading-section");
+		if (!(section instanceof HTMLElement)) return;
+		const card = dropdown.closest(".book-card");
+		if (!(card instanceof HTMLElement)) return;
+		card.remove();
+		const remaining = section.querySelectorAll(".currently-reading-grid .book-card");
+		if (remaining.length === 0) {
+			const grid = section.querySelector(".currently-reading-grid");
+			if (grid instanceof HTMLElement) {
+				grid.outerHTML = "<p>No books are currently marked as reading.</p>";
+			}
+		}
+	}
+
 	followToggle?.addEventListener("click", async () => {
 		if (!(followToggle instanceof HTMLButtonElement)) return;
 		const username = String(followToggle.dataset.username || "").trim();
@@ -566,6 +1362,7 @@ function shelfHrefForOwner(sectionId: string) {
 					setDropdownLabel(dropdown, status);
 					setShelvedState(dropdown, true);
 					showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
+					removeCardFromCurrentlyReading(dropdown, status);
 					closeShelfMenus(shelfDropdowns);
 				} catch (error) {
 					showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
@@ -575,8 +1372,118 @@ function shelfHrefForOwner(sectionId: string) {
 	}
 
 	document.addEventListener("click", async (event) => {
-		const target = event.target;
+		const rawTarget = event.target;
+		const target = rawTarget instanceof Element
+			? rawTarget
+			: (rawTarget instanceof Node ? rawTarget.parentElement : null);
 		if (!(target instanceof HTMLElement)) return;
+		const quickFinish = target.closest('[data-action="mark-finished-quick"]');
+		if (quickFinish instanceof HTMLButtonElement) {
+			event.preventDefault();
+			event.stopPropagation();
+			const totalPages = Math.max(0, Number(quickFinish.dataset.totalPages || 0) || 0);
+			const currentPageRaw = Math.max(0, Number(quickFinish.dataset.currentPage || 0) || 0);
+			const finishedPage = totalPages > 0 ? totalPages : currentPageRaw;
+			const entry = buildShelfEntryFromRecord({
+				title: String(quickFinish.dataset.title || "").trim(),
+				author: String(quickFinish.dataset.author || "").trim(),
+				description: String(quickFinish.dataset.description || "").trim(),
+				pageCount: totalPages,
+				coverUrl: String(quickFinish.dataset.cover || "").trim(),
+				format: "Book",
+				language: String(quickFinish.dataset.language || "").trim(),
+				isbn10: String(quickFinish.dataset.isbn10 || "").trim(),
+				isbn13: String(quickFinish.dataset.isbn13 || "").trim()
+			}, {
+				status: "finished",
+				totalPages,
+				currentPage: finishedPage,
+				finishedDate: new Date().toISOString().slice(0, 10)
+			});
+			if (!entry.title) return;
+			quickFinish.disabled = true;
+			try {
+				const result = await saveShelfEntryWithRetry(entry);
+				if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
+			const card = quickFinish.closest(".book-card");
+			const dropdown = card?.querySelector(".shelf-dropdown");
+				if (dropdown) {
+					setDropdownLabel(dropdown, "finished");
+					setShelvedState(dropdown, true);
+					showShelfFeedback(dropdown, "Saved to Read.", feedbackTimers);
+					removeCardFromCurrentlyReading(dropdown, "finished");
+				}
+			} finally {
+				quickFinish.disabled = false;
+			}
+			return;
+		}
+		const progressSave = target.closest('[data-action="save-reading-progress"]');
+		if (progressSave instanceof HTMLButtonElement) {
+			event.preventDefault();
+			event.stopPropagation();
+			const card = progressSave.closest(".book-card");
+			const input = card?.querySelector(".progress-inline-input");
+			if (!(input instanceof HTMLInputElement)) return;
+			const totalPages = Math.max(0, Number(progressSave.dataset.totalPages || 0) || 0);
+			const parsed = parseProgressInput(input.value, totalPages);
+			if (!parsed.valid) {
+				progressSave.textContent = "Invalid";
+				setTimeout(() => {
+					progressSave.textContent = "Save";
+				}, 1000);
+				return;
+			}
+			const currentPage = parsed.currentPage;
+			input.value = parsed.normalizedText;
+
+			const entry = buildShelfEntryFromRecord({
+				title: String(progressSave.dataset.title || "").trim(),
+				author: String(progressSave.dataset.author || "").trim(),
+				description: String(progressSave.dataset.description || "").trim(),
+				pageCount: totalPages,
+				coverUrl: String(progressSave.dataset.cover || "").trim(),
+				format: "Book",
+				language: String(progressSave.dataset.language || "").trim(),
+				isbn10: String(progressSave.dataset.isbn10 || "").trim(),
+				isbn13: String(progressSave.dataset.isbn13 || "").trim()
+			}, {
+				status: "reading",
+				totalPages,
+				currentPage,
+				finishedDate: ""
+			});
+			if (!entry.title) return;
+
+			const originalLabel = progressSave.textContent || "Save";
+			progressSave.disabled = true;
+			progressSave.textContent = "Saving...";
+			try {
+				const result = await saveShelfEntryWithRetry(entry);
+				if (!result.ok) throw new Error(result.message || "Failed to save progress.");
+				const progressNode = card?.querySelector(".progress-current-value");
+				if (progressNode instanceof HTMLElement) {
+					progressNode.textContent = `Progress: ${currentPage}/${totalPages} pages`;
+				}
+				const progressFill = card?.querySelector(".progress-fill");
+				if (progressFill instanceof HTMLElement && totalPages > 0) {
+					const percent = Math.max(0, Math.min(100, Math.round((currentPage / totalPages) * 100)));
+					progressFill.style.width = `${percent}%`;
+				}
+				progressSave.textContent = "Saved";
+				setTimeout(() => {
+					progressSave.textContent = originalLabel;
+				}, 900);
+			} catch {
+				progressSave.textContent = "Retry";
+				setTimeout(() => {
+					progressSave.textContent = originalLabel;
+				}, 1200);
+			} finally {
+				progressSave.disabled = false;
+			}
+			return;
+		}
 		const toggle = target.closest('[data-action="toggle-shelf"]');
 		if (toggle) {
 			event.preventDefault();
@@ -615,6 +1522,7 @@ function shelfHrefForOwner(sectionId: string) {
 				setDropdownLabel(dropdown, status);
 				setShelvedState(dropdown, true);
 				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
+				removeCardFromCurrentlyReading(dropdown, status);
 				closeShelfMenus(shelfDropdowns);
 				await hydrateShelfEntriesFromServer();
 				syncExistingState();

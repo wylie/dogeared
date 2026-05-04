@@ -366,7 +366,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
 </style>
 
 <script>
-  import { resolveClientAuthState, subscribeAuthStateChange, setAuthPreviewMode } from "../lib/clientAuth";
+  import { resolveClientAuthState, subscribeAuthStateChange, setAuthPreviewMode } from "/src/lib/clientAuth.ts";
 
   const leftHandNav = document.getElementById("left-hand-nav");
   const leftHandMenuToggle = document.getElementById("left-hand-menu-toggle");

@@ -6,8 +6,8 @@ import { getNeonSql } from '../lib/neon';
 export const prerender = false;
 
 const sectionLinks = [
+	{ id: "recent-activity", label: "Recent Activity" },
 	{ id: "reading", label: "Currently Reading" },
-	{ id: "want_to_read", label: "Want to Read" },
 	{ id: "finished", label: "Read" }
 ];
 function normalizeSeedText(value: unknown, maxLength: number) {
@@ -65,7 +65,7 @@ function normalizeUsernameForSave(value: unknown) {
 	if (!sanitized) return "";
 	return sanitized.slice(0, 40);
 }
-if (isAuthenticated && !editMode && !shelfView) {
+if (isAuthenticated) {
 	const sql = getNeonSql();
 	const rows = await sql<Array<{ username: string | null }>>`
 		select nullif(trim(username), '') as username
@@ -77,6 +77,7 @@ if (isAuthenticated && !editMode && !shelfView) {
 	if (username) {
 		return Astro.redirect(`/u/${encodeURIComponent(username)}`);
 	}
+	return Astro.redirect("/settings#account-settings");
 }
 if (isAuthenticated) {
 	const sql = getNeonSql();
@@ -234,7 +235,6 @@ if (isAuthenticated) {
 		class="reads-page"
 		data-authenticated={String(isAuthenticated)}
 		data-force-edit={String(editMode)}
-		data-shelf-view={shelfView}
 		data-live-profile-path={liveProfilePath}
 		data-initial-profile={encodeURIComponent(JSON.stringify(initialProfileSeed))}
 		data-initial-entries={encodeURIComponent(JSON.stringify(initialEntriesSeed))}
@@ -346,27 +346,15 @@ if (isAuthenticated) {
 
 		<section id="goal-progress-widget" class="goal-widget" aria-live="polite"></section>
 
-		<section class="list-section" data-panel="want_to_read" id="want_to_read" hidden>
+		<section class="list-section" id="recent-activity">
 			<div class="list-section-head">
-				<h2 id="section-want-to-read">Want to Read</h2>
-				<label class="list-sort">
-					<span>Sort</span>
-					<select id="sort-want-to-read">
-						<option value="date_added_desc">Date Added: Newest First</option>
-						<option value="date_added_asc">Date Added: Oldest First</option>
-						<option value="date_finished_desc">Date Finished: Newest First</option>
-						<option value="date_finished_asc">Date Finished: Oldest First</option>
-						<option value="name_asc">Name: A–Z</option>
-						<option value="name_desc">Name: Z–A</option>
-						<option value="author_asc">Author: A–Z</option>
-						<option value="author_desc">Author: Z–A</option>
-					</select>
-				</label>
+				<h2 id="section-recent-activity">Recent Activity</h2>
 			</div>
-			<div id="want-to-read-list" class="entry-list"></div>
+			<div id="recent-activity-list" class="entry-list"></div>
+			<div id="recent-activity-pagination" class="section-pagination"></div>
 		</section>
 
-		<section class="list-section" data-panel="reading" id="reading">
+		<section class="list-section" id="reading">
 			<div class="list-section-head">
 				<h2 id="section-reading">Currently Reading</h2>
 				<label class="list-sort">
@@ -384,9 +372,10 @@ if (isAuthenticated) {
 				</label>
 			</div>
 			<div id="currently-reading-list" class="entry-list"></div>
+			<div id="reading-pagination" class="section-pagination"></div>
 		</section>
 
-		<section class="list-section" data-panel="finished" id="finished" hidden>
+		<section class="list-section" id="finished">
 			<div class="list-section-head">
 				<h2 id="section-finished">Finished</h2>
 				<label class="list-sort">
@@ -404,6 +393,7 @@ if (isAuthenticated) {
 				</label>
 			</div>
 			<div id="finished-list" class="entry-list"></div>
+			<div id="finished-pagination" class="section-pagination"></div>
 		</section>
 		</>
 		)}
@@ -411,13 +401,13 @@ if (isAuthenticated) {
 </Layout>
 
 <script type="module">
-	import { renderProfileBookCard } from "../lib/profileBookCardTemplate";
+	import { renderProfileBookCard } from "/src/lib/profileBookCardTemplate.ts";
 	import {
 		loadShelfUpdates as loadSharedShelfUpdates,
 		migrateShelfEntriesInPlace,
 		saveShelfEntries,
 		saveShelfUpdates as saveSharedShelfUpdates
-	} from "../lib/shelfStorage";
+	} from "/src/lib/shelfStorage.ts";
 
 	const profilePageRoot = document.querySelector(".reads-page");
 	if (profilePageRoot?.dataset.authenticated === "true") {
@@ -426,13 +416,16 @@ if (isAuthenticated) {
 	const LIST_SORTS_KEY = "dogeared:profile-list-sorts";
 	const MAX_COVER_LOOKUPS_PER_PASS = 40;
 	let entries = [];
+	const PAGE_SIZE = 24;
 	let coverLookupInFlight = false;
 	let profileInfo = null;
 
-	const wantToReadList = document.getElementById("want-to-read-list");
+	const recentActivityList = document.getElementById("recent-activity-list");
+	const recentActivityPagination = document.getElementById("recent-activity-pagination");
 	const currentlyReadingList = document.getElementById("currently-reading-list");
+	const readingPagination = document.getElementById("reading-pagination");
 	const finishedList = document.getElementById("finished-list");
-	const wantToReadSort = document.getElementById("sort-want-to-read");
+	const finishedPagination = document.getElementById("finished-pagination");
 	const readingSort = document.getElementById("sort-reading");
 	const finishedSort = document.getElementById("sort-finished");
 	const profileView = document.getElementById("profile-view");
@@ -452,11 +445,12 @@ if (isAuthenticated) {
 	const profileAvatarPreview = document.getElementById("profile-avatar-preview");
 	const profileAvatarFile = document.getElementById("profile-avatar-file");
 	const profileAvatarRemove = document.getElementById("profile-avatar-remove");
-	const shelfPanels = Array.from(document.querySelectorAll("[data-panel]"));
-	const shelfFilterLinks = Array.from(document.querySelectorAll('.quick-links a[href^="#"]'));
-	const shelfViewParam = String(profilePageRoot?.dataset.shelfView || "").trim().toLowerCase();
 	const initialEntriesEncoded = String(profilePageRoot?.dataset.initialEntries || "").trim();
-	let activeTab = "reading";
+	let sectionPages = {
+		recent: 1,
+		reading: 1,
+		finished: 1
+	};
 	let editingGenres = [];
 	let editingAvatar = "";
 	let usernameCheckTimer = 0;
@@ -475,7 +469,6 @@ if (isAuthenticated) {
 	let pendingFinishEntryId = "";
 	let pendingFinishRating = 0;
 	let listSorts = {
-		want_to_read: "date_added_desc",
 		reading: "date_added_desc",
 		finished: "date_finished_desc"
 	};
@@ -641,13 +634,11 @@ if (isAuthenticated) {
 		try {
 			const parsed = JSON.parse(localStorage.getItem(LIST_SORTS_KEY) || "{}");
 			listSorts = {
-				want_to_read: normalizeSortValue(parsed?.want_to_read, "want_to_read"),
 				reading: normalizeSortValue(parsed?.reading, "reading"),
 				finished: normalizeSortValue(parsed?.finished, "finished")
 			};
 		} catch {
 			listSorts = {
-				want_to_read: "date_added_desc",
 				reading: "date_added_desc",
 				finished: "date_finished_desc"
 			};
@@ -659,9 +650,6 @@ if (isAuthenticated) {
 	}
 
 	function syncSortInputs() {
-		if (wantToReadSort instanceof HTMLSelectElement) {
-			wantToReadSort.value = normalizeSortValue(listSorts.want_to_read, "want_to_read");
-		}
 		if (readingSort instanceof HTMLSelectElement) {
 			readingSort.value = normalizeSortValue(listSorts.reading, "reading");
 		}
@@ -1277,13 +1265,13 @@ if (isAuthenticated) {
 		input.setSelectionRange(base.length, suggestion.length);
 	}
 
-	function formatLocationLabel(input: { city: string; region: string; countryCode: string }) {
+	function formatLocationLabel(input) {
 		return [input.city, input.region, input.countryCode].filter(Boolean).join(", ");
 	}
 
 	function uniqueLocationMatches(matches) {
-		const seen = new Set<string>();
-		const out: Array<{ label: string; city: string; region: string; countryCode: string }> = [];
+		const seen = new Set();
+		const out = [];
 		for (const match of matches) {
 			const city = String(match?.city || "").trim();
 			const region = String(match?.region || "").trim();
@@ -1303,7 +1291,7 @@ if (isAuthenticated) {
 		const value = String(input || "").trim();
 		if (!value) return [];
 		const zipMatch = value.match(/\b(\d{5})(?:-\d{4})?\b/);
-		const collected: Array<{ city: string; region: string; countryCode: string }> = [];
+		const collected = [];
 		if (zipMatch) {
 			const response = await fetch(`https://api.zippopotam.us/us/${zipMatch[1]}`);
 			if (response.ok) {
@@ -2475,35 +2463,91 @@ if (isAuthenticated) {
 		return `<p class="empty-state">${escapeHtml(message)}</p>`;
 	}
 
+	function paginate(items, page) {
+		const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+		const currentPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+		const start = (currentPage - 1) * PAGE_SIZE;
+		return {
+			items: items.slice(start, start + PAGE_SIZE),
+			currentPage,
+			totalPages
+		};
+	}
+
+	function renderPagination(target, sectionKey, currentPage, totalPages) {
+		if (!(target instanceof HTMLElement)) return;
+		if (totalPages <= 1) {
+			target.innerHTML = "";
+			return;
+		}
+		target.innerHTML = `
+			<button type="button" class="secondary" data-action="page" data-section="${sectionKey}" data-page="${currentPage - 1}" ${currentPage <= 1 ? "disabled" : ""}>Previous</button>
+			<span>Page ${currentPage} of ${totalPages}</span>
+			<button type="button" class="secondary" data-action="page" data-section="${sectionKey}" data-page="${currentPage + 1}" ${currentPage >= totalPages ? "disabled" : ""}>Next</button>
+		`;
+	}
+
+	function renderRecentActivityCard(update) {
+		const status = normalizeShelfStatus(update?.status) || "want_to_read";
+		const statusLabel = status === "reading" ? "Currently Reading" : status === "finished" ? "Read" : "Want to Read";
+		const timestamp = normalizeNumber(update?.timestamp);
+		const dateLabel = timestamp > 0
+			? new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+			: "";
+		const coverUrl = String(update?.coverUrl || "").trim();
+		const title = String(update?.title || "").trim();
+		const author = String(update?.author || "").trim();
+		return `
+			<article class="entry-card book-card">
+				<div class="cover-wrap">
+					${coverUrl
+						? `<img class="cover" src="${escapeHtml(coverUrl)}" alt="" loading="lazy" data-cover-image onerror="this.hidden=true; if (this.nextElementSibling) this.nextElementSibling.hidden=false;" />
+						   <div class="cover cover-placeholder" data-cover-placeholder hidden><span class="material-icons cover-placeholder-icon" aria-hidden="true">menu_book</span></div>`
+						: `<div class="cover cover-placeholder"><span class="material-icons cover-placeholder-icon" aria-hidden="true">menu_book</span></div>`}
+				</div>
+				<div class="card-body">
+					<p class="meta">
+						<strong>${status === "finished" ? "Finished Reading" : "Added to"} ${escapeHtml(statusLabel)}</strong>
+						${dateLabel ? `<br /><span class="activity-date-line">${escapeHtml(dateLabel)}</span>` : ""}
+					</p>
+					<h3>${escapeHtml(title || "Untitled")}</h3>
+					${author ? `<p class="meta">${escapeHtml(author)}</p>` : ""}
+				</div>
+			</article>
+		`;
+	}
+
 	function renderLists() {
-		const wantToRead = entries
-			.filter((entry) => entry.status === "want_to_read");
 		const reading = entries
 			.filter((entry) => entry.status === "reading");
 		const finished = entries
 			.filter((entry) => entry.status === "finished");
-		const sortedWantToRead = sortEntries(wantToRead, "want_to_read");
 		const sortedReading = sortEntries(reading, "reading");
 		const sortedFinished = sortEntries(finished, "finished");
+		const updates = loadUpdates();
+		const sortedUpdates = [...updates].sort((a, b) => normalizeNumber(b?.timestamp) - normalizeNumber(a?.timestamp));
 
-		wantToReadList.innerHTML = sortedWantToRead.length
-			? sortedWantToRead.map(renderEntryCard).join("")
-			: renderEmptyState("No books queued yet.");
+		const pagedRecent = paginate(sortedUpdates, sectionPages.recent);
+		const pagedReading = paginate(sortedReading, sectionPages.reading);
+		const pagedFinished = paginate(sortedFinished, sectionPages.finished);
+		sectionPages.recent = pagedRecent.currentPage;
+		sectionPages.reading = pagedReading.currentPage;
+		sectionPages.finished = pagedFinished.currentPage;
 
-		currentlyReadingList.innerHTML = sortedReading.length
-			? sortedReading.map(renderEntryCard).join("")
+		recentActivityList.innerHTML = pagedRecent.items.length
+			? pagedRecent.items.map(renderRecentActivityCard).join("")
+			: renderEmptyState("No recent activity yet.");
+
+		currentlyReadingList.innerHTML = pagedReading.items.length
+			? pagedReading.items.map(renderEntryCard).join("")
 			: renderEmptyState("No active books yet.");
 
-		finishedList.innerHTML = sortedFinished.length
-			? sortedFinished.map(renderEntryCard).join("")
+		finishedList.innerHTML = pagedFinished.items.length
+			? pagedFinished.items.map(renderEntryCard).join("")
 			: renderEmptyState("No finished books yet.");
-
-		for (const link of shelfFilterLinks) {
-			const hash = link.getAttribute("href") || "";
-			if (hash === "#want_to_read") link.textContent = `Want to Read (${wantToRead.length})`;
-			if (hash === "#reading") link.textContent = `Currently Reading (${reading.length})`;
-			if (hash === "#finished") link.textContent = `Read (${finished.length})`;
-		}
+		renderPagination(recentActivityPagination, "recent", pagedRecent.currentPage, pagedRecent.totalPages);
+		renderPagination(readingPagination, "reading", pagedReading.currentPage, pagedReading.totalPages);
+		renderPagination(finishedPagination, "finished", pagedFinished.currentPage, pagedFinished.totalPages);
 
 		bindCoverFallbacks();
 		renderGoalWidget();
@@ -2530,15 +2574,7 @@ if (isAuthenticated) {
 		}
 	}
 
-	function normalizeHashToTab(hash) {
-		const value = String(hash || "").replace(/^#/, "").trim();
-		if (value === "want_to_read" || value === "reading" || value === "finished") {
-			return value;
-		}
-		return "reading";
-	}
-
-	function normalizeShelfParamToTab(value) {
+	function normalizeShelfStatus(value) {
 		const raw = String(value || "").trim().toLowerCase();
 		if (raw === "want_to_read" || raw === "to_read" || raw === "want-to-read") return "want_to_read";
 		if (raw === "reading" || raw === "currently_reading" || raw === "currently-reading") return "reading";
@@ -2546,31 +2582,11 @@ if (isAuthenticated) {
 		return "";
 	}
 
-	function syncSidebarFilterActive(nextTab) {
-		for (const link of shelfFilterLinks) {
-			const isActive = link.getAttribute("href") === `#${nextTab}`;
-			link.classList.toggle("active", isActive);
-			if (isActive) {
-				link.setAttribute("aria-current", "true");
-			} else {
-				link.removeAttribute("aria-current");
-			}
-		}
-	}
-
-	function setActiveTab(nextTab) {
-		activeTab = nextTab;
-		for (const panel of shelfPanels) {
-			panel.hidden = panel.dataset.panel !== nextTab;
-		}
-		syncSidebarFilterActive(nextTab);
-	}
-
 	function moveEntryToShelf(entryId, nextStatus) {
 		const entry = entries.find((item) => item.id === entryId);
 		if (!entry) return;
-		const status = String(nextStatus || "").trim();
-		if (status !== "want_to_read" && status !== "reading" && status !== "finished") return;
+		const status = normalizeShelfStatus(nextStatus);
+		if (!status) return;
 		const previousStatus = entry.status;
 		entry.status = status;
 		entry.updatedAt = Date.now();
@@ -2604,7 +2620,6 @@ if (isAuthenticated) {
 			logShelfUpdate(entry, status);
 		}
 		renderLists();
-		setActiveTab(status);
 		void syncEntryToServer(entry);
 	}
 
@@ -2649,7 +2664,6 @@ if (isAuthenticated) {
 			logShelfUpdate(entry, "finished");
 		}
 		renderLists();
-		setActiveTab("finished");
 		void syncEntryToServer(entry);
 	}
 
@@ -2775,13 +2789,6 @@ if (isAuthenticated) {
 		loadListSorts();
 		syncSortInputs();
 
-		if (wantToReadSort instanceof HTMLSelectElement) {
-			wantToReadSort.addEventListener("change", () => {
-				listSorts.want_to_read = normalizeSortValue(wantToReadSort.value, "want_to_read");
-				saveListSorts();
-				renderLists();
-			});
-		}
 		if (readingSort instanceof HTMLSelectElement) {
 			readingSort.addEventListener("change", () => {
 				listSorts.reading = normalizeSortValue(readingSort.value, "reading");
@@ -2798,18 +2805,18 @@ if (isAuthenticated) {
 		}
 	}
 
-	for (const link of shelfFilterLinks) {
-		link.addEventListener("click", (event) => {
-			event.preventDefault();
-			const tabName = normalizeHashToTab(link.getAttribute("href"));
-			history.replaceState(null, "", `#${tabName}`);
-			setActiveTab(tabName);
-		});
+	function handlePaginationClick(event) {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		const button = target.closest('[data-action="page"]');
+		if (!(button instanceof HTMLButtonElement)) return;
+		const section = String(button.dataset.section || "");
+		const page = Math.max(1, Number(button.dataset.page || 1) || 1);
+		if (section === "recent") sectionPages.recent = page;
+		if (section === "reading") sectionPages.reading = page;
+		if (section === "finished") sectionPages.finished = page;
+		renderLists();
 	}
-
-	window.addEventListener("hashchange", () => {
-		setActiveTab(normalizeHashToTab(window.location.hash));
-	});
 
 	document.addEventListener("click", (event) => {
 		const target = event.target;
@@ -2818,10 +2825,11 @@ if (isAuthenticated) {
 		closeCardMenus();
 	});
 
-	wantToReadList.addEventListener("click", handleListClick);
+	recentActivityPagination?.addEventListener("click", handlePaginationClick);
+	readingPagination?.addEventListener("click", handlePaginationClick);
+	finishedPagination?.addEventListener("click", handlePaginationClick);
 	currentlyReadingList.addEventListener("click", handleListClick);
 	finishedList.addEventListener("click", handleListClick);
-	wantToReadList.addEventListener("keydown", handleListKeydown);
 	currentlyReadingList.addEventListener("keydown", handleListKeydown);
 	finishedList.addEventListener("keydown", handleListKeydown);
 
@@ -2830,11 +2838,6 @@ if (isAuthenticated) {
 	loadEntries();
 	cleanupLikelyImportedFinishedDates();
 	renderLists();
-	const initialTab = normalizeShelfParamToTab(shelfViewParam) || normalizeHashToTab(window.location.hash);
-	setActiveTab(initialTab || "reading");
-	if (normalizeShelfParamToTab(shelfViewParam)) {
-		history.replaceState(null, "", `#${initialTab}`);
-	}
 	void enrichMissingCovers();
 	void hydrateProfileInfoFromServer();
 	void hydrateEntriesFromServer();
@@ -3327,6 +3330,18 @@ if (isAuthenticated) {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
+	.reads-page .section-pagination {
+		margin-top: 0.65rem;
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+	}
+
+	.reads-page .section-pagination span {
+		font-size: 0.84rem;
+		color: #4d4d4d;
+	}
+
 	.reads-page .entry-card {
 		border: 1px solid #d8d8d8;
 		border-radius: 12px;
@@ -3336,6 +3351,13 @@ if (isAuthenticated) {
 		gap: 0.65rem;
 		background: #fff;
 		position: relative;
+	}
+
+	.reads-page .activity-date-line {
+		display: inline-block;
+		margin-top: 0.1rem;
+		color: #5b6470;
+		font-weight: 600;
 	}
 
 	.reads-page .entry-card.is-menu-open {

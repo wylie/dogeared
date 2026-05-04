@@ -1,0 +1,234 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BookCard from "../../components/BookCard.astro";
+import ShelfDropdown from "../../components/ShelfDropdown.astro";
+import Chip from "../../components/Chip.astro";
+import { getNeonSql } from "../../lib/neon";
+import { resolveUserBySession } from "../../lib/auth";
+import { authorHref, canonicalizeAuthor, normalizeAuthorName, slugifyAuthor } from "../../lib/author";
+
+export const prerender = false;
+
+type BookRow = {
+	id: number;
+	title: string;
+	author: string;
+	shelves: number;
+	readers: number;
+	genres: string[];
+	coverUrl: string;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+	googleBooksId: string;
+	synopsis: string;
+};
+
+const slug = String(Astro.params.slug || "").trim().toLowerCase();
+const requestedName = normalizeAuthorName(Astro.url.searchParams.get("name"));
+const canonicalFromSlug = slug.replace(/[^a-z0-9]+/g, "");
+const canonical = canonicalizeAuthor(requestedName) || canonicalFromSlug;
+
+const session = await resolveUserBySession(Astro.request);
+const viewerUserId = String(session?.userId || "");
+
+let authorName = requestedName;
+let books: BookRow[] = [];
+let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
+let errorMessage = "";
+let bio = "";
+let bioSource = "";
+let bioSourceUrl = "";
+let authorPhotoUrl = "";
+let shelvesCount = 0;
+let readersCount = 0;
+
+async function fetchOpenLibraryBio(name: string) {
+	if (!name) return null;
+	try {
+		const searchUrl = `https://openlibrary.org/search/authors.json?q=${encodeURIComponent(name)}`;
+		const searchRes = await fetch(searchUrl);
+		if (!searchRes.ok) return null;
+		const searchJson = await searchRes.json();
+		const docs = Array.isArray(searchJson?.docs) ? searchJson.docs : [];
+		if (docs.length === 0) return null;
+		const targetLower = name.toLowerCase();
+		const candidate = docs.find((row: any) => String(row?.name || "").trim().toLowerCase() === targetLower) || docs[0];
+		const key = String(candidate?.key || "").trim();
+		if (!key) return null;
+		const detailsRes = await fetch(`https://openlibrary.org${encodeURIComponent(key).replace(/%2F/g, "/")}.json`);
+		if (!detailsRes.ok) return null;
+		const details = await detailsRes.json();
+		const bioRaw = typeof details?.bio === "string" ? details.bio : String(details?.bio?.value || "");
+		const photoId = Number(Array.isArray(details?.photos) ? details.photos[0] : 0) || 0;
+		return {
+			bio: String(bioRaw || "").replace(/\s+/g, " ").trim(),
+			photoUrl: photoId > 0 ? `https://covers.openlibrary.org/a/id/${photoId}-L.jpg` : "",
+			sourceUrl: `https://openlibrary.org${key}`
+		};
+	} catch {
+		return null;
+	}
+}
+
+try {
+	const sql = getNeonSql();
+	const rows = await sql<BookRow[]>`
+		select
+			b.id,
+			b.title,
+			coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+			count(distinct ub.user_id)::int as shelves,
+			count(distinct ub.user_id)::int as readers,
+			coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}') as genres,
+			coalesce(nullif(trim(b.cover_url), ''), '') as "coverUrl",
+			coalesce(nullif(trim(b.language), ''), '') as language,
+			coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+			coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+			coalesce(nullif(trim(b.google_books_id), ''), '') as "googleBooksId",
+			coalesce(nullif(trim(b.synopsis), ''), '') as synopsis
+		from book b
+		left join user_book ub on ub.book_id = b.id
+		left join book_genre bg on bg.book_id = b.id
+		where lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+		group by b.id, b.title, b.primary_author, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis
+		order by shelves desc, readers desc, b.title asc
+	`;
+
+	if (rows.length > 0) {
+		authorName = normalizeAuthorName(rows[0].author);
+		books = rows;
+		shelvesCount = rows.reduce((sum, row) => sum + Number(row.shelves || 0), 0);
+		readersCount = Math.max(...rows.map((row) => Number(row.readers || 0)), 0);
+	}
+
+	if (viewerUserId && books.length > 0) {
+		const bookIds = Array.from(new Set(books.map((book) => Number(book.id || 0)).filter((id) => id > 0)));
+		if (bookIds.length > 0) {
+			const statuses = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished" }>>`
+				select book_id, status
+				from user_book
+				where user_id = ${viewerUserId}::uuid
+					and book_id = any(${bookIds}::bigint[])
+			`;
+			viewerStatusByBookId = new Map(statuses.map((row) => [Number(row.book_id || 0), row.status]));
+		}
+	}
+
+	if (authorName) {
+		const openLibrary = await fetchOpenLibraryBio(authorName);
+		if (openLibrary?.bio) {
+			bio = openLibrary.bio;
+			bioSource = "Open Library";
+			bioSourceUrl = openLibrary.sourceUrl;
+		}
+		if (openLibrary?.photoUrl) {
+			authorPhotoUrl = openLibrary.photoUrl;
+		}
+	}
+} catch (error) {
+	errorMessage = error instanceof Error ? error.message : "Failed to load author page.";
+}
+
+const displayName = authorName || requestedName || slug.replace(/-/g, " ");
+const canonicalHref = authorHref(displayName);
+if (displayName && canonicalHref && canonicalHref !== Astro.url.pathname + Astro.url.search) {
+	// no-op: keep canonical URL rendering simple; avoid forced redirect for now
+}
+---
+
+<Layout title={displayName ? `${displayName} · Author` : "Author"}>
+	<div slot="right" class="author-page">
+		{errorMessage && <p class="error">{errorMessage}</p>}
+
+		<section class="panel author-head">
+			<div class="author-photo">
+				{authorPhotoUrl
+					? <img src={authorPhotoUrl} alt={`${displayName} photo`} loading="lazy" />
+					: <div class="photo-placeholder"><span class="material-icons" aria-hidden="true">person</span></div>}
+			</div>
+			<div class="author-meta">
+				<h1>{displayName || "Author"}</h1>
+				<p class="meta">Books on Dogeared: {books.length.toLocaleString()}</p>
+				<p class="meta">Readers: {readersCount.toLocaleString()} · Shelf entries: {shelvesCount.toLocaleString()}</p>
+				{bio ? (
+					<p class="bio">
+						{bio}
+						{bioSourceUrl && <> <a class="author-link" href={bioSourceUrl} target="_blank" rel="noreferrer noopener">Source: {bioSource}</a></>}
+					</p>
+				) : (
+					<p class="bio">Bio unavailable right now.</p>
+				)}
+			</div>
+		</section>
+
+		<section class="books-section">
+			<h2>Books</h2>
+			{books.length === 0 ? (
+				<p>No books found for this author yet.</p>
+			) : (
+				<ul class="book-grid">
+					{books.map((book) => (
+						<li>
+							<BookCard
+								title={book.title}
+								titleHref={`/book?bookId=${encodeURIComponent(String(book.id))}&isbn13=${encodeURIComponent(book.isbn13 || "")}&isbn10=${encodeURIComponent(book.isbn10 || "")}&title=${encodeURIComponent(book.title)}&author=${encodeURIComponent(book.author)}`}
+								author={book.author}
+								authorHref={book.author ? authorHref(book.author) : ""}
+								thumbnail={book.coverUrl}
+								description={book.synopsis || "Synopsis unavailable for this title."}
+							>
+								<div slot="preMeta">
+									<p class="meta">Readers: {book.readers} · Shelf entries: {book.shelves}</p>
+								</div>
+								<div slot="footer" class="book-card-footer">
+									<div class="chips">
+										{(book.genres.length > 0 ? book.genres : ["Uncategorized"]).slice(0, 4).map((genre) => (
+											<Chip className="genre-chip" label={genre} />
+										))}
+									</div>
+									<ShelfDropdown attrs={{
+										"data-book-id": String(book.id || 0),
+										"data-initial-status": viewerStatusByBookId.get(Number(book.id || 0)) || "",
+										"data-title": book.title,
+										"data-author": book.author,
+										"data-cover": book.coverUrl,
+										"data-language": book.language,
+										"data-isbn10": book.isbn10,
+										"data-isbn13": book.isbn13,
+										"data-google-books-id": book.googleBooksId,
+										"data-categories": JSON.stringify(book.genres ?? [])
+									}} />
+								</div>
+							</BookCard>
+						</li>
+					))}
+				</ul>
+			)}
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.author-page { max-width: 980px; }
+	.panel { border: none; border-radius: 14px; background: var(--color-surface); padding: 1rem; }
+	.author-head { display: grid; grid-template-columns: 120px 1fr; gap: 1rem; }
+	.author-photo img, .photo-placeholder { width: 120px; height: 120px; border-radius: 12px; object-fit: cover; background: #f0f0f0; border: 1px solid #ddd; }
+	.photo-placeholder { display: grid; place-items: center; color: #8a8a8a; }
+	.author-meta h1 { margin: 0; }
+	.meta { margin: 0.2rem 0; color: #4d4d4d; }
+	.bio { margin-top: 0.6rem; line-height: 1.5; }
+	.books-section { margin-top: 0.8rem; }
+	.books-section h2 { margin: 0 0 0.6rem; }
+	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.book-card-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
+	.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+	.error { color: #991b1b; }
+	@media (max-width: 860px) {
+		.book-grid { grid-template-columns: 1fr; }
+	}
+	@media (max-width: 640px) {
+		.author-head { grid-template-columns: 1fr; }
+		.author-photo img, .photo-placeholder { width: 96px; height: 96px; }
+	}
+</style>

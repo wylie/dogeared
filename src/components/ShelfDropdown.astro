@@ -14,21 +14,40 @@ const hasInitialStatus = initialStatusRaw === "reading" || initialStatusRaw === 
 const initialLabel = initialStatus === "reading"
 	? "Currently Reading"
 	: (initialStatus === "finished" ? "Read" : "Want to Read");
+const initialIcon = initialStatus === "reading"
+	? "menu_book"
+	: (initialStatus === "finished" ? "check" : "add");
 ---
 
 <div
 	class={`shelf-dropdown${hasInitialStatus ? " is-shelved" : ""}`}
 	{...attrs}
 >
-	<button type="button" class="shelf-trigger" data-action="toggle-shelf" aria-expanded="false">
-		<span class="material-icons shelf-check" aria-hidden="true">check</span>
-		<span class="shelf-label">{initialLabel}</span>
-		<span class="material-icons shelf-icon" aria-hidden="true">arrow_drop_down</span>
+	<button
+		type="button"
+		class="shelf-trigger shelf-fab"
+		data-action="toggle-shelf"
+		data-status={initialStatus}
+		aria-expanded="false"
+		aria-label={`Shelf: ${initialLabel}. Open shelf options`}
+		title={`Shelf: ${initialLabel}`}
+	>
+		<span class="material-icons shelf-plus" aria-hidden="true">{initialIcon}</span>
 	</button>
+	<p class="shelf-state">{initialLabel}</p>
 	<div class="shelf-menu" hidden>
-		<button type="button" class="shelf-option" data-action="set-shelf" data-status="want_to_read">Want to Read</button>
-		<button type="button" class="shelf-option" data-action="set-shelf" data-status="reading">Currently Reading</button>
-		<button type="button" class="shelf-option" data-action="set-shelf" data-status="finished">Read</button>
+		<button type="button" class="shelf-option" data-action="set-shelf" data-status="want_to_read">
+			<span class="material-icons shelf-option-icon" aria-hidden="true">add</span>
+			<span>Want to Read</span>
+		</button>
+		<button type="button" class="shelf-option" data-action="set-shelf" data-status="reading">
+			<span class="material-icons shelf-option-icon" aria-hidden="true">menu_book</span>
+			<span>Currently Reading</span>
+		</button>
+		<button type="button" class="shelf-option" data-action="set-shelf" data-status="finished">
+			<span class="material-icons shelf-option-icon" aria-hidden="true">check</span>
+			<span>Read</span>
+		</button>
 	</div>
 	<p class="shelf-feedback" hidden></p>
 </div>
@@ -39,44 +58,44 @@ const initialLabel = initialStatus === "reading"
 		display: inline-flex;
 		flex-direction: column;
 		align-items: flex-start;
-		min-width: 150px;
+		width: 44px;
+		min-width: 44px;
+		overflow: visible;
 	}
-	.shelf-trigger {
-		border: none;
-		border-radius: 14px;
-		padding: 0.55rem 0.9rem;
-		font-size: 0.95rem;
-		background: var(--color-primary);
-		color: #fff;
+	.shelf-dropdown .shelf-trigger.shelf-fab {
+		width: 44px !important;
+		height: 44px !important;
+		min-width: 44px !important;
+		min-height: 44px !important;
+		border: none !important;
+		border-radius: 999px !important;
+		padding: 0 !important;
+		background: var(--color-primary) !important;
+		color: #fff !important;
 		cursor: pointer;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.45rem;
+		display: grid !important;
+		place-items: center !important;
+		line-height: 1 !important;
+	}
+	.shelf-dropdown .shelf-trigger.shelf-fab:hover {
+		background: var(--color-primary-hover) !important;
+	}
+	.shelf-plus {
+		font-size: 1.4rem;
 		line-height: 1;
 	}
-	.shelf-trigger:hover {
-		background: var(--color-primary-hover);
-	}
-	.shelf-label {
+	.shelf-state {
+		margin: 0.22rem 0 0;
+		font-size: 0.72rem;
+		line-height: 1.1;
 		font-weight: 700;
-	}
-	.shelf-icon {
-		font-size: 1.2rem;
-		line-height: 1;
-	}
-	.shelf-check {
-		font-size: 1.1rem;
-		line-height: 1;
-		opacity: 0;
-		transition: opacity 120ms ease-in-out;
-	}
-	.shelf-dropdown.is-shelved .shelf-check {
-		opacity: 1;
+		color: #1f5138;
 	}
 	.shelf-menu {
 		position: absolute;
 		top: calc(100% + 4px);
-		left: 0;
+		right: 0 !important;
+		left: auto !important;
 		min-width: 180px;
 		background: #fff;
 		border: 1px solid #c9c9c9;
@@ -86,7 +105,9 @@ const initialLabel = initialStatus === "reading"
 		z-index: 25;
 	}
 	.shelf-option {
-		display: block;
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
 		width: 100%;
 		text-align: left;
 		border: none;
@@ -96,13 +117,35 @@ const initialLabel = initialStatus === "reading"
 		cursor: pointer;
 		color: #222;
 	}
+	.shelf-option-icon {
+		font-size: 1.15rem;
+		line-height: 1;
+		color: var(--color-primary) !important;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		vertical-align: middle;
+		transform: translateY(0);
+		font-weight: 700;
+	}
 	.shelf-option:hover {
 		background: #f2f2f2;
 	}
 	.shelf-feedback {
-		margin-top: 0.25rem;
+		position: absolute;
+		top: calc(100% + 6px);
+		right: 0;
+		margin: 0;
 		font-size: 0.82rem;
 		color: var(--color-secondary);
 		line-height: 1.25;
+		white-space: nowrap;
+		background: transparent !important;
+		border: none !important;
+		border-radius: 0 !important;
+		box-shadow: none !important;
+		outline: none !important;
+		padding: 0 !important;
+		z-index: 40;
 	}
 </style>

@@ -44,8 +44,10 @@ export function renderProfileBookCard(entry: ProfileEntry, options: RenderOption
 	} = options;
 
 	const titleHref = `/book?bookId=${encodeURIComponent(String(entry.bookId || 0))}&isbn13=${encodeURIComponent(String(entry.isbn13 || ""))}&isbn10=${encodeURIComponent(String(entry.isbn10 || ""))}&title=${encodeURIComponent(String(entry.title || ""))}&author=${encodeURIComponent(String(entry.author || ""))}`;
+	const authorName = String(entry.author || "").trim();
+	const authorSlug = authorName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 	const author = entry.author
-		? `<p class="meta"><a class="author-link" href="/related?kind=author&value=${encodeURIComponent(String(entry.author || ""))}">${escapeHtml(entry.author)}</a></p>`
+		? `<p class="meta"><a class="author-link" href="/author/${encodeURIComponent(authorSlug)}?name=${encodeURIComponent(authorName)}">${escapeHtml(entry.author)}</a></p>`
 		: "";
 	const formatMeta = entry.format ? `<p class="meta">${escapeHtml(entry.format)}${entry.language ? ` • ${escapeHtml(String(entry.language).toUpperCase())}` : ""}</p>` : "";
 	const publishedMeta = entry.publishedDate ? `<p class="meta">Published: ${escapeHtml(formatPublishedLabel(entry.publishedDate))}</p>` : "";

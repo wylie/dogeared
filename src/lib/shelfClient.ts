@@ -72,8 +72,27 @@ export function promptForShelfLogin(redirectPath = "/settings#account-settings")
 }
 
 export function setDropdownLabel(dropdown: Element, status: string) {
-	const label = dropdown.querySelector(".shelf-label");
-	if (label) label.textContent = statusLabel(status);
+	const normalizedStatus = String(status || "").trim();
+	const nextStatus = (
+		normalizedStatus === "reading" || normalizedStatus === "finished" || normalizedStatus === "want_to_read"
+	)
+		? normalizedStatus
+		: "want_to_read";
+	const nextLabel = statusLabel(nextStatus);
+	const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
+	if (trigger instanceof HTMLElement) {
+		trigger.setAttribute("data-status", nextStatus);
+		trigger.setAttribute("aria-label", `Shelf: ${nextLabel}. Open shelf options`);
+		trigger.setAttribute("title", `Shelf: ${nextLabel}`);
+	}
+	const state = dropdown.querySelector(".shelf-state");
+	if (state) state.textContent = nextLabel;
+	const icon = dropdown.querySelector(".shelf-plus");
+	if (icon) {
+		icon.textContent = nextStatus === "finished"
+			? "check"
+			: (nextStatus === "reading" ? "menu_book" : "add");
+	}
 }
 
 export function setShelvedState(dropdown: Element, isShelved: boolean) {
