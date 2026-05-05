@@ -8,7 +8,7 @@ const isActive = (href: string) => normalize(current) === normalize(href);
   <ul>
     <li><a href="/" class="special-font">Dogeared</a></li>
     <li><input type="search" /></li>
-    <li class="material-icons"><a href={isActive('/profile') ? undefined : '/profile'} class={isActive('/profile') ? 'active' : 'hover'} aria-current={isActive('/profile') ? 'page' : undefined}>person</a></li>
+    <li class="material-icons"><a href="/settings#account-settings" class="hover">person</a></li>
   </ul>
 </nav>
 

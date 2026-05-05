@@ -1249,7 +1249,7 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 	}
 </style>
 
-<script type="module">
+<script>
 	import {
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
@@ -1855,6 +1855,20 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 		}
 		if (target.closest(".shelf-dropdown")) return;
 		closeShelfMenus(shelfDropdowns);
+	});
+
+	document.addEventListener("keydown", (event) => {
+		if (event.key !== "Enter") return;
+		const target = event.target;
+		if (!(target instanceof HTMLInputElement)) return;
+		if (!target.classList.contains("progress-inline-input")) return;
+		event.preventDefault();
+		const card = target.closest(".book-card");
+		if (!(card instanceof HTMLElement)) return;
+		const saveButton = card.querySelector('[data-action="save-reading-progress"]');
+		if (!(saveButton instanceof HTMLButtonElement)) return;
+		if (saveButton.disabled) return;
+		saveButton.click();
 	});
 
 	void (async () => {

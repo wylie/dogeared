@@ -85,7 +85,7 @@ if (query) {
 		{!query && <p>Enter a search term to find books.</p>}
 		{query && errorMessage && <p>Search failed: {errorMessage}</p>}
 		{query && !errorMessage && results.length === 0 && <p>No results for "{query}".</p>}
-		{query && !errorMessage && results.length > 0 && <p>Results for "{query}". Use the shelf dropdown to save to <a href="/profile">Profile</a>.</p>}
+		{query && !errorMessage && results.length > 0 && <p>Results for "{query}". Use the shelf dropdown to save to <a href="/settings#account-settings">Profile</a>.</p>}
 
 		<ul class="search-results" id="search-results">
 			{results.map((result) => (
@@ -426,7 +426,7 @@ if (query) {
 	}
 </style>
 
-<script type="module">
+<script>
 	import { resolveClientAuthState } from "../lib/clientAuth.ts";
 	import {
 		buildShelfEntryFromRecord,
