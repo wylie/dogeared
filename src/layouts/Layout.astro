@@ -3,6 +3,10 @@ import LeftHand from '../components/LeftHand.astro';
 type SectionLink = { id: string; label: string };
 const { title = "Dogeared", sectionLinks = [] } = Astro.props as { title?: string; sectionLinks?: SectionLink[] };
 const currentPath = Astro.url.pathname;
+const metaDescription = "Track what matters. Find your next great read. Keep your shelves focused. Make reading feel like yours.";
+const pageTitle = `${title} | Dogeared`;
+const canonicalUrl = new URL(currentPath, Astro.site ?? Astro.url).toString();
+const ogImageUrl = new URL("/og-image.png", Astro.site ?? Astro.url).toString();
 import '../assets/global.css';
 ---
 
@@ -31,10 +35,24 @@ import '../assets/global.css';
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="icon" href="/favicon.ico" />
 		<meta name="generator" content={Astro.generator} />
-		<title>{title} | Dogeared</title>
+		<title>{pageTitle}</title>
+		<link rel="canonical" href={canonicalUrl} />
+		<meta name="description" content={metaDescription} />
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="Dogeared" />
+		<meta property="og:title" content={pageTitle} />
+		<meta property="og:description" content={metaDescription} />
+		<meta property="og:url" content={canonicalUrl} />
+		<meta property="og:image" content={ogImageUrl} />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={pageTitle} />
+		<meta name="twitter:description" content={metaDescription} />
+		<meta name="twitter:image" content={ogImageUrl} />
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-		<link href="https://fonts.googleapis.com/css2?family=Chewy&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Permanent+Marker&display=swap" rel="stylesheet">
+		<link href="https://fonts.googleapis.com/css2?family=Copse&family=Outfit:wght@100..900&display=swap" rel="stylesheet">
 		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 	</head>
 		<body>
@@ -44,7 +62,7 @@ import '../assets/global.css';
 						<LeftHand current={currentPath} sectionLinks={sectionLinks} />
 					</slot>
 				</div>
-				<div class="column">
+				<div class="column content-column">
 					<slot name="right">
 						<slot />
 					</slot>
