@@ -427,7 +427,7 @@ if (query) {
 </style>
 
 <script type="module">
-	import { resolveClientAuthState } from "/src/lib/clientAuth.ts";
+	import { resolveClientAuthState } from "../lib/clientAuth.ts";
 	import {
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
@@ -439,14 +439,14 @@ if (query) {
 		statusLabel,
 		saveShelfEntryWithRetry,
 		toggleShelfMenu
-	} from "/src/lib/shelfClient.ts";
+	} from "../lib/shelfClient.ts";
 	import {
 		loadShelfEntries,
 		loadShelfUpdates,
 		migrateShelfEntriesInPlace,
 		saveShelfEntries,
 		saveShelfUpdates
-	} from "/src/lib/shelfStorage.ts";
+	} from "../lib/shelfStorage.ts";
 
 	const searchPage = document.getElementById("search-page");
 	let isAuthenticated = searchPage?.dataset.authenticated === "true";

@@ -1259,11 +1259,11 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 		statusLabel,
 		saveShelfEntryWithRetry,
 		toggleShelfMenu
-	} from "/src/lib/shelfClient.ts";
+	} from "../../lib/shelfClient.ts";
 	import {
 		loadShelfEntries,
 		migrateShelfEntriesInPlace
-	} from "/src/lib/shelfStorage.ts";
+	} from "../../lib/shelfStorage.ts";
 	const followToggle = document.getElementById("follow-toggle");
 	const followFeedback = document.getElementById("follow-feedback");
 	const followersCountNode = document.getElementById("follow-count-followers");

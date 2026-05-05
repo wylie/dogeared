@@ -335,7 +335,7 @@ if (!distinctReaders) distinctReaders = Math.max(...books.map((row) => Number(ro
 		statusLabel,
 		saveShelfEntryWithRetry,
 		toggleShelfMenu
-	} from "/src/lib/shelfClient.ts";
+	} from "../lib/shelfClient.ts";
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	const feedbackTimers = new WeakMap();
 

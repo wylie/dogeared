@@ -401,13 +401,13 @@ if (isAuthenticated) {
 </Layout>
 
 <script type="module">
-	import { renderProfileBookCard } from "/src/lib/profileBookCardTemplate.ts";
+	import { renderProfileBookCard } from "../lib/profileBookCardTemplate.ts";
 	import {
 		loadShelfUpdates as loadSharedShelfUpdates,
 		migrateShelfEntriesInPlace,
 		saveShelfEntries,
 		saveShelfUpdates as saveSharedShelfUpdates
-	} from "/src/lib/shelfStorage.ts";
+	} from "../lib/shelfStorage.ts";
 
 	const profilePageRoot = document.querySelector(".reads-page");
 	if (profilePageRoot?.dataset.authenticated === "true") {

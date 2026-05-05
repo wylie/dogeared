@@ -608,7 +608,7 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 </style>
 
 <script type="module">
-	import { resolveClientAuthState } from "/src/lib/clientAuth.ts";
+	import { resolveClientAuthState } from "../lib/clientAuth.ts";
 	import {
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
@@ -619,8 +619,8 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 		statusLabel,
 		saveShelfEntryWithRetry,
 		toggleShelfMenu
-	} from "/src/lib/shelfClient.ts";
-	import { normalizeBookPayload } from "/src/lib/bookPayload.ts";
+	} from "../lib/shelfClient.ts";
+	import { normalizeBookPayload } from "../lib/bookPayload.ts";
 
 	const page = document.querySelector(".book-page");
 	let isAuthenticated = page?.dataset.authenticated === "true";
