@@ -25,6 +25,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     </form>
     <ul id="left-hand-primary-links" class="primary-links">
       <li id="left-hand-login-item"><button type="button" class="nav-text-button hover">Log In</button></li>
+      <li id="left-hand-following-item" hidden><a href={isActive('/following') ? undefined : '/following'} class={isActive('/following') ? 'active' : 'hover'} aria-current={isActive('/following') ? 'page' : undefined}>Following</a></li>
       <li id="left-hand-profile-item" hidden><a href="/settings#account-settings" class="hover">Profile</a></li>
       <li><a href={isActive('/mission') ? undefined : '/mission'} class={isActive('/mission') ? 'active' : 'hover'} aria-current={isActive('/mission') ? 'page' : undefined}>Mission</a></li>
       <li><a href={isActive('/metrics') ? undefined : '/metrics'} class={isActive('/metrics') ? 'active' : 'hover'} aria-current={isActive('/metrics') ? 'page' : undefined}>Metrics</a></li>
@@ -35,7 +36,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     {sectionLinks.length > 0 && (
       <ul class="quick-links">
         {sectionLinks.map((link) => (
-          <li><a href={`#${link.id}`} class="hover">{link.label}</a></li>
+          <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
         ))}
       </ul>
     )}
@@ -66,6 +67,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
+    position: relative;
   }
   .mobile-top-row {
     display: block;
@@ -81,13 +83,14 @@ const query = Astro.url.searchParams.get("q") ?? "";
     overflow: auto;
   }
   .left-hand-footer-logo {
-    margin-top: auto;
-    width: 90%;
-    align-self: center;
-    padding-top: 0.9rem;
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: min(90%, 260px);
     display: flex;
     justify-content: center;
-    margin-bottom: -2rem;
+    pointer-events: none;
   }
   .left-hand-footer-logo img {
     width: 100%;
@@ -112,6 +115,10 @@ const query = Astro.url.searchParams.get("q") ?? "";
     text-underline-offset: 3px;
     text-decoration-thickness: 2px;
     cursor: default;
+  }
+  .quick-links a.section-active {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .hover:hover {
     text-decoration: underline;
@@ -376,6 +383,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   const leftHandPrimaryLinks = document.getElementById("left-hand-primary-links");
   const leftHandLoginItem = document.getElementById("left-hand-login-item");
   const leftHandLoginButton = leftHandLoginItem?.querySelector("button");
+  const leftHandFollowingItem = document.getElementById("left-hand-following-item");
   const leftHandProfileItem = document.getElementById("left-hand-profile-item");
   const leftHandProfileLink = leftHandProfileItem?.querySelector("a");
   const leftHandSettingsItem = document.getElementById("left-hand-settings-item");
@@ -416,6 +424,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
 
   function applyLeftHandAuthState(authenticated) {
     if (leftHandLoginItem instanceof HTMLElement) leftHandLoginItem.hidden = authenticated;
+    if (leftHandFollowingItem instanceof HTMLElement) leftHandFollowingItem.hidden = !authenticated;
     if (leftHandProfileItem instanceof HTMLElement) leftHandProfileItem.hidden = !authenticated;
     if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = !authenticated;
     if (leftHandLogoutItem instanceof HTMLElement) leftHandLogoutItem.hidden = !authenticated;
@@ -517,6 +526,67 @@ const query = Astro.url.searchParams.get("q") ?? "";
       leftHandMenuToggle.setAttribute("aria-label", "Open navigation menu");
     }
   });
+
+  const sectionNavLinks = Array.from(document.querySelectorAll("[data-section-link]"));
+  const sectionTargets = sectionNavLinks
+    .map((link) => {
+      if (!(link instanceof HTMLAnchorElement)) return null;
+      const id = String(link.dataset.sectionLink || "").trim();
+      const target = id ? document.getElementById(id) : null;
+      return target ? { id, link, target } : null;
+    })
+    .filter(Boolean);
+
+  function setActiveSectionLink(id) {
+    for (const item of sectionTargets) {
+      item.link.classList.toggle("section-active", item.id === id);
+      if (item.id === id) item.link.setAttribute("aria-current", "location");
+      else item.link.removeAttribute("aria-current");
+    }
+  }
+
+  function resolveCurrentSectionId() {
+    const first = sectionTargets[0];
+    const last = sectionTargets[sectionTargets.length - 1];
+    if (!first || !last) return "";
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    if (scrollY <= 8) return first.id;
+    if (maxScroll > 0 && scrollY >= maxScroll - 8) return last.id;
+
+    let currentId = first.id;
+    const marker = Math.max(120, window.innerHeight * 0.28);
+    for (const item of sectionTargets) {
+      const rect = item.target.getBoundingClientRect();
+      if (rect.top <= marker) currentId = item.id;
+      else break;
+    }
+    return currentId;
+  }
+
+  if (sectionTargets.length > 0) {
+    let ticking = false;
+    function updateActiveSectionLink() {
+      setActiveSectionLink(resolveCurrentSectionId());
+    }
+    function requestActiveSectionUpdate() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        updateActiveSectionLink();
+        ticking = false;
+      });
+    }
+    setActiveSectionLink(resolveCurrentSectionId());
+    window.addEventListener("scroll", requestActiveSectionUpdate, { passive: true });
+    window.addEventListener("resize", requestActiveSectionUpdate);
+    window.addEventListener("load", updateActiveSectionLink);
+    window.addEventListener("hashchange", () => {
+      const id = window.location.hash.replace(/^#/, "");
+      if (id) setActiveSectionLink(id);
+      else updateActiveSectionLink();
+    });
+  }
 
   subscribeAuthStateChange(() => {
     void syncLeftHandAuthState();

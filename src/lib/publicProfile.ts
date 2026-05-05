@@ -1,5 +1,6 @@
 import { getNeonSql } from "./neon";
 import { resolvePrivacySettings, resolveViewerProfileAccess } from "./privacy";
+import { canViewerSeeDemoTestUser, isDemoTestUsername } from "./demoVisibility";
 
 function normalizeText(value: unknown) {
 	return String(value || "").trim();
@@ -84,6 +85,17 @@ export async function resolvePublicProfileBundle(input: {
 	`;
 	const user = users[0];
 	if (!user?.id) {
+		return {
+			status: "not_found",
+			profile: null,
+			canViewActivity: false,
+			followersCount: 0,
+			followingCount: 0,
+			isViewerFollowing: false,
+			targetUserId: ""
+		};
+	}
+	if (isDemoTestUsername(user.username) && !(await canViewerSeeDemoTestUser(input.viewerUserId))) {
 		return {
 			status: "not_found",
 			profile: null,

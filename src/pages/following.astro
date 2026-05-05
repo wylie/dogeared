@@ -1,0 +1,668 @@
+---
+import Layout from "../layouts/Layout.astro";
+import BookCard from "../components/BookCard.astro";
+import ShelfDropdown from "../components/ShelfDropdown.astro";
+import { resolveUserBySession } from "../lib/auth";
+import { authorHref } from "../lib/author";
+import {
+	activityHeading,
+	formatActivityDate,
+	renderRatingStars,
+	resolveFollowingCount,
+	resolveFollowingFeedActivity,
+	resolveFollowingReaders,
+	resolvePublicReaderSuggestions,
+	resolveViewerStatusByBookId
+} from "../lib/feed";
+
+export const prerender = false;
+
+const session = await resolveUserBySession(Astro.request);
+if (!session?.userId) {
+	return Astro.redirect("/");
+}
+
+const viewerUserId = session.userId;
+const followingCount = await resolveFollowingCount(viewerUserId);
+const [activity, suggestions, followingReaders] = await Promise.all([
+	followingCount > 0 ? resolveFollowingFeedActivity(viewerUserId, 60) : Promise.resolve([]),
+	followingCount === 0 ? resolvePublicReaderSuggestions(viewerUserId, 60) : Promise.resolve([]),
+	followingCount > 0 ? resolveFollowingReaders(viewerUserId, 60) : Promise.resolve([])
+]);
+const viewerStatusByBookId = await resolveViewerStatusByBookId(
+	viewerUserId,
+	activity.map((item) => item.bookId)
+);
+const mockPeopleToFollow = [
+	{
+		name: "Maya Chen",
+		username: "maya_reads",
+		avatar: "https://i.pravatar.cc/160?img=47",
+		location: "Portland, OR",
+		blurb: "Literary fiction, essays, and anything with a sharp sense of place.",
+		readingGoal: "42 books in 2026",
+		favoriteBook: "Station Eleven",
+		favoriteAuthor: "Ursula K. Le Guin"
+	},
+	{
+		name: "Theo Brooks",
+		username: "theobookstack",
+		avatar: "https://i.pravatar.cc/160?img=12",
+		location: "Chicago, IL",
+		blurb: "Slow reader, heavy annotator, always looking for excellent nonfiction.",
+		readingGoal: "24 books in 2026",
+		favoriteBook: "The Warmth of Other Suns",
+		favoriteAuthor: "James Baldwin"
+	},
+	{
+		name: "Priya Nair",
+		username: "priya_pages",
+		avatar: "https://i.pravatar.cc/160?img=32",
+		location: "Austin, TX",
+		blurb: "Fantasy, translated fiction, and books with maps in the front.",
+		readingGoal: "60 books in 2026",
+		favoriteBook: "Piranesi",
+		favoriteAuthor: "N. K. Jemisin"
+	},
+	{
+		name: "Sam Rivera",
+		username: "samreads",
+		avatar: "https://i.pravatar.cc/160?img=59",
+		location: "Brooklyn, NY",
+		blurb: "Mostly poetry, food writing, and short novels for long train rides.",
+		readingGoal: "36 books in 2026",
+		favoriteBook: "A Psalm for the Wild-Built",
+		favoriteAuthor: "Mary Oliver"
+	}
+];
+const peopleToFollow = followingCount === 0 && suggestions.length > 0 ? suggestions : mockPeopleToFollow;
+const isUsingMockPeople = peopleToFollow === mockPeopleToFollow;
+---
+
+<Layout title="Following">
+	<div slot="right" class="feed-page">
+		<header class="feed-header">
+			<h1>Following</h1>
+			<p>Recent shelf activity from readers you follow.</p>
+		</header>
+
+		<section class="people-strip-section" aria-labelledby="people-strip-title">
+			<div class="section-heading-row">
+				<h2 id="people-strip-title">People to Follow</h2>
+				{isUsingMockPeople && <span>Preview data</span>}
+			</div>
+			<p class="people-strip-copy">
+				Follow other Dogeared users to discover books from readers across the community.
+			</p>
+			{peopleToFollow.length === 0 ? (
+				<p class="empty-note">No public profiles are available yet.</p>
+			) : (
+			<ul class="people-strip" aria-label="People to follow">
+				{peopleToFollow.map((reader) => (
+					<li class="people-strip-card" data-reader-card>
+						<div class="people-strip-top">
+							{reader.avatar
+								? <img src={reader.avatar} alt="" class="people-strip-avatar" />
+								: <span class="people-strip-avatar people-strip-avatar-fallback" aria-hidden="true">@</span>}
+							<button
+								type="button"
+								class="follow-button follow-button-small"
+								data-action={isUsingMockPeople ? "mock-follow-person" : "follow-reader"}
+								data-username={reader.username}
+							>
+								Follow
+							</button>
+						</div>
+						<a class="people-strip-name" href={`/u/${encodeURIComponent(reader.username)}`}>
+							<strong>{reader.name || `@${reader.username}`}</strong>
+							<span>@{reader.username}</span>
+						</a>
+						{reader.blurb && <p>{reader.blurb}</p>}
+						<div class="people-strip-facts">
+							{reader.location && <p><strong>Location:</strong> {reader.location}</p>}
+							{reader.readingGoal && <p><strong>Goal:</strong> {reader.readingGoal}</p>}
+							{reader.favoriteBook && <p>
+								<strong>Favorite book:</strong>{" "}
+								<a href={`/book?title=${encodeURIComponent(reader.favoriteBook)}${reader.favoriteAuthor ? `&author=${encodeURIComponent(reader.favoriteAuthor)}` : ""}`}>{reader.favoriteBook}</a>
+							</p>}
+							{reader.favoriteAuthor && <p>
+								<strong>Favorite author:</strong>{" "}
+								<a href={authorHref(reader.favoriteAuthor, 0)}>{reader.favoriteAuthor}</a>
+							</p>}
+						</div>
+						<p class="reader-feedback" data-reader-feedback hidden></p>
+					</li>
+				))}
+			</ul>
+			)}
+		</section>
+
+		{followingReaders.length > 0 && (
+			<section class="following-management-section" aria-labelledby="following-management-title">
+				<div class="section-heading-row">
+					<h2 id="following-management-title">Currently Following</h2>
+					<span>{followingReaders.length} reader{followingReaders.length === 1 ? "" : "s"}</span>
+				</div>
+				<ul class="following-management-grid">
+					{followingReaders.map((reader) => (
+						<li class="people-strip-card following-management-card" data-reader-card data-following-card>
+							<div class="people-strip-top">
+								{reader.avatar
+									? <img src={reader.avatar} alt="" class="people-strip-avatar" />
+									: <span class="people-strip-avatar people-strip-avatar-fallback" aria-hidden="true">@</span>}
+								<button type="button" class="follow-button follow-button-small" data-action="unfollow-reader" data-username={reader.username}>Unfollow</button>
+							</div>
+							<a class="people-strip-name" href={`/u/${encodeURIComponent(reader.username)}`}>
+								<strong>{reader.name || `@${reader.username}`}</strong>
+								<span>@{reader.username}</span>
+							</a>
+							{reader.blurb && <p>{reader.blurb}</p>}
+							<div class="people-strip-facts">
+								{reader.location && <p><strong>Location:</strong> {reader.location}</p>}
+								{reader.readingGoal && <p><strong>Goal:</strong> {reader.readingGoal}</p>}
+								{reader.favoriteBook && <p>
+									<strong>Favorite book:</strong>{" "}
+									<a href={`/book?title=${encodeURIComponent(reader.favoriteBook)}${reader.favoriteAuthor ? `&author=${encodeURIComponent(reader.favoriteAuthor)}` : ""}`}>{reader.favoriteBook}</a>
+								</p>}
+								{reader.favoriteAuthor && <p>
+									<strong>Favorite author:</strong>{" "}
+									<a href={authorHref(reader.favoriteAuthor, 0)}>{reader.favoriteAuthor}</a>
+								</p>}
+							</div>
+							<p class="reader-feedback" data-reader-feedback hidden></p>
+						</li>
+					))}
+				</ul>
+			</section>
+		)}
+
+		{followingCount > 0 && (
+			<section class="feed-activity" aria-labelledby="feed-activity-title">
+				<h2 id="feed-activity-title">Following Activity</h2>
+				{activity.length === 0 ? (
+					<div class="empty-following-panel">
+						<h2>No activity yet</h2>
+						<p>The people you follow have not shared recent shelf activity.</p>
+					</div>
+				) : (
+					<ul class="activity-grid">
+						{activity.map((item) => (
+							<BookCard
+								title={item.title}
+								titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}`}
+								author={item.author}
+								authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
+								thumbnail={item.thumbnail}
+							>
+								<p slot="preTitle" class="meta activity-headline">
+									<a class="actor-link" href={`/u/${encodeURIComponent(item.actorUsername)}`}>@{item.actorUsername}</a>
+									{" "}
+									<span class="activity-prefix">{activityHeading(item.eventType).prefix}</span>
+									{activityHeading(item.eventType).shelf && <>&nbsp;<em>{activityHeading(item.eventType).shelf}</em></>}
+									{formatActivityDate(item.updatedAt) && (
+										<>
+											<br />
+											<span class="activity-date">Updated {formatActivityDate(item.updatedAt)}</span>
+										</>
+									)}
+								</p>
+								<div slot="meta">
+									{item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>}
+								</div>
+								<div slot="actions">
+									<ShelfDropdown attrs={{
+										"data-book-id": String(item.bookId || 0),
+										"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "want_to_read",
+										"data-title": item.title,
+										"data-author": item.author,
+										"data-description": item.description,
+										"data-pages": "0",
+										"data-cover": item.thumbnail,
+										"data-format": "Book",
+										"data-language": item.language,
+										"data-isbn10": item.isbn10,
+										"data-isbn13": item.isbn13
+									}} />
+								</div>
+							</BookCard>
+						))}
+					</ul>
+				)}
+			</section>
+		)}
+	</div>
+</Layout>
+
+<style>
+	.feed-page {
+		max-width: 860px;
+		display: grid;
+		gap: 0.9rem;
+	}
+	.feed-header h1,
+	.feed-header p,
+	.feed-activity h2,
+	.empty-following-panel h2 {
+		margin: 0;
+	}
+	.feed-header p {
+		margin-top: 0.35rem;
+		color: #444;
+	}
+	.section-heading-row {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-bottom: 0.25rem;
+	}
+	.section-heading-row h2 {
+		margin: 0;
+		font-size: 1.15rem;
+	}
+	.section-heading-row span {
+		color: #5b6470;
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+	.people-strip-section {
+		min-width: 0;
+	}
+	.people-strip-copy {
+		margin: 0 0 0.6rem;
+		color: #444;
+	}
+	.people-strip {
+		list-style: none;
+		margin: 0;
+		padding: 0 0 0.2rem;
+		display: grid;
+		grid-auto-flow: column;
+		grid-auto-columns: minmax(220px, 255px);
+		gap: 0.75rem;
+		overflow-x: auto;
+		scroll-snap-type: x proximity;
+	}
+	.people-strip-card {
+		scroll-snap-align: start;
+		background: #fff;
+		border-radius: 12px;
+		padding: 0.75rem;
+		display: grid;
+		gap: 0.5rem;
+		min-height: 220px;
+		box-sizing: border-box;
+	}
+	.people-strip-top {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.65rem;
+	}
+	.people-strip-avatar {
+		width: 54px;
+		height: 54px;
+		border-radius: 999px;
+		object-fit: cover;
+		background: #ece7dc;
+	}
+	.people-strip-avatar-fallback {
+		display: grid;
+		place-items: center;
+		font-weight: 800;
+		color: #4f4a40;
+	}
+	.people-strip-name {
+		color: inherit;
+		text-decoration: none;
+		display: grid;
+		gap: 0.08rem;
+	}
+	.people-strip-name:hover strong,
+	.people-strip-name:focus-visible strong {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.people-strip-name span {
+		color: #5b6470;
+		font-size: 0.9rem;
+	}
+	.people-strip-card p {
+		margin: 0;
+		color: #333;
+		font-size: 0.9rem;
+		line-height: 1.35;
+	}
+	.people-strip-facts {
+		margin-top: auto;
+		display: grid;
+		gap: 0.12rem;
+	}
+	.people-strip-facts p {
+		margin: 0;
+		color: #374151;
+		font-size: 0.78rem;
+		line-height: 1.28;
+	}
+	.people-strip-facts strong {
+		color: #1f2937;
+		font-weight: 800;
+	}
+	.people-strip-facts a {
+		color: var(--color-secondary);
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.people-strip-facts a:hover,
+	.people-strip-facts a:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.feed-activity h2 {
+		margin-bottom: 0.6rem;
+	}
+	.activity-grid,
+	.reader-grid {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.75rem;
+	}
+	.activity-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.feed-page :global(.activity-grid .book-card .card-body h3) {
+		padding-right: 4.5rem;
+	}
+	.activity-headline {
+		font-weight: 700;
+		color: #2f2f2f;
+	}
+	.activity-prefix,
+	.actor-link {
+		color: var(--color-secondary);
+	}
+	.actor-link {
+		text-decoration: none;
+	}
+	.actor-link:hover,
+	.actor-link:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.activity-date {
+		color: #5b6470;
+		font-weight: 600;
+	}
+	.rating-meta {
+		color: var(--color-rating);
+		font-weight: 700;
+	}
+	.feed-page :global(.shelf-state) {
+		display: none !important;
+	}
+	.empty-following-panel {
+		border: none;
+		border-radius: 12px;
+		background: var(--color-surface);
+		padding: 1rem;
+	}
+	.empty-copy p,
+	.empty-note {
+		margin: 0.35rem 0 0;
+		color: #444;
+	}
+	.reader-grid {
+		margin-top: 0.85rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.following-management-grid {
+		list-style: none;
+		margin: 0;
+		padding: 0 0 0.2rem;
+		display: grid;
+		grid-auto-flow: column;
+		grid-auto-columns: minmax(220px, 255px);
+		gap: 0.75rem;
+		overflow-x: auto;
+		scroll-snap-type: x proximity;
+	}
+	.reader-card {
+		background: #fff;
+		border-radius: 12px;
+		padding: 0.8rem;
+		display: grid;
+		gap: 0.55rem;
+	}
+	.following-management-card {
+		min-height: 220px;
+	}
+	.following-management-card.is-removing {
+		opacity: 0.55;
+	}
+	.reader-topline {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.65rem;
+	}
+	.reader-identity {
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		color: inherit;
+		text-decoration: none;
+	}
+	.reader-identity:hover strong,
+	.reader-identity:focus-visible strong {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.reader-identity span span {
+		display: block;
+		margin-top: 0.1rem;
+		color: #5b6470;
+		font-size: 0.9rem;
+	}
+	.reader-avatar {
+		width: 48px;
+		height: 48px;
+		border-radius: 999px;
+		object-fit: cover;
+		flex: 0 0 auto;
+	}
+	.reader-avatar-fallback {
+		display: grid;
+		place-items: center;
+		background: #ece7dc;
+		font-weight: 800;
+		color: #4f4a40;
+	}
+	.follow-button {
+		border: none;
+		border-radius: 999px;
+		background: #111;
+		color: #fff;
+		font: inherit;
+		font-weight: 700;
+		padding: 0.35rem 0.75rem;
+		cursor: pointer;
+		flex: 0 0 auto;
+	}
+	.follow-button:disabled {
+		opacity: 0.7;
+		cursor: default;
+	}
+	.follow-button-small {
+		padding: 0.28rem 0.65rem;
+		font-size: 0.86rem;
+	}
+	.reader-blurb {
+		margin: 0;
+		color: #333;
+	}
+	.reader-facts {
+		display: grid;
+		gap: 0.25rem;
+	}
+	.reader-facts p,
+	.reader-feedback {
+		margin: 0;
+		font-size: 0.88rem;
+		color: #4b5563;
+	}
+	.reader-feedback {
+		color: var(--color-secondary);
+		font-weight: 700;
+	}
+	@media (max-width: 740px) {
+		.activity-grid,
+		.reader-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>
+
+<script>
+	import {
+		buildShelfEntryFromRecord,
+		closeShelfMenus,
+		setDropdownLabel,
+		setShelvedState,
+		showShelfFeedback,
+		saveShelfEntryWithRetry,
+		toggleShelfMenu
+	} from "../lib/shelfClient.ts";
+
+	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
+	const feedbackTimers = new WeakMap();
+
+	document.addEventListener("click", (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		const dropdown = target.closest(".shelf-dropdown");
+		if (!dropdown) {
+			closeShelfMenus(shelfDropdowns);
+			return;
+		}
+		const action = target.closest("[data-action]");
+		if (!(action instanceof HTMLElement)) return;
+		if (action.dataset.action === "toggle-shelf") {
+			toggleShelfMenu(dropdown, shelfDropdowns);
+		}
+	});
+
+	for (const dropdown of shelfDropdowns) {
+		dropdown.addEventListener("click", async (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			const option = target.closest('[data-action="set-shelf"]');
+			if (!(option instanceof HTMLElement)) return;
+			const status = String(option.dataset.status || "want_to_read");
+			const entry = buildShelfEntryFromRecord({
+				title: dropdown.getAttribute("data-title"),
+				author: dropdown.getAttribute("data-author"),
+				description: dropdown.getAttribute("data-description"),
+				pageCount: dropdown.getAttribute("data-pages"),
+				coverUrl: dropdown.getAttribute("data-cover"),
+				format: dropdown.getAttribute("data-format"),
+				language: dropdown.getAttribute("data-language"),
+				isbn10: dropdown.getAttribute("data-isbn10"),
+				isbn13: dropdown.getAttribute("data-isbn13")
+			}, { status });
+			Object.assign(entry, { bookId: Number(dropdown.getAttribute("data-book-id") || 0) || undefined });
+			showShelfFeedback(dropdown, "Saving...", feedbackTimers);
+			const result = await saveShelfEntryWithRetry(entry, { redirectPath: "/settings#account-settings" });
+			if (!result.ok) {
+				showShelfFeedback(dropdown, result.message || "Failed to save.", feedbackTimers);
+				return;
+			}
+			setDropdownLabel(dropdown, status);
+			setShelvedState(dropdown, true);
+			closeShelfMenus(shelfDropdowns);
+			showShelfFeedback(dropdown, "Saved.", feedbackTimers);
+		});
+	}
+
+	document.addEventListener("click", async (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		const mockButton = target.closest('[data-action="mock-follow-person"]');
+		if (mockButton instanceof HTMLButtonElement) {
+			mockButton.textContent = "Following";
+			mockButton.disabled = true;
+			return;
+		}
+		const unfollowButton = target.closest('[data-action="unfollow-reader"]');
+		if (unfollowButton instanceof HTMLButtonElement) {
+			const card = unfollowButton.closest("[data-reader-card]");
+			const feedback = card?.querySelector("[data-reader-feedback]");
+			const username = String(unfollowButton.dataset.username || "").trim();
+			if (!username) return;
+			unfollowButton.disabled = true;
+			if (card instanceof HTMLElement) card.classList.add("is-removing");
+			if (feedback instanceof HTMLElement) {
+				feedback.textContent = "Unfollowing...";
+				feedback.hidden = false;
+			}
+			try {
+				const response = await fetch("/api/follow", {
+					method: "DELETE",
+					credentials: "same-origin",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ username })
+				});
+				const data = await response.json().catch(() => ({}));
+				if (!response.ok) {
+					unfollowButton.disabled = false;
+					if (card instanceof HTMLElement) card.classList.remove("is-removing");
+					if (feedback instanceof HTMLElement) feedback.textContent = String(data?.error || "Failed to unfollow.");
+					return;
+				}
+				if (feedback instanceof HTMLElement) feedback.textContent = "Unfollowed.";
+				if (card instanceof HTMLElement) {
+					setTimeout(() => {
+						card.remove();
+					}, 250);
+				}
+			} catch {
+				unfollowButton.disabled = false;
+				if (card instanceof HTMLElement) card.classList.remove("is-removing");
+				if (feedback instanceof HTMLElement) feedback.textContent = "Failed to unfollow.";
+			}
+			return;
+		}
+		const button = target.closest('[data-action="follow-reader"]');
+		if (!(button instanceof HTMLButtonElement)) return;
+		const card = button.closest("[data-reader-card]");
+		const feedback = card?.querySelector("[data-reader-feedback]");
+		const username = String(button.dataset.username || "").trim();
+		if (!username) return;
+		button.disabled = true;
+		if (feedback instanceof HTMLElement) {
+			feedback.textContent = "Following...";
+			feedback.hidden = false;
+		}
+		try {
+			const response = await fetch("/api/follow", {
+				method: "POST",
+				credentials: "same-origin",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ username })
+			});
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				button.disabled = false;
+				if (feedback instanceof HTMLElement) feedback.textContent = String(data?.error || "Failed to follow.");
+				return;
+			}
+			button.textContent = "Following";
+			if (feedback instanceof HTMLElement) feedback.textContent = "Added to Following.";
+		} catch {
+			button.disabled = false;
+			if (feedback instanceof HTMLElement) feedback.textContent = "Failed to follow.";
+		}
+	});
+</script>

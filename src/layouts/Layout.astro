@@ -76,12 +76,15 @@ import '../assets/global.css';
 	}
 	.column {
 		padding: 1rem;
+		box-sizing: border-box;
 	}
 	.container > .column:first-child {
 		position: sticky;
 		top: 0;
 		align-self: start;
 		height: 100vh;
+		max-height: 100vh;
+		min-height: 0;
 		overflow-y: auto;
 	}
 	.global-support-float {
