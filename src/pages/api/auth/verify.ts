@@ -14,26 +14,18 @@ export const GET: APIRoute = async ({ url }) => {
 
 		const tokenHash = sha256Hex(token);
 		const sql = getNeonSql();
-		const linkRows = await sql<Array<{ id: string; user_id: string }>>`
-			select id::text as id, user_id::text as user_id
-			from auth_magic_link
+		const consumedRows = await sql<Array<{ user_id: string }>>`
+			update auth_magic_link
+			set used_at = now()
 			where token_hash = ${tokenHash}
 				and used_at is null
 				and expires_at > now()
-			limit 1
+			returning user_id::text as user_id
 		`;
-		const linkId = String(linkRows[0]?.id || "");
-		const userId = String(linkRows[0]?.user_id || "");
-		if (!linkId || !userId) {
+		const userId = String(consumedRows[0]?.user_id || "");
+		if (!userId) {
 			return Response.redirect(invalidRedirect, 302);
 		}
-
-		await sql`
-			update auth_magic_link
-			set used_at = now()
-			where id = ${linkId}::uuid
-				and used_at is null
-		`;
 
 		const sessionToken = randomToken(32);
 		const sessionHash = sha256Hex(sessionToken);
