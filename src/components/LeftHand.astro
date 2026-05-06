@@ -16,9 +16,6 @@ const query = Astro.url.searchParams.get("q") ?? "";
           <span>Dogeared</span>
         </a>
       </h2>
-      <button type="button" id="left-hand-menu-toggle" class="mobile-menu-toggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="left-hand-primary-links">
-        ☰
-      </button>
     </div>
     <form action="/search" method="get">
       <input type="search" name="q" placeholder="Search" value={query} />
@@ -27,11 +24,11 @@ const query = Astro.url.searchParams.get("q") ?? "";
       <li id="left-hand-login-item"><button type="button" class="nav-text-button hover">Log In</button></li>
       <li id="left-hand-following-item" hidden><a href={isActive('/following') ? undefined : '/following'} class={isActive('/following') ? 'active' : 'hover'} aria-current={isActive('/following') ? 'page' : undefined}>Following</a></li>
       <li id="left-hand-profile-item" hidden><a href="/settings#account-settings" class="hover">Profile</a></li>
-      <li><a href={isActive('/mission') ? undefined : '/mission'} class={isActive('/mission') ? 'active' : 'hover'} aria-current={isActive('/mission') ? 'page' : undefined}>Mission</a></li>
+      <li id="left-hand-logout-item" hidden><button type="button" class="nav-text-button hover">Log Out</button></li>
+      <li class="nav-group-divider"><a href={isActive('/mission') ? undefined : '/mission'} class={isActive('/mission') ? 'active' : 'hover'} aria-current={isActive('/mission') ? 'page' : undefined}>Mission</a></li>
       <li><a href={isActive('/metrics') ? undefined : '/metrics'} class={isActive('/metrics') ? 'active' : 'hover'} aria-current={isActive('/metrics') ? 'page' : undefined}>Metrics</a></li>
       <li><a href={isActive('/roadmap') ? undefined : '/roadmap'} class={isActive('/roadmap') ? 'active' : 'hover'} aria-current={isActive('/roadmap') ? 'page' : undefined}>Roadmap</a></li>
       <li id="left-hand-settings-item" hidden><a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a></li>
-      <li id="left-hand-logout-item" hidden><button type="button" class="nav-text-button hover">Log Out</button></li>
     </ul>
     {sectionLinks.length > 0 && (
       <ul class="quick-links">
@@ -102,6 +99,11 @@ const query = Astro.url.searchParams.get("q") ?? "";
     text-align: left;
     width: 100%;
     gap: .25rem;
+  }
+  .primary-links .nav-group-divider {
+    margin-top: 0.65rem;
+    padding-top: 0.7rem;
+    border-top: 1px solid rgba(32, 32, 32, 0.38);
   }
   a {
     text-decoration: none;
@@ -282,9 +284,9 @@ const query = Astro.url.searchParams.get("q") ?? "";
       grid-area: top;
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-start;
       gap: 0.5rem;
-      margin-bottom: 0.8rem;
+      margin-bottom: 0.55rem;
       min-height: 56px;
     }
     #left-hand-nav h2 {
@@ -310,28 +312,42 @@ const query = Astro.url.searchParams.get("q") ?? "";
       padding: 0.4rem 0.8rem;
       border: 2px solid #d1d5db;
     }
-    .mobile-menu-toggle {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: 0;
-      align-self: center;
-      flex: 0 0 auto;
-    }
     #left-hand-nav .primary-links {
-      display: none;
-      gap: 0.35rem;
+      display: flex;
+      flex-wrap: nowrap;
+      column-gap: 0.65rem;
+      row-gap: 0.35rem;
       border-top: none;
       margin-top: 0;
       padding-top: 0;
       grid-area: links;
+      align-items: center;
+      min-width: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      white-space: nowrap;
     }
-    #left-hand-nav.menu-open .primary-links {
-      display: flex;
-      flex-wrap: wrap;
+    #left-hand-nav .primary-links::-webkit-scrollbar {
+      display: none;
     }
     #left-hand-nav .primary-links li {
+      flex: 0 0 auto;
       width: auto;
+    }
+    #left-hand-nav .primary-links .nav-group-divider {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      margin-top: 0;
+      padding-top: 0;
+      border-top: none;
+    }
+    #left-hand-nav .primary-links .nav-group-divider::before {
+      content: "|";
+      color: #8a8a8a;
+      font-weight: 400;
     }
     #left-hand-nav .primary-links a,
     #left-hand-nav .primary-links .nav-text-button {
@@ -340,7 +356,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       border: none;
       background: transparent;
       border-radius: 0;
-      padding: 0.1rem 0.15rem;
+      padding: 0;
       line-height: 1.2;
       text-decoration: none;
       color: #202020;
@@ -366,7 +382,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   }
   @media (max-width: 680px) {
     .mobile-top-row {
-      margin-bottom: 0.72rem;
+      margin-bottom: 0.5rem;
       min-height: 52px;
     }
     #left-hand-nav h2 a.special-font {
@@ -428,6 +444,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     if (leftHandProfileItem instanceof HTMLElement) leftHandProfileItem.hidden = !authenticated;
     if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = !authenticated;
     if (leftHandLogoutItem instanceof HTMLElement) leftHandLogoutItem.hidden = !authenticated;
+    window.requestAnimationFrame(updateMobileStickyOffset);
   }
 
   async function syncLeftHandAuthState() {
@@ -519,14 +536,14 @@ const query = Astro.url.searchParams.get("q") ?? "";
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     if (!target.closest("a,button")) return;
-    if (!(leftHandNav instanceof HTMLElement) || !(leftHandMenuToggle instanceof HTMLButtonElement)) return;
-    if (window.matchMedia("(max-width: 900px)").matches) {
+    if (!(leftHandNav instanceof HTMLElement)) return;
+    if (window.matchMedia("(max-width: 900px)").matches && leftHandMenuToggle instanceof HTMLButtonElement) {
       leftHandNav.classList.remove("menu-open");
       leftHandMenuToggle.setAttribute("aria-expanded", "false");
       leftHandMenuToggle.textContent = "☰";
       leftHandMenuToggle.setAttribute("aria-label", "Open navigation menu");
-      updateMobileStickyOffset();
     }
+    updateMobileStickyOffset();
   });
 
   function updateMobileStickyOffset() {

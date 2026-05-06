@@ -26,57 +26,14 @@ const viewerUserId = session.userId;
 const followingCount = await resolveFollowingCount(viewerUserId);
 const [activity, suggestions, followingReaders] = await Promise.all([
 	followingCount > 0 ? resolveFollowingFeedActivity(viewerUserId, 60) : Promise.resolve([]),
-	followingCount === 0 ? resolvePublicReaderSuggestions(viewerUserId, 60) : Promise.resolve([]),
+	resolvePublicReaderSuggestions(viewerUserId, 60),
 	followingCount > 0 ? resolveFollowingReaders(viewerUserId, 60) : Promise.resolve([])
 ]);
 const viewerStatusByBookId = await resolveViewerStatusByBookId(
 	viewerUserId,
 	activity.map((item) => item.bookId)
 );
-const mockPeopleToFollow = [
-	{
-		name: "Maya Chen",
-		username: "maya_reads",
-		avatar: "https://i.pravatar.cc/160?img=47",
-		location: "Portland, OR",
-		blurb: "Literary fiction, essays, and anything with a sharp sense of place.",
-		readingGoal: "42 books in 2026",
-		favoriteBook: "Station Eleven",
-		favoriteAuthor: "Ursula K. Le Guin"
-	},
-	{
-		name: "Theo Brooks",
-		username: "theobookstack",
-		avatar: "https://i.pravatar.cc/160?img=12",
-		location: "Chicago, IL",
-		blurb: "Slow reader, heavy annotator, always looking for excellent nonfiction.",
-		readingGoal: "24 books in 2026",
-		favoriteBook: "The Warmth of Other Suns",
-		favoriteAuthor: "James Baldwin"
-	},
-	{
-		name: "Priya Nair",
-		username: "priya_pages",
-		avatar: "https://i.pravatar.cc/160?img=32",
-		location: "Austin, TX",
-		blurb: "Fantasy, translated fiction, and books with maps in the front.",
-		readingGoal: "60 books in 2026",
-		favoriteBook: "Piranesi",
-		favoriteAuthor: "N. K. Jemisin"
-	},
-	{
-		name: "Sam Rivera",
-		username: "samreads",
-		avatar: "https://i.pravatar.cc/160?img=59",
-		location: "Brooklyn, NY",
-		blurb: "Mostly poetry, food writing, and short novels for long train rides.",
-		readingGoal: "36 books in 2026",
-		favoriteBook: "A Psalm for the Wild-Built",
-		favoriteAuthor: "Mary Oliver"
-	}
-];
-const peopleToFollow = followingCount === 0 && suggestions.length > 0 ? suggestions : mockPeopleToFollow;
-const isUsingMockPeople = peopleToFollow === mockPeopleToFollow;
+const peopleToFollow = suggestions;
 ---
 
 <Layout title="Following">
@@ -89,7 +46,6 @@ const isUsingMockPeople = peopleToFollow === mockPeopleToFollow;
 		<section class="people-strip-section" aria-labelledby="people-strip-title">
 			<div class="section-heading-row">
 				<h2 id="people-strip-title">People to Follow</h2>
-				{isUsingMockPeople && <span>Preview data</span>}
 			</div>
 			<p class="people-strip-copy">
 				Follow other Dogeared users to discover books from readers across the community.
@@ -107,7 +63,7 @@ const isUsingMockPeople = peopleToFollow === mockPeopleToFollow;
 							<button
 								type="button"
 								class="follow-button follow-button-small"
-								data-action={isUsingMockPeople ? "mock-follow-person" : "follow-reader"}
+								data-action="follow-reader"
 								data-username={reader.username}
 							>
 								Follow
@@ -589,12 +545,6 @@ const isUsingMockPeople = peopleToFollow === mockPeopleToFollow;
 	document.addEventListener("click", async (event) => {
 		const target = event.target;
 		if (!(target instanceof HTMLElement)) return;
-		const mockButton = target.closest('[data-action="mock-follow-person"]');
-		if (mockButton instanceof HTMLButtonElement) {
-			mockButton.textContent = "Following";
-			mockButton.disabled = true;
-			return;
-		}
 		const unfollowButton = target.closest('[data-action="unfollow-reader"]');
 		if (unfollowButton instanceof HTMLButtonElement) {
 			const card = unfollowButton.closest("[data-reader-card]");

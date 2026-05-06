@@ -440,7 +440,10 @@ try {
 	.rank-stack {
 		display: inline-flex;
 		align-items: center;
+		justify-content: flex-end;
+		flex-wrap: wrap;
 		gap: 0.28rem;
+		max-width: 100%;
 	}
 
 	:global(.browse-page .book-card .top-right) {
@@ -611,6 +614,26 @@ try {
 
 		.book-grid {
 			grid-template-columns: 1fr;
+		}
+	}
+
+	@media (max-width: 420px) {
+		:global(.browse-page .book-card .top-right) {
+			grid-row: 2;
+			justify-self: stretch;
+			margin-top: 0.45rem;
+		}
+		.rank-stack {
+			justify-content: flex-end;
+		}
+		:global(.browse-page .book-card .card-body h3) {
+			line-height: 1.18;
+		}
+		:global(.browse-page .book-card .description) {
+			display: -webkit-box;
+			-webkit-line-clamp: 5;
+			-webkit-box-orient: vertical;
+			overflow: hidden;
 		}
 	}
 
