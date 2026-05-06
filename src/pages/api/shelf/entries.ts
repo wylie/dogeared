@@ -6,6 +6,10 @@ import { ensureAuthorEnriched } from "../../../lib/authorEnrichment";
 import {
 	normalizeCatalogText,
 	normalizeCatalogIsbn,
+	canonicalCatalogWorkKey,
+	canonicalizeCatalogTitle,
+	canonicalizeCatalogAuthor,
+	resolveBestCatalogBookId,
 	upsertBookSources,
 	type CatalogSourceInput
 } from "../../../lib/catalog";
@@ -110,39 +114,6 @@ function isGenreSlug(slug: string) {
 	return true;
 }
 
-function canonicalizeTitle(value: unknown) {
-	return String(value || "")
-		.toLowerCase()
-		.normalize("NFKD")
-		.replace(/[\u0300-\u036f]/g, "")
-		.replace(/\([^)]*\)/g, " ")
-		.replace(/\b(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition)\b/g, " ")
-		.split(":")[0]
-		.replace(/^(the|a|an)\s+/g, "")
-		.replace(/[^a-z0-9\s]/g, " ")
-		.replace(/\s+/g, " ")
-		.trim();
-}
-
-function canonicalizeAuthor(value: unknown) {
-	return String(value || "")
-		.toLowerCase()
-		.normalize("NFKD")
-		.replace(/[\u0300-\u036f]/g, "")
-		.replace(/^(by\s+)/, "")
-		.replace(/[^a-z0-9\s]/g, " ")
-		.replace(/\s+/g, " ")
-		.trim();
-}
-
-function canonicalWorkKey(input: { title: string; author: string; isbn10: string; isbn13: string }) {
-	if (input.isbn13) return `isbn13:${input.isbn13}`;
-	if (input.isbn10) return `isbn10:${input.isbn10}`;
-	const title = canonicalizeTitle(input.title) || "untitled";
-	const author = canonicalizeAuthor(input.author) || "unknown";
-	return `title_author:${title}|${author}`;
-}
-
 function parseGenres(input: unknown) {
 	const values = Array.isArray(input) ? input : [];
 	const dedupe = new Set<string>();
@@ -164,10 +135,10 @@ function scoreGoogleVolume(
 ) {
 	if (!volume) return -1;
 	const info = volume.volumeInfo || {};
-	const title = canonicalizeTitle(info.title || "");
-	const author = canonicalizeAuthor(Array.isArray(info.authors) ? info.authors[0] : "");
-	const targetTitle = canonicalizeTitle(input.title);
-	const targetAuthor = canonicalizeAuthor(input.author);
+	const title = canonicalizeCatalogTitle(info.title || "");
+	const author = canonicalizeCatalogAuthor(Array.isArray(info.authors) ? info.authors[0] : "");
+	const targetTitle = canonicalizeCatalogTitle(input.title);
+	const targetAuthor = canonicalizeCatalogAuthor(input.author);
 	let score = 0;
 	if (title && targetTitle && title === targetTitle) score += 120;
 	if (title && targetTitle && title.includes(targetTitle)) score += 80;
@@ -194,10 +165,10 @@ function scoreOpenLibraryDoc(
 	input: { title: string; author: string }
 ) {
 	if (!doc) return -1;
-	const title = canonicalizeTitle(doc.title || "");
-	const author = canonicalizeAuthor(Array.isArray(doc.author_name) ? doc.author_name[0] : "");
-	const targetTitle = canonicalizeTitle(input.title);
-	const targetAuthor = canonicalizeAuthor(input.author);
+	const title = canonicalizeCatalogTitle(doc.title || "");
+	const author = canonicalizeCatalogAuthor(Array.isArray(doc.author_name) ? doc.author_name[0] : "");
+	const targetTitle = canonicalizeCatalogTitle(input.title);
+	const targetAuthor = canonicalizeCatalogAuthor(input.author);
 	let score = 0;
 	if (title && targetTitle && title === targetTitle) score += 120;
 	if (title && targetTitle && title.includes(targetTitle)) score += 80;
@@ -411,34 +382,6 @@ async function ensureShelfSchema() {
 	await sql`alter table book add column if not exists synopsis text not null default ''`;
 }
 
-async function resolveBestBookId(
-	sql: ReturnType<typeof getNeonSql>,
-	input: { canonicalWorkKey: string; isbn10: string; isbn13: string; googleBooksId: string }
-) {
-	const rows = await sql<Array<{ id: number }>>`
-		select b.id
-		from book b
-		where (
-			(${input.googleBooksId} <> '' and b.google_books_id = ${input.googleBooksId})
-			or (${input.isbn13} <> '' and b.isbn13 = ${input.isbn13})
-			or (${input.isbn10} <> '' and b.isbn10 = ${input.isbn10})
-			or b.canonical_work_key = ${input.canonicalWorkKey}
-		)
-		order by
-			case
-				when ${input.googleBooksId} <> '' and b.google_books_id = ${input.googleBooksId} then 1
-				when ${input.isbn13} <> '' and b.isbn13 = ${input.isbn13} then 2
-				when ${input.isbn10} <> '' and b.isbn10 = ${input.isbn10} then 3
-				when b.canonical_work_key = ${input.canonicalWorkKey} then 4
-				else 9
-			end asc,
-			b.updated_at desc,
-			b.id desc
-		limit 1
-	`;
-	return Number(rows[0]?.id || 0);
-}
-
 export const GET: APIRoute = async ({ request, url }) => {
 	try {
 		await ensureShelfSchema();
@@ -565,7 +508,7 @@ export const POST: APIRoute = async ({ request }) => {
 			if (!isbn10) isbn10 = enriched.isbn10 || isbn10;
 			if (!googleBooksId) googleBooksId = enriched.googleBooksId || googleBooksId;
 		}
-		const workKey = canonicalWorkKey({ title, author, isbn10, isbn13 });
+		const workKey = canonicalCatalogWorkKey({ title, author, isbn10, isbn13 });
 		const source = normalizeCatalogText(entry.source);
 		const sourceWorkId = normalizeCatalogText(entry.sourceWorkId);
 		const sourceEditionId = normalizeCatalogText(entry.sourceEditionId);
@@ -595,11 +538,14 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 		const userId = session.userId;
 		const sql = getNeonSql();
-		const resolvedBookId = await resolveBestBookId(sql, {
+		const resolvedBookId = await resolveBestCatalogBookId(sql, {
 			canonicalWorkKey: workKey,
+			title,
+			author,
 			isbn10,
 			isbn13,
-			googleBooksId
+			googleBooksId,
+			sources
 		});
 
 		const previousRows = await sql<Array<{ status: ShelfStatus; rating: number | null }>>`
@@ -867,13 +813,15 @@ export const DELETE: APIRoute = async ({ request }) => {
 		const author = normalizeText(entry.author);
 		const isbn10 = normalizeIsbn(entry.isbn10);
 		const isbn13 = normalizeIsbn(entry.isbn13);
-		const workKey = canonicalWorkKey({ title, author, isbn10, isbn13 });
+		const workKey = canonicalCatalogWorkKey({ title, author, isbn10, isbn13 });
 
 		const userId = session.userId;
 		const sql = getNeonSql();
 		const googleBooksId = normalizeCatalogText(entry.googleBooksId);
-		const bookId = await resolveBestBookId(sql, {
+		const bookId = await resolveBestCatalogBookId(sql, {
 			canonicalWorkKey: workKey,
+			title,
+			author,
 			isbn10,
 			isbn13,
 			googleBooksId

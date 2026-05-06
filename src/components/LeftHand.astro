@@ -512,6 +512,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       leftHandMenuToggle.textContent = willOpen ? "✕" : "☰";
       leftHandMenuToggle.setAttribute("aria-label", willOpen ? "Close navigation menu" : "Open navigation menu");
     }
+    updateMobileStickyOffset();
   });
 
   leftHandPrimaryLinks?.addEventListener("click", (event) => {
@@ -524,8 +525,21 @@ const query = Astro.url.searchParams.get("q") ?? "";
       leftHandMenuToggle.setAttribute("aria-expanded", "false");
       leftHandMenuToggle.textContent = "☰";
       leftHandMenuToggle.setAttribute("aria-label", "Open navigation menu");
+      updateMobileStickyOffset();
     }
   });
+
+  function updateMobileStickyOffset() {
+    if (!(leftHandNav instanceof HTMLElement)) return;
+    const isMobile = window.matchMedia("(max-width: 900px)").matches;
+    const overlap = isMobile ? 15 : 0;
+    const offset = isMobile ? Math.max(0, Math.ceil(leftHandNav.getBoundingClientRect().height) - overlap) : 0;
+    document.documentElement.style.setProperty("--mobile-sticky-offset", `${offset}px`);
+  }
+
+  updateMobileStickyOffset();
+  window.addEventListener("resize", updateMobileStickyOffset);
+  window.addEventListener("load", updateMobileStickyOffset);
 
   const sectionNavLinks = Array.from(document.querySelectorAll("[data-section-link]"));
   const sectionTargets = sectionNavLinks
