@@ -13,6 +13,8 @@ import {
 	upsertBookSources,
 	type CatalogSourceInput
 } from "../../../lib/catalog";
+import { normalizeGenreList } from "../../../lib/genres";
+import { normalizeTopicTagList } from "../../../lib/genres";
 
 export const prerender = false;
 
@@ -71,62 +73,8 @@ function normalizeIsbn(value: unknown) {
 	return normalizeCatalogIsbn(value);
 }
 
-function slugify(value: string) {
-	return String(value || "")
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "");
-}
-
-const NON_GENRE_SLUGS = new Set([
-	"",
-	"all",
-	"book-club",
-	"books-i-own",
-	"default",
-	"did-not-finish",
-	"dnf",
-	"faves",
-	"favorites",
-	"fiction",
-	"general",
-	"kindle",
-	"library",
-	"maybe",
-	"owned",
-	"physical",
-	"read",
-	"re-read",
-	"reread",
-	"tbr",
-	"to-buy",
-	"to-read",
-	"currently-reading",
-	"want-to-buy",
-	"want-to-own"
-]);
-
-function isGenreSlug(slug: string) {
-	if (!slug || NON_GENRE_SLUGS.has(slug)) return false;
-	if (/^\d{4}(-reads)?$/.test(slug)) return false;
-	if (/^\d+$/.test(slug)) return false;
-	return true;
-}
-
 function parseGenres(input: unknown) {
-	const values = Array.isArray(input) ? input : [];
-	const dedupe = new Set<string>();
-	const genres: Array<{ slug: string; name: string }> = [];
-	for (const raw of values) {
-		const name = String(raw || "").trim();
-		if (!name) continue;
-		const slug = slugify(name);
-		if (!isGenreSlug(slug) || dedupe.has(slug)) continue;
-		dedupe.add(slug);
-		genres.push({ slug, name });
-	}
-	return genres;
+	return normalizeGenreList(input, 8);
 }
 
 function scoreGoogleVolume(
@@ -380,6 +328,14 @@ async function ensureShelfSchema() {
 	const sql = getNeonSql();
 	await sql`alter table user_book add column if not exists rating int`;
 	await sql`alter table book add column if not exists synopsis text not null default ''`;
+	await sql`
+		create table if not exists book_tag (
+			book_id bigint not null references book(id) on delete cascade,
+			tag_slug text not null,
+			tag_name text not null,
+			primary key (book_id, tag_slug)
+		)
+	`;
 }
 
 export const GET: APIRoute = async ({ request, url }) => {
@@ -497,6 +453,7 @@ export const POST: APIRoute = async ({ request }) => {
 		const publishedYearMatch = publishedDate.match(/\d{4}/);
 		let publishedYear = publishedYearMatch ? Number(publishedYearMatch[0]) : null;
 		const genres = parseGenres(bookPayload.categories);
+		const tags = normalizeTopicTagList(bookPayload.categories, 12);
 		let googleBooksId = bookPayload.googleBooksId;
 		if (!synopsis || !coverUrl || !publishedYear || !language || (!isbn10 && !isbn13) || !googleBooksId) {
 			const enriched = await inferMetadataForBook({ title, author, isbn10, isbn13, googleBooksId });
@@ -629,6 +586,14 @@ export const POST: APIRoute = async ({ request }) => {
 				values (${bookId}, ${genre.slug}, ${genre.name})
 				on conflict (book_id, genre_slug) do update set
 					genre_name = excluded.genre_name
+			`;
+		}
+		for (const tag of tags) {
+			await sql`
+				insert into book_tag (book_id, tag_slug, tag_name)
+				values (${bookId}, ${tag.slug}, ${tag.name})
+				on conflict (book_id, tag_slug) do update set
+					tag_name = excluded.tag_name
 			`;
 		}
 

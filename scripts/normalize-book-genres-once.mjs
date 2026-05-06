@@ -1,23 +1,11 @@
-export function formatGenreLabel(value: string, fallback = "Genre") {
-	const source = String(value || "").trim();
-	if (!source) return fallback;
+import { neon } from "@neondatabase/serverless";
 
-	const acronyms = new Set(["ya", "mg", "us", "uk", "lgbtq", "lgbtqia"]);
-
-	return source
-		.replace(/[-_]+/g, " ")
-		.replace(/\s+/g, " ")
-		.trim()
-		.toLowerCase()
-		.split(" ")
-		.map((word) => {
-			if (!word) return word;
-			if (acronyms.has(word)) return word.toUpperCase();
-			if (word === "and") return "&";
-			return `${word[0].toUpperCase()}${word.slice(1)}`;
-		})
-		.join(" ");
+const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+if (!DATABASE_URL) {
+	throw new Error("Missing DATABASE_URL.");
 }
+
+const sql = neon(DATABASE_URL);
 
 const NON_GENRE_SLUGS = new Set([
 	"",
@@ -60,55 +48,7 @@ const ARTIFACT_SLUG_PATTERNS = [
 	/^open-library-staff-picks$/
 ];
 
-const STANDARD_GENRE_SLUGS = new Set([
-	"action",
-	"adventure",
-	"anthology",
-	"autobiography",
-	"biography",
-	"classic",
-	"comedy",
-	"comics",
-	"contemporary",
-	"crime",
-	"detective",
-	"dystopian",
-	"epic",
-	"fantasy",
-	"graphic-novel",
-	"historical",
-	"horror",
-	"humor",
-	"literary",
-	"magic",
-	"memoir",
-	"mystery",
-	"mythology",
-	"paranormal",
-	"philosophy",
-	"poetry",
-	"post-apocalyptic",
-	"psychological",
-	"romance",
-	"satire",
-	"science-fiction",
-	"self-help",
-	"short-story",
-	"social-science",
-	"space-opera",
-	"steampunk",
-	"suspense",
-	"thriller",
-	"time-travel",
-	"true-crime",
-	"urban-fantasy",
-	"war",
-	"western",
-	"women-s-fiction",
-	"young-adult"
-]);
-
-const GENRE_ALIASES: Record<string, { slug: string; name: string }> = {
+const GENRE_ALIASES = {
 	scifi: { slug: "science-fiction", name: "Science Fiction" },
 	"sci-fi": { slug: "science-fiction", name: "Science Fiction" },
 	"sci fi": { slug: "science-fiction", name: "Science Fiction" },
@@ -153,7 +93,26 @@ const GENRE_ALIASES: Record<string, { slug: string; name: string }> = {
 	"war-stories": { slug: "war", name: "War" }
 };
 
-function slugify(value: string) {
+function formatGenreLabel(value, fallback = "Genre") {
+	const source = String(value || "").trim();
+	if (!source) return fallback;
+	const acronyms = new Set(["ya", "mg", "us", "uk", "lgbtq", "lgbtqia"]);
+	return source
+		.replace(/[-_]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim()
+		.toLowerCase()
+		.split(" ")
+		.map((word) => {
+			if (!word) return word;
+			if (acronyms.has(word)) return word.toUpperCase();
+			if (word === "and") return "&";
+			return `${word[0].toUpperCase()}${word.slice(1)}`;
+		})
+		.join(" ");
+}
+
+function slugify(value) {
 	return String(value || "")
 		.trim()
 		.toLowerCase()
@@ -161,14 +120,14 @@ function slugify(value: string) {
 		.replace(/^-+|-+$/g, "");
 }
 
-function splitGenreParts(value: unknown) {
+function splitGenreParts(value) {
 	return String(value || "")
 		.split(/\s*(?:\/|&|,|\band\b)\s*/gi)
 		.map((part) => String(part || "").trim())
 		.filter(Boolean);
 }
 
-function isGenreSlug(slug: string) {
+function isGenreSlug(slug) {
 	if (!slug || NON_GENRE_SLUGS.has(slug)) return false;
 	if (/^\d{4}(-reads)?$/.test(slug)) return false;
 	if (/^\d+$/.test(slug)) return false;
@@ -176,25 +135,11 @@ function isGenreSlug(slug: string) {
 	return true;
 }
 
-function isStandardGenreSlug(slug: string) {
-	if (STANDARD_GENRE_SLUGS.has(slug)) return true;
-	if (slug.endsWith("-fiction")) {
-		const base = slug.replace(/-fiction$/, "");
-		if (STANDARD_GENRE_SLUGS.has(base)) return true;
-	}
-	if (slug.endsWith("-stories")) {
-		const base = slug.replace(/-stories$/, "");
-		if (STANDARD_GENRE_SLUGS.has(base)) return true;
-	}
-	return false;
-}
-
-function normalizeSubjectEntry(value: unknown) {
+function normalizeGenreEntry(value) {
 	const parts = splitGenreParts(value);
-	if (parts.length === 0) return [] as Array<{ slug: string; name: string }>;
-
-	const out: Array<{ slug: string; name: string }> = [];
-	const dedupe = new Set<string>();
+	if (parts.length === 0) return [];
+	const out = [];
+	const dedupe = new Set();
 	for (const part of parts) {
 		const alias = GENRE_ALIASES[part.toLowerCase()];
 		const raw = alias?.name || part;
@@ -206,17 +151,11 @@ function normalizeSubjectEntry(value: unknown) {
 	return out;
 }
 
-export function normalizeGenreEntry(value: unknown) {
-	return normalizeSubjectEntry(value).filter((item) => isStandardGenreSlug(item.slug));
-}
-
-export function normalizeGenreList(input: unknown, limit = 8) {
-	const values = Array.isArray(input) ? input : [];
-	const out: Array<{ slug: string; name: string }> = [];
-	const dedupe = new Set<string>();
-	for (const value of values) {
-		for (const item of normalizeSubjectEntry(value)) {
-			if (!isStandardGenreSlug(item.slug)) continue;
+function normalizeGenreList(values, limit = 8) {
+	const out = [];
+	const dedupe = new Set();
+	for (const value of Array.isArray(values) ? values : []) {
+		for (const item of normalizeGenreEntry(value)) {
 			if (dedupe.has(item.slug)) continue;
 			dedupe.add(item.slug);
 			out.push(item);
@@ -226,18 +165,63 @@ export function normalizeGenreList(input: unknown, limit = 8) {
 	return out;
 }
 
-export function normalizeTopicTagList(input: unknown, limit = 12) {
-	const values = Array.isArray(input) ? input : [];
-	const out: Array<{ slug: string; name: string }> = [];
-	const dedupe = new Set<string>();
-	for (const value of values) {
-		for (const item of normalizeSubjectEntry(value)) {
-			if (isStandardGenreSlug(item.slug)) continue;
-			if (dedupe.has(item.slug)) continue;
-			dedupe.add(item.slug);
-			out.push(item);
-			if (out.length >= limit) return out;
-		}
-	}
-	return out;
+function keyFor(rows) {
+	return rows
+		.map((row) => `${String(row.slug || "").trim()}:${String(row.name || "").trim().toLowerCase()}`)
+		.sort()
+		.join("|");
 }
+
+const rows = await sql`
+	select book_id::bigint as book_id, coalesce(genre_slug, '') as genre_slug, coalesce(genre_name, '') as genre_name
+	from book_genre
+	order by book_id asc
+`;
+
+const byBook = new Map();
+for (const row of rows) {
+	const bookId = Number(row.book_id || 0);
+	if (!bookId) continue;
+	const list = byBook.get(bookId) || [];
+	list.push({
+		slug: String(row.genre_slug || "").trim(),
+		name: String(row.genre_name || "").trim()
+	});
+	byBook.set(bookId, list);
+}
+
+let booksTouched = 0;
+let booksChanged = 0;
+let rowsBefore = 0;
+let rowsAfter = 0;
+
+for (const [bookId, entries] of byBook.entries()) {
+	booksTouched += 1;
+	rowsBefore += entries.length;
+	const sourceValues = entries.map((entry) => entry.name || entry.slug).filter(Boolean);
+	const normalized = normalizeGenreList(sourceValues, 8);
+	rowsAfter += normalized.length;
+	const beforeKey = keyFor(entries);
+	const afterKey = keyFor(normalized);
+	if (beforeKey === afterKey) continue;
+	booksChanged += 1;
+	await sql`delete from book_genre where book_id = ${bookId}`;
+	for (const genre of normalized) {
+		await sql`
+			insert into book_genre (book_id, genre_slug, genre_name)
+			values (${bookId}, ${genre.slug}, ${genre.name})
+			on conflict (book_id, genre_slug) do update set genre_name = excluded.genre_name
+		`;
+	}
+}
+
+const finalCountRows = await sql`select count(*)::int as count from book_genre`;
+const finalCount = Number(finalCountRows[0]?.count || 0);
+
+console.log(JSON.stringify({
+	booksTouched,
+	booksChanged,
+	rowsBefore,
+	rowsAfterNormalized: rowsAfter,
+	finalRowsInBookGenre: finalCount
+}, null, 2));
