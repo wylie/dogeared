@@ -24,7 +24,16 @@ const query = Astro.url.searchParams.get("q") ?? "";
     </form>
     <ul id="left-hand-primary-links" class="primary-links">
       <li id="left-hand-login-item"><button type="button" class="nav-text-button hover">Log In</button></li>
-      <li id="left-hand-following-item" hidden><a href={isActive('/following') ? undefined : '/following'} class={isActive('/following') ? 'active' : 'hover'} aria-current={isActive('/following') ? 'page' : undefined}>Following</a></li>
+      <li id="left-hand-following-item" hidden>
+        <a href={isActive('/following') ? undefined : '/following'} class={isActive('/following') ? 'active' : 'hover'} aria-current={isActive('/following') ? 'page' : undefined}>Following</a>
+        {isActive('/following') && sectionLinks.length > 0 && (
+          <ul class="section-links-nested">
+            {sectionLinks.map((link) => (
+              <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+            ))}
+          </ul>
+        )}
+      </li>
       <li id="left-hand-profile-item" hidden>
         <a href="/settings#account-settings" class={isProfilePage ? 'active' : 'hover'} aria-current={isProfilePage ? 'page' : undefined}>Profile</a>
         {isProfilePage && sectionLinks.length > 0 && (
@@ -35,6 +44,18 @@ const query = Astro.url.searchParams.get("q") ?? "";
           </ul>
         )}
       </li>
+      <li id="left-hand-settings-item" hidden>
+        <a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a>
+        {isActive('/settings') && sectionLinks.length > 0 && (
+          <ul class="section-links-nested">
+            {sectionLinks.map((link) => (
+              <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+            ))}
+          </ul>
+        )}
+      </li>
+      <li id="left-hand-logout-item" hidden><button type="button" class="nav-text-button hover">Log Out</button></li>
+      <li id="left-hand-auth-divider" class="nav-group-divider" hidden aria-hidden="true"></li>
       <li>
         <a href={isActive('/mission') ? undefined : '/mission'} class={isActive('/mission') ? 'active' : 'hover'} aria-current={isActive('/mission') ? 'page' : undefined}>Mission</a>
         {isActive('/mission') && sectionLinks.length > 0 && (
@@ -65,17 +86,6 @@ const query = Astro.url.searchParams.get("q") ?? "";
           </ul>
         )}
       </li>
-      <li id="left-hand-settings-item" hidden>
-        <a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a>
-        {isActive('/settings') && sectionLinks.length > 0 && (
-          <ul class="section-links-nested">
-            {sectionLinks.map((link) => (
-              <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-            ))}
-          </ul>
-        )}
-      </li>
-      <li id="left-hand-logout-item" hidden><button type="button" class="nav-text-button hover">Log Out</button></li>
     </ul>
     <div class="left-hand-footer-logo" aria-hidden="true">
       <img src="/logo.png" alt="Dogeared logo" loading="lazy" />
@@ -386,17 +396,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       width: auto;
     }
     #left-hand-nav .primary-links .nav-group-divider {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.65rem;
-      margin-top: 0;
-      padding-top: 0;
-      border-top: none;
-    }
-    #left-hand-nav .primary-links .nav-group-divider::before {
-      content: "|";
-      color: #8a8a8a;
-      font-weight: 400;
+      display: none;
     }
     #left-hand-nav .primary-links a,
     #left-hand-nav .primary-links .nav-text-button {
@@ -461,6 +461,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   const leftHandProfileLink = leftHandProfileItem?.querySelector("a");
   const leftHandSettingsItem = document.getElementById("left-hand-settings-item");
   const leftHandLogoutItem = document.getElementById("left-hand-logout-item");
+  const leftHandAuthDivider = document.getElementById("left-hand-auth-divider");
   const leftHandLogoutButton = leftHandLogoutItem?.querySelector("button");
   const leftHandLoginModal = document.getElementById("left-hand-login-modal");
   const leftHandLoginForm = document.getElementById("left-hand-login-form");
@@ -501,6 +502,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     if (leftHandProfileItem instanceof HTMLElement) leftHandProfileItem.hidden = !authenticated;
     if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = !authenticated;
     if (leftHandLogoutItem instanceof HTMLElement) leftHandLogoutItem.hidden = !authenticated;
+    if (leftHandAuthDivider instanceof HTMLElement) leftHandAuthDivider.hidden = !authenticated;
     window.requestAnimationFrame(updateMobileStickyOffset);
   }
 

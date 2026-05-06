@@ -34,16 +34,21 @@ const viewerStatusByBookId = await resolveViewerStatusByBookId(
 	activity.map((item) => item.bookId)
 );
 const peopleToFollow = suggestions;
+const sectionLinks = [
+	{ id: "people-to-follow", label: "People to Follow" },
+	...(followingReaders.length > 0 ? [{ id: "currently-following", label: "Currently Following" }] : []),
+	...(followingCount > 0 ? [{ id: "following-activity", label: "Following Activity" }] : [])
+];
 ---
 
-<Layout title="Following">
+<Layout title="Following" sectionLinks={sectionLinks}>
 	<div slot="right" class="feed-page">
 		<header class="feed-header">
 			<h1>Following</h1>
 			<p>Recent shelf activity from readers you follow.</p>
 		</header>
 
-		<section class="people-strip-section" aria-labelledby="people-strip-title">
+		<section id="people-to-follow" class="people-strip-section" aria-labelledby="people-strip-title">
 			<div class="section-heading-row">
 				<h2 id="people-strip-title">People to Follow</h2>
 			</div>
@@ -94,7 +99,7 @@ const peopleToFollow = suggestions;
 		</section>
 
 		{followingReaders.length > 0 && (
-			<section class="following-management-section" aria-labelledby="following-management-title">
+			<section id="currently-following" class="following-management-section" aria-labelledby="following-management-title">
 				<div class="section-heading-row">
 					<h2 id="following-management-title">Currently Following</h2>
 					<span>{followingReaders.length} reader{followingReaders.length === 1 ? "" : "s"}</span>
@@ -133,7 +138,7 @@ const peopleToFollow = suggestions;
 		)}
 
 		{followingCount > 0 && (
-			<section class="feed-activity" aria-labelledby="feed-activity-title">
+			<section id="following-activity" class="feed-activity" aria-labelledby="feed-activity-title">
 				<h2 id="feed-activity-title">Following Activity</h2>
 				{activity.length === 0 ? (
 					<div class="empty-following-panel">
