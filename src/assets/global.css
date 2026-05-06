@@ -93,3 +93,11 @@ a.author-link:focus-visible {
 .chip--static {
   background: var(--color-chip-static);
 }
+
+@media (max-width: 900px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
