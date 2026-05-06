@@ -42,12 +42,12 @@ const roadmapItems = [
 		description: "Let readers rate books from key surfaces and feed those ratings into profile, activity, and book pages."
 	},
 	{
-		status: "Next",
+		status: "Now",
 		title: "Profile & Library Polish",
 		description: "Refine profile pages, related views, and book metadata presentation for a cleaner first-run experience."
 	},
 	{
-		status: "Next",
+		status: "Now",
 		title: "Data Quality & Metadata Backfills",
 		description: "Improve missing authors/genres/covers/published dates and run recurring metadata backfills."
 	},
@@ -103,7 +103,10 @@ const roadmapItems = [
 	}
 ];
 
-const activeRoadmapItems = roadmapItems.filter((item) => item.status !== "Finished");
+const statusOrder: Record<string, number> = { Now: 0, Next: 1, Later: 2 };
+const activeRoadmapItems = roadmapItems
+	.filter((item) => item.status !== "Finished")
+	.sort((a, b) => (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99));
 const finishedRoadmapItems = roadmapItems.filter((item) => item.status === "Finished");
 
 const supportOptions = [
