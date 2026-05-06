@@ -1,0 +1,253 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getNeonSql } from "../lib/neon";
+import { resolveUserBySession } from "../lib/auth";
+
+export const prerender = false;
+
+const session = await resolveUserBySession(Astro.request);
+if (!session?.userId) {
+	return Astro.redirect("/");
+}
+
+const sql = getNeonSql();
+const rows = await sql<Array<{ username: string | null }>>`
+	select nullif(trim(username), '') as username
+	from app_user
+	where id = ${session.userId}::uuid
+	limit 1
+`;
+const existingUsername = String(rows[0]?.username || "").trim();
+if (existingUsername) {
+	return Astro.redirect(`/u/${encodeURIComponent(existingUsername)}`);
+}
+---
+
+<Layout title="Welcome">
+	<div slot="right" class="welcome-page">
+		<section class="welcome-card">
+			<p class="step">Step 1 of 1</p>
+			<p class="eyebrow">Welcome</p>
+			<h1>Set your username to finish account setup.</h1>
+			<p class="copy">Choose a public username for your profile URL. You can only set it once, so pick carefully.</p>
+			<form id="welcome-username-form" class="welcome-form">
+				<label for="welcome-username">Username</label>
+				<input id="welcome-username" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" minlength="3" maxlength="40" required placeholder="readername" />
+				<p id="welcome-username-hint" class="hint">Use 3-40 characters: letters, numbers, `.`, `_`, `-`.</p>
+				<button id="welcome-submit" type="submit" disabled>Save Username</button>
+			</form>
+			<p id="welcome-feedback" class="feedback" hidden></p>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.welcome-page {
+		max-width: 720px;
+	}
+	.welcome-card {
+		border: 1px solid #ddd;
+		border-radius: 14px;
+		background: #fff;
+		padding: 1rem;
+	}
+	.step {
+		margin: 0 0 0.2rem;
+		font-size: 0.78rem;
+		font-weight: 700;
+		color: #5f5f5f;
+	}
+	.eyebrow {
+		margin: 0;
+		font-size: 0.78rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: #5f5f5f;
+	}
+	h1 {
+		margin: 0.35rem 0 0;
+		font-size: clamp(1.45rem, 3vw, 2.2rem);
+		line-height: 1.1;
+	}
+	.copy {
+		margin: 0.55rem 0 0.95rem;
+		color: #454545;
+	}
+	.welcome-form {
+		display: grid;
+		gap: 0.55rem;
+		max-width: 360px;
+	}
+	label {
+		font-weight: 700;
+	}
+	input {
+		border: 1px solid #cfd5de;
+		border-radius: 10px;
+		padding: 0.62rem 0.72rem;
+		font: inherit;
+	}
+	.hint {
+		margin: 0;
+		font-size: 0.82rem;
+		color: #4b5563;
+	}
+	.hint.error {
+		color: #991b1b;
+	}
+	.hint.success {
+		color: #166534;
+	}
+	button {
+		border: none;
+		border-radius: 9px;
+		padding: 0.62rem 0.9rem;
+		background: #111;
+		color: #fff;
+		font: inherit;
+		cursor: pointer;
+		justify-self: start;
+	}
+	button:disabled {
+		opacity: 0.55;
+		cursor: default;
+	}
+	.feedback {
+		margin: 0.8rem 0 0;
+		padding: 0.7rem 0.8rem;
+		border-radius: 10px;
+		background: #f3f4f6;
+		color: #1f2937;
+	}
+	.feedback.error {
+		background: #fef2f2;
+		color: #991b1b;
+	}
+</style>
+
+<script>
+	const form = document.getElementById("welcome-username-form");
+	const input = document.getElementById("welcome-username");
+	const feedback = document.getElementById("welcome-feedback");
+	const hint = document.getElementById("welcome-username-hint");
+	const submitButton = document.getElementById("welcome-submit");
+	let validateTimer = null;
+	let validateToken = 0;
+	let usernameAvailable = false;
+
+	function normalizeUsername(value) {
+		return String(value || "")
+			.trim()
+			.toLowerCase()
+			.replace(/^@+/, "")
+			.replace(/[^a-z0-9._-]/g, "")
+			.slice(0, 40);
+	}
+
+	function setHint(message, tone = "") {
+		if (!(hint instanceof HTMLElement)) return;
+		hint.textContent = message;
+		hint.classList.toggle("error", tone === "error");
+		hint.classList.toggle("success", tone === "success");
+	}
+
+	function syncSubmitState() {
+		if (!(submitButton instanceof HTMLButtonElement)) return;
+		submitButton.disabled = !usernameAvailable;
+	}
+
+	function showFeedback(message, isError = false) {
+		if (!(feedback instanceof HTMLElement)) return;
+		feedback.textContent = message;
+		feedback.hidden = !message;
+		feedback.classList.toggle("error", isError);
+	}
+
+	async function validateUsernameCandidate(raw) {
+		const normalized = normalizeUsername(raw);
+		const token = ++validateToken;
+		usernameAvailable = false;
+		syncSubmitState();
+		showFeedback("");
+
+		if (!normalized) {
+			setHint("Use 3-40 characters: letters, numbers, `.`, `_`, `-`.");
+			return;
+		}
+		if (normalized.length < 3) {
+			setHint("Use at least 3 characters.", "error");
+			return;
+		}
+		if (input instanceof HTMLInputElement && input.value !== normalized) {
+			input.value = normalized;
+		}
+
+		setHint("Checking availability...");
+		try {
+			const response = await fetch(`/api/profile/username?username=${encodeURIComponent(normalized)}`);
+			const data = await response.json().catch(() => ({}));
+			if (token !== validateToken) return;
+			if (!response.ok) {
+				setHint(String(data?.error || "Could not validate username."), "error");
+				return;
+			}
+			const available = !!data?.available;
+			usernameAvailable = available;
+			if (available) setHint("Username available.", "success");
+			else setHint(String(data?.reason || "That username is already taken."), "error");
+			syncSubmitState();
+		} catch {
+			if (token !== validateToken) return;
+			setHint("Could not validate username. Try again.", "error");
+		}
+	}
+
+	input?.addEventListener("input", () => {
+		if (!(input instanceof HTMLInputElement)) return;
+		if (validateTimer) window.clearTimeout(validateTimer);
+		validateTimer = window.setTimeout(() => {
+			void validateUsernameCandidate(input.value);
+		}, 220);
+	});
+
+	form?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		const username = String(input instanceof HTMLInputElement ? input.value : "").trim();
+		if (!username) {
+			showFeedback("Enter a username.", true);
+			return;
+		}
+		if (!usernameAvailable) {
+			showFeedback("Choose an available username first.", true);
+			return;
+		}
+		showFeedback("Saving username...");
+		if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
+		try {
+			const response = await fetch("/api/profile/username", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ username })
+			});
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				showFeedback(String(data?.error || "Failed to save username."), true);
+				return;
+			}
+			const savedUsername = String(data?.username || "").trim();
+			if (!savedUsername) {
+				showFeedback("Username saved, but profile routing failed. Open Settings.", true);
+				if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
+				return;
+			}
+			window.location.href = `/u/${encodeURIComponent(savedUsername)}?welcome=1`;
+		} catch {
+			showFeedback("Failed to save username.", true);
+			if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
+		}
+	});
+
+	setHint("Use 3-40 characters: letters, numbers, `.`, `_`, `-`.");
+	syncSubmitState();
+</script>

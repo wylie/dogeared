@@ -64,6 +64,18 @@ export async function upsertUserByEmail(email: string) {
 	return String(userRows[0]?.id || "");
 }
 
+export async function findUserIdByEmail(email: string) {
+	const sql = getNeonSql();
+	const emailHash = sha256Hex(email);
+	const rows = await sql<Array<{ id: string }>>`
+		select id::text as id
+		from app_user
+		where email_hash = ${emailHash}
+		limit 1
+	`;
+	return String(rows[0]?.id || "");
+}
+
 export async function resolveUserBySession(request: Request) {
 	const token = readCookie(request.headers, SESSION_COOKIE);
 	if (!token) return null;

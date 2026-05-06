@@ -14,6 +14,7 @@ const requestedUsername = String(Astro.params.username || "").trim().toLowerCase
 const session = await resolveUserBySession(Astro.request);
 const viewerUserId = String(session?.userId || "");
 const editMode = String(Astro.url.searchParams.get("edit") || "").trim() === "1";
+const showWelcomeBanner = String(Astro.url.searchParams.get("welcome") || "").trim() === "1";
 
 function normalizeText(value: unknown, maxLength: number) {
 	return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
@@ -503,6 +504,12 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 		)}
 		{!notFound && !privateProfile && (
 			<>
+				{showWelcomeBanner && (
+					<section class="welcome-banner" role="status" aria-live="polite">
+						<p><strong>Welcome to Dogeared.</strong> Your account setup is complete and your profile is live.</p>
+						<button type="button" id="dismiss-welcome-banner" class="welcome-banner-dismiss">Dismiss</button>
+					</section>
+				)}
 				<section id="about" class="profile-card">
 					{isOwnerViewer && (
 						<div class="profile-card-actions">
@@ -914,6 +921,30 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 
 <style>
 	.public-profile-page { max-width: 860px; display: grid; gap: 0.9rem; }
+	.welcome-banner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		border: 1px solid #d8e8d6;
+		border-radius: 12px;
+		background: #f6fbf4;
+		padding: 0.75rem 0.85rem;
+	}
+	.welcome-banner p {
+		margin: 0;
+		color: #1f3b22;
+	}
+	.welcome-banner-dismiss {
+		border: none;
+		border-radius: 999px;
+		background: #1f7a45;
+		color: #fff;
+		font: inherit;
+		font-weight: 700;
+		padding: 0.35rem 0.7rem;
+		cursor: pointer;
+	}
 	.state-card, .profile-card, .shelf-card, .activity-card { border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
 	.activity-card-plain { border: none; background: transparent; border-radius: 0; padding: 0; }
 	.profile-card { position: relative; }
@@ -1266,10 +1297,20 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 	} from "../../lib/shelfStorage.ts";
 	const followToggle = document.getElementById("follow-toggle");
 	const followFeedback = document.getElementById("follow-feedback");
+	const dismissWelcomeBanner = document.getElementById("dismiss-welcome-banner");
 	const followersCountNode = document.getElementById("follow-count-followers");
 	const followingCountNode = document.getElementById("follow-count-following");
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	const feedbackTimers = new WeakMap();
+
+	dismissWelcomeBanner?.addEventListener("click", () => {
+		const url = new URL(window.location.href);
+		url.searchParams.delete("welcome");
+		const next = `${url.pathname}${url.searchParams.toString() ? `?${url.searchParams.toString()}` : ""}${url.hash}`;
+		window.history.replaceState({}, "", next);
+		const banner = dismissWelcomeBanner.closest(".welcome-banner");
+		if (banner instanceof HTMLElement) banner.hidden = true;
+	});
 
 	function normalizeText(value) {
 		return String(value || "").trim().toLowerCase();

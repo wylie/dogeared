@@ -43,7 +43,7 @@ export const GET: APIRoute = async ({ url }) => {
 		const username = String(userRows[0]?.username || "").trim();
 		const redirectPath = username
 			? `/u/${encodeURIComponent(username)}?auth=success`
-			: "/settings#account-settings";
+			: "/welcome?onboarding=1";
 
 		const headers = new Headers({ Location: redirectPath });
 		headers.append("Set-Cookie", createSessionCookie(sessionToken));
