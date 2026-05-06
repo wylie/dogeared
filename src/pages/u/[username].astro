@@ -715,7 +715,9 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 										<div slot="meta" class="reading-progress-block">
 											{item.totalPages > 0 && (
 												<>
-													<p class="meta progress-current-value">Progress: {item.currentPage}/{item.totalPages} pages</p>
+													<p class="meta progress-current-value">
+														Progress: {item.currentPage}/{item.totalPages} pages ({Math.max(0, Math.min(100, Math.round((item.currentPage / Math.max(1, item.totalPages)) * 100)))}%)
+													</p>
 													<div class="progress-track" aria-hidden="true">
 														<div
 															class="progress-fill"
@@ -1816,7 +1818,10 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 				if (!result.ok) throw new Error(result.message || "Failed to save progress.");
 				const progressNode = card?.querySelector(".progress-current-value");
 				if (progressNode instanceof HTMLElement) {
-					progressNode.textContent = `Progress: ${currentPage}/${totalPages} pages`;
+					const percent = totalPages > 0 ? Math.max(0, Math.min(100, Math.round((currentPage / totalPages) * 100))) : 0;
+					progressNode.textContent = totalPages > 0
+						? `Progress: ${currentPage}/${totalPages} pages (${percent}%)`
+						: `Progress: ${currentPage} pages`;
 				}
 				const progressFill = card?.querySelector(".progress-fill");
 				if (progressFill instanceof HTMLElement && totalPages > 0) {
