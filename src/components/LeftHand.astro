@@ -396,7 +396,16 @@ const query = Astro.url.searchParams.get("q") ?? "";
       width: auto;
     }
     #left-hand-nav .primary-links .nav-group-divider {
-      display: none;
+      display: inline-flex;
+      align-items: center;
+      margin: 0 0.15rem;
+      padding: 0;
+      border: none;
+      color: #8c8c8c;
+      line-height: 1;
+    }
+    #left-hand-nav .primary-links .nav-group-divider::before {
+      content: "|";
     }
     #left-hand-nav .primary-links a,
     #left-hand-nav .primary-links .nav-text-button {
@@ -423,15 +432,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       text-underline-offset: 2px;
     }
     #left-hand-nav .section-links-nested {
-      margin-top: 0.18rem;
-      padding-left: 0.9rem;
-    }
-    #left-hand-nav .section-links-nested li {
-      margin-top: 0;
-    }
-    #left-hand-nav .section-links-nested a {
-      padding-left: 0.05rem;
-      font-size: 0.95rem;
+      display: none;
     }
     .left-hand-footer-logo {
       display: none;
