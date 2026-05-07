@@ -10,15 +10,16 @@ if (!session?.userId) {
 }
 
 const sectionLinks = [
+	{ id: "auth-settings", label: "Authentication" },
 	{ id: "privacy-settings", label: "Privacy" },
 	{ id: "reading-defaults", label: "Reading Defaults" },
 	{ id: "personalization-settings", label: "Personalization" },
-	{ id: "security-settings", label: "Security" },
 	{ id: "goodreads-import", label: "Import Goodreads" },
 	{ id: "import-controls", label: "Import Controls" },
 	{ id: "data-export", label: "Data Export" },
 	{ id: "api-settings", label: "API" },
-	{ id: "account-settings", label: "Account" }
+	{ id: "security-settings", label: "Security" },
+	{ id: "danger-zone-settings", label: "Danger Zone" }
 ];
 ---
 
@@ -35,7 +36,7 @@ const sectionLinks = [
 			<ol class="steps">
 				<li>In Goodreads, go to My Books and export your library as CSV.</li>
 				<li>Upload that CSV file here.</li>
-				<li>Review the import summary and open your <a href="/settings#account-settings">Profile</a>.</li>
+				<li>Review the import summary and open your <a href="/settings#auth-settings">Profile</a>.</li>
 			</ol>
 
 			<form id="goodreads-import-form" class="import-form">
@@ -68,15 +69,14 @@ const sectionLinks = [
 			<p id="import-controls-feedback" class="feedback" hidden></p>
 		</section>
 
-		<section class="settings-section" id="account-settings" aria-labelledby="account-settings-title">
-			<h2 id="account-settings-title">Account</h2>
+		<section class="settings-section" id="auth-settings" aria-labelledby="auth-settings-title">
+			<h2 id="auth-settings-title">Authentication</h2>
 			<p class="section-copy">
-				Sign in with a magic link delivered through Brevo, sign out, or permanently delete your account.
+				Sign in with a magic link delivered through Brevo, or sign out.
 			</p>
 
 			<div class="account-blocks">
 				<div class="account-panel">
-					<h3>Authentication</h3>
 					<div id="account-signed-in-state" hidden>
 						<p class="account-meta">Signed in as <strong id="account-email"></strong></p>
 						<div class="account-actions">
@@ -89,21 +89,23 @@ const sectionLinks = [
 						<button type="submit">Send Magic Link</button>
 					</form>
 				</div>
-
-				<div id="account-danger-zone" class="account-panel account-panel-danger" hidden>
-					<h3>Danger Zone</h3>
-					<p class="danger-copy">
-						Delete account permanently removes your account and synced shelf data.
-					</p>
-					<form id="delete-account-form" class="danger-form">
-						<label for="delete-confirm">Type <code>DELETE</code> to confirm</label>
-						<input id="delete-confirm" type="text" autocomplete="off" />
-						<button type="submit" class="danger">Delete Account</button>
-					</form>
-				</div>
 			</div>
 
 			<p id="account-feedback" class="feedback" hidden></p>
+		</section>
+
+		<section class="settings-section" id="danger-zone-settings" aria-labelledby="danger-zone-settings-title">
+			<h2 id="danger-zone-settings-title">Danger Zone</h2>
+			<p class="section-copy danger-copy">
+				Delete account permanently removes your account and synced shelf data.
+			</p>
+			<div id="account-danger-zone" class="account-panel account-panel-danger" hidden>
+				<form id="delete-account-form" class="danger-form">
+					<label for="delete-confirm">Type <code>DELETE</code> to confirm</label>
+					<input id="delete-confirm" type="text" autocomplete="off" />
+					<button type="submit" class="danger">Delete Account</button>
+				</form>
+			</div>
 		</section>
 
 		<section class="settings-section" id="privacy-settings" aria-labelledby="privacy-settings-title">
@@ -263,15 +265,16 @@ const sectionLinks = [
 		order: 0;
 	}
 
-	#privacy-settings { order: 2; }
-	#reading-defaults { order: 3; }
-	#personalization-settings { order: 4; }
-	#security-settings { order: 5; }
+	#auth-settings { order: 2; }
+	#privacy-settings { order: 3; }
+	#reading-defaults { order: 4; }
+	#personalization-settings { order: 5; }
 	#goodreads-import { order: 6; }
 	#import-controls { order: 7; }
 	#data-export { order: 8; }
 	#api-settings { order: 9; }
-	#account-settings { order: 10; }
+	#security-settings { order: 10; }
+	#danger-zone-settings { order: 11; }
 
 	.settings-section {
 		border: 1px solid #d8d8d8;
@@ -993,7 +996,7 @@ const sectionLinks = [
 				body: JSON.stringify({ entry })
 			});
 			if (response.status === 401) {
-				window.location.href = "/settings#account-settings";
+				window.location.href = "/settings#auth-settings";
 				return false;
 			}
 			return response.ok;
@@ -1102,7 +1105,7 @@ const sectionLinks = [
 			body: JSON.stringify({})
 		});
 		if (response.status === 401) {
-			window.location.href = "/settings#account-settings";
+			window.location.href = "/settings#auth-settings";
 			return false;
 		}
 		return response.ok;
