@@ -146,6 +146,10 @@ export function setRatingControlValue(control: Element, value: unknown) {
 	if (stars instanceof HTMLElement) {
 		stars.textContent = renderRatingStars(rating);
 	}
+	const actions = control.querySelector(".rating-control-actions");
+	if (actions instanceof HTMLElement) {
+		actions.setAttribute("aria-label", rating ? `Your rating: ${rating}/5` : "Rate this book");
+	}
 	const clearButton = control.querySelector("[data-action='clear-rating']");
 	if (clearButton instanceof HTMLButtonElement) {
 		clearButton.hidden = !rating;
