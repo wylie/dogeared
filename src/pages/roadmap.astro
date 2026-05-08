@@ -12,39 +12,9 @@ const SUPPORT_LINKS = {
 
 const roadmapItems = [
 	{
-		status: "Finished",
-		title: "Core Site Setup & Stabilization",
-		description: "Finish baseline setup, tighten navigation and mobile UX, and make key pages feel consistent and reliable."
-	},
-	{
-		status: "Finished",
-		title: "Shelf & Search Reliability",
-		description: "Improve add-to-shelf flows, deduplication, and search result quality so the core reading workflow is dependable."
-	},
-	{
-		status: "Finished",
-		title: "Auth & Account Hardening",
-		description: "Tighten sign-in/session behavior, account recovery, and auth error handling so onboarding is stable."
-	},
-	{
-		status: "Now",
-		title: "New Account Creation",
-		description: "Add a clear sign-up flow so new readers can create an account, set a username, and land in profile setup."
-	},
-	{
 		status: "Now",
 		title: "Import Pipeline Reliability",
 		description: "Make Goodreads/CSV imports idempotent with clear progress, retries, and duplicate protection."
-	},
-	{
-		status: "Finished",
-		title: "Book Ratings",
-		description: "Let readers rate books from key surfaces and feed those ratings into profile, activity, and book pages."
-	},
-	{
-		status: "Now",
-		title: "Profile & Library Polish",
-		description: "Refine profile pages, related views, and book metadata presentation for a cleaner first-run experience."
 	},
 	{
 		status: "Now",
@@ -52,24 +22,34 @@ const roadmapItems = [
 		description: "Improve missing authors/genres/covers/published dates and run recurring metadata backfills."
 	},
 	{
-		status: "Finished",
-		title: "Genre Cleanup & Normalization",
-		description: "Deduplicate genres, split combo genres, and standardize genre names/slugs so shelves and discovery stay clean."
-	},
-	{
-		status: "Next",
+		status: "Now",
 		title: "Performance & Caching Pass",
 		description: "Speed up home/search/metrics queries and reduce client payloads, especially on mobile."
 	},
 	{
-		status: "Next",
-		title: "QA + Monitoring",
-		description: "Add smoke tests for shelf/search/profile flows and basic production monitoring with alerts."
+		status: "Now",
+		title: "Production QA + Monitoring",
+		description: "Expand CI into smoke tests for shelf/search/profile flows and add basic production monitoring with alerts."
+	},
+	{
+		status: "Now",
+		title: "Security + Dependency Maintenance",
+		description: "Resolve flagged dependency vulnerabilities and keep dependency updates part of the regular maintenance rhythm."
+	},
+	{
+		status: "Now",
+		title: "Admin/Data Health Dashboard",
+		description: "Surface missing covers/authors/genres, duplicate clusters, failed imports, and backfill progress in one maintenance view."
 	},
 	{
 		status: "Next",
-		title: "Browser Notifications",
-		description: "Add opt-in browser notifications for key events like follows, reading reminders, and activity digests with per-user controls."
+		title: "Reader Onboarding v2",
+		description: "Guide new readers through importing, setting favorites, following people, and rating a few read books."
+	},
+	{
+		status: "Next",
+		title: "Shelf Editing Controls",
+		description: "Add easier bulk edits, move/remove actions, metadata fixes, and duplicate management from one library view."
 	},
 	{
 		status: "Next",
@@ -77,9 +57,34 @@ const roadmapItems = [
 		description: "Improve crawlability and discoverability with tighter metadata, structured data, internal linking, and index/sitemap hygiene."
 	},
 	{
-		status: "Later",
+		status: "Next",
+		title: "Ratings + Taste Signals",
+		description: "Use ratings, follows, favorite books, and shelf behavior to improve recommendations and reader discovery."
+	},
+	{
+		status: "Next",
+		title: "Recommendations v1",
+		description: "Ship lightweight “because you shelved X” recommendations from genre and author overlap."
+	},
+	{
+		status: "Next",
 		title: "Richer Metrics Views",
 		description: "Expand drill-downs from authors to genres, tags, and location snapshots with cleaner exportable views."
+	},
+	{
+		status: "Next",
+		title: "Accessibility Pass",
+		description: "Tighten keyboard flows, focus states, screen-reader labels, reduced motion, and contrast across core workflows."
+	},
+	{
+		status: "Next",
+		title: "Mobile Reading Workflow Pass",
+		description: "Tune add-to-shelf, progress updates, ratings, and search specifically for small screens."
+	},
+	{
+		status: "Next",
+		title: "Library Export Improvements",
+		description: "Export filtered shelves, ratings, progress, and profile data in friendlier CSV and JSON formats."
 	},
 	{
 		status: "Later",
@@ -88,13 +93,78 @@ const roadmapItems = [
 	},
 	{
 		status: "Later",
+		title: "Review Notes / Private Notes",
+		description: "Let readers add private notes or short public blurbs to rated and read books."
+	},
+	{
+		status: "Later",
+		title: "Public Sharing Cards",
+		description: "Create polished preview cards for profiles, books, shelves, and reading goals when shared."
+	},
+	{
+		status: "Later",
+		title: "Notification Preferences + Email Digests",
+		description: "Add per-user digest preferences for follows, ratings, and reading activity before browser notifications."
+	},
+	{
+		status: "Later",
+		title: "Browser Notifications",
+		description: "Add opt-in browser notifications for key events like follows, reading reminders, and activity digests with per-user controls."
+	},
+	{
+		status: "Later",
 		title: "Audiobooks Support",
 		description: "Add audiobook-specific search, edition handling, and shelf views once core book workflows are fully stable."
 	},
 	{
-		status: "Later",
-		title: "Recommendations v1",
-		description: "Ship lightweight “because you shelved X” recommendations from genre and author overlap."
+		status: "Finished",
+		title: "Rating UX Polish",
+		description: "Cleaned up editable rating controls, rating feedback, clear actions, and community-versus-personal rating presentation."
+	},
+	{
+		status: "Finished",
+		title: "Release Workflow + Main Protection",
+		description: "Added semantic versioning, changelog tracking, GitHub Releases, CI checks, and branch protection rules for main."
+	},
+	{
+		status: "Finished",
+		title: "Following Activity Feed",
+		description: "Shipped Following as a logged-in activity page with reader discovery, follow management, and followed-reader shelf activity."
+	},
+	{
+		status: "Finished",
+		title: "Book Ratings",
+		description: "Let readers rate books from key surfaces and feed those ratings into profile, activity, and book pages."
+	},
+	{
+		status: "Finished",
+		title: "Profile & Library Polish",
+		description: "Refined profile pages, responsive book cards, mobile navigation, section highlighting, and book metadata presentation."
+	},
+	{
+		status: "Finished",
+		title: "New Account Creation",
+		description: "Added a clear sign-up flow so new readers can create an account, set a username, and land in profile setup."
+	},
+	{
+		status: "Finished",
+		title: "Genre Cleanup & Normalization",
+		description: "Deduplicate genres, split combo genres, and standardize genre names/slugs so shelves and discovery stay clean."
+	},
+	{
+		status: "Finished",
+		title: "Shelf & Search Reliability",
+		description: "Improve add-to-shelf flows, deduplication, and search result quality so the core reading workflow is dependable."
+	},
+	{
+		status: "Finished",
+		title: "Public Profiles + Follow Graph Foundations",
+		description: "Shipped public profile privacy gates, follow relationships, and profile activity views for multi-user groundwork."
+	},
+	{
+		status: "Finished",
+		title: "Auth & Account Hardening",
+		description: "Tighten sign-in/session behavior, account recovery, and auth error handling so onboarding is stable."
 	},
 	{
 		status: "Finished",
@@ -108,8 +178,8 @@ const roadmapItems = [
 	},
 	{
 		status: "Finished",
-		title: "Public Profiles + Follow Graph Foundations",
-		description: "Shipped public profile privacy gates, follow relationships, and profile activity views for multi-user groundwork."
+		title: "Core Site Setup & Stabilization",
+		description: "Finish baseline setup, tighten navigation and mobile UX, and make key pages feel consistent and reliable."
 	}
 ];
 
@@ -177,9 +247,12 @@ const supportOptions = [
 				<p>Upcoming additions planned for Dogeared.</p>
 			</div>
 			<div class="roadmap-grid">
-				{activeRoadmapItems.map((item) => (
+				{activeRoadmapItems.map((item, index) => (
 					<article class="roadmap-item">
-						<p class={`status-pill status-${item.status.toLowerCase()}`}>{item.status}</p>
+						<div class="roadmap-item-head">
+							<p class={`status-pill status-${item.status.toLowerCase()}`}>{item.status}</p>
+							<p class="rank-pill">#{index + 1}</p>
+						</div>
 						<h3>{item.title}</h3>
 						<p>{item.description}</p>
 					</article>
@@ -191,9 +264,12 @@ const supportOptions = [
 						<h3>Finished</h3>
 					</div>
 					<div class="roadmap-grid finished-grid">
-						{finishedRoadmapItems.map((item) => (
+						{finishedRoadmapItems.map((item, index) => (
 							<article class="roadmap-item roadmap-item-finished">
-								<p class="status-pill status-finished">Finished</p>
+								<div class="roadmap-item-head">
+									<p class="status-pill status-finished">Finished</p>
+									<p class="rank-pill finished-rank-pill">#{index + 1}</p>
+								</div>
 								<h3>{item.title}</h3>
 								<p>{item.description}</p>
 							</article>
@@ -243,13 +319,16 @@ const supportOptions = [
 	.panel-head p { margin: 0.3rem 0 0; color: #515151; }
 	.roadmap-grid { margin-top: 0.7rem; display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.roadmap-item { border: none; border-radius: 12px; padding: 0.75rem; background: #fcfbf8; }
+	.roadmap-item-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 	.roadmap-item h3 { margin: 0.35rem 0 0; font-size: 1rem; }
 	.roadmap-item p { margin: 0.45rem 0 0; color: #4f4f4f; line-height: 1.5; }
 	.status-pill { display: inline-flex; margin: 0; border-radius: 999px; padding: 0.14rem 0.5rem; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+	.rank-pill { display: inline-flex; margin: 0; border-radius: 999px; background: #c7e2b8; color: #21351a; padding: 0.15rem 0.48rem; font-size: 0.8rem; font-weight: 700; line-height: 1.2; }
 	.status-now { background: #d7f1df; color: #176339; }
 	.status-next { background: #f6ebcf; color: #7a5a19; }
 	.status-later { background: #e8e8e8; color: #5e5e5e; }
 	.status-finished { background: #dbeafe; color: #1e40af; }
+	.finished-rank-pill { background: #e2e8f0; color: #475569; }
 	.finished-head { margin-top: 0.9rem; }
 	.finished-head h3 { margin: 0; font-size: 1rem; }
 	.finished-grid { margin-top: 0.45rem; }
