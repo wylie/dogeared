@@ -520,7 +520,11 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 						</p>
 						{book.publishedLabel && <p class="meta">Published: {book.publishedLabel}</p>}
 						<p class="meta">Shelves: {book.shelves.toLocaleString()}</p>
-						{book.ratingCount > 0 && <p class="meta rating">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>}
+						{book.ratingCount > 0 && (
+							isAuthenticated && book.id > 0 && viewerShelfStatus === "finished"
+								? <p class="meta community-rating">Community rating: {book.averageRating.toFixed(1)} from {book.ratingCount} reader{book.ratingCount === 1 ? "" : "s"}</p>
+								: <p class="meta rating">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
+						)}
 						{isAuthenticated && book.id > 0 && viewerShelfStatus === "finished" && (
 							<RatingControl bookId={book.id} rating={viewerRating} editable={true} />
 						)}
@@ -583,6 +587,7 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 	.cover-placeholder { display: flex; align-items: center; justify-content: center; color: #8a8a8a; border: 1px solid #d7d7d7; }
 	.meta { margin: 0.24rem 0; color: #4d4d4d; }
 	.rating { color: var(--color-rating); font-weight: 700; }
+	.community-rating { color: #6b7280; font-size: 0.88rem; font-weight: 600; }
 	.book-head-actions :global(.shelf-dropdown) {
 		margin-top: 0;
 		display: inline-flex;

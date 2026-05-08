@@ -315,7 +315,10 @@ try {
 						{section.books.length === 0 && <p class="empty">No books found for this shelf yet.</p>}
 						{section.books.length > 0 && (
 							<ul class="book-grid">
-								{section.books.map((book, index) => (
+								{section.books.map((book, index) => {
+									const numericBookId = Number(String(book.id || "").replace(/^book_/, ""));
+									const hasPersonalRatingControl = viewerStatusByBookId.get(numericBookId) === "finished";
+									return (
 									<BookCard
 										title={book.title}
 										titleHref={`/book?bookId=${encodeURIComponent(String(book.id).replace(/^book_/, ""))}`}
@@ -331,12 +334,14 @@ try {
 										<div slot="meta">
 											{book.publishedDate && <p class="meta">Published: {formatPublishedLabel(book.publishedDate)}</p>}
 											{book.ratingCount > 0 && (
-												<p class="meta rating-meta">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
+												hasPersonalRatingControl
+													? <p class="meta community-rating-meta">Community rating: {book.averageRating.toFixed(1)} from {book.ratingCount} reader{book.ratingCount === 1 ? "" : "s"}</p>
+													: <p class="meta rating-meta">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
 											)}
-											{viewerStatusByBookId.get(Number(String(book.id || "").replace(/^book_/, ""))) === "finished" && (
+											{hasPersonalRatingControl && (
 												<RatingControl
-													bookId={String(book.id || "").replace(/^book_/, "")}
-													rating={viewerRatingByBookId.get(Number(String(book.id || "").replace(/^book_/, ""))) || 0}
+													bookId={String(numericBookId)}
+													rating={viewerRatingByBookId.get(numericBookId) || 0}
 													editable={true}
 												/>
 											)}
@@ -361,7 +366,8 @@ try {
 											}} />
 										</div>
 									</BookCard>
-								))}
+									);
+								})}
 							</ul>
 						)}
 					</section>
@@ -472,6 +478,12 @@ try {
 
 	.rating-meta {
 		color: var(--color-rating);
+		font-weight: 600;
+	}
+
+	.community-rating-meta {
+		color: #6b7280;
+		font-size: 0.82rem;
 		font-weight: 600;
 	}
 
