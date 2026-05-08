@@ -138,10 +138,6 @@ export function renderRatingStars(value: unknown) {
 export function setRatingControlValue(control: Element, value: unknown) {
 	const rating = normalizeRatingValue(value);
 	control.setAttribute("data-rating", rating ? String(rating) : "");
-	const label = control.querySelector("[data-rating-label]");
-	if (label instanceof HTMLElement) {
-		label.textContent = rating ? `Your rating: ${rating}/5` : "Rate this book";
-	}
 	const stars = control.querySelector("[data-rating-stars]");
 	if (stars instanceof HTMLElement) {
 		stars.textContent = renderRatingStars(rating);
@@ -152,7 +148,7 @@ export function setRatingControlValue(control: Element, value: unknown) {
 	}
 	const clearButton = control.querySelector("[data-action='clear-rating']");
 	if (clearButton instanceof HTMLButtonElement) {
-		clearButton.hidden = !rating;
+		clearButton.style.display = rating ? "" : "none";
 	}
 	for (const button of Array.from(control.querySelectorAll("[data-action='set-rating']"))) {
 		if (!(button instanceof HTMLElement)) continue;
