@@ -165,9 +165,26 @@ export function setRatingControlValue(control: Element, value: unknown) {
 export function showRatingFeedback(control: Element, message: string, isError = false) {
 	const feedback = control.querySelector("[data-rating-feedback]");
 	if (!(feedback instanceof HTMLElement)) return;
+	const existingTimer = Number(feedback.dataset.hideTimer || 0);
+	if (existingTimer) window.clearTimeout(existingTimer);
+	delete feedback.dataset.hideTimer;
 	feedback.textContent = message;
 	feedback.hidden = !message;
 	feedback.classList.toggle("is-error", isError);
+	feedback.classList.remove("is-hiding");
+	if (message && !isError && message !== "Saving...") {
+		const fadeTimer = window.setTimeout(() => {
+			feedback.classList.add("is-hiding");
+			const hideTimer = window.setTimeout(() => {
+				feedback.hidden = true;
+				feedback.textContent = "";
+				feedback.classList.remove("is-hiding");
+				delete feedback.dataset.hideTimer;
+			}, 220);
+			feedback.dataset.hideTimer = String(hideTimer);
+		}, 1800);
+		feedback.dataset.hideTimer = String(fadeTimer);
+	}
 }
 
 export function initRatingControls(root: ParentNode = document) {

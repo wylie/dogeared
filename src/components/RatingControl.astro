@@ -86,9 +86,15 @@ const stars = Array.from({ length: 5 }, (_, index) => (index < normalizedRating 
 		padding: 0;
 		cursor: pointer;
 		margin-left: 0.28rem;
+		opacity: 0;
+		transition: color 140ms ease, opacity 140ms ease;
 	}
 	.rating-control-actions button.rating-clear[hidden] {
 		display: none;
+	}
+	.rating-control-actions:hover button.rating-clear,
+	.rating-control-actions:focus-within button.rating-clear {
+		opacity: 1;
 	}
 	.rating-control-actions button.rating-clear .material-icons {
 		display: block;
@@ -103,6 +109,11 @@ const stars = Array.from({ length: 5 }, (_, index) => (index < normalizedRating 
 		margin: 0;
 		font-size: 0.8rem;
 		color: #1f7a45;
+		opacity: 1;
+		transition: opacity 180ms ease;
+	}
+	.rating-feedback.is-hiding {
+		opacity: 0;
 	}
 	.rating-feedback.is-error {
 		color: #991b1b;
