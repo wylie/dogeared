@@ -6,6 +6,20 @@ This project follows semantic versioning for product releases. While Dogeared is
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-08
+
+### Changed
+
+- Polished editable rating controls so saved messages fade away after a short delay.
+- Made the clear rating icon fade in when hovering or focusing the rating row.
+- Separated community ratings from personal ratings so editable book cards do not show competing star rows.
+
+### Fixed
+
+- Kept the clear rating icon hidden until a book has a rating.
+- Prevented the clear rating icon from inheriting the orange star color.
+- Removed visible rating labels from editable rating rows while preserving accessible labels.
+
 ## [0.1.0] - 2026-05-08
 
 ### Added
