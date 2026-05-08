@@ -100,6 +100,104 @@ export function setShelvedState(dropdown: Element, isShelved: boolean) {
 	else dropdown.classList.remove("is-shelved");
 }
 
+export function normalizeRatingValue(value: unknown) {
+	if (value === null || value === undefined || String(value).trim() === "") return null;
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed)) return null;
+	const rounded = Math.floor(parsed);
+	return rounded >= 1 && rounded <= 5 ? rounded : null;
+}
+
+export async function syncShelfRatingToServer(input: { bookId: unknown; rating: unknown }) {
+	const response = await fetch("/api/shelf/rating", {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			bookId: Math.max(0, Number(input.bookId || 0) || 0),
+			rating: normalizeRatingValue(input.rating)
+		})
+	});
+	if (response.status === 401) {
+		window.location.href = "/settings#account-settings";
+		return { ok: false, unauthorized: true, response, data: null };
+	}
+	let data: unknown = null;
+	try {
+		data = await response.json();
+	} catch {
+		data = null;
+	}
+	return { ok: response.ok, unauthorized: false, response, data };
+}
+
+export function renderRatingStars(value: unknown) {
+	const rating = normalizeRatingValue(value) || 0;
+	return Array.from({ length: 5 }, (_, index) => (index < rating ? "★" : "☆")).join("");
+}
+
+export function setRatingControlValue(control: Element, value: unknown) {
+	const rating = normalizeRatingValue(value);
+	control.setAttribute("data-rating", rating ? String(rating) : "");
+	const label = control.querySelector("[data-rating-label]");
+	if (label instanceof HTMLElement) {
+		label.textContent = rating ? `Your rating: ${rating}/5` : "Rate this book";
+	}
+	const stars = control.querySelector("[data-rating-stars]");
+	if (stars instanceof HTMLElement) {
+		stars.textContent = renderRatingStars(rating);
+	}
+	const clearButton = control.querySelector("[data-action='clear-rating']");
+	if (clearButton instanceof HTMLButtonElement) {
+		clearButton.hidden = !rating;
+	}
+	for (const button of Array.from(control.querySelectorAll("[data-action='set-rating']"))) {
+		if (!(button instanceof HTMLElement)) continue;
+		const buttonRating = normalizeRatingValue(button.getAttribute("data-rating"));
+		button.setAttribute("aria-pressed", rating && buttonRating === rating ? "true" : "false");
+		button.textContent = buttonRating && rating && buttonRating <= rating ? "★" : "☆";
+	}
+}
+
+export function showRatingFeedback(control: Element, message: string, isError = false) {
+	const feedback = control.querySelector("[data-rating-feedback]");
+	if (!(feedback instanceof HTMLElement)) return;
+	feedback.textContent = message;
+	feedback.hidden = !message;
+	feedback.classList.toggle("is-error", isError);
+}
+
+export function initRatingControls(root: ParentNode = document) {
+	const controls = Array.from(root.querySelectorAll("[data-rating-control]"));
+	for (const control of controls) setRatingControlValue(control, control.getAttribute("data-rating"));
+	document.addEventListener("click", async (event) => {
+		const target = event.target instanceof Element ? event.target : null;
+		if (!target) return;
+		const button = target.closest("[data-action='set-rating'], [data-action='clear-rating']");
+		if (!(button instanceof HTMLButtonElement)) return;
+		const control = button.closest("[data-rating-control]");
+		if (!(control instanceof HTMLElement)) return;
+		const bookId = Math.max(0, Number(control.dataset.bookId || 0) || 0);
+		if (!bookId) return;
+		const nextRating = button.dataset.action === "clear-rating" ? null : normalizeRatingValue(button.dataset.rating);
+		button.disabled = true;
+		showRatingFeedback(control, "Saving...");
+		try {
+			const result = await syncShelfRatingToServer({ bookId, rating: nextRating });
+			if (!result.ok) {
+				const message = result.unauthorized ? "Please log in to rate books." : "Failed to save rating.";
+				showRatingFeedback(control, message, true);
+				return;
+			}
+			setRatingControlValue(control, nextRating);
+			showRatingFeedback(control, nextRating ? "Rating saved." : "Rating removed.");
+		} catch {
+			showRatingFeedback(control, "Failed to save rating.", true);
+		} finally {
+			button.disabled = false;
+		}
+	});
+}
+
 export function showShelfFeedback(
 	dropdown: Element,
 	message: string,

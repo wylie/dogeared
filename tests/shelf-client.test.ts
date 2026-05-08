@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
 	buildShelfEntryFromRecord,
+	normalizeRatingValue,
 	parseCategories,
 	resolveShelfSaveMessage,
 	saveShelfEntryWithRetry,
+	syncShelfRatingToServer,
 	statusLabel,
 	syncShelfEntryToServer
 } from "../src/lib/shelfClient.ts";
@@ -19,6 +21,16 @@ test("statusLabel maps known values and defaults", () => {
 test("parseCategories parses JSON category arrays safely", () => {
 	assert.deepEqual(parseCategories('["Fantasy"," Sci-Fi "]'), ["Fantasy", "Sci-Fi"]);
 	assert.deepEqual(parseCategories("not json"), []);
+});
+
+test("normalizeRatingValue keeps valid star ratings and clears invalid values", () => {
+	assert.equal(normalizeRatingValue(1), 1);
+	assert.equal(normalizeRatingValue("5"), 5);
+	assert.equal(normalizeRatingValue("3.8"), 3);
+	assert.equal(normalizeRatingValue(0), null);
+	assert.equal(normalizeRatingValue(6), null);
+	assert.equal(normalizeRatingValue(""), null);
+	assert.equal(normalizeRatingValue(null), null);
 });
 
 test("buildShelfEntryFromRecord returns normalized shelf entry", () => {
@@ -52,6 +64,31 @@ test("syncShelfEntryToServer reports unauthorized and sets redirect", async () =
 
 	try {
 		const result = await syncShelfEntryToServer({ title: "X" }, "/settings#account-settings");
+		assert.equal(result.ok, false);
+		assert.equal(result.unauthorized, true);
+		const href = ((globalThis as Record<string, unknown>).window as { location: { href: string } }).location.href;
+		assert.equal(href, "/settings#account-settings");
+	} finally {
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
+		(globalThis as Record<string, unknown>).window = originalWindow;
+	}
+});
+
+test("syncShelfRatingToServer reports unauthorized and sets redirect", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWindow = (globalThis as Record<string, unknown>).window;
+
+	(globalThis as unknown as { fetch: typeof fetch }).fetch = (async (_url, init) => {
+		assert.equal(_url, "/api/shelf/rating");
+		assert.equal((init as RequestInit).method, "PATCH");
+		return new Response("{}", { status: 401, headers: { "Content-Type": "application/json" } });
+	}) as typeof fetch;
+	(globalThis as Record<string, unknown>).window = {
+		location: { href: "http://localhost/" }
+	};
+
+	try {
+		const result = await syncShelfRatingToServer({ bookId: 123, rating: 5 });
 		assert.equal(result.ok, false);
 		assert.equal(result.unauthorized, true);
 		const href = ((globalThis as Record<string, unknown>).window as { location: { href: string } }).location.href;

@@ -1,0 +1,112 @@
+---
+type Props = {
+	bookId: number | string;
+	rating?: number | null;
+	editable?: boolean;
+};
+
+const { bookId, rating = 0, editable = false } = Astro.props as Props;
+const normalizedRating = Math.max(0, Math.min(5, Number(rating || 0) || 0));
+const stars = Array.from({ length: 5 }, (_, index) => (index < normalizedRating ? "★" : "☆")).join("");
+---
+
+<div class={`rating-control${editable ? " is-editable" : ""}`} data-rating-control data-book-id={String(bookId || "")} data-rating={normalizedRating ? String(normalizedRating) : ""}>
+	<p class="rating-control-label">
+		<span data-rating-label>{normalizedRating ? `Your rating: ${normalizedRating}/5` : "Rate this book"}</span>
+		{editable && (
+			<button type="button" class="rating-clear" data-action="clear-rating" aria-label="Clear rating" title="Clear rating" hidden={normalizedRating <= 0}>
+				<svg viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+					<line x1="3.5" y1="3.5" x2="8.5" y2="8.5" />
+					<line x1="8.5" y1="3.5" x2="3.5" y2="8.5" />
+				</svg>
+			</button>
+		)}
+		{!editable && <span class="rating-control-stars" data-rating-stars>{stars}</span>}
+	</p>
+	{editable && (
+		<div class="rating-control-actions" aria-label="Edit rating">
+			{[1, 2, 3, 4, 5].map((value) => (
+				<button type="button" data-action="set-rating" data-rating={String(value)} aria-label={`${value} star${value === 1 ? "" : "s"}`} aria-pressed={normalizedRating === value ? "true" : "false"}>
+					{value <= normalizedRating ? "★" : "☆"}
+				</button>
+			))}
+		</div>
+	)}
+	<p class="rating-feedback" data-rating-feedback hidden></p>
+</div>
+
+<style>
+	.rating-control {
+		display: grid;
+		gap: 0.25rem;
+		margin-top: 0.35rem;
+	}
+	.rating-control-label {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin: 0;
+		font-size: 0.86rem;
+		font-weight: 700;
+		color: #4b5563;
+	}
+	.rating-control-stars {
+		margin-left: 0.25rem;
+		color: var(--color-rating);
+		letter-spacing: 0.02em;
+	}
+	.rating-control-actions {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.18rem;
+	}
+	.rating-control-actions button {
+		border: none;
+		background: transparent;
+		color: var(--color-rating);
+		font: inherit;
+		font-size: 1.2rem;
+		line-height: 1;
+		padding: 0.1rem;
+		cursor: pointer;
+	}
+	.rating-control-actions button[aria-pressed="true"] {
+		transform: translateY(-1px);
+	}
+	.rating-clear {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		appearance: none;
+		border: none;
+		border-radius: 50%;
+		background: #eceff3;
+		color: #374151;
+		width: 1.05rem;
+		height: 1.05rem;
+		padding: 0;
+		cursor: pointer;
+	}
+	.rating-clear svg {
+		display: block;
+		width: 0.68rem;
+		height: 0.68rem;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2.1;
+		stroke-linecap: round;
+	}
+	.rating-clear:hover,
+	.rating-clear:focus-visible {
+		background: #d9dee6;
+	}
+	.rating-feedback {
+		margin: 0;
+		font-size: 0.8rem;
+		color: #1f7a45;
+	}
+	.rating-feedback.is-error {
+		color: #991b1b;
+	}
+</style>

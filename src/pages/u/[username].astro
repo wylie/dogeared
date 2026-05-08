@@ -3,6 +3,7 @@ import Layout from "../../layouts/Layout.astro";
 import BookCard from "../../components/BookCard.astro";
 import ShelfDropdown from "../../components/ShelfDropdown.astro";
 import Chip from "../../components/Chip.astro";
+import RatingControl from "../../components/RatingControl.astro";
 import { resolveUserBySession } from "../../lib/auth";
 import { getNeonSql } from "../../lib/neon";
 import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicShelfSummary } from "../../lib/publicProfile";
@@ -657,7 +658,11 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 											)}
 										</p>
 										<div slot="meta">
-											{item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>}
+											{isOwnerViewer ? (
+												<RatingControl bookId={item.bookId} rating={item.rating} editable={true} />
+											) : (
+												item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>
+											)}
 										</div>
 										<div slot="actions">
 											<ShelfDropdown attrs={{
@@ -886,7 +891,11 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 											)}
 										</p>
 										<div slot="meta">
-											{item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>}
+											{isOwnerViewer ? (
+												<RatingControl bookId={item.bookId} rating={item.rating} editable={true} />
+											) : (
+												item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>
+											)}
 										</div>
 										<div slot="actions">
 											<ShelfDropdown attrs={{
@@ -1291,7 +1300,8 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 		showShelfFeedback,
 		statusLabel,
 		saveShelfEntryWithRetry,
-		toggleShelfMenu
+		toggleShelfMenu,
+		initRatingControls
 	} from "../../lib/shelfClient.ts";
 	import {
 		loadShelfEntries,
@@ -1304,6 +1314,7 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 	const followingCountNode = document.getElementById("follow-count-following");
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	const feedbackTimers = new WeakMap();
+	initRatingControls();
 
 	dismissWelcomeBanner?.addEventListener("click", () => {
 		const url = new URL(window.location.href);

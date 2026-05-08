@@ -3,6 +3,7 @@ import Layout from '../layouts/Layout.astro';
 import BookCard from '../components/BookCard.astro';
 import ShelfDropdown from '../components/ShelfDropdown.astro';
 import Chip from '../components/Chip.astro';
+import RatingControl from '../components/RatingControl.astro';
 import { resolveUserBySession } from '../lib/auth';
 import { getNeonSql } from '../lib/neon';
 import { formatGenreLabel } from '../lib/genres';
@@ -121,6 +122,7 @@ function sanitizeDescription(value: string, maxLength = 220) {
 let sections: BrowseSection[] = [];
 let errorMessage = "";
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
+let viewerRatingByBookId = new Map<number, number>();
 
 try {
 	const sql = getNeonSql();
@@ -269,14 +271,17 @@ try {
 				.filter((value) => Number.isFinite(value) && value > 0)
 		));
 		if (bookIds.length > 0) {
-			const statusRows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished" }>>`
-				select book_id, status
+			const statusRows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
+				select book_id, status, rating
 				from user_book
 				where user_id = ${session.userId}::uuid
 					and book_id = any(${bookIds}::bigint[])
 			`;
 			viewerStatusByBookId = new Map(
 				statusRows.map((row) => [Number(row.book_id || 0), row.status])
+			);
+			viewerRatingByBookId = new Map(
+				statusRows.map((row) => [Number(row.book_id || 0), Math.max(0, Math.min(5, Number(row.rating || 0) || 0))])
 			);
 		}
 	}
@@ -327,6 +332,13 @@ try {
 											{book.publishedDate && <p class="meta">Published: {formatPublishedLabel(book.publishedDate)}</p>}
 											{book.ratingCount > 0 && (
 												<p class="meta rating-meta">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
+											)}
+											{viewerStatusByBookId.get(Number(String(book.id || "").replace(/^book_/, ""))) === "finished" && (
+												<RatingControl
+													bookId={String(book.id || "").replace(/^book_/, "")}
+													rating={viewerRatingByBookId.get(Number(String(book.id || "").replace(/^book_/, ""))) || 0}
+													editable={true}
+												/>
 											)}
 										</div>
 										<div slot="actions">
@@ -650,7 +662,8 @@ try {
 		showShelfFeedback,
 		statusLabel,
 		saveShelfEntryWithRetry,
-		toggleShelfMenu
+		toggleShelfMenu,
+		initRatingControls
 	} from "../lib/shelfClient.ts";
 	import {
 		loadShelfEntries,
@@ -664,6 +677,7 @@ try {
 	let isAuthenticated = browsePage?.dataset.authenticated === "true";
 	const feedbackTimers = new WeakMap();
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
+	initRatingControls();
 
 	function normalizeText(value) {
 		return String(value || "").trim().toLowerCase();
