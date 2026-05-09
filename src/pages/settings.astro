@@ -483,6 +483,13 @@ const sectionLinks = [
 </style>
 
 <script>
+	import {
+		buildGoodreadsImportPlan,
+		parseGoodreadsImportCsv,
+		summarizeGoodreadsImportPlan
+	} from "../lib/goodreadsImport.ts";
+	import { saveShelfEntryWithRetry } from "../lib/shelfClient.ts";
+
 	const STORAGE_KEY = "dogeared:myreads";
 	const UPDATES_KEY = "dogeared:updates";
 	const importForm = document.getElementById("goodreads-import-form");
@@ -534,9 +541,12 @@ const sectionLinks = [
 
 	function showSummary(result) {
 		summary.innerHTML = `
+			${Number.isFinite(Number(result.totalRows)) ? `<p><strong>Rows:</strong> ${result.totalRows} total, ${result.importableRows || result.imported + result.updated} importable</p>` : ""}
 			<p><strong>Imported:</strong> ${result.imported} books</p>
 			<p><strong>Updated:</strong> ${result.updated} books</p>
 			<p><strong>Skipped:</strong> ${result.skipped} rows</p>
+			${result.duplicateRows ? `<p><strong>Duplicates collapsed:</strong> ${result.duplicateRows} rows</p>` : ""}
+			${result.syncFailed ? `<p><strong>Sync failed:</strong> ${result.syncFailed} books</p>` : ""}
 			<p><strong>Shelves:</strong> Want to Read (${result.wantToRead}), Currently Reading (${result.reading}), Read (${result.finished})</p>
 		`;
 		summary.hidden = false;
@@ -988,32 +998,22 @@ const sectionLinks = [
 		}
 	}
 
-	async function syncEntryToServer(entry) {
-		try {
-			const response = await fetch("/api/shelf/entries", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ entry })
-			});
-			if (response.status === 401) {
-				window.location.href = "/settings#auth-settings";
-				return false;
-			}
-			return response.ok;
-		} catch {
-			return false;
-		}
-	}
-
-	async function syncEntriesToServer(entries) {
+	async function syncEntriesToServer(entries, onProgress) {
 		let failed = 0;
-		const batchSize = 25;
+		let completed = 0;
+		const batchSize = 10;
 		for (let i = 0; i < entries.length; i += batchSize) {
 			const batch = entries.slice(i, i + batchSize);
-			const results = await Promise.all(batch.map((entry) => syncEntryToServer(entry)));
-			for (const ok of results) {
-				if (!ok) failed += 1;
+			const results = await Promise.all(batch.map((entry) => saveShelfEntryWithRetry(entry, {
+				redirectPath: "/settings#auth-settings",
+				retries: 2,
+				retryDelayMs: 300
+			})));
+			for (const result of results) {
+				completed += 1;
+				if (!result.ok) failed += 1;
 			}
+			if (typeof onProgress === "function") onProgress(completed, entries.length);
 		}
 		return failed;
 	}
@@ -1123,95 +1123,39 @@ const sectionLinks = [
 
 	async function importGoodreadsCsv(file, options = { mode: "merge", dryRun: false }) {
 		const text = await file.text();
-		const candidates = toImportCandidates(text);
-		if (candidates.length === 0) {
+		const parseResult = parseGoodreadsImportCsv(text);
+		if (parseResult.candidates.length === 0) {
 			throw new Error("No importable rows found. Confirm this is a Goodreads export CSV.");
 		}
+		const mode = options?.mode === "replace" ? "replace" : "merge";
+		const existingEntries = mode === "replace" ? [] : loadEntries();
+		const plan = buildGoodreadsImportPlan(parseResult, existingEntries, mode);
+		const summary = summarizeGoodreadsImportPlan(plan);
 		if (options?.dryRun) {
-			const preview = buildImportSummary(candidates);
 			return {
-				imported: 0,
-				updated: 0,
-				skipped: 0,
-				wantToRead: preview.wantToRead,
-				reading: preview.reading,
-				finished: preview.finished,
+				...summary,
 				localCache: "full",
 				syncFailed: 0,
 				previewOnly: true,
-				totalPreview: preview.total
+				totalPreview: summary.importableRows
 			};
 		}
 
-		const mode = options?.mode === "replace" ? "replace" : "merge";
-		const existingEntries = mode === "replace" ? [] : loadEntries();
-		const byKey = new Map();
-		for (const existing of existingEntries) {
-			byKey.set(canonicalWorkKey(existing), existing);
-		}
-
-		let imported = 0;
-		let updated = 0;
-		let skipped = 0;
-		let wantToRead = 0;
-		let reading = 0;
-		let finished = 0;
-		const changedEntries = [];
-
-		for (const candidate of candidates) {
-			const key = canonicalWorkKey(candidate);
-			if (!candidate.title) {
-				skipped += 1;
-				continue;
-			}
-			const existing = byKey.get(key);
-			if (existing) {
-				const previousStatus = existing.status || "want_to_read";
-				existing.title = existing.title || candidate.title;
-				existing.author = existing.author || candidate.author;
-				existing.totalPages = existing.totalPages || candidate.totalPages;
-				existing.format = existing.format || candidate.format;
-				existing.publisher = existing.publisher || candidate.publisher;
-				existing.publishedDate = existing.publishedDate || candidate.publishedDate;
-				existing.isbn10 = existing.isbn10 || candidate.isbn10;
-				existing.isbn13 = existing.isbn13 || candidate.isbn13;
-				existing.coverUrl = existing.coverUrl || candidate.coverUrl || coverFromIsbn(existing.isbn13, existing.isbn10);
-				existing.categories = Array.isArray(existing.categories) && existing.categories.length > 0
-					? existing.categories
-					: candidate.categories;
-				applyStatus(existing, candidate.status, { setFinishedDateWhenMissing: false });
-				if (candidate.status === "finished") {
-					existing.finishedDate = candidate.finishedDate || "";
-				}
-				existing.updatedAt = Date.now();
-				changedEntries.push(existing);
-				if (previousStatus !== existing.status) {
-					logShelfUpdate(existing, existing.status);
-				}
-				updated += 1;
-			} else {
-				existingEntries.unshift(candidate);
-				byKey.set(key, candidate);
-				changedEntries.push(candidate);
-				logShelfUpdate(candidate, candidate.status);
-				imported += 1;
-			}
-		}
-
-		for (const entry of existingEntries) {
-			if (entry.status === "reading") reading += 1;
-			else if (entry.status === "finished") finished += 1;
-			else wantToRead += 1;
-		}
-
 		if (mode === "replace") {
-			await clearShelfOnServer();
+			const cleared = await clearShelfOnServer();
+			if (!cleared) throw new Error("Could not clear the existing shelf before replacing it.");
 		}
 
-		const localCache = saveEntriesWithFallback(existingEntries);
-		const syncFailed = await syncEntriesToServer(changedEntries);
+		for (const change of plan.statusChanges) {
+			logShelfUpdate(change.entry, change.status);
+		}
 
-		return { imported, updated, skipped, wantToRead, reading, finished, localCache, syncFailed, previewOnly: false };
+		const localCache = saveEntriesWithFallback(plan.nextEntries);
+		const syncFailed = await syncEntriesToServer(plan.changedEntries, (completed, total) => {
+			showFeedback(`Syncing imported books: ${completed}/${total} saved...`);
+		});
+
+		return { ...summary, localCache, syncFailed, previewOnly: false };
 	}
 
 	importForm?.addEventListener("submit", async (event) => {
@@ -1231,12 +1175,15 @@ const sectionLinks = [
 				showSummary({
 					imported: preview.totalPreview,
 					updated: 0,
-					skipped: 0,
+					skipped: preview.skipped,
+					duplicateRows: preview.duplicateRows,
 					wantToRead: preview.wantToRead,
 					reading: preview.reading,
-					finished: preview.finished
+					finished: preview.finished,
+					totalRows: preview.totalRows,
+					importableRows: preview.importableRows
 				});
-				const proceed = window.confirm(`Preview found ${preview.totalPreview} rows. Continue with ${mode === "replace" ? "replace" : "merge"} import?`);
+				const proceed = window.confirm(`Preview found ${preview.totalPreview} importable books. Continue with ${mode === "replace" ? "replace" : "merge"} import?`);
 				if (!proceed) {
 					showFeedback("Import canceled after preview.");
 					return;
@@ -1277,12 +1224,15 @@ const sectionLinks = [
 			showSummary({
 				imported: preview.totalPreview,
 				updated: 0,
-				skipped: 0,
+				skipped: preview.skipped,
+				duplicateRows: preview.duplicateRows,
 				wantToRead: preview.wantToRead,
 				reading: preview.reading,
-				finished: preview.finished
+				finished: preview.finished,
+				totalRows: preview.totalRows,
+				importableRows: preview.importableRows
 			});
-			showImportControlsFeedback(`Preview ready: ${preview.totalPreview} rows detected.`);
+			showImportControlsFeedback(`Preview ready: ${preview.totalPreview} importable books detected.`);
 		} catch (error) {
 			showImportControlsFeedback(error instanceof Error ? error.message : "Preview failed.", true);
 		}
