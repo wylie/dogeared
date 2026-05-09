@@ -13,11 +13,6 @@ const SUPPORT_LINKS = {
 const roadmapItems = [
 	{
 		status: "Now",
-		title: "Production QA + Monitoring",
-		description: "Expand CI into smoke tests for shelf/search/profile flows and add basic production monitoring with alerts."
-	},
-	{
-		status: "Now",
 		title: "Security + Dependency Maintenance",
 		description: "Resolve flagged dependency vulnerabilities and keep dependency updates part of the regular maintenance rhythm."
 	},
@@ -115,6 +110,11 @@ const roadmapItems = [
 		status: "Finished",
 		title: "Performance & Caching Pass",
 		description: "Added cache headers/runtime memoization for read APIs and capped heavy metrics payload generation for faster repeat loads."
+	},
+	{
+		status: "Finished",
+		title: "Production QA + Monitoring",
+		description: "Added CI smoke coverage for critical endpoints plus scheduled production health/API checks with automatic issue alerts."
 	},
 	{
 		status: "Finished",

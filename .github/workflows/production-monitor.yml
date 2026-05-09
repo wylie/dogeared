@@ -1,0 +1,92 @@
+name: Production Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+
+    steps:
+      - name: Validate base URL
+        run: |
+          if [ -z "${APP_BASE_URL}" ]; then
+            echo "Missing APP_BASE_URL secret."
+            exit 1
+          fi
+
+      - name: Run production endpoint checks
+        id: checks
+        run: |
+          set -euo pipefail
+          mkdir -p tmp
+          HEALTH_URL="${APP_BASE_URL}/api/health"
+          SEARCH_URL="${APP_BASE_URL}/api/books/search?q=dune&page=1&pageSize=10"
+          TOP_URL="${APP_BASE_URL}/api/lists/top?genre=fantasy&limit=5"
+
+          curl -fsS -o tmp/health.json "${HEALTH_URL}"
+          curl -fsS -o tmp/search.json "${SEARCH_URL}"
+          curl -fsS -o tmp/top.json "${TOP_URL}"
+
+          node -e "const fs=require('node:fs');const health=JSON.parse(fs.readFileSync('tmp/health.json','utf8'));if(health.status!=='ok'){console.error('Health status is not ok:',health.status);process.exit(1)}"
+          node -e "const fs=require('node:fs');const payload=JSON.parse(fs.readFileSync('tmp/search.json','utf8'));if(!Array.isArray(payload.results)){console.error('Search payload missing results array');process.exit(1)}"
+          node -e "const fs=require('node:fs');const payload=JSON.parse(fs.readFileSync('tmp/top.json','utf8'));if(!Array.isArray(payload.items)){console.error('Top payload missing items array');process.exit(1)}"
+
+      - name: Upload monitor payloads
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-monitor-payloads
+          path: tmp/*.json
+          if-no-files-found: ignore
+
+      - name: Create or update monitoring issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "Production monitor failure";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              "Production endpoint checks failed.",
+              "",
+              `- Workflow: ${context.workflow}`,
+              `- Run: ${runUrl}`,
+              `- Ref: ${context.ref}`,
+              `- SHA: ${context.sha}`,
+              `- Trigger: ${context.eventName}`,
+              "",
+              "Check uploaded artifacts for endpoint payloads."
+            ].join("\n");
+
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              per_page: 100
+            });
+            const issue = existing.find((item) => item.title === title);
+            if (issue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body
+              });
+            }

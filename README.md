@@ -33,6 +33,7 @@ Set this in local `.env` and in Vercel Project Settings:
 - `BREVO_API_KEY`: API key for Dogeared magic-link email delivery.
 - `BREVO_FROM_EMAIL`: verified sender email used for magic-link emails.
 - `BREVO_FROM_NAME`: optional sender name for magic-link emails.
+- `APP_BASE_URL`: production base URL used by scheduled monitoring workflow (store as GitHub secret).
 
 ### Quick Setup
 
@@ -71,6 +72,16 @@ GitHub Actions:
 
 - `.github/workflows/metadata-backfills.yml` runs weekly on Monday and supports manual dispatch.
 - Scheduled runs default to dry-run mode with a bounded limit.
+
+## QA + Monitoring
+
+- CI now includes smoke-level endpoint checks in `tests/production-smoke.test.ts`.
+- `/api/health` provides a lightweight health signal with DB status/latency.
+- `.github/workflows/production-monitor.yml` runs every 30 minutes and checks:
+  - `/api/health`
+  - `/api/books/search`
+  - `/api/lists/top`
+- On failure, the monitor workflow creates or updates a `Production monitor failure` issue with a link to the failed run.
 
 ## Auth State Preview (Local)
 
