@@ -1,0 +1,53 @@
+name: Metadata Backfills
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run without database writes (1=true, 0=false)"
+        required: false
+        default: "1"
+      backfill_limit:
+        description: "Optional max rows per backfill script (0=all)"
+        required: false
+        default: "500"
+      backfill_concurrency:
+        description: "Concurrent workers for backfill scripts"
+        required: false
+        default: "4"
+  schedule:
+    - cron: "30 6 * * 1"
+
+jobs:
+  metadata-backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      GOOGLE_BOOKS_API_KEY: ${{ secrets.GOOGLE_BOOKS_API_KEY }}
+      BACKFILL_DRY_RUN: ${{ github.event_name == 'schedule' && '1' || inputs.dry_run }}
+      BACKFILL_LIMIT: ${{ github.event_name == 'schedule' && '500' || inputs.backfill_limit }}
+      BACKFILL_CONCURRENCY: ${{ github.event_name == 'schedule' && '4' || inputs.backfill_concurrency }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Validate required secrets
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "Missing DATABASE_URL secret."
+            exit 1
+          fi
+
+      - name: Run metadata backfill pipeline
+        run: npm run backfill:metadata

@@ -53,6 +53,24 @@ Set this in local `.env` and in Vercel Project Settings:
 - `want_to_read` weighted baseline
 - plus unique reader count
 
+## Metadata Backfills
+
+Recurring metadata maintenance is now centralized:
+
+- `npm run backfill:report`: outputs JSON coverage for book/author metadata and duplicate work-key groups.
+- `npm run backfill:metadata`: runs quality report, author bio/avatar backfills, synopsis backfill, genre backfill, then a final report.
+
+Optional env controls:
+
+- `BACKFILL_DRY_RUN=1`: run without writes for author scripts.
+- `BACKFILL_LIMIT=500`: cap records processed per script (0 or unset = no cap).
+- `BACKFILL_CONCURRENCY=4`: worker concurrency for supported scripts.
+
+GitHub Actions:
+
+- `.github/workflows/metadata-backfills.yml` runs weekly on Monday and supports manual dispatch.
+- Scheduled runs default to dry-run mode with a bounded limit.
+
 ## Auth State Preview (Local)
 
 Client auth state is now centralized in `src/lib/clientAuth.ts` and used across navigation and shelf actions.
