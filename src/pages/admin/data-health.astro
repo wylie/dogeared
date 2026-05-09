@@ -1,0 +1,306 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { getNeonSql } from "../../lib/neon";
+import { resolveAdminSession } from "../../lib/admin";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const sql = getNeonSql();
+
+const [
+	bookCoverageRows,
+	genreCoverageRows,
+	authorCoverageRows,
+	importHealthRows,
+	duplicateGroupsRows,
+	recentBackfillRows
+] = await Promise.all([
+	sql<Array<{
+		total_books: number;
+		missing_author: number;
+		missing_cover: number;
+		missing_published_year: number;
+		missing_synopsis: number;
+		missing_isbn: number;
+	}>>`
+		select
+			count(*)::int as total_books,
+			count(*) filter (where trim(coalesce(primary_author, '')) = '')::int as missing_author,
+			count(*) filter (where trim(coalesce(cover_url, '')) = '')::int as missing_cover,
+			count(*) filter (where published_year is null or published_year <= 0)::int as missing_published_year,
+			count(*) filter (where trim(coalesce(synopsis, '')) = '')::int as missing_synopsis,
+			count(*) filter (
+				where coalesce(trim(coalesce(isbn13, '')), trim(coalesce(isbn10, '')), '') = ''
+			)::int as missing_isbn
+		from book
+	`,
+	sql<Array<{ books_without_genres: number; books_with_genres: number }>>`
+		with genre_counts as (
+			select b.id as book_id, count(bg.genre_slug)::int as genre_count
+			from book b
+			left join book_genre bg on bg.book_id = b.id
+			group by b.id
+		)
+		select
+			count(*) filter (where genre_count = 0)::int as books_without_genres,
+			count(*) filter (where genre_count > 0)::int as books_with_genres
+		from genre_counts
+	`,
+	sql<Array<{
+		total_authors: number;
+		authors_without_bio: number;
+		authors_without_photo: number;
+	}>>`
+		select
+			count(*)::int as total_authors,
+			count(*) filter (where trim(coalesce(bio, '')) = '')::int as authors_without_bio,
+			count(*) filter (where trim(coalesce(photo_url, '')) = '')::int as authors_without_photo
+		from author
+	`,
+	sql<Array<{
+		total_user_books: number;
+		active_readers: number;
+		entries_without_total_pages: number;
+		finished_without_date: number;
+		reading_with_zero_progress: number;
+	}>>`
+		select
+			count(*)::int as total_user_books,
+			count(distinct user_id)::int as active_readers,
+			count(*) filter (where total_pages = 0)::int as entries_without_total_pages,
+			count(*) filter (where status = 'finished' and finished_date is null)::int as finished_without_date,
+			count(*) filter (where status = 'reading' and current_page = 0)::int as reading_with_zero_progress
+		from user_book
+	`,
+	sql<Array<{
+		canonical_work_key: string;
+		books: number;
+		sample_title: string;
+		sample_author: string;
+		latest_update_at: string;
+	}>>`
+		select
+			b.canonical_work_key,
+			count(*)::int as books,
+			min(b.title) as sample_title,
+			min(b.primary_author) as sample_author,
+			max(b.updated_at)::text as latest_update_at
+		from book b
+		where trim(coalesce(b.canonical_work_key, '')) <> ''
+		group by b.canonical_work_key
+		having count(*) > 1
+		order by books desc, latest_update_at desc
+		limit 25
+	`,
+	sql<Array<{
+		updated_books_24h: number;
+		updated_books_7d: number;
+		updated_authors_24h: number;
+		updated_authors_7d: number;
+	}>>`
+		select
+			(select count(*)::int from book where updated_at >= now() - interval '24 hours') as updated_books_24h,
+			(select count(*)::int from book where updated_at >= now() - interval '7 days') as updated_books_7d,
+			(select count(*)::int from author where updated_at >= now() - interval '24 hours') as updated_authors_24h,
+			(select count(*)::int from author where updated_at >= now() - interval '7 days') as updated_authors_7d
+	`
+]);
+
+const sectionLinks = [
+	{ id: "overview", label: "Overview" },
+	{ id: "metadata-gaps", label: "Metadata Gaps" },
+	{ id: "import-health", label: "Import Health" },
+	{ id: "duplicates", label: "Duplicates" },
+	{ id: "backfills", label: "Backfills" }
+];
+
+function pct(numerator: number, denominator: number) {
+	if (!denominator) return "0.0";
+	return ((numerator / denominator) * 100).toFixed(1);
+}
+
+const books = bookCoverageRows[0] || {
+	total_books: 0,
+	missing_author: 0,
+	missing_cover: 0,
+	missing_published_year: 0,
+	missing_synopsis: 0,
+	missing_isbn: 0
+};
+const genres = genreCoverageRows[0] || { books_without_genres: 0, books_with_genres: 0 };
+const authors = authorCoverageRows[0] || { total_authors: 0, authors_without_bio: 0, authors_without_photo: 0 };
+const imports = importHealthRows[0] || {
+	total_user_books: 0,
+	active_readers: 0,
+	entries_without_total_pages: 0,
+	finished_without_date: 0,
+	reading_with_zero_progress: 0
+};
+const backfills = recentBackfillRows[0] || {
+	updated_books_24h: 0,
+	updated_books_7d: 0,
+	updated_authors_24h: 0,
+	updated_authors_7d: 0
+};
+---
+
+<Layout title="Admin Data Health" sectionLinks={sectionLinks}>
+	<div slot="right" class="admin-data-health-page">
+		<header id="overview" class="hero">
+			<h1>Admin Data Health</h1>
+			<p>Coverage, duplicate risk, import quality, and backfill movement in one view.</p>
+		</header>
+
+		<section class="panel" id="metadata-gaps">
+			<div class="panel-head">
+				<h2>Metadata Gaps</h2>
+			</div>
+			<div class="grid four">
+				<article class="stat">
+					<p>Total books</p>
+					<strong>{books.total_books.toLocaleString()}</strong>
+				</article>
+				<article class="stat">
+					<p>Cover coverage</p>
+					<strong>{pct(books.total_books - books.missing_cover, books.total_books)}%</strong>
+				</article>
+				<article class="stat">
+					<p>Synopsis coverage</p>
+					<strong>{pct(books.total_books - books.missing_synopsis, books.total_books)}%</strong>
+				</article>
+				<article class="stat">
+					<p>Genre coverage</p>
+					<strong>{pct(genres.books_with_genres, books.total_books)}%</strong>
+				</article>
+			</div>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr><th>Signal</th><th>Count</th></tr>
+					</thead>
+					<tbody>
+						<tr><td>Books missing author</td><td>{books.missing_author.toLocaleString()}</td></tr>
+						<tr><td>Books missing cover</td><td>{books.missing_cover.toLocaleString()}</td></tr>
+						<tr><td>Books missing published year</td><td>{books.missing_published_year.toLocaleString()}</td></tr>
+						<tr><td>Books missing synopsis</td><td>{books.missing_synopsis.toLocaleString()}</td></tr>
+						<tr><td>Books missing ISBN</td><td>{books.missing_isbn.toLocaleString()}</td></tr>
+						<tr><td>Books without genres</td><td>{genres.books_without_genres.toLocaleString()}</td></tr>
+						<tr><td>Authors without bio</td><td>{authors.authors_without_bio.toLocaleString()}</td></tr>
+						<tr><td>Authors without photo</td><td>{authors.authors_without_photo.toLocaleString()}</td></tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<section class="panel" id="import-health">
+			<div class="panel-head">
+				<h2>Import Health</h2>
+			</div>
+			<div class="grid four">
+				<article class="stat">
+					<p>Total shelf entries</p>
+					<strong>{imports.total_user_books.toLocaleString()}</strong>
+				</article>
+				<article class="stat">
+					<p>Active readers</p>
+					<strong>{imports.active_readers.toLocaleString()}</strong>
+				</article>
+				<article class="stat">
+					<p>Reading with 0 progress</p>
+					<strong>{imports.reading_with_zero_progress.toLocaleString()}</strong>
+				</article>
+				<article class="stat">
+					<p>Finished missing date</p>
+					<strong>{imports.finished_without_date.toLocaleString()}</strong>
+				</article>
+			</div>
+			<p class="note">These are reliability proxies for import quality and shelf consistency.</p>
+		</section>
+
+		<section class="panel" id="duplicates">
+			<div class="panel-head">
+				<h2>Duplicate Clusters</h2>
+				<p>{duplicateGroupsRows.length.toLocaleString()} duplicate canonical work-key groups (top 25 shown).</p>
+			</div>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr><th>Canonical key</th><th>Books</th><th>Sample title</th><th>Author</th><th>Last update</th></tr>
+					</thead>
+					<tbody>
+						{duplicateGroupsRows.length === 0 ? (
+							<tr><td colspan="5">No duplicate canonical work-key groups detected.</td></tr>
+						) : duplicateGroupsRows.map((row) => (
+							<tr>
+								<td><code>{row.canonical_work_key}</code></td>
+								<td>{Number(row.books || 0).toLocaleString()}</td>
+								<td>{row.sample_title}</td>
+								<td>{row.sample_author || "Unknown"}</td>
+								<td>{row.latest_update_at ? new Date(row.latest_update_at).toLocaleString() : "Unknown"}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<section class="panel" id="backfills">
+			<div class="panel-head">
+				<h2>Backfill Movement</h2>
+			</div>
+			<div class="grid four">
+				<article class="stat">
+					<p>Books updated (24h)</p>
+					<strong>{backfills.updated_books_24h.toLocaleString()}</strong>
+				</article>
+				<article class="stat">
+					<p>Books updated (7d)</p>
+					<strong>{backfills.updated_books_7d.toLocaleString()}</strong>
+				</article>
+				<article class="stat">
+					<p>Authors updated (24h)</p>
+					<strong>{backfills.updated_authors_24h.toLocaleString()}</strong>
+				</article>
+				<article class="stat">
+					<p>Authors updated (7d)</p>
+					<strong>{backfills.updated_authors_7d.toLocaleString()}</strong>
+				</article>
+			</div>
+			<div class="actions">
+				<a href="/roadmap">Roadmap</a>
+				<a href="/settings#import-controls">Import Controls</a>
+			</div>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.admin-data-health-page { max-width: 980px; }
+	.hero h1 { margin: 0; }
+	.hero p { margin: 0.35rem 0 0; color: #4d4d4d; }
+	.panel { margin-top: 1rem; border: 0; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.panel-head h2 { margin: 0; }
+	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }
+	.grid { display: grid; gap: 0.55rem; margin-top: 0.7rem; }
+	.grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+	.stat { border-radius: 10px; background: #f3f7fb; padding: 0.6rem; }
+	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }
+	.stat strong { display: block; margin-top: 0.2rem; font-size: 1.2rem; }
+	.note { margin-top: 0.6rem; color: #5c5c5c; font-size: 0.86rem; }
+	.table-wrap { margin-top: 0.7rem; overflow-x: auto; }
+	table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+	th, td { text-align: left; padding: 0.45rem; border-bottom: 1px solid #e8e8e8; vertical-align: top; }
+	th { font-weight: 700; color: #444; }
+	code { font-size: 0.8rem; }
+	.actions { margin-top: 0.7rem; display: flex; gap: 0.75rem; }
+	.actions a { color: #0b6ea8; font-weight: 700; text-decoration: none; }
+	.actions a:hover { text-decoration: underline; }
+
+	@media (max-width: 900px) {
+		.grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	}
+</style>
+

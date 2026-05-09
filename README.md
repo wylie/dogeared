@@ -34,6 +34,7 @@ Set this in local `.env` and in Vercel Project Settings:
 - `BREVO_FROM_EMAIL`: verified sender email used for magic-link emails.
 - `BREVO_FROM_NAME`: optional sender name for magic-link emails.
 - `APP_BASE_URL`: production base URL used by scheduled monitoring workflow (store as GitHub secret).
+- `ADMIN_USERNAMES`: comma-separated usernames allowed to access `/admin/data-health` (default: `wylie`).
 
 ### Quick Setup
 
