@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { getNeonSql } from "../../../lib/neon";
+import { createPublicCacheControl, withRuntimeCache } from "../../../lib/runtimeCache";
 
 export const prerender = false;
 
@@ -43,21 +44,27 @@ export const GET: APIRoute = async ({ url }) => {
 	}
 
 	try {
-		const sql = getNeonSql();
-		const rows = await sql<TopListRow[]>`
-			select
-				book_id,
-				title,
-				primary_author,
-				cover_url,
-				score,
-				reader_count,
-				reading_count,
-				want_to_read_count,
-				finished_count,
-				last_activity_at
-			from get_top_books_by_genre(${genre}, ${limit}, ${windowDays})
-		`;
+		const rows = await withRuntimeCache(
+			`top:${genre}:${limit}:${windowDays}`,
+			30_000,
+			async () => {
+				const sql = getNeonSql();
+				return sql<TopListRow[]>`
+					select
+						book_id,
+						title,
+						primary_author,
+						cover_url,
+						score,
+						reader_count,
+						reading_count,
+						want_to_read_count,
+						finished_count,
+						last_activity_at
+					from get_top_books_by_genre(${genre}, ${limit}, ${windowDays})
+				`;
+			}
+		);
 
 		const items = rows.map((row) => ({
 			bookId: row.book_id,
@@ -82,7 +89,10 @@ export const GET: APIRoute = async ({ url }) => {
 			items
 		}), {
 			status: 200,
-			headers: { "Content-Type": "application/json" }
+			headers: {
+				"Content-Type": "application/json",
+				"Cache-Control": createPublicCacheControl(30, 120)
+			}
 		});
 	} catch (error) {
 		return new Response(JSON.stringify({

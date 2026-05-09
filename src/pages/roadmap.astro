@@ -13,11 +13,6 @@ const SUPPORT_LINKS = {
 const roadmapItems = [
 	{
 		status: "Now",
-		title: "Performance & Caching Pass",
-		description: "Speed up home/search/metrics queries and reduce client payloads, especially on mobile."
-	},
-	{
-		status: "Now",
 		title: "Production QA + Monitoring",
 		description: "Expand CI into smoke tests for shelf/search/profile flows and add basic production monitoring with alerts."
 	},
@@ -115,6 +110,11 @@ const roadmapItems = [
 		status: "Finished",
 		title: "Data Quality & Metadata Backfills",
 		description: "Added recurring metadata backfill orchestration, scheduled automation, and quality coverage reporting for authors/books."
+	},
+	{
+		status: "Finished",
+		title: "Performance & Caching Pass",
+		description: "Added cache headers/runtime memoization for read APIs and capped heavy metrics payload generation for faster repeat loads."
 	},
 	{
 		status: "Finished",

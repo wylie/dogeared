@@ -1,13 +1,17 @@
 import type { APIRoute } from "astro";
 import { resolveUserBySession } from "../../../lib/auth";
 import { resolvePublicProfileBundle, resolvePublicShelfSummary } from "../../../lib/publicProfile";
+import { createPublicCacheControl } from "../../../lib/runtimeCache";
 
 export const prerender = false;
 
 function json(status: number, body: unknown) {
 	return new Response(JSON.stringify(body), {
 		status,
-		headers: { "Content-Type": "application/json" }
+		headers: {
+			"Content-Type": "application/json",
+			"Cache-Control": createPublicCacheControl(20, 120)
+		}
 	});
 }
 

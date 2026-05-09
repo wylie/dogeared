@@ -65,6 +65,7 @@ Optional env controls:
 - `BACKFILL_DRY_RUN=1`: run without writes for author scripts.
 - `BACKFILL_LIMIT=500`: cap records processed per script (0 or unset = no cap).
 - `BACKFILL_CONCURRENCY=4`: worker concurrency for supported scripts.
+- `METRICS_FACT_LIMIT=3000`: max analytics fact rows included in live metrics payload.
 
 GitHub Actions:
 

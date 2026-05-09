@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { getNeonSql } from "../../../lib/neon";
+import { createPublicCacheControl, withRuntimeCache } from "../../../lib/runtimeCache";
 
 export const prerender = false;
 
@@ -253,7 +254,11 @@ export const GET: APIRoute = async ({ url }) => {
 			return Array.isArray(data.items) ? data.items : [];
 		};
 
-		const baseItems = await fetchItems(query);
+		const baseItems = await withRuntimeCache(
+			`search:google:${query.toLowerCase()}:${page}:${pageSize}`,
+			45_000,
+			() => fetchItems(query)
+		);
 		const byId = new Map<string, any>();
 		for (const item of baseItems) {
 			const id = String(item?.id || "");
@@ -291,25 +296,29 @@ export const GET: APIRoute = async ({ url }) => {
 		const googleIds = Array.from(new Set(mapped.map((item) => String(item.googleBooksId || "").trim()).filter(Boolean)));
 		const isbn13s = Array.from(new Set(mapped.map((item) => String(item.isbn13 || "").trim()).filter(Boolean)));
 		const isbn10s = Array.from(new Set(mapped.map((item) => String(item.isbn10 || "").trim()).filter(Boolean)));
-		const catalogRows = await sql<Array<{
-			id: number;
-			author_id: number | null;
-			google_books_id: string;
-			isbn13: string;
-			isbn10: string;
-		}>>`
-			select
-				b.id,
-				b.author_id,
-				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
-				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
-				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10
-			from book b
-			where
-				(array_length(${googleIds}::text[], 1) is not null and b.google_books_id = any(${googleIds}::text[]))
-				or (array_length(${isbn13s}::text[], 1) is not null and b.isbn13 = any(${isbn13s}::text[]))
-				or (array_length(${isbn10s}::text[], 1) is not null and b.isbn10 = any(${isbn10s}::text[]))
-		`;
+		const catalogRows = await withRuntimeCache(
+			`search:catalog:${googleIds.join(",")}:${isbn13s.join(",")}:${isbn10s.join(",")}`,
+			20_000,
+			() => sql<Array<{
+				id: number;
+				author_id: number | null;
+				google_books_id: string;
+				isbn13: string;
+				isbn10: string;
+			}>>`
+				select
+					b.id,
+					b.author_id,
+					coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10
+				from book b
+				where
+					(array_length(${googleIds}::text[], 1) is not null and b.google_books_id = any(${googleIds}::text[]))
+					or (array_length(${isbn13s}::text[], 1) is not null and b.isbn13 = any(${isbn13s}::text[]))
+					or (array_length(${isbn10s}::text[], 1) is not null and b.isbn10 = any(${isbn10s}::text[]))
+			`
+		);
 		const byGoogleId = new Map<string, { bookId: number; authorId: number }>();
 		const byIsbn13 = new Map<string, { bookId: number; authorId: number }>();
 		const byIsbn10 = new Map<string, { bookId: number; authorId: number }>();
@@ -335,7 +344,10 @@ export const GET: APIRoute = async ({ url }) => {
 		const hasMore = baseItems.length >= pageSize;
 		return new Response(JSON.stringify({ results, hasMore, page }), {
 			status: 200,
-			headers: { "Content-Type": "application/json" }
+			headers: {
+				"Content-Type": "application/json",
+				"Cache-Control": createPublicCacheControl(30, 120)
+			}
 		});
 	} catch {
 		return new Response(JSON.stringify({ results: [], hasMore: false }), {

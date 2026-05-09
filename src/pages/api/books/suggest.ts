@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { createPublicCacheControl, withRuntimeCache } from "../../../lib/runtimeCache";
 
 export const prerender = false;
 
@@ -151,10 +152,17 @@ export const GET: APIRoute = async ({ url }) => {
 	}
 
 	try {
-		const suggestions = await searchGoogleBooks(query, googleBooksApiKey);
+		const suggestions = await withRuntimeCache(
+			`suggest:${query.toLowerCase()}`,
+			45_000,
+			() => searchGoogleBooks(query, googleBooksApiKey)
+		);
 		return new Response(JSON.stringify({ suggestions }), {
 			status: 200,
-			headers: { "Content-Type": "application/json" }
+			headers: {
+				"Content-Type": "application/json",
+				"Cache-Control": createPublicCacheControl(45, 180)
+			}
 		});
 	} catch {
 		return new Response(JSON.stringify({ suggestions: [] }), {

@@ -287,6 +287,7 @@ const samplePayload: MetricsPayload = {
 };
 
 let metricsPayload: MetricsPayload = samplePayload;
+const METRICS_FACT_LIMIT = Math.max(500, Math.min(8000, Number(import.meta.env.METRICS_FACT_LIMIT || 3000) || 3000));
 
 try {
 	const session = await resolveUserBySession(Astro.request);
@@ -463,6 +464,8 @@ try {
 				order by bg1.genre_name asc
 				limit 1
 			) bg on true
+			order by ub.updated_at desc, ub.book_id desc
+			limit ${METRICS_FACT_LIMIT}
 		`,
 		sql<Array<{ pages_read_7d: number; pages_read_30d: number; pages_read_90d: number; pages_read_365d: number; books_added_30d: number }>>`
 			select
