@@ -6,6 +6,16 @@ This project follows semantic versioning for product releases. While Dogeared is
 
 ## [Unreleased]
 
+### Added
+
+- Added weekly Dependabot update configuration for npm packages and GitHub Actions.
+- Added a `Security and Dependency Maintenance` GitHub Actions workflow for dependency review, vulnerability auditing, and outdated report artifacts.
+
+### Changed
+
+- Marked the Security + Dependency Maintenance roadmap item as finished.
+- Documented the recurring security/dependency maintenance rhythm in `docs/release-process.md`.
+
 ## [0.1.1] - 2026-05-08
 
 ### Changed

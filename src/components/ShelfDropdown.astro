@@ -9,15 +9,35 @@ const initialStatus = (
 	initialStatusRaw === "reading" || initialStatusRaw === "finished" || initialStatusRaw === "want_to_read"
 )
 	? initialStatusRaw
-	: "want_to_read";
+	: "";
 const hasInitialStatus = initialStatusRaw === "reading" || initialStatusRaw === "finished" || initialStatusRaw === "want_to_read";
 const initialLabel = initialStatus === "reading"
 	? "Currently Reading"
-	: (initialStatus === "finished" ? "Read" : "Want to Read");
-const initialIcon = initialStatus === "reading"
+	: (initialStatus === "finished" ? "Read" : (initialStatus === "want_to_read" ? "Want to Read" : "Not on Shelf"));
+const displayIconOverride = String(attrs["data-display-icon"] || "").trim();
+const statusIcon = initialStatus === "reading"
 	? "menu_book"
-	: (initialStatus === "finished" ? "check" : "add");
+	: (initialStatus === "finished" ? "check" : (initialStatus === "want_to_read" ? "add" : "library_add"));
+const initialIcon = displayIconOverride || statusIcon;
 const hideLabel = String(attrs["data-hide-label"] || "").trim() === "true";
+const currentCustomShelfId = Math.max(0, Number(attrs["data-current-custom-shelf-id"] || 0) || 0);
+const customShelvesRaw = String(attrs["data-custom-shelves"] || "[]");
+let customShelves: Array<{ id: number; name: string; icon: string }> = [];
+try {
+	const parsed = JSON.parse(customShelvesRaw);
+	if (Array.isArray(parsed)) {
+		customShelves = parsed
+			.map((row) => ({
+				id: Math.max(0, Number((row as { id?: unknown }).id || 0) || 0),
+				name: String((row as { name?: unknown }).name || "").trim(),
+				icon: String((row as { icon?: unknown }).icon || "bookmarks").trim() || "bookmarks"
+			}))
+			.filter((row) => row.id > 0 && row.name)
+			.slice(0, 24);
+	}
+} catch {
+	customShelves = [];
+}
 ---
 
 <div
@@ -29,6 +49,7 @@ const hideLabel = String(attrs["data-hide-label"] || "").trim() === "true";
 		class="shelf-trigger shelf-fab"
 		data-action="toggle-shelf"
 		data-status={initialStatus}
+		data-display-icon={displayIconOverride}
 		aria-expanded="false"
 		aria-label={`Shelf: ${initialLabel}. Open shelf options`}
 		title={`Shelf: ${initialLabel}`}
@@ -37,18 +58,49 @@ const hideLabel = String(attrs["data-hide-label"] || "").trim() === "true";
 	</button>
 	{!hideLabel && <p class="shelf-state">{initialLabel}</p>}
 	<div class="shelf-menu" hidden>
-		<button type="button" class="shelf-option" data-action="set-shelf" data-status="want_to_read">
+		<button
+			type="button"
+			class={`shelf-option${initialStatus === "want_to_read" ? " is-current" : ""}`}
+			data-action="set-shelf"
+			data-status="want_to_read"
+		>
 			<span class="material-icons shelf-option-icon" aria-hidden="true">add</span>
 			<span>Want to Read</span>
 		</button>
-		<button type="button" class="shelf-option" data-action="set-shelf" data-status="reading">
+		<button
+			type="button"
+			class={`shelf-option${initialStatus === "reading" ? " is-current" : ""}`}
+			data-action="set-shelf"
+			data-status="reading"
+		>
 			<span class="material-icons shelf-option-icon" aria-hidden="true">menu_book</span>
 			<span>Currently Reading</span>
 		</button>
-		<button type="button" class="shelf-option" data-action="set-shelf" data-status="finished">
+		<button
+			type="button"
+			class={`shelf-option${initialStatus === "finished" ? " is-current" : ""}`}
+			data-action="set-shelf"
+			data-status="finished"
+		>
 			<span class="material-icons shelf-option-icon" aria-hidden="true">check</span>
 			<span>Read</span>
 		</button>
+		{customShelves.length > 0 && (
+			<>
+				<div class="shelf-option-divider" role="separator" aria-hidden="true"></div>
+				{customShelves.map((shelf) => (
+					<button
+						type="button"
+						class={`shelf-option${currentCustomShelfId === shelf.id ? " is-current" : ""}`}
+						data-action="assign-custom-shelf"
+						data-shelf-id={String(shelf.id)}
+					>
+						<span class="material-icons shelf-option-icon" aria-hidden="true">{shelf.icon}</span>
+						<span>{shelf.name}</span>
+					</button>
+				))}
+			</>
+		)}
 	</div>
 	<p class="shelf-feedback" hidden></p>
 </div>
@@ -118,10 +170,11 @@ const hideLabel = String(attrs["data-hide-label"] || "").trim() === "true";
 		cursor: pointer;
 		color: #222;
 	}
+	.shelf-option.is-current { font-weight: 600; }
 	.shelf-option-icon {
 		font-size: 1.15rem;
 		line-height: 1;
-		color: var(--color-primary) !important;
+		color: #9aa3af;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -129,8 +182,16 @@ const hideLabel = String(attrs["data-hide-label"] || "").trim() === "true";
 		transform: translateY(0);
 		font-weight: 700;
 	}
+	.shelf-option.is-current .shelf-option-icon {
+		color: var(--color-primary);
+	}
 	.shelf-option:hover {
 		background: #f2f2f2;
+	}
+	.shelf-option-divider {
+		height: 1px;
+		margin: 0.2rem 0;
+		background: #ececec;
 	}
 	.shelf-feedback {
 		position: absolute;

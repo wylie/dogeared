@@ -648,6 +648,13 @@ export const POST: APIRoute = async ({ request }) => {
 				finished_date = excluded.finished_date,
 				updated_at = now()
 		`;
+		// Single-shelf mode: putting a book on a default shelf removes it from
+		// all custom shelves for this user.
+		await sql`
+			delete from user_custom_shelf_book
+			where user_id = ${userId}::uuid
+				and book_id = ${bookId}
+		`;
 
 		if (!previousStatus || previousStatus !== status) {
 			await sql`

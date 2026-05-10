@@ -6,6 +6,7 @@ import RatingControl from '../components/RatingControl.astro';
 import { resolveUserBySession } from '../lib/auth';
 import { authorHref } from '../lib/author';
 import { getNeonSql } from '../lib/neon';
+import { ensureCustomShelfSchema } from '../lib/customShelves';
 
 export const prerender = false;
 const session = await resolveUserBySession(Astro.request);
@@ -53,6 +54,7 @@ let results: SearchResult[] = [];
 let errorMessage = "";
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let viewerRatingByBookId = new Map<number, number>();
+let customShelfOptionsJson = "[]";
 
 function truncateDescription(value: string, maxLength = 280) {
 	const text = String(value || "")
@@ -96,6 +98,31 @@ if (query) {
 		}
 	} catch (error) {
 		errorMessage = error instanceof Error ? error.message : "Unknown error";
+	}
+}
+
+if (session?.userId) {
+	try {
+		const sql = getNeonSql();
+		await ensureCustomShelfSchema(sql);
+		const customShelfRows = await sql<Array<{ id: number; name: string; icon: string; position: number }>>`
+			select id, name, icon, position
+			from user_custom_shelf
+			where user_id = ${session.userId}::uuid
+			order by position asc, id asc
+		`;
+		customShelfOptionsJson = JSON.stringify(
+			customShelfRows
+				.map((row) => ({
+					id: Math.max(0, Number(row.id || 0) || 0),
+					name: String(row.name || "").trim(),
+					icon: String(row.icon || "bookmarks").trim() || "bookmarks"
+				}))
+				.filter((row) => row.id > 0 && row.name)
+				.slice(0, 24)
+		);
+	} catch {
+		customShelfOptionsJson = "[]";
 	}
 }
 ---
@@ -185,7 +212,8 @@ if (query) {
 								'data-description': result.description,
 								'data-pages': String(result.pageCount ?? 0),
 								'data-cover': result.thumbnail,
-								'data-categories': JSON.stringify(result.categories ?? [])
+								'data-categories': JSON.stringify(result.categories ?? []),
+								'data-custom-shelves': customShelfOptionsJson
 							}} />
 						</div>
 					</BookCard>
@@ -738,7 +766,7 @@ if (query) {
 	function syncExistingState() {
 		if (!isAuthenticated) {
 			for (const dropdown of shelfDropdowns) {
-				setDropdownLabel(dropdown, "want_to_read");
+				setDropdownLabel(dropdown, "");
 				setShelvedState(dropdown, false);
 			}
 			return;
@@ -749,10 +777,10 @@ if (query) {
 			const author = dropdown.dataset.author || "";
 			const existing = findEntry(entries, title, author);
 			if (existing) {
-				setDropdownLabel(dropdown, existing.status || "want_to_read");
+				setDropdownLabel(dropdown, existing.status || "");
 				setShelvedState(dropdown, true);
 			} else {
-				setDropdownLabel(dropdown, "want_to_read");
+				setDropdownLabel(dropdown, "");
 				setShelvedState(dropdown, false);
 			}
 		}

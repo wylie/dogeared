@@ -50,6 +50,25 @@ While Dogeared is pre-1.0, minor releases can contain larger product changes.
 
 7. Create a GitHub Release from the tag and paste the matching changelog section into the release notes. GitHub can also generate commit-based notes using `.github/release.yml`.
 
+## Security + Dependency Maintenance Rhythm
+
+Use this regular loop to keep risk low and updates small:
+
+1. Let Dependabot open weekly PRs for `npm` and GitHub Actions updates.
+2. Review and merge low-risk updates quickly, grouped by ecosystem where possible.
+3. Run local checks before merge:
+
+   ```sh
+   npm run deps:audit
+   npm run release:check
+   ```
+
+4. Use the `Security and Dependency Maintenance` workflow as the scheduled guardrail:
+   - runs weekly,
+   - runs dependency review on PRs,
+   - fails on high/critical production dependency vulnerabilities,
+   - uploads outdated dependency reports as artifacts.
+
 ## Changelog Format
 
 Use these headings when they apply:

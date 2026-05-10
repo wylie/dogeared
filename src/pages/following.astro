@@ -173,7 +173,7 @@ const sectionLinks = [
 								<div slot="actions">
 									<ShelfDropdown attrs={{
 										"data-book-id": String(item.bookId || 0),
-										"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "want_to_read",
+										"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "",
 										"data-title": item.title,
 										"data-author": item.author,
 										"data-description": item.description,

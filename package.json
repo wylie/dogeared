@@ -13,6 +13,8 @@
     "release:patch": "npm version patch --no-git-tag-version",
     "release:minor": "npm version minor --no-git-tag-version",
     "release:major": "npm version major --no-git-tag-version",
+    "deps:audit": "npm audit --audit-level=high",
+    "deps:outdated": "npm outdated || true",
     "preview": "astro preview",
     "astro": "astro",
     "backfill:genres": "node scripts/backfill-book-genres.mjs",

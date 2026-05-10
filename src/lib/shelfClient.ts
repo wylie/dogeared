@@ -77,8 +77,8 @@ export function setDropdownLabel(dropdown: Element, status: string) {
 		normalizedStatus === "reading" || normalizedStatus === "finished" || normalizedStatus === "want_to_read"
 	)
 		? normalizedStatus
-		: "want_to_read";
-	const nextLabel = statusLabel(nextStatus);
+		: "";
+	const nextLabel = nextStatus ? statusLabel(nextStatus) : "Not on Shelf";
 	const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
 	if (trigger instanceof HTMLElement) {
 		trigger.setAttribute("data-status", nextStatus);
@@ -89,9 +89,26 @@ export function setDropdownLabel(dropdown: Element, status: string) {
 	if (state) state.textContent = nextLabel;
 	const icon = dropdown.querySelector(".shelf-plus");
 	if (icon) {
-		icon.textContent = nextStatus === "finished"
-			? "check"
-			: (nextStatus === "reading" ? "menu_book" : "add");
+		const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
+		const displayIconOverride = String(
+			(trigger instanceof HTMLElement ? trigger.getAttribute("data-display-icon") : "")
+			|| ""
+		).trim();
+		icon.textContent = displayIconOverride || (
+			nextStatus === "finished"
+				? "check"
+				: (nextStatus === "reading" ? "menu_book" : (nextStatus === "want_to_read" ? "add" : "library_add"))
+		);
+	}
+	for (const option of Array.from(dropdown.querySelectorAll('[data-action="set-shelf"]'))) {
+		if (!(option instanceof HTMLElement)) continue;
+		const optionStatus = String(option.getAttribute("data-status") || "").trim();
+		const isCurrent = optionStatus === nextStatus;
+		option.classList.toggle("is-current", isCurrent);
+		const iconNode = option.querySelector(".shelf-option-icon");
+		if (iconNode instanceof HTMLElement) {
+			iconNode.style.color = isCurrent ? "var(--color-primary)" : "#9aa3af";
+		}
 	}
 }
 
@@ -276,6 +293,25 @@ export async function syncShelfEntryToServer(entry: unknown, redirectPath = "/se
 	return { ok: response.ok, unauthorized: false, response, data };
 }
 
+export async function deleteShelfEntryFromServer(entry: unknown, redirectPath = "/settings#account-settings") {
+	const response = await fetch("/api/shelf/entries", {
+		method: "DELETE",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ entry })
+	});
+	if (response.status === 401) {
+		window.location.href = redirectPath;
+		return { ok: false, unauthorized: true, response, data: null };
+	}
+	let data: unknown = null;
+	try {
+		data = await response.json();
+	} catch {
+		data = null;
+	}
+	return { ok: response.ok, unauthorized: false, response, data };
+}
+
 export function resolveShelfSaveMessage(result: {
 	ok: boolean;
 	unauthorized?: boolean;
@@ -332,6 +368,46 @@ export async function saveShelfEntryWithRetry(
 	return {
 		...lastResult,
 		message: resolveShelfSaveMessage(lastResult)
+	};
+}
+
+export async function removeShelfEntryWithRetry(
+	entry: unknown,
+	options?: { redirectPath?: string; retries?: number; retryDelayMs?: number }
+) {
+	const redirectPath = String(options?.redirectPath || "/settings#account-settings");
+	const retries = Math.max(0, Number(options?.retries ?? 1) || 0);
+	const retryDelayMs = Math.max(0, Number(options?.retryDelayMs ?? 250) || 0);
+	let attempt = 0;
+	let lastResult: {
+		ok: boolean;
+		unauthorized?: boolean;
+		response?: Response;
+		data?: unknown;
+		error?: unknown;
+	} = { ok: false };
+
+	while (attempt <= retries) {
+		try {
+			const result = await deleteShelfEntryFromServer(entry, redirectPath);
+			lastResult = result;
+			if (result.ok) return { ...result, message: "" };
+			const status = Number(result.response?.status || 0);
+			const retriable = status >= 500 || status === 429;
+			if (!retriable || attempt >= retries || result.unauthorized) break;
+		} catch (error) {
+			lastResult = { ok: false, error };
+			if (attempt >= retries) break;
+		}
+		attempt += 1;
+		if (retryDelayMs > 0) {
+			await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+		}
+	}
+
+	return {
+		...lastResult,
+		message: resolveShelfSaveMessage(lastResult).replace("save", "remove")
 	};
 }
 

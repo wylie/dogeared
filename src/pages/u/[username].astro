@@ -8,6 +8,7 @@ import { resolveUserBySession } from "../../lib/auth";
 import { getNeonSql } from "../../lib/neon";
 import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicShelfSummary } from "../../lib/publicProfile";
 import { authorHref } from "../../lib/author";
+import { ensureCustomShelfSchema } from "../../lib/customShelves";
 
 export const prerender = false;
 
@@ -50,13 +51,22 @@ if (Astro.request.method === "POST" && viewerUserId && requestedUsername) {
 		const target = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
 		if (target.targetUserId && target.targetUserId === viewerUserId) {
 			const sql = getNeonSql();
-			const existingRows = await sql<Array<{ username: string | null }>>`
-				select username
+			const existingRows = await sql<Array<{ username: string | null; profile_data: unknown }>>`
+				select username, profile_data
 				from app_user
 				where id = ${viewerUserId}::uuid
 				limit 1
 			`;
 			const currentUsername = normalizeUsernameForSave(existingRows[0]?.username);
+			const existingProfileData = (existingRows[0]?.profile_data && typeof existingRows[0].profile_data === "object")
+				? existingRows[0].profile_data as Record<string, unknown>
+				: {};
+			const existingSettings = (existingProfileData.settings && typeof existingProfileData.settings === "object")
+				? existingProfileData.settings as Record<string, unknown>
+				: {};
+			const currentAvatar = normalizeText(existingProfileData.avatar, 500000);
+			const submittedAvatar = normalizeText(formData.get("avatarUrl"), 500000);
+			const nextAvatar = submittedAvatar || currentAvatar;
 			let nextUsername = normalizeUsernameForSave(formData.get("username"));
 			if (!nextUsername) nextUsername = currentUsername;
 			if (nextUsername && nextUsername !== currentUsername) {
@@ -72,7 +82,7 @@ if (Astro.request.method === "POST" && viewerUserId && requestedUsername) {
 				}
 			}
 			const nextProfile = {
-				avatar: normalizeText(formData.get("avatarUrl"), 500),
+				avatar: nextAvatar,
 				name: normalizeText(formData.get("name"), 80),
 				username: nextUsername ? `@${nextUsername}` : "",
 				location: normalizeText(formData.get("location"), 80),
@@ -80,7 +90,8 @@ if (Astro.request.method === "POST" && viewerUserId && requestedUsername) {
 				favoriteBook: normalizeText(formData.get("favoriteBook"), 120),
 				favoriteAuthor: normalizeText(formData.get("favoriteAuthor"), 120),
 				blurb: normalizeText(formData.get("blurb"), 400),
-				genres: normalizeGenres(formData.get("genres"))
+				genres: normalizeGenres(formData.get("genres")),
+				settings: existingSettings
 			};
 			await sql`
 				update app_user
@@ -195,8 +206,26 @@ let followState = {
 	canFollow: false
 };
 let isOwnerViewer = false;
+let customShelves: Array<{ id: number; name: string; slug: string; icon: string; position: number; bookCount: number }> = [];
+let shelfSectionOrderKeys: string[] = [];
+let shelfSectionOrderByKey = new Map<string, number>();
+let customShelfBooksByShelfId = new Map<number, Array<{
+	bookId: number;
+	title: string;
+	author: string;
+	authorId: number;
+	thumbnail: string;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+	description: string;
+	status: string;
+	rating: number;
+	updatedAt: string;
+}>>();
 let favoriteBookHref = "";
 let favoriteAuthorHref = "";
+let ownerProfileData: Record<string, unknown> = {};
 const PAGE_SIZE = 12;
 const recentPage = Math.max(1, Number(Astro.url.searchParams.get("ra_page") || "1") || 1);
 const readingPage = Math.max(1, Number(Astro.url.searchParams.get("cr_page") || "1") || 1);
@@ -211,6 +240,17 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 	profile = bundle.profile;
 	canViewActivity = bundle.canViewActivity;
 	isOwnerViewer = !!viewerUserId && viewerUserId === bundle.targetUserId;
+	if (isOwnerViewer) {
+		const ownerRows = await sql<Array<{ profile_data: unknown }>>`
+			select profile_data
+			from app_user
+			where id = ${bundle.targetUserId}::uuid
+			limit 1
+		`;
+		ownerProfileData = (ownerRows[0]?.profile_data && typeof ownerRows[0].profile_data === "object")
+			? ownerRows[0].profile_data as Record<string, unknown>
+			: {};
+	}
 	followState = {
 		followersCount: bundle.followersCount,
 		followingCount: bundle.followingCount,
@@ -254,7 +294,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		const favoriteAuthorId = Number(favoriteAuthorMatch[0]?.id || 0);
 		favoriteAuthorHref = authorHref(profile.favoriteAuthor, favoriteAuthorId);
 	}
-	const [summary, updates, readingRows, wantToReadRows, finishedRows] = await Promise.all([
+	const [summary, updates, readingRows, wantToReadRows, finishedRows, customShelfRows, customShelfBookRows] = await Promise.all([
 		resolvePublicShelfSummary(bundle.targetUserId),
 		bundle.canViewActivity ? resolvePublicRecentActivity(bundle.targetUserId, 500) : Promise.resolve([]),
 		bundle.canViewActivity
@@ -356,6 +396,67 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 				order by coalesce(ub.finished_date, ub.updated_at) desc
 				limit 500
 			`
+			: Promise.resolve([]),
+		isOwnerViewer
+			? (async () => {
+				await ensureCustomShelfSchema(sql);
+				return sql<Array<{ id: number; name: string; slug: string; icon: string; position: number; book_count: number }>>`
+					select
+						s.id,
+						s.name,
+						s.slug,
+						s.icon,
+						s.position,
+						coalesce(count(sb.book_id), 0)::int as book_count
+					from user_custom_shelf s
+					left join user_custom_shelf_book sb
+						on sb.shelf_id = s.id
+						and sb.user_id = s.user_id
+					where s.user_id = ${bundle.targetUserId}::uuid
+					group by s.id, s.name, s.slug, s.position
+					order by s.position asc, s.id asc
+				`;
+			})()
+			: Promise.resolve([]),
+		isOwnerViewer
+			? (async () => {
+				await ensureCustomShelfSchema(sql);
+				return sql<Array<{
+					shelf_id: number;
+					book_id: number;
+					title: string;
+					primary_author: string;
+					author_id: number | null;
+					cover_url: string;
+					language: string;
+					isbn10: string;
+					isbn13: string;
+					status: string | null;
+					rating: number | null;
+					updated_at: string | null;
+				}>>`
+					select
+						sb.shelf_id,
+						b.id as book_id,
+						b.title,
+						b.primary_author,
+						b.author_id,
+						b.cover_url,
+						b.language,
+						b.isbn10,
+						b.isbn13,
+						ub.status,
+						ub.rating,
+						coalesce(ub.updated_at::text, sb.created_at::text) as updated_at
+					from user_custom_shelf_book sb
+					join book b on b.id = sb.book_id
+					left join user_book ub
+						on ub.user_id = sb.user_id
+						and ub.book_id = sb.book_id
+					where sb.user_id = ${bundle.targetUserId}::uuid
+					order by sb.shelf_id asc, coalesce(ub.updated_at, sb.created_at) desc
+				`;
+			})()
 			: Promise.resolve([])
 	]);
 	shelfStats = summary;
@@ -401,11 +502,78 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		finishedDate: String(row.finished_date || "").trim(),
 		updatedAt: String(row.updated_at || "").trim()
 	}));
-	if (viewerUserId && (recentActivity.length > 0 || currentlyReading.length > 0 || finishedBooks.length > 0)) {
+	customShelves = customShelfRows.map((row) => ({
+		id: Math.max(0, Number(row.id || 0) || 0),
+		name: String(row.name || "").trim(),
+		slug: String(row.slug || "").trim(),
+		icon: String(row.icon || "bookmarks").trim() || "bookmarks",
+		position: Math.max(0, Number(row.position || 0) || 0),
+		bookCount: Math.max(0, Number(row.book_count || 0) || 0)
+	})).filter((row) => row.id > 0 && row.name);
+	if (isOwnerViewer) {
+		const defaultKeys = ["default:reading", "default:want_to_read", "default:finished"];
+		const customKeys = customShelves.map((shelf) => `custom:${shelf.id}`);
+		const allKeys = [...defaultKeys, ...customKeys];
+		const settings = ownerProfileData.settings && typeof ownerProfileData.settings === "object"
+			? ownerProfileData.settings as Record<string, unknown>
+			: {};
+		const storedOrder = Array.isArray(settings.shelfSectionOrder)
+			? settings.shelfSectionOrder.map((item) => String(item || "").trim()).filter(Boolean)
+			: [];
+		const dedupedStored = Array.from(new Set(storedOrder));
+		shelfSectionOrderKeys = [
+			...dedupedStored.filter((key) => allKeys.includes(key)),
+			...allKeys.filter((key) => !dedupedStored.includes(key))
+		];
+		shelfSectionOrderByKey = new Map(shelfSectionOrderKeys.map((key, index) => [key, index]));
+		customShelves = [...customShelves].sort((a, b) => {
+			const aOrder = shelfSectionOrderByKey.get(`custom:${a.id}`) ?? Number.MAX_SAFE_INTEGER;
+			const bOrder = shelfSectionOrderByKey.get(`custom:${b.id}`) ?? Number.MAX_SAFE_INTEGER;
+			return aOrder - bOrder || a.position - b.position || a.id - b.id;
+		});
+	}
+	customShelfBooksByShelfId = customShelfBookRows.reduce((map, row) => {
+		const shelfId = Math.max(0, Number(row.shelf_id || 0) || 0);
+		const bookId = Math.max(0, Number(row.book_id || 0) || 0);
+		if (!shelfId || !bookId) return map;
+		const list = map.get(shelfId) || [];
+		list.push({
+			bookId,
+			title: String(row.title || "").trim(),
+			author: String(row.primary_author || "").trim(),
+			authorId: Math.max(0, Number(row.author_id || 0) || 0),
+			thumbnail: String(row.cover_url || "").trim(),
+			language: String(row.language || "").trim(),
+			isbn10: String(row.isbn10 || "").trim(),
+			isbn13: String(row.isbn13 || "").trim(),
+			description: "",
+			status: String(row.status || "").trim(),
+			rating: Math.max(0, Math.min(5, Number(row.rating || 0) || 0)),
+			updatedAt: String(row.updated_at || "").trim()
+		});
+		map.set(shelfId, list);
+		return map;
+	}, new Map<number, Array<{
+		bookId: number;
+		title: string;
+		author: string;
+		authorId: number;
+		thumbnail: string;
+		language: string;
+		isbn10: string;
+		isbn13: string;
+		description: string;
+		status: string;
+		rating: number;
+		updatedAt: string;
+	}>>());
+	if (viewerUserId && (recentActivity.length > 0 || currentlyReading.length > 0 || wantToReadBooks.length > 0 || finishedBooks.length > 0 || customShelfBookRows.length > 0)) {
 		const bookIds = Array.from(new Set([
 			...recentActivity.map((item) => Number(item.bookId || 0)),
 			...currentlyReading.map((item) => Number(item.bookId || 0)),
-			...finishedBooks.map((item) => Number(item.bookId || 0))
+			...wantToReadBooks.map((item) => Number(item.bookId || 0)),
+			...finishedBooks.map((item) => Number(item.bookId || 0)),
+			...customShelfBookRows.map((item) => Number(item.book_id || 0))
 		].filter((value) => value > 0)));
 		if (bookIds.length > 0) {
 			const rows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished" }>>`
@@ -432,6 +600,14 @@ function activityHeading(eventType: string) {
 function renderRatingStars(value: number) {
 	const clamped = Math.max(0, Math.min(5, Number(value) || 0));
 	return Array.from({ length: 5 }, (_, index) => (index < clamped ? "★" : "☆")).join("");
+}
+
+function statusLabel(status: string) {
+	const normalized = String(status || "").trim();
+	if (normalized === "reading") return "Currently Reading";
+	if (normalized === "finished") return "Read";
+	if (normalized === "want_to_read") return "Want to Read";
+	return "Not on Shelf";
 }
 
 function formatActivityDate(value: string) {
@@ -474,23 +650,59 @@ function paginationHref(param: string, value: number, anchor: string) {
 	return `${Astro.url.pathname}${query ? `?${query}` : ""}#${anchor}`;
 }
 
-const sectionLinks = [
+function shelfSectionOrderValue(key: string) {
+	const value = shelfSectionOrderByKey.get(String(key || "").trim());
+	return Number.isFinite(value as number) ? Number(value) : 999;
+}
+
+function shelfSectionOrderStyle(key: string) {
+	return `order:${300 + shelfSectionOrderValue(key)}`;
+}
+
+const baseSectionLinks = [
 	{ id: "about", label: "About" },
 	{ id: "shelf-summary", label: "Shelf Summary" },
-	{ id: "recent-activity", label: "Recent Activity" },
-	{ id: "currently-reading", label: "Currently Reading" },
-	{ id: "want-to-read", label: "Want to Read" },
-	{ id: "read", label: "Read" }
+	...(isOwnerViewer ? [{ id: "custom-shelves", label: "Custom Shelves" }] : []),
+	{ id: "recent-activity", label: "Recent Activity" }
 ];
+const orderedShelfSectionLinks = isOwnerViewer
+	? [
+		{ id: "currently-reading", label: "Currently Reading", key: "default:reading" },
+		{ id: "want-to-read", label: "Want to Read", key: "default:want_to_read" },
+		{ id: "read", label: "Read", key: "default:finished" },
+		...customShelves.map((shelf) => ({
+			id: `custom-shelf-${shelf.slug || shelf.id}`,
+			label: shelf.name,
+			key: `custom:${shelf.id}`
+		}))
+	]
+		.sort((a, b) => shelfSectionOrderValue(String(a.key || "")) - shelfSectionOrderValue(String(b.key || "")))
+		.map(({ id, label }) => ({ id, label }))
+	: [
+		{ id: "currently-reading", label: "Currently Reading" },
+		{ id: "want-to-read", label: "Want to Read" },
+		{ id: "read", label: "Read" }
+	];
+const sectionLinks = [...baseSectionLinks, ...orderedShelfSectionLinks];
+const customShelfOptionsJson = JSON.stringify(customShelves.map((shelf) => ({
+	id: shelf.id,
+	name: shelf.name,
+	icon: shelf.icon
+})));
 
 const pagedRecent = paginate(recentActivity, recentPage, PAGE_SIZE);
 const pagedReading = paginate(currentlyReading, readingPage, PAGE_SIZE);
 const pagedWantToRead = paginate(wantToReadBooks, wantToReadPage, PAGE_SIZE);
 const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
+const shelfSectionOrderJson = JSON.stringify(
+	shelfSectionOrderKeys.length > 0
+		? shelfSectionOrderKeys
+		: ["default:reading", "default:want_to_read", "default:finished", ...customShelves.map((shelf) => `custom:${shelf.id}`)]
+);
 ---
 
 <Layout title={profile.username ? `${profile.username} • Profile` : "Profile"} sectionLinks={sectionLinks}>
-	<div slot="right" class="public-profile-page">
+	<div slot="right" class="public-profile-page" data-shelf-section-order={shelfSectionOrderJson}>
 		{notFound && (
 			<section class="state-card">
 				<h1>Profile not found</h1>
@@ -514,13 +726,37 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 				<section id="about" class="profile-card">
 					{isOwnerViewer && (
 						<div class="profile-card-actions">
-							<a class="owner-edit-link" href={`/u/${encodeURIComponent(profile.username)}?edit=1`}>
-								{editMode ? "Editing..." : "Edit Profile"}
-							</a>
+							<div class="profile-actions-menu-wrap" data-profile-actions-menu>
+								<button
+									type="button"
+									class="profile-actions-menu-trigger"
+									data-action="toggle-profile-actions-menu"
+									aria-expanded="false"
+									aria-label="Profile actions"
+								>
+									<span class="material-icons" aria-hidden="true">more_vert</span>
+								</button>
+								<div class="profile-actions-menu" hidden>
+									<a class="profile-actions-menu-item" href={`/u/${encodeURIComponent(profile.username)}?edit=1`}>
+										{editMode ? "Editing..." : "Edit Profile"}
+									</a>
+								</div>
+							</div>
 						</div>
 					)}
 					<div class="profile-head">
-						{profile.avatar ? <img src={profile.avatar} alt="" class="avatar" /> : <div class="avatar-fallback" aria-hidden="true">@</div>}
+						<div class="avatar-wrap" aria-hidden="true">
+							{profile.avatar ? (
+								<img
+									src={profile.avatar}
+									alt=""
+									class="avatar"
+									onerror="this.outerHTML='<div class=&quot;avatar-fallback&quot; aria-hidden=&quot;true&quot;>@</div>';"
+								/>
+							) : (
+								<div class="avatar-fallback">@</div>
+							)}
+						</div>
 						<div>
 							<h1>{profile.name || `@${profile.username}`}</h1>
 							<p class="username">@{profile.username}</p>
@@ -548,7 +784,8 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 							<input type="hidden" name="profileIntent" value="save" />
 							<label>Name<input type="text" name="name" maxlength="80" value={profile.name || ""} required /></label>
 							<label>Username<input type="text" name="username" maxlength="40" value={profile.username ? `@${profile.username}` : ""} required /></label>
-							<label>Avatar URL<input type="text" name="avatarUrl" maxlength="500" value={profile.avatar || ""} /></label>
+							<label>Avatar URL<input type="text" name="avatarUrl" maxlength="500000" value={profile.avatar || ""} /></label>
+							<label>Upload Avatar<input type="file" name="avatarFile" accept="image/*" data-avatar-file /></label>
 							<label>Location<input type="text" name="location" maxlength="80" value={profile.location || ""} /></label>
 							<label>Reading goal<input type="text" name="readingGoal" maxlength="80" value={profile.readingGoal || ""} /></label>
 							<label>Favorite book<input type="text" name="favoriteBook" maxlength="120" value={profile.favoriteBook || ""} /></label>
@@ -632,7 +869,104 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 					</div>
 				</section>
 
-				{canViewActivity && (
+				{isOwnerViewer && (
+					<section id="custom-shelves" class="activity-card activity-card-plain custom-shelves-section">
+						<h2>Custom Shelves</h2>
+						<p class="meta">Create shelves for your own groupings and assign books from each book card menu.</p>
+						<form class="custom-shelf-create" data-custom-shelf-create>
+							<input type="text" name="name" maxlength="60" placeholder="New shelf name" required />
+							<button type="submit">Create shelf</button>
+						</form>
+						<p class="meta custom-shelf-feedback" data-custom-shelf-feedback hidden></p>
+						<div class="custom-shelf-list" data-custom-shelf-list>
+							{customShelves.length === 0 && <p class="custom-shelf-empty">No custom shelves yet.</p>}
+						</div>
+					</section>
+				)}
+
+				{(canViewActivity || isOwnerViewer) && customShelves.map((shelf) => (
+					<section
+						id={`custom-shelf-${shelf.slug || shelf.id}`}
+						class="custom-shelf-books-section"
+						data-custom-shelf-row
+						data-shelf-section-key={`custom:${shelf.id}`}
+						data-shelf-id={String(shelf.id)}
+						style={shelfSectionOrderStyle(`custom:${shelf.id}`)}
+					>
+						<div class="custom-shelf-heading-row">
+							<h3><span class="material-icons custom-shelf-heading-icon" aria-hidden="true">{shelf.icon}</span>{shelf.name}</h3>
+							<div class="custom-shelf-menu-wrap">
+								<button
+									type="button"
+									class="custom-shelf-menu-trigger"
+									data-action="toggle-custom-shelf-menu"
+									aria-expanded="false"
+									aria-label={`Actions for ${shelf.name}`}
+								>
+									<span class="material-icons" aria-hidden="true">more_vert</span>
+								</button>
+								<div class="custom-shelf-menu" hidden>
+									<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up">Move up</button>
+									<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down">Move down</button>
+									<button type="button" class="custom-shelf-menu-item" data-action="change-custom-shelf-icon" data-current-icon={shelf.icon}>Change icon</button>
+									<button type="button" class="custom-shelf-menu-item" data-action="rename-custom-shelf">Rename</button>
+									<button type="button" class="custom-shelf-menu-item danger" data-action="delete-custom-shelf">Delete</button>
+								</div>
+							</div>
+						</div>
+						<p class="meta custom-shelf-count">{shelf.bookCount} {shelf.bookCount === 1 ? "book" : "books"}</p>
+						{(customShelfBooksByShelfId.get(shelf.id) || []).length === 0 ? (
+							<p class="meta">No books on this shelf yet.</p>
+						) : (
+							<ul class="activity-grid">
+								{(customShelfBooksByShelfId.get(shelf.id) || []).map((item) => (
+									<BookCard
+										title={item.title}
+										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}`}
+										author={item.author}
+										authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
+										thumbnail={item.thumbnail}
+									>
+										<p slot="preTitle" class="meta activity-headline">
+											<span class="activity-prefix">
+												{shelf.name}
+											</span>
+											{formatActivityDate(item.updatedAt) && (
+												<>
+													<br />
+													<span class="activity-date">Updated {formatActivityDate(item.updatedAt)}</span>
+												</>
+											)}
+										</p>
+										<div slot="meta">
+											{item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>}
+										</div>
+										<div slot="actions">
+											<ShelfDropdown attrs={{
+												"data-custom-shelves": customShelfOptionsJson,
+												"data-book-id": String(item.bookId || 0),
+												"data-initial-status": "",
+												"data-display-icon": shelf.icon,
+												"data-current-custom-shelf-id": String(shelf.id),
+												"data-title": item.title,
+												"data-author": item.author,
+												"data-description": item.description,
+												"data-pages": "0",
+												"data-cover": item.thumbnail,
+												"data-format": "Book",
+												"data-language": item.language,
+												"data-isbn10": item.isbn10,
+												"data-isbn13": item.isbn13
+											}} />
+										</div>
+									</BookCard>
+								))}
+							</ul>
+						)}
+					</section>
+				))}
+
+				{(canViewActivity || isOwnerViewer) && (
 					<section id="recent-activity" class="activity-card activity-card-plain">
 						<h2>Recent Activity</h2>
 						{pagedRecent.items.length === 0 ? (
@@ -666,8 +1000,9 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 										</div>
 										<div slot="actions">
 											<ShelfDropdown attrs={{
+												"data-custom-shelves": customShelfOptionsJson,
 												"data-book-id": String(item.bookId || 0),
-												"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "want_to_read",
+												"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "",
 												"data-title": item.title,
 												"data-author": item.author,
 												"data-description": item.description,
@@ -693,9 +1028,27 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 					</section>
 				)}
 
-				{canViewActivity && (
-					<section id="currently-reading" class="activity-card activity-card-plain currently-reading-section">
-						<h2>Currently Reading</h2>
+				{(canViewActivity || isOwnerViewer) && (
+					<section
+						id="currently-reading"
+						class="activity-card activity-card-plain currently-reading-section"
+						data-shelf-section-key="default:reading"
+						style={shelfSectionOrderStyle("default:reading")}
+					>
+						<div class="custom-shelf-heading-row">
+							<h2>Currently Reading</h2>
+							{isOwnerViewer && (
+								<div class="custom-shelf-menu-wrap">
+									<button type="button" class="custom-shelf-menu-trigger" data-action="toggle-custom-shelf-menu" aria-expanded="false" aria-label="Actions for Currently Reading">
+										<span class="material-icons" aria-hidden="true">more_vert</span>
+									</button>
+									<div class="custom-shelf-menu" hidden>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up">Move up</button>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down">Move down</button>
+									</div>
+								</div>
+							)}
+						</div>
 						{pagedReading.items.length === 0 ? (
 							<p>No books are currently marked as reading.</p>
 						) : (
@@ -786,8 +1139,9 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 										</div>
 										<div slot="actions">
 											<ShelfDropdown attrs={{
+												"data-custom-shelves": customShelfOptionsJson,
 												"data-book-id": String(item.bookId || 0),
-												"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "want_to_read",
+												"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "",
 												"data-title": item.title,
 												"data-author": item.author,
 												"data-description": item.description,
@@ -813,9 +1167,22 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 					</section>
 				)}
 
-				{canViewActivity && (
-					<section id="want-to-read" class="activity-card activity-card-plain">
-						<h2>Want to Read</h2>
+				{(canViewActivity || isOwnerViewer) && (
+					<section id="want-to-read" class="activity-card activity-card-plain" data-shelf-section-key="default:want_to_read" style={shelfSectionOrderStyle("default:want_to_read")}>
+						<div class="custom-shelf-heading-row">
+							<h2>Want to Read</h2>
+							{isOwnerViewer && (
+								<div class="custom-shelf-menu-wrap">
+									<button type="button" class="custom-shelf-menu-trigger" data-action="toggle-custom-shelf-menu" aria-expanded="false" aria-label="Actions for Want to Read">
+										<span class="material-icons" aria-hidden="true">more_vert</span>
+									</button>
+									<div class="custom-shelf-menu" hidden>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up">Move up</button>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down">Move down</button>
+									</div>
+								</div>
+							)}
+						</div>
 						{pagedWantToRead.items.length === 0 ? (
 							<p>No books in Want to Read yet.</p>
 						) : (
@@ -839,8 +1206,9 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 										</p>
 										<div slot="actions">
 											<ShelfDropdown attrs={{
+												"data-custom-shelves": customShelfOptionsJson,
 												"data-book-id": String(item.bookId || 0),
-												"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "want_to_read",
+												"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "",
 												"data-title": item.title,
 												"data-author": item.author,
 												"data-description": item.description,
@@ -866,9 +1234,22 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 					</section>
 				)}
 
-				{canViewActivity && (
-					<section id="read" class="activity-card activity-card-plain">
-						<h2>Read</h2>
+				{(canViewActivity || isOwnerViewer) && (
+					<section id="read" class="activity-card activity-card-plain" data-shelf-section-key="default:finished" style={shelfSectionOrderStyle("default:finished")}>
+						<div class="custom-shelf-heading-row">
+							<h2>Read</h2>
+							{isOwnerViewer && (
+								<div class="custom-shelf-menu-wrap">
+									<button type="button" class="custom-shelf-menu-trigger" data-action="toggle-custom-shelf-menu" aria-expanded="false" aria-label="Actions for Read">
+										<span class="material-icons" aria-hidden="true">more_vert</span>
+									</button>
+									<div class="custom-shelf-menu" hidden>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up">Move up</button>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down">Move down</button>
+									</div>
+								</div>
+							)}
+						</div>
 						{pagedFinished.items.length === 0 ? (
 							<p>No finished books yet.</p>
 						) : (
@@ -899,8 +1280,9 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 										</div>
 										<div slot="actions">
 											<ShelfDropdown attrs={{
+												"data-custom-shelves": customShelfOptionsJson,
 												"data-book-id": String(item.bookId || 0),
-												"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "want_to_read",
+												"data-initial-status": viewerStatusByBookId.get(Number(item.bookId || 0)) || "",
 												"data-title": item.title,
 												"data-author": item.author,
 												"data-description": item.description,
@@ -966,6 +1348,54 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 		display: flex;
 		justify-content: flex-end;
 	}
+	.profile-actions-menu-wrap {
+		position: relative;
+	}
+	.profile-actions-menu-trigger {
+		width: 28px;
+		height: 28px;
+		border: none;
+		border-radius: 0;
+		background: transparent;
+		color: #374151;
+		display: grid;
+		place-items: center;
+		cursor: pointer;
+	}
+	.profile-actions-menu-trigger .material-icons {
+		font-size: 1.3rem;
+		line-height: 1;
+		font-variation-settings: "FILL" 1, "wght" 700, "GRAD" 0, "opsz" 24;
+	}
+	.profile-actions-menu {
+		position: absolute;
+		top: calc(100% + 4px);
+		right: 0;
+		min-width: 132px;
+		background: #fff;
+		border: 1px solid #d8d8d8;
+		border-radius: 8px;
+		box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+		padding: 0.2rem 0;
+		z-index: 30;
+	}
+	.profile-actions-menu-item {
+		display: block;
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: transparent;
+		padding: 0.45rem 0.65rem;
+		font: inherit;
+		font-size: 0.86rem;
+		color: #222;
+		text-decoration: none;
+		cursor: pointer;
+		box-sizing: border-box;
+	}
+	.profile-actions-menu-item:hover {
+		background: #f3f4f6;
+	}
 	.profile-head { display: flex; gap: 0.75rem; align-items: center; }
 	.avatar, .avatar-fallback { width: 64px; height: 64px; border-radius: 999px; object-fit: cover; }
 	.avatar-fallback { display: grid; place-items: center; background: #ece7dc; font-weight: 700; color: #4f4a40; }
@@ -1003,6 +1433,9 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 	}
 	.inline-profile-form .full-width {
 		grid-column: 1 / -1;
+	}
+	.inline-profile-form input[type="file"] {
+		padding: 0.45rem;
 	}
 	.inline-profile-actions {
 		grid-column: 1 / -1;
@@ -1093,6 +1526,202 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 	}
 	.activity-grid { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.activity-headline { font-weight: 700; color: #2f2f2f; }
+	.custom-shelves-section .meta {
+		margin-top: 0.2rem;
+	}
+	.custom-shelf-create {
+		margin-top: 0.55rem;
+		display: flex;
+		gap: 0.45rem;
+	}
+	.custom-shelf-create input {
+		flex: 1;
+		min-width: 0;
+		height: 36px;
+		border: 1px solid #cad1db;
+		border-radius: 9px;
+		padding: 0 0.6rem;
+		font: inherit;
+	}
+	.custom-shelf-create button {
+		border: none;
+		border-radius: 9px;
+		background: #1f7a45;
+		color: #fff;
+		padding: 0 0.75rem;
+		font: inherit;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.custom-shelf-feedback {
+		margin-top: 0.45rem;
+	}
+	.custom-shelf-list {
+		margin: 1rem 0 0;
+		padding: 0;
+		display: grid;
+		gap: 0.9rem;
+	}
+	.custom-shelf-menu-wrap {
+		position: relative;
+	}
+	.custom-shelf-menu-trigger {
+		width: 26px;
+		height: 26px;
+		border: none;
+		border-radius: 0;
+		background: transparent;
+		color: #374151;
+		display: grid;
+		place-items: center;
+		cursor: pointer;
+	}
+	.custom-shelf-menu-trigger .material-icons {
+		font-size: 1.2rem;
+		line-height: 1;
+		font-variation-settings: "FILL" 1, "wght" 700, "GRAD" 0, "opsz" 24;
+	}
+	.custom-shelf-menu {
+		position: absolute;
+		top: calc(100% + 4px);
+		right: 0;
+		min-width: 120px;
+		background: #fff;
+		border: 1px solid #d8d8d8;
+		border-radius: 8px;
+		box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+		padding: 0.2rem 0;
+		z-index: 30;
+	}
+	.custom-shelf-menu-item {
+		display: block;
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: transparent;
+		padding: 0.45rem 0.65rem;
+		font: inherit;
+		font-size: 0.86rem;
+		cursor: pointer;
+		box-sizing: border-box;
+	}
+	.custom-shelf-menu-item:hover {
+		background: #f3f4f6;
+	}
+	.custom-shelf-menu-item.danger {
+		color: #7f1d1d;
+	}
+	.custom-shelf-empty {
+		margin: 0;
+		color: #5b6470;
+	}
+	.custom-shelf-books-section {
+		margin-top: 1.6rem;
+		/* margin-bottom: 1.6rem; */
+	}
+	.currently-reading-section,
+	#want-to-read,
+	#read {
+		margin-top: 1.6rem;
+	}
+	.custom-shelf-heading-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.55rem;
+	}
+	.custom-shelf-books-section h3 {
+		margin: 0;
+		font-size: 1.35rem;
+		line-height: 1.2;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.custom-shelf-count {
+		margin: 0.2rem 0 0.45rem;
+	}
+	.custom-shelf-heading-icon {
+		font-size: 1.2rem;
+		line-height: 1;
+		color: #4b5563;
+	}
+	:global(.icon-picker-overlay) {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.35);
+		display: grid;
+		place-items: center;
+		z-index: 1200;
+		padding: 1rem;
+	}
+	:global(.icon-picker-modal) {
+		width: min(500px, 100%);
+		background: #fff;
+		border: 1px solid #d8d8d8;
+		border-radius: 12px;
+		box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+		padding: 0.9rem;
+	}
+	:global(.icon-picker-title) {
+		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 700;
+	}
+	:global(.icon-picker-grid) {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 0.45rem;
+		margin-top: 0.7rem;
+	}
+	:global(.icon-picker-option) {
+		border: 1px solid #d1d5db;
+		background: #fff;
+		border-radius: 10px;
+		padding: 0.55rem 0.35rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		min-height: 48px;
+	}
+	:global(.icon-picker-option:hover) {
+		border-color: #9ca3af;
+		background: #f8fafc;
+	}
+	:global(.icon-picker-option.is-selected) {
+		border-color: #0f766e;
+		background: #ecfdf5;
+	}
+	:global(.icon-picker-option .material-icons) {
+		font-size: 1.45rem;
+		line-height: 1;
+		color: #374151;
+	}
+	:global(.icon-picker-actions) {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.45rem;
+		margin-top: 0.75rem;
+	}
+	:global(.icon-picker-cancel),
+	:global(.icon-picker-save) {
+		border: none;
+		border-radius: 8px;
+		height: 34px;
+		padding: 0 0.8rem;
+		font: inherit;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	:global(.icon-picker-cancel) {
+		background: #eceff3;
+		color: #1f2937;
+	}
+	:global(.icon-picker-save) {
+		background: var(--color-primary);
+		color: #fff;
+	}
 	.public-profile-page :global(.activity-grid .book-card .card-body h3) {
 		padding-right: 4.5rem;
 	}
@@ -1288,6 +1917,7 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 		.shelf-summary-item-total { grid-column: auto; }
 		.activity-grid { grid-template-columns: 1fr; }
 		.profile-card-actions { position: static; margin-bottom: 0.6rem; justify-content: flex-start; }
+		.custom-shelf-heading-row { align-items: flex-start; }
 	}
 </style>
 
@@ -1312,9 +1942,113 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 	const dismissWelcomeBanner = document.getElementById("dismiss-welcome-banner");
 	const followersCountNode = document.getElementById("follow-count-followers");
 	const followingCountNode = document.getElementById("follow-count-following");
+	const customShelfList = document.querySelector("[data-custom-shelf-list]");
+	const profilePageRoot = document.querySelector(".public-profile-page");
+	const customShelfFeedback = document.querySelector("[data-custom-shelf-feedback]");
+	const customShelfCreateForm = document.querySelector("[data-custom-shelf-create]");
+	const profileActionsMenu = document.querySelector("[data-profile-actions-menu]");
+	const avatarUrlInput = document.querySelector('input[name="avatarUrl"]');
+	const avatarFileInput = document.querySelector("[data-avatar-file]");
+	const shelfSectionNodes = Array.from(document.querySelectorAll("[data-shelf-section-key]"));
+	let shelfSectionOrder = (() => {
+		try {
+			const raw = String(profilePageRoot?.getAttribute("data-shelf-section-order") || "[]");
+			const parsed = JSON.parse(raw);
+			return Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : [];
+		} catch {
+			return [];
+		}
+	})();
+	const shelfOrderStorageKey = `dogeared:shelf-order:${String(window.location.pathname || "").toLowerCase()}`;
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	const feedbackTimers = new WeakMap();
 	initRatingControls();
+
+	function loadStoredShelfSectionOrder() {
+		try {
+			const raw = localStorage.getItem(shelfOrderStorageKey);
+			if (!raw) return [];
+			const parsed = JSON.parse(raw);
+			return Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function saveStoredShelfSectionOrder(orderKeys) {
+		try {
+			localStorage.setItem(shelfOrderStorageKey, JSON.stringify(orderKeys));
+		} catch {
+			// Ignore storage errors.
+		}
+	}
+
+	function applyShelfSectionOrderToDom(orderKeys) {
+		const lookup = new Map(orderKeys.map((key, index) => [String(key || "").trim(), index]));
+		for (const node of shelfSectionNodes) {
+			if (!(node instanceof HTMLElement)) continue;
+			const key = String(node.getAttribute("data-shelf-section-key") || "").trim();
+			const position = lookup.has(key) ? Number(lookup.get(key)) : 999;
+			node.style.order = String(300 + position);
+		}
+	}
+
+	function syncLeftNavShelfOrder(orderKeys) {
+		const order = Array.isArray(orderKeys) ? orderKeys.map((item) => String(item || "").trim()).filter(Boolean) : [];
+		if (order.length === 0) return;
+		const sectionIdByKey = new Map();
+		const sectionLabelById = new Map();
+		for (const node of shelfSectionNodes) {
+			if (!(node instanceof HTMLElement)) continue;
+			const key = String(node.getAttribute("data-shelf-section-key") || "").trim();
+			const id = String(node.id || "").trim();
+			if (!key || !id) continue;
+			sectionIdByKey.set(key, id);
+			const heading = node.querySelector("h2, h3");
+			const label = String(heading?.textContent || "").replace(/\s+/g, " ").trim();
+			if (label) sectionLabelById.set(id, label);
+		}
+		const orderedSectionIds = order
+			.map((key) => String(sectionIdByKey.get(key) || "").trim())
+			.filter(Boolean);
+		if (orderedSectionIds.length === 0) return;
+		const movableIdSet = new Set(orderedSectionIds);
+		const profileSectionList = document.querySelector("#left-hand-profile-item .section-links-nested");
+		if (!(profileSectionList instanceof HTMLElement)) return;
+		const existingItems = Array.from(profileSectionList.querySelectorAll(":scope > li"));
+		const itemsById = new Map();
+		for (const li of existingItems) {
+			if (!(li instanceof HTMLElement)) continue;
+			const link = li.querySelector("[data-section-link]");
+			const linkId = String(link?.getAttribute("data-section-link") || "").trim();
+			if (linkId) itemsById.set(linkId, li);
+		}
+		for (const id of orderedSectionIds) {
+			if (itemsById.has(id)) continue;
+			const li = document.createElement("li");
+			const anchor = document.createElement("a");
+			anchor.href = `#${id}`;
+			anchor.className = "hover";
+			anchor.setAttribute("data-section-link", id);
+			anchor.textContent = sectionLabelById.get(id) || id;
+			li.append(anchor);
+			itemsById.set(id, li);
+		}
+		const existingMovable = existingItems.filter((li) => {
+			const link = li.querySelector("[data-section-link]");
+			const id = String(link?.getAttribute("data-section-link") || "").trim();
+			return movableIdSet.has(id);
+		});
+		for (const li of existingMovable) li.remove();
+		const firstStatic = profileSectionList.querySelector(":scope > li");
+		const fragment = document.createDocumentFragment();
+		for (const id of orderedSectionIds) {
+			const item = itemsById.get(id);
+			if (item) fragment.append(item);
+		}
+		if (firstStatic) profileSectionList.append(fragment);
+		else profileSectionList.append(fragment);
+	}
 
 	dismissWelcomeBanner?.addEventListener("click", () => {
 		const url = new URL(window.location.href);
@@ -1399,14 +2133,15 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 				googleBooksId: String(dropdown.dataset.googleBooksId || "")
 			});
 			if (existing) {
-				setDropdownLabel(dropdown, String(existing.status || "want_to_read"));
+				setDropdownLabel(dropdown, String(existing.status || ""));
 				setShelvedState(dropdown, true);
 			} else if (!appliedSeed) {
-				setDropdownLabel(dropdown, "want_to_read");
+				setDropdownLabel(dropdown, "");
 				setShelvedState(dropdown, false);
 			}
 		}
 	}
+
 
 	async function hydrateShelfEntriesFromServer() {
 		try {
@@ -1424,6 +2159,203 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 		followFeedback.textContent = message;
 		followFeedback.hidden = !message;
 		followFeedback.style.color = isError ? "#991b1b" : "";
+	}
+
+	function setCustomShelfFeedback(message, isError = false) {
+		if (!(customShelfFeedback instanceof HTMLElement)) return;
+		customShelfFeedback.textContent = message;
+		customShelfFeedback.hidden = !message;
+		customShelfFeedback.style.color = isError ? "#991b1b" : "";
+	}
+
+	async function assignBookToCustomShelf(shelfId, bookId) {
+		const response = await fetch("/api/shelf/custom-shelf-books", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ shelfId, bookId, action: "add" })
+		});
+		const data = await response.json().catch(() => ({}));
+		return { ok: response.ok, status: response.status, data };
+	}
+
+	async function createCustomShelf(name) {
+		const response = await fetch("/api/shelf/custom-shelves", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ name })
+		});
+		const data = await response.json().catch(() => ({}));
+		return { ok: response.ok, status: response.status, data };
+	}
+
+	async function renameCustomShelf(shelfId, name) {
+		const response = await fetch("/api/shelf/custom-shelves", {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ shelfId, name })
+		});
+		const data = await response.json().catch(() => ({}));
+		return { ok: response.ok, status: response.status, data };
+	}
+
+	const CUSTOM_SHELF_ICON_OPTIONS = [
+		"bookmarks",
+		"flag",
+		"local_fire_department",
+		"psychology",
+		"auto_stories",
+		"rocket_launch",
+		"favorite",
+		"history_edu",
+		"auto_awesome",
+		"star",
+		"lightbulb",
+		"workspace_premium",
+		"explore",
+		"science",
+		"library_music",
+		"public"
+	];
+
+	function promptForCustomShelfIcon(currentIcon) {
+		return new Promise((resolve) => {
+			const existing = document.getElementById("icon-picker-overlay");
+			if (existing) existing.remove();
+
+			const overlay = document.createElement("div");
+			overlay.id = "icon-picker-overlay";
+			overlay.className = "icon-picker-overlay";
+
+			const modal = document.createElement("div");
+			modal.className = "icon-picker-modal";
+			modal.setAttribute("role", "dialog");
+			modal.setAttribute("aria-modal", "true");
+			modal.setAttribute("aria-label", "Choose shelf icon");
+
+			const title = document.createElement("p");
+			title.className = "icon-picker-title";
+			title.textContent = "Choose shelf icon";
+
+			const grid = document.createElement("div");
+			grid.className = "icon-picker-grid";
+
+			const actions = document.createElement("div");
+			actions.className = "icon-picker-actions";
+
+			const cancelButton = document.createElement("button");
+			cancelButton.type = "button";
+			cancelButton.className = "icon-picker-cancel";
+			cancelButton.textContent = "Cancel";
+
+			const saveButton = document.createElement("button");
+			saveButton.type = "button";
+			saveButton.className = "icon-picker-save";
+			saveButton.textContent = "Save";
+
+			let selectedIcon = CUSTOM_SHELF_ICON_OPTIONS.includes(String(currentIcon || ""))
+				? String(currentIcon || "")
+				: CUSTOM_SHELF_ICON_OPTIONS[0];
+
+			const renderSelection = () => {
+				for (const optionButton of Array.from(grid.querySelectorAll(".icon-picker-option"))) {
+					const iconValue = String(optionButton.getAttribute("data-icon") || "");
+					optionButton.classList.toggle("is-selected", iconValue === selectedIcon);
+				}
+			};
+
+			const close = (value) => {
+				overlay.remove();
+				resolve(value);
+			};
+
+			for (const iconName of CUSTOM_SHELF_ICON_OPTIONS) {
+				const optionButton = document.createElement("button");
+				optionButton.type = "button";
+				optionButton.className = "icon-picker-option";
+				optionButton.setAttribute("data-icon", iconName);
+				optionButton.setAttribute("aria-label", `Select ${iconName}`);
+				optionButton.innerHTML = `<span class="material-icons" aria-hidden="true">${iconName}</span>`;
+				optionButton.addEventListener("click", () => {
+					selectedIcon = iconName;
+					renderSelection();
+				});
+				grid.append(optionButton);
+			}
+
+			cancelButton.addEventListener("click", () => close(""));
+			saveButton.addEventListener("click", () => close(selectedIcon));
+			overlay.addEventListener("click", (event) => {
+				if (event.target === overlay) close("");
+			});
+			document.addEventListener("keydown", (event) => {
+				if (event.key === "Escape" && document.body.contains(overlay)) close("");
+			}, { once: true });
+
+			actions.append(cancelButton, saveButton);
+			modal.append(title, grid, actions);
+			overlay.append(modal);
+			document.body.append(overlay);
+			renderSelection();
+		});
+	}
+
+	async function changeCustomShelfIcon(shelfId, icon) {
+		const response = await fetch("/api/shelf/custom-shelves", {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ shelfId, icon })
+		});
+		const data = await response.json().catch(() => ({}));
+		return { ok: response.ok, status: response.status, data };
+	}
+
+	async function deleteCustomShelf(shelfId) {
+		const response = await fetch("/api/shelf/custom-shelves", {
+			method: "DELETE",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ shelfId })
+		});
+		const data = await response.json().catch(() => ({}));
+		return { ok: response.ok, status: response.status, data };
+	}
+
+	async function moveCustomShelf(shelfId, direction) {
+		const rows = Array.from(document.querySelectorAll("[data-custom-shelf-row]"));
+		const index = rows.findIndex((row) => Number(row.getAttribute("data-shelf-id") || 0) === shelfId);
+		if (index < 0) return { ok: false, data: { error: "Shelf not found." } };
+		const targetIndex = direction === "up" ? index - 1 : index + 1;
+		if (targetIndex < 0 || targetIndex >= rows.length) return { ok: false, data: { error: "Cannot move shelf further." } };
+		const targetRow = rows[targetIndex];
+		if (!(targetRow instanceof HTMLElement)) return { ok: false, data: { error: "Invalid shelf target." } };
+		const targetShelfId = Math.max(0, Number(targetRow.dataset.shelfId || 0) || 0);
+		if (!targetShelfId) return { ok: false, data: { error: "Invalid shelf target." } };
+
+		const response = await fetch("/api/shelf/custom-shelves", {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ shelfId, swapWithShelfId: targetShelfId })
+		});
+		const data = await response.json().catch(() => ({}));
+		return { ok: response.ok, status: response.status, data };
+	}
+
+	async function saveShelfSectionOrder(nextOrder) {
+		const response = await fetch("/api/shelf/section-order", {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ order: nextOrder })
+		});
+		const data = await response.json().catch(() => ({}));
+		return { ok: response.ok, status: response.status, data };
+	}
+
+	function closeAllShelfSectionMenus() {
+		for (const menu of Array.from(document.querySelectorAll(".custom-shelf-menu"))) {
+			if (menu instanceof HTMLElement) menu.hidden = true;
+		}
+		for (const trigger of Array.from(document.querySelectorAll('[data-action="toggle-custom-shelf-menu"]'))) {
+			if (trigger instanceof HTMLButtonElement) trigger.setAttribute("aria-expanded", "false");
+		}
 	}
 
 	function parseProgressInput(rawValue, totalPages) {
@@ -1625,20 +2557,44 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 		});
 	}
 
-	function removeCardFromCurrentlyReading(dropdown, status) {
-		if (String(status || "").trim() === "reading") return;
-		const section = dropdown?.closest?.(".currently-reading-section");
-		if (!(section instanceof HTMLElement)) return;
-		const card = dropdown.closest(".book-card");
+	function buildEntryFromDropdown(dropdown, status) {
+		const nextStatus = String(status || "").trim();
+		return buildShelfEntryFromRecord({
+			bookId: Number(dropdown.dataset.bookId || 0),
+			title: String(dropdown.dataset.title || "").trim(),
+			author: String(dropdown.dataset.author || "").trim(),
+			description: String(dropdown.dataset.description || "").trim(),
+			pageCount: 0,
+			coverUrl: String(dropdown.dataset.cover || "").trim(),
+			format: String(dropdown.dataset.format || "Book").trim(),
+			language: String(dropdown.dataset.language || "").trim(),
+			isbn10: String(dropdown.dataset.isbn10 || "").trim(),
+			isbn13: String(dropdown.dataset.isbn13 || "").trim(),
+			googleBooksId: String(dropdown.dataset.googleBooksId || "").trim()
+		}, {
+			status: nextStatus,
+			totalPages: 0,
+			currentPage: nextStatus === "reading" ? 1 : 0,
+			finishedDate: nextStatus === "finished" ? new Date().toISOString().slice(0, 10) : ""
+		});
+	}
+
+	function removeCardFromShelfSection(dropdown, status) {
+		const normalizedStatus = String(status || "").trim();
+		const card = dropdown?.closest?.(".book-card");
 		if (!(card instanceof HTMLElement)) return;
+		if (normalizedStatus === "reading") return;
 		card.remove();
-		const remaining = section.querySelectorAll(".currently-reading-grid .book-card");
-		if (remaining.length === 0) {
-			const grid = section.querySelector(".currently-reading-grid");
-			if (grid instanceof HTMLElement) {
-				grid.outerHTML = "<p>No books are currently marked as reading.</p>";
-			}
-		}
+		const section = dropdown.closest(".activity-card");
+		if (!(section instanceof HTMLElement)) return;
+		const grid = section.querySelector(".activity-grid");
+		if (!(grid instanceof HTMLElement)) return;
+		if (grid.querySelector(".book-card")) return;
+		const sectionId = String(section.id || "");
+		const emptyText = sectionId === "currently-reading"
+			? "No books are currently marked as reading."
+			: (sectionId === "want-to-read" ? "No books in Want to Read yet." : "No finished books yet.");
+		grid.outerHTML = `<p>${emptyText}</p>`;
 	}
 
 	followToggle?.addEventListener("click", async () => {
@@ -1682,7 +2638,7 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 
 	for (const dropdown of shelfDropdowns) {
 		const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
-		const options = Array.from(dropdown.querySelectorAll('[data-action="set-shelf"]'));
+		const options = Array.from(dropdown.querySelectorAll('[data-action="set-shelf"], [data-action="assign-custom-shelf"]'));
 		if (trigger) {
 			trigger.addEventListener("click", (event) => {
 				event.preventDefault();
@@ -1694,23 +2650,23 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 			option.addEventListener("click", async (event) => {
 				event.preventDefault();
 				event.stopPropagation();
+				const action = String(option.dataset.action || "");
+				if (action === "assign-custom-shelf") {
+					const shelfId = Math.max(0, Number(option.dataset.shelfId || 0) || 0);
+					const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
+					if (!shelfId || !bookId) return;
+					try {
+						const result = await assignBookToCustomShelf(shelfId, bookId);
+						if (!result.ok) throw new Error(String(result.data?.error || "Failed to assign custom shelf."));
+						showShelfFeedback(dropdown, "Saved to custom shelf.", feedbackTimers);
+						closeShelfMenus(shelfDropdowns);
+					} catch (error) {
+						showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
+					}
+					return;
+				}
 				const status = option.dataset.status || "want_to_read";
-				const entry = buildShelfEntryFromRecord({
-					title: String(dropdown.dataset.title || "").trim(),
-					author: String(dropdown.dataset.author || "").trim(),
-					description: String(dropdown.dataset.description || "").trim(),
-					pageCount: 0,
-					coverUrl: String(dropdown.dataset.cover || "").trim(),
-					format: String(dropdown.dataset.format || "Book").trim(),
-					language: String(dropdown.dataset.language || "").trim(),
-					isbn10: String(dropdown.dataset.isbn10 || "").trim(),
-					isbn13: String(dropdown.dataset.isbn13 || "").trim()
-				}, {
-					status,
-					totalPages: 0,
-					currentPage: status === "reading" ? 1 : 0,
-					finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : ""
-				});
+				const entry = buildEntryFromDropdown(dropdown, status);
 				if (status === "finished") {
 					const finishRating = await promptForFinishRating();
 					if (finishRating.cancelled) return;
@@ -1723,7 +2679,7 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 					setDropdownLabel(dropdown, status);
 					setShelvedState(dropdown, true);
 					showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
-					removeCardFromCurrentlyReading(dropdown, status);
+					removeCardFromShelfSection(dropdown, status);
 					closeShelfMenus(shelfDropdowns);
 				} catch (error) {
 					showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
@@ -1775,7 +2731,7 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 					setDropdownLabel(dropdown, "finished");
 					setShelvedState(dropdown, true);
 					showShelfFeedback(dropdown, "Saved to Read.", feedbackTimers);
-					removeCardFromCurrentlyReading(dropdown, "finished");
+					removeCardFromShelfSection(dropdown, "finished");
 				}
 			} finally {
 				quickFinish.disabled = false;
@@ -1873,22 +2829,7 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 			const dropdown = option.closest(".shelf-dropdown");
 			if (!dropdown) return;
 			const status = option.dataset.status || "want_to_read";
-			const entry = buildShelfEntryFromRecord({
-				title: String(dropdown.dataset.title || "").trim(),
-				author: String(dropdown.dataset.author || "").trim(),
-				description: String(dropdown.dataset.description || "").trim(),
-				pageCount: 0,
-				coverUrl: String(dropdown.dataset.cover || "").trim(),
-				format: String(dropdown.dataset.format || "Book").trim(),
-				language: String(dropdown.dataset.language || "").trim(),
-				isbn10: String(dropdown.dataset.isbn10 || "").trim(),
-				isbn13: String(dropdown.dataset.isbn13 || "").trim()
-			}, {
-				status,
-				totalPages: 0,
-				currentPage: status === "reading" ? 1 : 0,
-				finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : ""
-			});
+			const entry = buildEntryFromDropdown(dropdown, status);
 			if (status === "finished") {
 				const finishRating = await promptForFinishRating();
 				if (finishRating.cancelled) return;
@@ -1901,10 +2842,29 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 				setDropdownLabel(dropdown, status);
 				setShelvedState(dropdown, true);
 				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
-				removeCardFromCurrentlyReading(dropdown, status);
+				removeCardFromShelfSection(dropdown, status);
 				closeShelfMenus(shelfDropdowns);
 				await hydrateShelfEntriesFromServer();
 				syncExistingState();
+			} catch (error) {
+				showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
+			}
+			return;
+		}
+		const assignOption = target.closest('[data-action="assign-custom-shelf"]');
+		if (assignOption) {
+			event.preventDefault();
+			event.stopPropagation();
+			const dropdown = assignOption.closest(".shelf-dropdown");
+			if (!(dropdown instanceof HTMLElement)) return;
+			const shelfId = Math.max(0, Number(assignOption.getAttribute("data-shelf-id") || 0) || 0);
+			const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
+			if (!shelfId || !bookId) return;
+			try {
+				const result = await assignBookToCustomShelf(shelfId, bookId);
+				if (!result.ok) throw new Error(String(result.data?.error || "Failed to assign custom shelf."));
+				showShelfFeedback(dropdown, "Saved to custom shelf.", feedbackTimers);
+				closeShelfMenus(shelfDropdowns);
 			} catch (error) {
 				showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
 			}
@@ -1928,9 +2888,196 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 		saveButton.click();
 	});
 
+	customShelfCreateForm?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		if (!(customShelfCreateForm instanceof HTMLFormElement)) return;
+		const input = customShelfCreateForm.querySelector('input[name="name"]');
+		if (!(input instanceof HTMLInputElement)) return;
+		const name = String(input.value || "").trim();
+		if (!name) return;
+		input.disabled = true;
+		setCustomShelfFeedback("Creating...");
+		try {
+			const result = await createCustomShelf(name);
+			if (!result.ok) throw new Error(String(result.data?.error || "Failed to create shelf."));
+			window.location.reload();
+		} catch (error) {
+			setCustomShelfFeedback(error instanceof Error ? error.message : "Failed to create shelf.", true);
+			input.disabled = false;
+		}
+	});
+
+	avatarFileInput?.addEventListener("change", async () => {
+		if (!(avatarFileInput instanceof HTMLInputElement)) return;
+		if (!(avatarUrlInput instanceof HTMLInputElement)) return;
+		const file = avatarFileInput.files?.[0];
+		if (!file) return;
+		const maxBytes = 1024 * 1024 * 2;
+		if (file.size > maxBytes) {
+			window.alert("Please choose an image under 2MB.");
+			avatarFileInput.value = "";
+			return;
+		}
+		try {
+			const reader = new FileReader();
+			const dataUrl = await new Promise((resolve, reject) => {
+				reader.onload = () => resolve(String(reader.result || ""));
+				reader.onerror = () => reject(new Error("Failed to read image."));
+				reader.readAsDataURL(file);
+			});
+			avatarUrlInput.value = String(dataUrl || "");
+		} catch {
+			window.alert("Failed to load avatar image.");
+		}
+	});
+
+	profileActionsMenu?.addEventListener("click", (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		const toggleButton = target.closest('[data-action="toggle-profile-actions-menu"]');
+		if (!(toggleButton instanceof HTMLButtonElement)) return;
+		event.preventDefault();
+		event.stopPropagation();
+		const menu = profileActionsMenu.querySelector(".profile-actions-menu");
+		if (!(menu instanceof HTMLElement)) return;
+		const willOpen = menu.hidden;
+		menu.hidden = !willOpen;
+		toggleButton.setAttribute("aria-expanded", willOpen ? "true" : "false");
+	});
+
+	document.addEventListener("click", async (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		const toggleButton = target.closest('[data-action="toggle-custom-shelf-menu"]');
+		if (toggleButton instanceof HTMLButtonElement) {
+			event.preventDefault();
+			event.stopPropagation();
+			const row = toggleButton.closest("[data-custom-shelf-row], [data-shelf-section-key]");
+			if (!(row instanceof HTMLElement)) return;
+			const thisMenu = row.querySelector(".custom-shelf-menu");
+			const willOpen = thisMenu instanceof HTMLElement ? thisMenu.hidden : false;
+			closeAllShelfSectionMenus();
+			if (thisMenu instanceof HTMLElement) {
+				thisMenu.hidden = !willOpen;
+				toggleButton.setAttribute("aria-expanded", willOpen ? "true" : "false");
+			}
+			return;
+		}
+		const row = target.closest("[data-custom-shelf-row], [data-shelf-section-key]");
+		if (!(row instanceof HTMLElement)) {
+			if (!target.closest(".custom-shelf-menu") && !target.closest('[data-action="toggle-custom-shelf-menu"]')) {
+				closeAllShelfSectionMenus();
+			}
+			return;
+		}
+		const sectionKey = String(row.getAttribute("data-shelf-section-key") || "").trim();
+		let shelfId = Math.max(0, Number(row.dataset.shelfId || 0) || 0);
+		if (!shelfId && sectionKey.startsWith("custom:")) {
+			shelfId = Math.max(0, Number(sectionKey.slice("custom:".length)) || 0);
+		}
+		const renameButton = target.closest('[data-action="rename-custom-shelf"]');
+		const iconButton = target.closest('[data-action="change-custom-shelf-icon"]');
+		const moveUpButton = target.closest('[data-action="move-shelf-section-up"]');
+		const moveDownButton = target.closest('[data-action="move-shelf-section-down"]');
+		if (moveUpButton || moveDownButton) {
+			if (!sectionKey) return;
+			const workingOrder = shelfSectionOrder.length > 0
+				? [...shelfSectionOrder]
+				: shelfSectionNodes
+					.map((node) => String(node.getAttribute("data-shelf-section-key") || "").trim())
+					.filter(Boolean);
+			const index = workingOrder.indexOf(sectionKey);
+			if (index < 0) return;
+			const targetIndex = moveUpButton ? index - 1 : index + 1;
+			if (targetIndex < 0 || targetIndex >= workingOrder.length) return;
+			const swapped = [...workingOrder];
+			const [moved] = swapped.splice(index, 1);
+			swapped.splice(targetIndex, 0, moved);
+			setCustomShelfFeedback("Updating order...");
+			const result = await saveShelfSectionOrder(swapped);
+			if (!result.ok) {
+				setCustomShelfFeedback(String(result.data?.error || "Failed to update shelf order."), true);
+				return;
+			}
+			shelfSectionOrder = swapped;
+			applyShelfSectionOrderToDom(shelfSectionOrder);
+			syncLeftNavShelfOrder(shelfSectionOrder);
+			saveStoredShelfSectionOrder(shelfSectionOrder);
+			setCustomShelfFeedback("Shelf order updated.");
+			closeAllShelfSectionMenus();
+			return;
+		}
+		if (!shelfId) return;
+		if (iconButton) {
+			const currentIcon = String(
+				iconButton.getAttribute("data-current-icon")
+				|| row.querySelector(".custom-shelf-heading-icon")?.textContent
+				|| "bookmarks"
+			).trim() || "bookmarks";
+			const nextIcon = await promptForCustomShelfIcon(currentIcon);
+			if (!nextIcon) return;
+			setCustomShelfFeedback("Saving icon...");
+			const result = await changeCustomShelfIcon(shelfId, nextIcon);
+			if (!result.ok) {
+				setCustomShelfFeedback(String(result.data?.error || "Failed to update icon."), true);
+				return;
+			}
+			window.location.reload();
+			return;
+		}
+		if (renameButton) {
+			const currentName = String(row.querySelector("strong")?.textContent || "").trim();
+			const nextName = window.prompt("Rename shelf", currentName);
+			if (!nextName || nextName.trim() === currentName) return;
+			setCustomShelfFeedback("Saving...");
+			const result = await renameCustomShelf(shelfId, nextName);
+			if (!result.ok) {
+				setCustomShelfFeedback(String(result.data?.error || "Failed to rename shelf."), true);
+				return;
+			}
+			closeAllShelfSectionMenus();
+			window.location.reload();
+			return;
+		}
+		const deleteButton = target.closest('[data-action="delete-custom-shelf"]');
+		if (deleteButton) {
+			if (!window.confirm("Delete this custom shelf?")) return;
+			setCustomShelfFeedback("Deleting...");
+			const result = await deleteCustomShelf(shelfId);
+			if (!result.ok) {
+				setCustomShelfFeedback(String(result.data?.error || "Failed to delete shelf."), true);
+				return;
+			}
+			closeAllShelfSectionMenus();
+			window.location.reload();
+		}
+	});
+
+	document.addEventListener("click", (event) => {
+		const target = event.target;
+		if (!(target instanceof Element)) return;
+		if (target.closest("[data-profile-actions-menu]")) return;
+		const menu = profileActionsMenu?.querySelector(".profile-actions-menu");
+		if (menu instanceof HTMLElement) menu.hidden = true;
+		const trigger = profileActionsMenu?.querySelector('[data-action="toggle-profile-actions-menu"]');
+		if (trigger instanceof HTMLButtonElement) trigger.setAttribute("aria-expanded", "false");
+	});
+
 	void (async () => {
 		migrateShelfEntriesInPlace();
 		await hydrateShelfEntriesFromServer();
 		syncExistingState();
 	})();
+
+	const localOrder = loadStoredShelfSectionOrder();
+	if (localOrder.length > 0) {
+		const liveKeys = new Set(shelfSectionNodes.map((node) => String(node.getAttribute("data-shelf-section-key") || "").trim()).filter(Boolean));
+		const mergedOrder = [
+			...localOrder.filter((key) => liveKeys.has(key)),
+			...Array.from(liveKeys).filter((key) => !localOrder.includes(key))
+		];
+		if (mergedOrder.length > 0) shelfSectionOrder = mergedOrder;
+	}
+	applyShelfSectionOrderToDom(shelfSectionOrder);
+	syncLeftNavShelfOrder(shelfSectionOrder);
 </script>

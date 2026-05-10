@@ -122,6 +122,10 @@ function pct(numerator: number, denominator: number) {
 	return ((numerator / denominator) * 100).toFixed(1);
 }
 
+function countWithPct(count: number, total: number) {
+	return `${count.toLocaleString()} (${pct(count, total)}%)`;
+}
+
 const books = bookCoverageRows[0] || {
 	total_books: 0,
 	missing_author: 0,
@@ -158,10 +162,14 @@ const backfills = recentBackfillRows[0] || {
 			<div class="panel-head">
 				<h2>Metadata Gaps</h2>
 			</div>
-			<div class="grid four">
+			<div class="grid metadata-stats" role="list">
 				<article class="stat">
 					<p>Total books</p>
 					<strong>{books.total_books.toLocaleString()}</strong>
+				</article>
+				<article class="stat">
+					<p>Total authors</p>
+					<strong>{authors.total_authors.toLocaleString()}</strong>
 				</article>
 				<article class="stat">
 					<p>Cover coverage</p>
@@ -188,8 +196,8 @@ const backfills = recentBackfillRows[0] || {
 						<tr><td>Books missing synopsis</td><td>{books.missing_synopsis.toLocaleString()}</td></tr>
 						<tr><td>Books missing ISBN</td><td>{books.missing_isbn.toLocaleString()}</td></tr>
 						<tr><td>Books without genres</td><td>{genres.books_without_genres.toLocaleString()}</td></tr>
-						<tr><td>Authors without bio</td><td>{authors.authors_without_bio.toLocaleString()}</td></tr>
-						<tr><td>Authors without photo</td><td>{authors.authors_without_photo.toLocaleString()}</td></tr>
+						<tr><td>Authors without bio</td><td>{countWithPct(authors.authors_without_bio, authors.total_authors)}</td></tr>
+						<tr><td>Authors without photo</td><td>{countWithPct(authors.authors_without_photo, authors.total_authors)}</td></tr>
 					</tbody>
 				</table>
 			</div>
@@ -286,6 +294,16 @@ const backfills = recentBackfillRows[0] || {
 	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }
 	.grid { display: grid; gap: 0.55rem; margin-top: 0.7rem; }
 	.grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+	.grid.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+	.metadata-stats {
+		display: flex;
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		padding-bottom: 0.15rem;
+	}
+	.metadata-stats .stat {
+		flex: 0 0 180px;
+	}
 	.stat { border-radius: 10px; background: #f3f7fb; padding: 0.6rem; }
 	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }
 	.stat strong { display: block; margin-top: 0.2rem; font-size: 1.2rem; }
@@ -301,6 +319,6 @@ const backfills = recentBackfillRows[0] || {
 
 	@media (max-width: 900px) {
 		.grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.grid.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	}
 </style>
-
