@@ -20,7 +20,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
       </h2>
     </div>
     <form action="/search" method="get">
-      <input type="search" name="q" placeholder="Search" value={query} />
+      <label class="visually-hidden" for="left-hand-search">Search books and authors</label>
+      <input id="left-hand-search" type="search" name="q" placeholder="Search" value={query} />
     </form>
     <ul id="left-hand-primary-links" class="primary-links">
       <li id="left-hand-login-item"><button type="button" class="nav-text-button hover">Log In</button></li>
@@ -216,6 +217,17 @@ const query = Astro.url.searchParams.get("q") ?? "";
     border-radius: 50px;
     padding: .5rem 1rem;
     margin-top: 1rem;
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   form {
     width: 100%;

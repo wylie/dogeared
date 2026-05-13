@@ -12,10 +12,10 @@
 
   --color-bg: var(--palette-5);
   --color-surface: #ffffff;
-  --color-primary: var(--palette-7);
-  --color-primary-hover: var(--palette-8);
-  --color-secondary: var(--palette-10);
-  --color-secondary-hover: var(--palette-9);
+  --color-primary: #1f7a45;
+  --color-primary-hover: #176339;
+  --color-secondary: #1f5d87;
+  --color-secondary-hover: #1b4f74;
   --color-accent: var(--palette-1);
   --color-highlight: var(--palette-3);
   --color-chip-static: var(--palette-6);
@@ -35,6 +35,20 @@ body {
   font-variation-settings: "wdth" 100;
   background-color: var(--background-color);
   color: var(--color-text);
+}
+
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid #1f5d87;
+  outline-offset: 2px;
+}
+
+button,
+[role="button"],
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  min-height: 24px;
+  min-width: 24px;
 }
 
 .special-font {
@@ -77,7 +91,7 @@ a.author-link:focus-visible {
   padding: 0.2rem 0.6rem;
   font-size: 0.82rem;
   line-height: 1.2;
-  color: #2c2c2c;
+  color: #1f2937;
   text-decoration: none;
 }
 

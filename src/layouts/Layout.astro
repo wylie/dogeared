@@ -56,17 +56,18 @@ import '../assets/global.css';
 		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 	</head>
 		<body>
+			<a class="skip-link" href="#main-content">Skip to main content</a>
 			<div class="container">
 				<div class="column" style="padding-bottom: 0;">
 					<slot name="left">
 						<LeftHand current={currentPath} sectionLinks={sectionLinks} />
 					</slot>
 				</div>
-				<div class="column content-column">
+				<main id="main-content" class="column content-column" tabindex="-1">
 					<slot name="right">
 						<slot />
 					</slot>
-				</div>
+				</main>
 			</div>
 			<a class="global-support-float" href="https://buymeacoffee.com/wylie" target="_blank" rel="noopener noreferrer">Support Dogeared</a>
 		</body>
@@ -104,6 +105,20 @@ import '../assets/global.css';
 		max-height: 100vh;
 		min-height: 0;
 		overflow-y: auto;
+	}
+	.skip-link {
+		position: absolute;
+		top: -40px;
+		left: 0.5rem;
+		z-index: 15000;
+		background: #111;
+		color: #fff;
+		padding: 0.5rem 0.75rem;
+		border-radius: 6px;
+		text-decoration: none;
+	}
+	.skip-link:focus {
+		top: 0.5rem;
 	}
 	.global-support-float {
 		position: fixed;
