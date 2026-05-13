@@ -522,7 +522,7 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 						<p class="meta">Shelves: {book.shelves.toLocaleString()}</p>
 						{book.ratingCount > 0 && (
 							isAuthenticated && book.id > 0 && viewerShelfStatus === "finished"
-								? <p class="meta community-rating">Community rating: {book.averageRating.toFixed(1)} from {book.ratingCount} reader{book.ratingCount === 1 ? "" : "s"}</p>
+								? <p class="meta community-rating">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(2)}</p>
 								: <p class="meta rating">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
 						)}
 						{isAuthenticated && book.id > 0 && viewerShelfStatus === "finished" && (

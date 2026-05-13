@@ -107,8 +107,8 @@ import '../assets/global.css';
 		overflow-y: auto;
 	}
 	.skip-link {
-		position: absolute;
-		top: -40px;
+		position: fixed;
+		top: 0.5rem;
 		left: 0.5rem;
 		z-index: 15000;
 		background: #111;
@@ -116,9 +116,14 @@ import '../assets/global.css';
 		padding: 0.5rem 0.75rem;
 		border-radius: 6px;
 		text-decoration: none;
+		transform: translateY(-200%);
+		opacity: 0;
+		pointer-events: none;
 	}
 	.skip-link:focus {
-		top: 0.5rem;
+		transform: translateY(0);
+		opacity: 1;
+		pointer-events: auto;
 	}
 	.global-support-float {
 		position: fixed;

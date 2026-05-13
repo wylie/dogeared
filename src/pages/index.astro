@@ -335,7 +335,7 @@ try {
 											{book.publishedDate && <p class="meta">Published: {formatPublishedLabel(book.publishedDate)}</p>}
 											{book.ratingCount > 0 && (
 												hasPersonalRatingControl
-													? <p class="meta community-rating-meta">Community rating: {book.averageRating.toFixed(1)} from {book.ratingCount} reader{book.ratingCount === 1 ? "" : "s"}</p>
+													? <p class="meta community-rating-meta">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(2)}</p>
 													: <p class="meta rating-meta">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
 											)}
 											{hasPersonalRatingControl && (
