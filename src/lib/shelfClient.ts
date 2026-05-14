@@ -222,7 +222,11 @@ export function initRatingControls(root: ParentNode = document) {
 				showRatingFeedback(control, message, true);
 				return;
 			}
-			setRatingControlValue(control, nextRating);
+			const selectors = `[data-rating-control][data-book-id="${CSS.escape(String(bookId))}"]`;
+			const matchingControls = Array.from(document.querySelectorAll(selectors));
+			for (const matchingControl of matchingControls) {
+				setRatingControlValue(matchingControl, nextRating);
+			}
 			showRatingFeedback(control, nextRating ? "Rating saved." : "Rating removed.");
 		} catch {
 			showRatingFeedback(control, "Failed to save rating.", true);

@@ -18,14 +18,21 @@ const {
 } = Astro.props as Props;
 
 const hasTopRight = Astro.slots.has("topRight");
+const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavailable/i.test(String(description || "").trim());
 ---
 
 <li class="book-card">
 	{hasTopRight && <div class="top-right"><slot name="topRight" /></div>}
 	<div class="cover-wrap">
-		{thumbnail
-			? <img class="cover" src={thumbnail} alt={`${title} cover`} loading="lazy" />
-			: <div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>}
+		{thumbnail ? (
+			titleHref
+				? <a href={titleHref} aria-label={`View ${title}`}><img class="cover" src={thumbnail} alt={`${title} cover`} loading="lazy" /></a>
+				: <img class="cover" src={thumbnail} alt={`${title} cover`} loading="lazy" />
+		) : (
+			titleHref
+				? <a href={titleHref} aria-label={`View ${title}`}><div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div></a>
+				: <div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>
+		)}
 	</div>
 	<div class="card-body">
 		<slot name="preTitle" />
@@ -43,7 +50,7 @@ const hasTopRight = Astro.slots.has("topRight");
 		{description && (
 			<div class="description-wrap">
 				<p class="description">{description}</p>
-				{titleHref && <a class="description-more" href={titleHref}>Continue reading</a>}
+				{titleHref && hasSynopsisText && <a class="description-more" href={titleHref}>Continue reading</a>}
 			</div>
 		)}
 		<slot name="footer" />
@@ -83,6 +90,11 @@ const hasTopRight = Astro.slots.has("topRight");
 	.cover-wrap {
 		width: 56px;
 		height: 84px;
+	}
+	.cover-wrap a {
+		display: block;
+		width: 100%;
+		height: 100%;
 	}
 	.cover {
 		width: 56px;

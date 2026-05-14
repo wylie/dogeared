@@ -6,6 +6,7 @@ const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") 
 const isActive = (href: string) => normalize(current) === normalize(href);
 const currentNormalized = normalize(current);
 const isProfilePage = currentNormalized.startsWith("/u/");
+const isHomePage = currentNormalized === "/";
 const query = Astro.url.searchParams.get("q") ?? "";
 ---
 
@@ -24,6 +25,16 @@ const query = Astro.url.searchParams.get("q") ?? "";
       <input id="left-hand-search" type="search" name="q" placeholder="Search" value={query} />
     </form>
     <ul id="left-hand-primary-links" class="primary-links">
+      <li>
+        <a href={isHomePage ? undefined : '/'} class={isHomePage ? 'active' : 'hover'} aria-current={isHomePage ? 'page' : undefined}>Discover</a>
+        {isHomePage && sectionLinks.length > 0 && (
+          <ul class="section-links-nested">
+            {sectionLinks.map((link) => (
+              <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+            ))}
+          </ul>
+        )}
+      </li>
       <li id="left-hand-login-item"><button type="button" class="nav-text-button hover">Log In</button></li>
       <li id="left-hand-following-item" hidden>
         <a href={isActive('/following') ? undefined : '/following'} class={isActive('/following') ? 'active' : 'hover'} aria-current={isActive('/following') ? 'page' : undefined}>Following</a>
@@ -88,6 +99,13 @@ const query = Astro.url.searchParams.get("q") ?? "";
         )}
       </li>
     </ul>
+    {sectionLinks.length > 0 && (
+      <ul id="left-hand-secondary-links" class="secondary-links-mobile" aria-label="Section navigation">
+        {sectionLinks.map((link) => (
+          <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+        ))}
+      </ul>
+    )}
     <div class="left-hand-footer-logo" aria-hidden="true">
       <img src="/logo.png" alt="Dogeared logo" loading="lazy" />
     </div>
@@ -125,6 +143,9 @@ const query = Astro.url.searchParams.get("q") ?? "";
     margin: 1rem 0 0;
     padding: 1rem 0 0;
     border-top: 1px solid var(--color-divider);
+  }
+  .secondary-links-mobile {
+    display: none;
   }
   .section-links-nested {
     list-style: none;
@@ -344,6 +365,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       grid-template-areas:
         "top"
         "links"
+        "secondary"
         "search";
       background: #fff;
       border-bottom: 1px solid #ddd6c8;
@@ -386,11 +408,11 @@ const query = Astro.url.searchParams.get("q") ?? "";
     #left-hand-nav .primary-links {
       display: flex;
       flex-wrap: nowrap;
-      column-gap: 0.65rem;
-      row-gap: 0.35rem;
+      column-gap: 0.95rem;
+      row-gap: 0.5rem;
       border-top: none;
       margin-top: 0;
-      padding-top: 0;
+      padding: 0 0 0.5rem;
       grid-area: links;
       align-items: center;
       min-width: 0;
@@ -425,9 +447,9 @@ const query = Astro.url.searchParams.get("q") ?? "";
       align-items: center;
       border: none;
       background: transparent;
-      border-radius: 0;
-      padding: 0;
-      line-height: 1.2;
+      border-radius: 8px;
+      padding: 0.38rem 0.2rem;
+      line-height: 1.25;
       text-decoration: none;
       color: #202020;
     }
@@ -445,6 +467,47 @@ const query = Astro.url.searchParams.get("q") ?? "";
     }
     #left-hand-nav .section-links-nested {
       display: none;
+    }
+    #left-hand-nav .secondary-links-mobile {
+      grid-area: secondary;
+      display: flex;
+      flex-wrap: nowrap;
+      column-gap: 0.85rem;
+      row-gap: 0.45rem;
+      list-style: none;
+      margin: 0.15rem 0 0;
+      padding: 0.6rem 0 0.35rem;
+      border-top: 1px solid #d7dde4;
+      align-items: center;
+      min-width: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      white-space: nowrap;
+    }
+    #left-hand-nav .secondary-links-mobile li:first-child {
+      padding-left: 0.2rem;
+    }
+    #left-hand-nav .secondary-links-mobile::-webkit-scrollbar {
+      display: none;
+    }
+    #left-hand-nav .secondary-links-mobile li {
+      flex: 0 0 auto;
+      width: auto;
+    }
+    #left-hand-nav .secondary-links-mobile a {
+      display: inline-flex;
+      align-items: center;
+      text-decoration: none;
+      color: #202020;
+      line-height: 1.25;
+      padding: 0.34rem 0.2rem;
+      border-radius: 8px;
+    }
+    #left-hand-nav .secondary-links-mobile a.section-active {
+      text-decoration: underline;
+      text-underline-offset: 2px;
     }
     .left-hand-footer-logo {
       display: none;
@@ -621,7 +684,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   function updateMobileStickyOffset() {
     if (!(leftHandNav instanceof HTMLElement)) return;
     const isMobile = window.matchMedia("(max-width: 900px)").matches;
-    const overlap = isMobile ? 15 : 0;
+    const overlap = isMobile ? 12 : 0;
     const offset = isMobile ? Math.max(0, Math.ceil(leftHandNav.getBoundingClientRect().height) - overlap) : 0;
     document.documentElement.style.setProperty("--mobile-sticky-offset", `${offset}px`);
   }

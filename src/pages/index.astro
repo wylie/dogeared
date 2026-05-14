@@ -337,7 +337,7 @@ try {
 										thumbnail={book.thumbnail}
 										description={book.description || "Synopsis unavailable for this edition."}
 									>
-										<div slot="topRight" class="rank-stack">
+										<div slot="footer" class="rank-stack rank-stack-footer">
 											<Chip className="rank-badge" label={`#${index + 1}`} />
 											<Chip className="shelf-count-badge" label={`${book.shelfCount.toLocaleString()} ${book.shelfCount === 1 ? "shelf" : "shelves"}`} />
 										</div>
@@ -474,13 +474,10 @@ try {
 		gap: 0.28rem;
 		max-width: 100%;
 	}
-
-	:global(.browse-page .book-card .top-right) {
-		position: static !important;
-		grid-column: 1 / -1;
-		grid-row: 2;
-		justify-self: end;
-		margin-top: 0.35rem;
+	.rank-stack-footer {
+		margin-top: auto;
+		padding-top: 0.45rem;
+		width: 100%;
 	}
 
 	:global(.shelf-count-badge) {
@@ -653,11 +650,6 @@ try {
 	}
 
 	@media (max-width: 420px) {
-		:global(.browse-page .book-card .top-right) {
-			grid-row: 2;
-			justify-self: stretch;
-			margin-top: 0.45rem;
-		}
 		.rank-stack {
 			justify-content: flex-end;
 		}
