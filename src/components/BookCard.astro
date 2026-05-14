@@ -32,13 +32,21 @@ const hasTopRight = Astro.slots.has("topRight");
 		<h3>{titleHref ? <a href={titleHref}>{title}</a> : title}</h3>
 		{author && (
 			<p class="meta">
+				by{" "}
 				{authorHref
 					? <a class="author-link" href={authorHref}>{author}</a>
 					: author}
 			</p>
 		)}
+		<slot name="preMeta" />
 		<slot name="meta" />
-		{description && <p class="description">{description}</p>}
+		{description && (
+			<div class="description-wrap">
+				<p class="description">{description}</p>
+				{titleHref && <a class="description-more" href={titleHref}>Continue reading</a>}
+			</div>
+		)}
+		<slot name="footer" />
 		<slot />
 		<div class="card-actions">
 			<slot name="actions" />
@@ -118,11 +126,32 @@ const hasTopRight = Astro.slots.has("topRight");
 	:global(.book-card .meta + .meta) {
 		margin-top: 0.1rem;
 	}
+	.description-wrap {
+		margin-top: 0.25rem;
+	}
 	.description {
 		margin: 0.25rem 0 0;
 		font-size: 0.85rem;
 		color: #575757;
+		line-height: 1.45;
 		overflow-wrap: anywhere;
+		display: -webkit-box;
+		-webkit-line-clamp: 7;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+	.description-more {
+		display: inline-block;
+		margin-top: 0.3rem;
+		font-size: 0.84rem;
+		font-weight: 600;
+		color: var(--color-secondary);
+		text-decoration: none;
+	}
+	.description-more:hover,
+	.description-more:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 	.card-actions {
 		position: absolute;
@@ -153,6 +182,7 @@ const hasTopRight = Astro.slots.has("topRight");
 		.description {
 			font-size: 0.82rem;
 			line-height: 1.35;
+			-webkit-line-clamp: 6;
 		}
 	}
 </style>

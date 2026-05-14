@@ -3,6 +3,7 @@ import Layout from "../../layouts/Layout.astro";
 import BookCard from "../../components/BookCard.astro";
 import ShelfDropdown from "../../components/ShelfDropdown.astro";
 import Chip from "../../components/Chip.astro";
+import RatingControl from "../../components/RatingControl.astro";
 import { getNeonSql } from "../../lib/neon";
 import { resolveUserBySession } from "../../lib/auth";
 import { authorHref, canonicalizeAuthor, normalizeAuthorName } from "../../lib/author";
@@ -23,6 +24,9 @@ type BookRow = {
 	isbn13: string;
 	googleBooksId: string;
 	synopsis: string;
+	pageCount: number;
+	averageRating: number;
+	ratingCount: number;
 };
 
 const slug = String(Astro.params.slug || "").trim().toLowerCase();
@@ -36,6 +40,7 @@ const viewerUserId = String(session?.userId || "");
 let authorName = requestedName;
 let books: BookRow[] = [];
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
+let viewerRatingByBookId = new Map<number, number>();
 let errorMessage = "";
 let bio = "";
 let bioSource = "";
@@ -43,6 +48,14 @@ let bioSourceUrl = "";
 let authorPhotoUrl = "";
 let shelvesCount = 0;
 let readersCount = 0;
+
+function renderAverageStars(value: number) {
+	const rounded = Math.max(0, Math.min(5, Math.round((Number(value || 0) + Number.EPSILON) * 2) / 2));
+	const full = Math.floor(rounded);
+	const hasHalf = rounded - full >= 0.5;
+	const empty = 5 - full - (hasHalf ? 1 : 0);
+	return `${"★".repeat(full)}${hasHalf ? "☆" : ""}${"☆".repeat(Math.max(0, empty))}`;
+}
 
 async function fetchOpenLibraryBio(name: string) {
 	if (!name) return null;
@@ -99,12 +112,22 @@ try {
 			coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
 			coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
 			coalesce(nullif(trim(b.google_books_id), ''), '') as "googleBooksId",
-			coalesce(nullif(trim(b.synopsis), ''), '') as synopsis
+			coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+			coalesce(nullif(b.page_count, 0), 0)::int as "pageCount",
+			coalesce(rt.average_rating, 0) as "averageRating",
+			coalesce(rt.rating_count, 0)::int as "ratingCount"
 		from book b
 		left join user_book ub on ub.book_id = b.id
 		left join book_genre bg on bg.book_id = b.id
+		left join lateral (
+			select
+				round(avg(ub2.rating)::numeric, 2) as average_rating,
+				count(*) filter (where ub2.rating is not null)::int as rating_count
+			from user_book ub2
+			where ub2.book_id = b.id
+		) rt on true
 		where lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
-		group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis
+		group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis, b.page_count, rt.average_rating, rt.rating_count
 		order by shelves desc, readers desc, b.title asc
 	`;
 
@@ -118,13 +141,18 @@ try {
 	if (viewerUserId && books.length > 0) {
 		const bookIds = Array.from(new Set(books.map((book) => Number(book.id || 0)).filter((id) => id > 0)));
 		if (bookIds.length > 0) {
-			const statuses = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished" }>>`
-				select book_id, status
+			const statuses = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
+				select book_id, status, rating
 				from user_book
 				where user_id = ${viewerUserId}::uuid
 					and book_id = any(${bookIds}::bigint[])
 			`;
 			viewerStatusByBookId = new Map(statuses.map((row) => [Number(row.book_id || 0), row.status]));
+			viewerRatingByBookId = new Map(
+				statuses
+					.map((status) => [Number(status.book_id || 0), Number(status.rating || 0) || 0] as const)
+					.filter(([, rating]) => rating > 0)
+			);
 		}
 	}
 
@@ -188,6 +216,22 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 						>
 							<div slot="preMeta">
 								<p class="meta">Readers: {book.readers} · Shelf entries: {book.shelves}</p>
+								<p class="meta">
+									{book.pageCount > 0 ? `${book.pageCount.toLocaleString()} pages` : "Pages unavailable"}
+									{" · "}
+									{book.genres[0] || "Uncategorized"}
+								</p>
+								{viewerStatusByBookId.get(Number(book.id || 0)) === "finished" ? (
+									<RatingControl
+										bookId={String(book.id || 0)}
+										rating={viewerRatingByBookId.get(Number(book.id || 0)) || 0}
+										editable={true}
+									/>
+								) : (
+									book.ratingCount > 0
+										? <p class="meta rating-meta">Average rating: {renderAverageStars(book.averageRating)} {book.averageRating.toFixed(2)}</p>
+										: <p class="meta">No ratings yet.</p>
+								)}
 							</div>
 							<div slot="footer" class="book-card-footer">
 								<div class="chips">
@@ -195,12 +239,16 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 										<Chip className="genre-chip" label={genre} />
 									))}
 								</div>
+							</div>
+							<div slot="actions">
 								<ShelfDropdown attrs={{
 									"data-book-id": String(book.id || 0),
 									"data-initial-status": viewerStatusByBookId.get(Number(book.id || 0)) || "",
 									"data-title": book.title,
 									"data-author": book.author,
 									"data-cover": book.coverUrl,
+									"data-description": book.synopsis,
+									"data-pages": String(book.pageCount || 0),
 									"data-language": book.language,
 									"data-isbn10": book.isbn10,
 									"data-isbn13": book.isbn13,
@@ -216,6 +264,77 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 	</div>
 </Layout>
 
+<script>
+	import {
+		buildShelfEntryFromRecord,
+		closeShelfMenus,
+		parseCategories,
+		setDropdownLabel,
+		showShelfFeedback,
+		statusLabel,
+		saveShelfEntryWithRetry,
+		toggleShelfMenu,
+		initRatingControls
+	} from "../../lib/shelfClient.ts";
+	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
+	const feedbackTimers = new WeakMap();
+	initRatingControls();
+
+	document.addEventListener("click", async (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+
+		const toggle = target.closest('[data-action="toggle-shelf"]');
+		if (toggle instanceof HTMLButtonElement) {
+			const dropdown = toggle.closest(".shelf-dropdown");
+			if (!(dropdown instanceof HTMLElement)) return;
+			toggleShelfMenu(dropdown, shelfDropdowns);
+			return;
+		}
+
+		const option = target.closest('[data-action="set-shelf"]');
+		if (option instanceof HTMLButtonElement) {
+			const dropdown = option.closest(".shelf-dropdown");
+			if (!(dropdown instanceof HTMLElement)) return;
+			const status = String(option.dataset.status || "want_to_read");
+			const title = String(dropdown.dataset.title || "").trim();
+			if (!title) return;
+			const author = String(dropdown.dataset.author || "").trim();
+			const categories = parseCategories(dropdown.dataset.categories);
+			const totalPages = Math.max(0, Number(dropdown.dataset.pages || 0) || 0);
+			const entry = buildShelfEntryFromRecord({
+				title,
+				author,
+				description: String(dropdown.dataset.description || "").trim(),
+				pageCount: totalPages,
+				coverUrl: String(dropdown.dataset.cover || ""),
+				format: "Book",
+				language: String(dropdown.dataset.language || ""),
+				isbn10: String(dropdown.dataset.isbn10 || ""),
+				isbn13: String(dropdown.dataset.isbn13 || ""),
+				categories
+			}, {
+				status,
+				totalPages,
+				currentPage: status === "finished" ? totalPages : (status === "reading" ? Math.min(1, totalPages || 1) : 0),
+				finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : ""
+			});
+			try {
+				const result = await saveShelfEntryWithRetry(entry);
+				if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
+				setDropdownLabel(dropdown, status);
+				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
+				closeShelfMenus(shelfDropdowns);
+			} catch (err) {
+				showShelfFeedback(dropdown, err instanceof Error ? err.message : "Failed to save.", feedbackTimers);
+			}
+			return;
+		}
+
+		if (!target.closest(".shelf-dropdown")) closeShelfMenus(shelfDropdowns);
+	});
+</script>
+
 <style>
 	.author-page { max-width: 980px; }
 	.panel { border: none; border-radius: 14px; background: var(--color-surface); padding: 1rem; }
@@ -230,6 +349,7 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.book-card-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
 	.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+	.rating-meta { color: #4d4d4d; font-weight: 400; }
 	.error { color: #991b1b; }
 	@media (max-width: 860px) {
 		.book-grid { grid-template-columns: 1fr; }

@@ -48,6 +48,20 @@ const steps = [
 		env: commonEnv
 	},
 	{
+		id: "backfill_page_counts",
+		label: "Backfill book page counts",
+		command: "node",
+		args: ["scripts/backfill-book-page-counts.mjs"],
+		env: commonEnv
+	},
+	{
+		id: "backfill_publishers",
+		label: "Backfill book publishers",
+		command: "node",
+		args: ["scripts/backfill-book-publishers.mjs"],
+		env: commonEnv
+	},
+	{
 		id: "backfill_genres",
 		label: "Backfill book genres",
 		command: "node",

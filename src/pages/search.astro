@@ -13,6 +13,7 @@ const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
 
 type SearchResult = {
+	source?: "dbd" | "google_books" | "open_library";
 	title: string;
 	subtitle: string;
 	authors: string[];
@@ -54,6 +55,8 @@ let results: SearchResult[] = [];
 let errorMessage = "";
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let viewerRatingByBookId = new Map<number, number>();
+let averageRatingByBookId = new Map<number, number>();
+let ratingCountByBookId = new Map<number, number>();
 let customShelfOptionsJson = "[]";
 
 function truncateDescription(value: string, maxLength = 280) {
@@ -64,6 +67,11 @@ function truncateDescription(value: string, maxLength = 280) {
 	if (!text) return "";
 	if (text.length <= maxLength) return text;
 	return `${text.slice(0, maxLength).trimEnd()}…`;
+}
+
+function publishedYearOnly(value: string) {
+	const match = String(value || "").match(/\b(1[0-9]{3}|20[0-9]{2}|2100)\b/);
+	return match ? match[1] : "";
 }
 
 if (query) {
@@ -93,6 +101,21 @@ if (query) {
 						Number(row.book_id || 0),
 						Math.max(0, Math.min(5, Number(row.rating || 0) || 0))
 					]));
+					const ratingRows = await sql<Array<{ book_id: number; average_rating: number | null; rating_count: number }>>`
+						select
+							ub.book_id,
+							round(avg(ub.rating)::numeric, 1) as average_rating,
+							count(*) filter (where ub.rating is not null)::int as rating_count
+						from user_book ub
+						where ub.book_id = any(${bookIds}::bigint[])
+						group by ub.book_id
+					`;
+					averageRatingByBookId = new Map(
+						ratingRows.map((row) => [Number(row.book_id || 0), Number(row.average_rating || 0)])
+					);
+					ratingCountByBookId = new Map(
+						ratingRows.map((row) => [Number(row.book_id || 0), Number(row.rating_count || 0)])
+					);
 				}
 			}
 		}
@@ -137,6 +160,11 @@ if (session?.userId) {
 
 		<ul class="search-results" id="search-results">
 			{results.map((result) => (
+				(() => {
+					const numericBookId = Number(result.bookId || 0);
+					const averageRating = Number(averageRatingByBookId.get(numericBookId) || 0);
+					const ratingCount = Number(ratingCountByBookId.get(numericBookId) || 0);
+					return (
 				<BookCard
 					title={result.title}
 					titleHref={Number(result.bookId || 0) > 0
@@ -148,19 +176,12 @@ if (session?.userId) {
 					description={truncateDescription(result.description)}
 				>
 						<div slot="meta">
-							{result.authors.length > 1 && (
-								<p class="meta">
-									With{" "}
-										{result.authors.slice(1).map((author, index) => (
-											<>
-												{index > 0 && ", "}
-												<a class="author-link" href={authorHref(author, 0)}>{author}</a>
-											</>
-										))}
-								</p>
+							{publishedYearOnly(result.publishedDate) && <p class="meta">Published: {publishedYearOnly(result.publishedDate)}</p>}
+							{result.pageCount !== null && result.pageCount > 0 && <p class="meta">Pages: {result.pageCount.toLocaleString()}</p>}
+							{result.publisher && <p class="meta">Publisher: {result.publisher}</p>}
+							{averageRating > 0 && (
+								<p class="meta">Average rating: {"★".repeat(Math.round(averageRating)).padEnd(5, "☆")} {averageRating.toFixed(1)}{ratingCount > 0 ? ` · ${ratingCount} rating${ratingCount === 1 ? "" : "s"}` : ""}</p>
 							)}
-							{result.pageCount !== null && <p class="meta">{result.pageCount} pages</p>}
-							{(result.variantCount ?? 1) > 1 && <p class="meta">{result.variantCount} editions/formats combined</p>}
 							{Number(result.bookId || 0) > 0 && viewerStatusByBookId.get(Number(result.bookId || 0)) === "finished" && (
 								<RatingControl
 									bookId={Number(result.bookId || 0)}
@@ -169,42 +190,6 @@ if (session?.userId) {
 								/>
 							)}
 						</div>
-						<div>
-							<div class="variant-picker">
-								<div class="variant-dropdown" aria-label={`Edition and format for ${result.title}`}>
-									<button type="button" class="variant-trigger" data-action="toggle-variant" aria-expanded="false">
-										<span class="variant-selected-label">Editions/Formats ({result.variantCount ?? (result.variants?.length ?? 0)})</span>
-										<span class="material-icons shelf-icon" aria-hidden="true">arrow_drop_down</span>
-									</button>
-									<div class="variant-menu" hidden>
-										{(result.variants ?? []).map((variant) => (
-											<button
-												type="button"
-												class="variant-option"
-												data-action="set-variant"
-												data-label={variant.optionLabel}
-												data-title={variant.title}
-												data-author={variant.author}
-												data-pages={String(variant.pageCount)}
-												data-cover={variant.thumbnail}
-												data-language={variant.language}
-												data-format={variant.format}
-												data-publisher={variant.publisher}
-											data-published-date={variant.publishedDate}
-											data-isbn10={variant.isbn10}
-											data-isbn13={variant.isbn13}
-											data-google-books-id={variant.googleBooksId}
-											data-detail-label={variant.detailLabel}
-										>
-												<span class="variant-option-title">{variant.optionLabel}</span>
-												<span class="variant-option-sub">{variant.detailLabel}</span>
-											</button>
-										))}
-									</div>
-								</div>
-								<p class="variant-meta"></p>
-							</div>
-						</div>
 						<div slot="actions">
 							<ShelfDropdown attrs={{
 								'data-title': result.title,
@@ -212,12 +197,24 @@ if (session?.userId) {
 								'data-description': result.description,
 								'data-pages': String(result.pageCount ?? 0),
 								'data-cover': result.thumbnail,
+								'data-format': result.printType || "Book",
+								'data-language': result.language || "",
+								'data-publisher': result.publisher || "",
+								'data-published-date': result.publishedDate || "",
+								'data-isbn10': result.isbn10 || "",
+								'data-isbn13': result.isbn13 || "",
+								'data-google-books-id': result.googleBooksId || "",
+								'data-source': result.source || (result.googleBooksId ? "google_books" : "open_library"),
+								'data-source-work-id': result.googleBooksId || "",
+								'data-source-url': result.googleBooksId ? `https://books.google.com/books?id=${encodeURIComponent(result.googleBooksId)}` : "",
 								'data-categories': JSON.stringify(result.categories ?? []),
 								'data-custom-shelves': customShelfOptionsJson
 							}} />
 						</div>
 					</BookCard>
-				))}
+					);
+				})()
+			))}
 		</ul>
 		{query && !errorMessage && results.length > 0 && (
 			<div id="search-sentinel-wrap">
@@ -254,92 +251,6 @@ if (session?.userId) {
 		margin: 0.2rem 0;
 		color: #4a4a4a;
 		font-size: 0.92rem;
-	}
-
-	.variant-picker {
-		margin-top: 0.35rem;
-		display: grid;
-		gap: 0.25rem;
-		max-width: 380px;
-	}
-
-	.variant-dropdown {
-		position: relative;
-		max-width: 100%;
-	}
-
-	.variant-trigger {
-		width: 100%;
-		max-width: 100%;
-		border: 1px solid #c8c8c8;
-		border-radius: 8px;
-		padding: 0.45rem 0.55rem;
-		font-size: 0.9rem;
-		background: #fff;
-		color: #1a1a1a;
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-start;
-		gap: 0.4rem;
-		cursor: pointer;
-		text-align: left;
-	}
-
-	.variant-selected-label {
-		white-space: normal;
-		word-break: break-word;
-		line-height: 1.25;
-	}
-
-	.variant-menu {
-		position: absolute;
-		top: calc(100% + 4px);
-		left: 0;
-		right: 0;
-		max-height: 280px;
-		overflow-y: auto;
-		background: #fff;
-		border: 1px solid #c9c9c9;
-		border-radius: 8px;
-		box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
-		padding: 0.2rem 0;
-		z-index: 30;
-	}
-
-	.variant-option {
-		display: block;
-		width: 100%;
-		text-align: left;
-		border: none;
-		background: transparent;
-		padding: 0.45rem 0.65rem;
-		cursor: pointer;
-		color: #222;
-		white-space: normal;
-	}
-
-	.variant-option:hover {
-		background: #f2f2f2;
-	}
-
-	.variant-option-title {
-		display: block;
-		font-size: 0.9rem;
-		line-height: 1.25;
-	}
-
-	.variant-option-sub {
-		display: block;
-		font-size: 0.78rem;
-		line-height: 1.25;
-		color: #666;
-		margin-top: 0.2rem;
-	}
-
-	.variant-meta {
-		margin: 0;
-		color: #5a5a5a;
-		font-size: 0.84rem;
 	}
 
 	.shelf-dropdown {
@@ -509,7 +420,6 @@ if (session?.userId) {
 	let isAuthenticated = searchPage?.dataset.authenticated === "true";
 	const feedbackTimers = new WeakMap();
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
-	const variantDropdowns = Array.from(document.querySelectorAll(".variant-dropdown"));
 	initRatingControls();
 
 	function normalizeText(value) {
@@ -563,55 +473,8 @@ if (session?.userId) {
 		));
 	}
 
-	function updateVariantMeta(card) {
-		if (!card) return;
-		const variantDropdown = card.querySelector(".variant-dropdown");
-		const meta = card.querySelector(".variant-meta");
-		if (!variantDropdown || !meta) return;
-		const detailLabel = String(variantDropdown.dataset.detailLabel || "").trim();
-		meta.textContent = detailLabel;
-	}
-
-	function closeVariantMenus() {
-		for (const dropdown of variantDropdowns) {
-			const trigger = dropdown.querySelector('[data-action="toggle-variant"]');
-			const menu = dropdown.querySelector(".variant-menu");
-			if (menu) menu.hidden = true;
-			if (trigger) trigger.setAttribute("aria-expanded", "false");
-		}
-	}
-
 	function closeAllMenus() {
 		closeShelfMenus(shelfDropdowns);
-		closeVariantMenus();
-	}
-
-	function toggleVariantMenu(dropdown) {
-		const trigger = dropdown.querySelector('[data-action="toggle-variant"]');
-		const menu = dropdown.querySelector(".variant-menu");
-		if (!trigger || !menu) return;
-		const willOpen = menu.hidden;
-		closeVariantMenus();
-		menu.hidden = !willOpen;
-		trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
-	}
-
-	function setVariantSelection(dropdown, optionButton) {
-		dropdown.dataset.title = String(optionButton.dataset.title || "").trim();
-		dropdown.dataset.author = String(optionButton.dataset.author || "").trim();
-		dropdown.dataset.pages = String(optionButton.dataset.pages || "").trim();
-		dropdown.dataset.cover = String(optionButton.dataset.cover || "").trim();
-		dropdown.dataset.language = String(optionButton.dataset.language || "").trim();
-		dropdown.dataset.format = String(optionButton.dataset.format || "").trim();
-		dropdown.dataset.publisher = String(optionButton.dataset.publisher || "").trim();
-		dropdown.dataset.publishedDate = String(optionButton.dataset.publishedDate || "").trim();
-		dropdown.dataset.isbn10 = String(optionButton.dataset.isbn10 || "").trim();
-		dropdown.dataset.isbn13 = String(optionButton.dataset.isbn13 || "").trim();
-		dropdown.dataset.googleBooksId = String(optionButton.dataset.googleBooksId || "").trim();
-		dropdown.dataset.detailLabel = String(optionButton.dataset.detailLabel || "").trim();
-
-		const card = dropdown.closest(".book-card");
-		updateVariantMeta(card);
 	}
 
 	function applyStatus(entry, selectedStatus, totalPages) {
@@ -660,21 +523,19 @@ if (session?.userId) {
 			promptForShelfLogin();
 			return;
 		}
-		const resultCard = dropdown.closest(".book-card");
-		const variantDropdown = resultCard?.querySelector(".variant-dropdown");
-		const title = String(variantDropdown?.dataset?.title || dropdown.dataset.title || "").trim();
+		const title = String(dropdown.dataset.title || "").trim();
 		if (!title) return;
-		const author = String(variantDropdown?.dataset?.author || dropdown.dataset.author || "").trim();
-		const totalPages = Math.max(0, Number(variantDropdown?.dataset?.pages || dropdown.dataset.pages || 0) || 0);
-		const coverUrl = String(variantDropdown?.dataset?.cover || dropdown.dataset.cover || "").trim();
-		const format = String(variantDropdown?.dataset?.format || "").trim();
-		const language = String(variantDropdown?.dataset?.language || "").trim();
-		const publisher = String(variantDropdown?.dataset?.publisher || "").trim();
-		const publishedDate = String(variantDropdown?.dataset?.publishedDate || "").trim();
+		const author = String(dropdown.dataset.author || "").trim();
+		const totalPages = Math.max(0, Number(dropdown.dataset.pages || 0) || 0);
+		const coverUrl = String(dropdown.dataset.cover || "").trim();
+		const format = String(dropdown.dataset.format || "").trim();
+		const language = String(dropdown.dataset.language || "").trim();
+		const publisher = String(dropdown.dataset.publisher || "").trim();
+		const publishedDate = String(dropdown.dataset.publishedDate || "").trim();
 		const description = String(dropdown.dataset.description || "").trim();
-		const isbn10 = String(variantDropdown?.dataset?.isbn10 || "").trim();
-		const isbn13 = String(variantDropdown?.dataset?.isbn13 || "").trim();
-		const googleBooksId = String(variantDropdown?.dataset?.googleBooksId || "").trim();
+		const isbn10 = String(dropdown.dataset.isbn10 || "").trim();
+		const isbn13 = String(dropdown.dataset.isbn13 || "").trim();
+		const googleBooksId = String(dropdown.dataset.googleBooksId || "").trim();
 		const categories = parseCategories(dropdown.dataset.categories);
 
 		const entries = loadShelfEntries();
@@ -793,23 +654,6 @@ if (session?.userId) {
 		syncExistingState();
 	}
 
-	for (const dropdown of variantDropdowns) {
-		const trigger = dropdown.querySelector('[data-action="toggle-variant"]');
-		const options = Array.from(dropdown.querySelectorAll('[data-action="set-variant"]'));
-		if (trigger) {
-			trigger.addEventListener("click", () => toggleVariantMenu(dropdown));
-		}
-		if (options.length > 0) {
-			setVariantSelection(dropdown, options[0]);
-		}
-		for (const option of options) {
-			option.addEventListener("click", () => {
-				setVariantSelection(dropdown, option);
-				closeVariantMenus();
-			});
-		}
-	}
-
 	document.addEventListener("click", (event) => {
 		const target = event.target;
 		if (!(target instanceof HTMLElement)) return;
@@ -836,7 +680,6 @@ if (session?.userId) {
 			return;
 		}
 		if (target.closest(".shelf-dropdown")) return;
-		if (target.closest(".variant-dropdown")) return;
 		closeAllMenus();
 	});
 

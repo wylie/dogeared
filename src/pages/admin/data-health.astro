@@ -9,6 +9,7 @@ const admin = await resolveAdminSession(Astro.request);
 if (!admin.isAdmin) return Astro.redirect("/");
 
 const sql = getNeonSql();
+await sql`alter table book add column if not exists publisher text not null default ''`;
 
 const [
 	bookCoverageRows,
@@ -16,7 +17,9 @@ const [
 	authorCoverageRows,
 	importHealthRows,
 	duplicateGroupsRows,
-	recentBackfillRows
+	recentBackfillRows,
+	unresolvedPageCountRows,
+	unresolvedPublisherRows
 ] = await Promise.all([
 	sql<Array<{
 		total_books: number;
@@ -25,6 +28,8 @@ const [
 		missing_published_year: number;
 		missing_synopsis: number;
 		missing_isbn: number;
+		missing_page_count: number;
+		missing_publisher: number;
 	}>>`
 		select
 			count(*)::int as total_books,
@@ -34,7 +39,9 @@ const [
 			count(*) filter (where trim(coalesce(synopsis, '')) = '')::int as missing_synopsis,
 			count(*) filter (
 				where coalesce(trim(coalesce(isbn13, '')), trim(coalesce(isbn10, '')), '') = ''
-			)::int as missing_isbn
+			)::int as missing_isbn,
+			count(*) filter (where coalesce(page_count, 0) <= 0)::int as missing_page_count,
+			count(*) filter (where trim(coalesce(publisher, '')) = '')::int as missing_publisher
 		from book
 	`,
 	sql<Array<{ books_without_genres: number; books_with_genres: number }>>`
@@ -106,6 +113,50 @@ const [
 			(select count(*)::int from book where updated_at >= now() - interval '7 days') as updated_books_7d,
 			(select count(*)::int from author where updated_at >= now() - interval '24 hours') as updated_authors_24h,
 			(select count(*)::int from author where updated_at >= now() - interval '7 days') as updated_authors_7d
+	`,
+	sql<Array<{
+		id: number;
+		title: string;
+		primary_author: string;
+		google_books_id: string;
+		isbn13: string;
+		isbn10: string;
+		updated_at: string;
+	}>>`
+		select
+			id,
+			title,
+			primary_author,
+			coalesce(google_books_id, '') as google_books_id,
+			coalesce(isbn13, '') as isbn13,
+			coalesce(isbn10, '') as isbn10,
+			updated_at::text as updated_at
+		from book
+		where coalesce(page_count, 0) <= 0
+		order by updated_at desc, id desc
+		limit 50
+	`,
+	sql<Array<{
+		id: number;
+		title: string;
+		primary_author: string;
+		google_books_id: string;
+		isbn13: string;
+		isbn10: string;
+		updated_at: string;
+	}>>`
+		select
+			id,
+			title,
+			primary_author,
+			coalesce(google_books_id, '') as google_books_id,
+			coalesce(isbn13, '') as isbn13,
+			coalesce(isbn10, '') as isbn10,
+			updated_at::text as updated_at
+		from book
+		where trim(coalesce(publisher, '')) = ''
+		order by updated_at desc, id desc
+		limit 50
 	`
 ]);
 
@@ -114,7 +165,9 @@ const sectionLinks = [
 	{ id: "metadata-gaps", label: "Metadata Gaps" },
 	{ id: "import-health", label: "Import Health" },
 	{ id: "duplicates", label: "Duplicates" },
-	{ id: "backfills", label: "Backfills" }
+	{ id: "backfills", label: "Backfills" },
+	{ id: "page-count-gaps", label: "Page Counts" },
+	{ id: "publisher-gaps", label: "Publishers" }
 ];
 
 function pct(numerator: number, denominator: number) {
@@ -132,7 +185,9 @@ const books = bookCoverageRows[0] || {
 	missing_cover: 0,
 	missing_published_year: 0,
 	missing_synopsis: 0,
-	missing_isbn: 0
+	missing_isbn: 0,
+	missing_page_count: 0,
+	missing_publisher: 0
 };
 const genres = genreCoverageRows[0] || { books_without_genres: 0, books_with_genres: 0 };
 const authors = authorCoverageRows[0] || { total_authors: 0, authors_without_bio: 0, authors_without_photo: 0 };
@@ -183,6 +238,14 @@ const backfills = recentBackfillRows[0] || {
 					<p>Genre coverage</p>
 					<strong>{pct(genres.books_with_genres, books.total_books)}%</strong>
 				</article>
+				<article class="stat">
+					<p>Page count coverage</p>
+					<strong>{pct(books.total_books - books.missing_page_count, books.total_books)}%</strong>
+				</article>
+				<article class="stat">
+					<p>Publisher coverage</p>
+					<strong>{pct(books.total_books - books.missing_publisher, books.total_books)}%</strong>
+				</article>
 			</div>
 			<div class="table-wrap">
 				<table>
@@ -195,6 +258,8 @@ const backfills = recentBackfillRows[0] || {
 						<tr><td>Books missing published year</td><td>{books.missing_published_year.toLocaleString()}</td></tr>
 						<tr><td>Books missing synopsis</td><td>{books.missing_synopsis.toLocaleString()}</td></tr>
 						<tr><td>Books missing ISBN</td><td>{books.missing_isbn.toLocaleString()}</td></tr>
+						<tr><td>Books missing page count</td><td>{books.missing_page_count.toLocaleString()}</td></tr>
+						<tr><td>Books missing publisher</td><td>{books.missing_publisher.toLocaleString()}</td></tr>
 						<tr><td>Books without genres</td><td>{genres.books_without_genres.toLocaleString()}</td></tr>
 						<tr><td>Authors without bio</td><td>{countWithPct(authors.authors_without_bio, authors.total_authors)}</td></tr>
 						<tr><td>Authors without photo</td><td>{countWithPct(authors.authors_without_photo, authors.total_authors)}</td></tr>
@@ -280,6 +345,60 @@ const backfills = recentBackfillRows[0] || {
 			<div class="actions">
 				<a href="/roadmap">Roadmap</a>
 				<a href="/settings#import-controls">Import Controls</a>
+			</div>
+		</section>
+
+		<section class="panel" id="page-count-gaps">
+			<div class="panel-head">
+				<h2>Page Count Gaps</h2>
+				<p>{unresolvedPageCountRows.length.toLocaleString()} unresolved books shown (up to 50 newest updates).</p>
+			</div>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr><th>Book</th><th>Author</th><th>Google Books ID</th><th>ISBN</th><th>Updated</th></tr>
+					</thead>
+					<tbody>
+						{unresolvedPageCountRows.length === 0 ? (
+							<tr><td colspan="5">No page-count gaps detected.</td></tr>
+						) : unresolvedPageCountRows.map((row) => (
+							<tr>
+								<td>{row.title}</td>
+								<td>{row.primary_author || "Unknown"}</td>
+								<td>{row.google_books_id || "—"}</td>
+								<td>{row.isbn13 || row.isbn10 || "—"}</td>
+								<td>{row.updated_at ? new Date(row.updated_at).toLocaleString() : "Unknown"}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<section class="panel" id="publisher-gaps">
+			<div class="panel-head">
+				<h2>Publisher Gaps</h2>
+				<p>{unresolvedPublisherRows.length.toLocaleString()} unresolved books shown (up to 50 newest updates).</p>
+			</div>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr><th>Book</th><th>Author</th><th>Google Books ID</th><th>ISBN</th><th>Updated</th></tr>
+					</thead>
+					<tbody>
+						{unresolvedPublisherRows.length === 0 ? (
+							<tr><td colspan="5">No publisher gaps detected.</td></tr>
+						) : unresolvedPublisherRows.map((row) => (
+							<tr>
+								<td>{row.title}</td>
+								<td>{row.primary_author || "Unknown"}</td>
+								<td>{row.google_books_id || "—"}</td>
+								<td>{row.isbn13 || row.isbn10 || "—"}</td>
+								<td>{row.updated_at ? new Date(row.updated_at).toLocaleString() : "Unknown"}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
 			</div>
 		</section>
 	</div>

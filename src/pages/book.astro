@@ -113,6 +113,7 @@ type BookDetails = {
 	shelves: number;
 	averageRating: number;
 	ratingCount: number;
+	pageCount: number;
 };
 
 const params = Astro.url.searchParams;
@@ -166,6 +167,11 @@ async function fetchGoogleBook() {
 	return null;
 }
 
+function normalizeCatalogPageCount(value: unknown) {
+	const numeric = Math.max(0, Number(value || 0) || 0);
+	return Number.isFinite(numeric) ? Math.floor(numeric) : 0;
+}
+
 async function fetchOpenLibraryBook() {
 	const fetchJson = async (url: string) => {
 		try {
@@ -210,6 +216,7 @@ try {
 		shelves: number;
 		average_rating: number | null;
 		rating_count: number;
+		page_count: number;
 	}> = [];
 
 	if (queryBookId > 0) {
@@ -226,21 +233,23 @@ try {
 				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
 				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
 				b.published_year,
+				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 				coalesce(sc.shelves, 0)::int as shelves,
 				coalesce(rt.average_rating, 0) as average_rating,
 				coalesce(rt.rating_count, 0)::int as rating_count
 			from book b
 			left join lateral (
 				select count(*)::int as shelves
-				from user_book ub
-				where ub.book_id = b.id
+				from user_book ub2
+				where ub2.book_id = b.id
 			) sc on true
 			left join lateral (
-				select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count
-				from user_book ub
-				where ub.book_id = b.id
+				select round(avg(ub3.rating)::numeric, 1) as average_rating, count(*) filter (where ub3.rating is not null)::int as rating_count
+				from user_book ub3
+				where ub3.book_id = b.id
 			) rt on true
 			where b.id = ${queryBookId}
+			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
@@ -256,6 +265,7 @@ try {
 				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
 				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
 				b.published_year,
+				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 				coalesce(sc.shelves, 0)::int as shelves,
 				coalesce(rt.average_rating, 0) as average_rating,
 				coalesce(rt.rating_count, 0)::int as rating_count
@@ -263,6 +273,7 @@ try {
 			left join lateral (select count(*)::int as shelves from user_book ub where ub.book_id = b.id) sc on true
 			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
 			where b.isbn13 = ${queryIsbn13}
+			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
@@ -278,6 +289,7 @@ try {
 				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
 				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
 				b.published_year,
+				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 				coalesce(sc.shelves, 0)::int as shelves,
 				coalesce(rt.average_rating, 0) as average_rating,
 				coalesce(rt.rating_count, 0)::int as rating_count
@@ -285,6 +297,7 @@ try {
 			left join lateral (select count(*)::int as shelves from user_book ub where ub.book_id = b.id) sc on true
 			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
 			where b.isbn10 = ${queryIsbn10}
+			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
@@ -300,6 +313,7 @@ try {
 				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
 				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
 				b.published_year,
+				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 				coalesce(sc.shelves, 0)::int as shelves,
 				coalesce(rt.average_rating, 0) as average_rating,
 				coalesce(rt.rating_count, 0)::int as rating_count
@@ -307,6 +321,7 @@ try {
 			left join lateral (select count(*)::int as shelves from user_book ub where ub.book_id = b.id) sc on true
 			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
 			where b.google_books_id = ${queryGoogleBooksId}
+			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
@@ -324,6 +339,7 @@ try {
 				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
 				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
 				b.published_year,
+				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 				coalesce(sc.shelves, 0)::int as shelves,
 				coalesce(rt.average_rating, 0) as average_rating,
 				coalesce(rt.rating_count, 0)::int as rating_count
@@ -332,6 +348,7 @@ try {
 			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
 			where lower(regexp_replace(coalesce(b.title, ''), '[^[:alnum:]]+', '', 'g')) = ${ct.replace(/[^a-z0-9]+/g, "")}
 				and (${ca} = '' or lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${ca.replace(/[^a-z0-9]+/g, "")})
+			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
@@ -357,6 +374,7 @@ try {
 			shelves: Number(row.shelves || 0),
 			averageRating: Number(row.average_rating || 0),
 			ratingCount: Number(row.rating_count || 0)
+			,pageCount: normalizeCatalogPageCount(row.page_count)
 		};
 
 		const encryptionKey = getEncryptionKey();
@@ -402,6 +420,7 @@ try {
 				shelves: 0,
 				averageRating: Number(info.averageRating || 0),
 				ratingCount: Number(info.ratingsCount || 0)
+				,pageCount: normalizeCatalogPageCount(info.pageCount)
 			};
 		} else {
 			const open = await fetchOpenLibraryBook();
@@ -421,6 +440,7 @@ try {
 					shelves: 0,
 					averageRating: 0,
 					ratingCount: 0
+					,pageCount: 0
 				};
 			}
 		}
@@ -502,7 +522,7 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 								"data-author": book.author,
 								"data-description": book.synopsis,
 								"data-cover": book.coverUrl,
-								"data-pages": "0",
+								"data-pages": String(book.pageCount || 0),
 								"data-categories": "[]",
 								"data-isbn10": book.isbn10,
 								"data-isbn13": book.isbn13,
@@ -515,15 +535,16 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 						<h1>{book.title}</h1>
 						<p class="meta">
 							{book.author
-								? <a class="author-link" href={authorHref(book.author, book.authorId)}>{book.author}</a>
+								? <>by <a class="author-link" href={authorHref(book.author, book.authorId)}>{book.author}</a></>
 								: "Unknown author"}
 						</p>
 						{book.publishedLabel && <p class="meta">Published: {book.publishedLabel}</p>}
+						{book.pageCount > 0 && <p class="meta">Pages: {book.pageCount.toLocaleString()}</p>}
 						<p class="meta">Shelves: {book.shelves.toLocaleString()}</p>
 						{book.ratingCount > 0 && (
 							isAuthenticated && book.id > 0 && viewerShelfStatus === "finished"
-								? <p class="meta community-rating">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(2)}</p>
-								: <p class="meta rating">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
+								? <p class="meta community-rating">Average rating: {renderAverageStars(book.averageRating)} {book.averageRating.toFixed(2)}</p>
+								: <p class="meta rating">Average rating: {renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
 						)}
 						{isAuthenticated && book.id > 0 && viewerShelfStatus === "finished" && (
 							<RatingControl bookId={book.id} rating={viewerRating} editable={true} />
@@ -575,8 +596,9 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 
 <style>
 	.book-page { max-width: 980px; }
-	.book-head { display: grid; grid-template-columns: 180px auto; gap: 1rem; border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
+	.book-head { display: grid; grid-template-columns: 180px auto; gap: 1rem; align-items: start; border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
 	.book-head-content { position: relative; padding-right: 6rem; }
+	.book-head-content h1 { margin: 0; }
 	.book-head-actions {
 		position: absolute;
 		top: 0.1rem;
@@ -586,8 +608,8 @@ const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 	.cover-large img, .cover-placeholder { width: 180px; height: 270px; border-radius: 10px; object-fit: cover; background: #f1f1f1; }
 	.cover-placeholder { display: flex; align-items: center; justify-content: center; color: #8a8a8a; border: 1px solid #d7d7d7; }
 	.meta { margin: 0.24rem 0; color: #4d4d4d; }
-	.rating { color: var(--color-rating); font-weight: 700; }
-	.community-rating { color: #6b7280; font-size: 0.88rem; font-weight: 600; }
+	.rating { color: #4d4d4d; font-weight: 400; }
+	.community-rating { color: #4d4d4d; font-size: 0.88rem; font-weight: 400; }
 	.book-head-actions :global(.shelf-dropdown) {
 		margin-top: 0;
 		display: inline-flex;

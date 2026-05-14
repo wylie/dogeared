@@ -17,7 +17,9 @@ const [bookCoverageRow] = await sql`
 		count(*) filter (where trim(coalesce(synopsis, '')) = '')::int as missing_synopsis,
 		count(*) filter (
 			where coalesce(trim(coalesce(isbn13, '')), trim(coalesce(isbn10, '')), '') = ''
-		)::int as missing_isbn
+		)::int as missing_isbn,
+		count(*) filter (where coalesce(page_count, 0) <= 0)::int as missing_page_count,
+		count(*) filter (where trim(coalesce(publisher, '')) = '')::int as missing_publisher
 	from book
 `;
 
@@ -80,6 +82,8 @@ const missingCover = toInt(bookCoverageRow?.missing_cover);
 const missingPublishedYear = toInt(bookCoverageRow?.missing_published_year);
 const missingSynopsis = toInt(bookCoverageRow?.missing_synopsis);
 const missingIsbn = toInt(bookCoverageRow?.missing_isbn);
+const missingPageCount = toInt(bookCoverageRow?.missing_page_count);
+const missingPublisher = toInt(bookCoverageRow?.missing_publisher);
 const booksWithoutGenres = toInt(genreCoverageRow?.books_without_genres);
 
 const totalAuthors = toInt(authorCoverageRow?.total_authors);
@@ -95,12 +99,16 @@ const qualityReport = {
 		missingPublishedYear,
 		missingSynopsis,
 		missingIsbn,
+		missingPageCount,
+		missingPublisher,
 		withoutGenres: booksWithoutGenres,
 		coverage: {
 			authorPct: percentage(totalBooks - missingAuthor, totalBooks),
 			coverPct: percentage(totalBooks - missingCover, totalBooks),
 			publishedYearPct: percentage(totalBooks - missingPublishedYear, totalBooks),
 			synopsisPct: percentage(totalBooks - missingSynopsis, totalBooks),
+			pageCountPct: percentage(totalBooks - missingPageCount, totalBooks),
+			publisherPct: percentage(totalBooks - missingPublisher, totalBooks),
 			genrePct: percentage(totalBooks - booksWithoutGenres, totalBooks)
 		}
 	},

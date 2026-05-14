@@ -169,8 +169,10 @@ try {
 			isbn10: string;
 			isbn13: string;
 			google_books_id: string;
+			page_count: number;
 			average_rating: number | null;
 			rating_count: number;
+			page_count: number;
 			source: "google_books" | "open_library" | "nyt" | null;
 			source_work_id: string | null;
 			source_edition_id: string | null;
@@ -193,6 +195,7 @@ try {
 				b.isbn10,
 				b.isbn13,
 				b.google_books_id,
+				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 				coalesce(ra.average_rating, 0) as average_rating,
 				coalesce(ra.rating_count, 0)::int as rating_count,
 				bs.source,
@@ -243,7 +246,7 @@ try {
 			thumbnail: String(row.cover_url || "").trim(),
 			publishedDate: row.published_year ? String(row.published_year) : "",
 			description: sanitizeDescription(String(row.synopsis || "")),
-			pageCount: 0,
+			pageCount: Math.max(0, Number(row.page_count || 0) || 0),
 			format: "Book",
 			language: String(row.language || "").trim().toUpperCase(),
 			isbn10: String(row.isbn10 || "").trim(),
@@ -318,6 +321,13 @@ try {
 								{section.books.map((book, index) => {
 									const numericBookId = Number(String(book.id || "").replace(/^book_/, ""));
 									const hasPersonalRatingControl = viewerStatusByBookId.get(numericBookId) === "finished";
+									const viewerRating = Math.max(0, Math.min(5, Number(viewerRatingByBookId.get(numericBookId) || 0)));
+									const displayAverageRating = Number(book.averageRating || 0) > 0
+										? Number(book.averageRating || 0)
+										: viewerRating;
+									const displayRatingCount = Number(book.ratingCount || 0) > 0
+										? Number(book.ratingCount || 0)
+										: (viewerRating > 0 ? 1 : 0);
 									return (
 									<BookCard
 										title={book.title}
@@ -333,15 +343,16 @@ try {
 										</div>
 										<div slot="meta">
 											{book.publishedDate && <p class="meta">Published: {formatPublishedLabel(book.publishedDate)}</p>}
-											{book.ratingCount > 0 && (
+											{book.pageCount > 0 && <p class="meta">Pages: {book.pageCount.toLocaleString()}</p>}
+											{displayAverageRating > 0 && (
 												hasPersonalRatingControl
-													? <p class="meta community-rating-meta">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(2)}</p>
-													: <p class="meta rating-meta">{renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
+													? <p class="meta community-rating-meta">Average rating: {renderAverageStars(displayAverageRating)} {displayAverageRating.toFixed(2)}</p>
+													: <p class="meta rating-meta">Average rating: {renderAverageStars(displayAverageRating)} {displayAverageRating.toFixed(1)} · {displayRatingCount} rating{displayRatingCount === 1 ? "" : "s"}</p>
 											)}
 											{hasPersonalRatingControl && (
 												<RatingControl
 													bookId={String(numericBookId)}
-													rating={viewerRatingByBookId.get(numericBookId) || 0}
+													rating={viewerRating}
 													editable={true}
 												/>
 											)}
@@ -477,14 +488,14 @@ try {
 	}
 
 	.rating-meta {
-		color: var(--color-rating);
-		font-weight: 600;
+		color: #4d4d4d;
+		font-weight: 400;
 	}
 
 	.community-rating-meta {
-		color: #6b7280;
-		font-size: 0.82rem;
-		font-weight: 600;
+		color: #4d4d4d;
+		font-size: 0.87rem;
+		font-weight: 400;
 	}
 
 	.shelf-dropdown {

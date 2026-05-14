@@ -949,8 +949,21 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 					<strong>{metricsPayload.userMetrics.readingStreakDays.toLocaleString()} days</strong>
 				</article>
 				<article class="widget">
-					<p>Avg Pages / Day (7d / 30d / 90d)</p>
-					<strong>{metricsPayload.userMetrics.avgPagesPerDay7d.toFixed(1)} / {metricsPayload.userMetrics.avgPagesPerDay30d.toFixed(1)} / {metricsPayload.userMetrics.avgPagesPerDay90d.toFixed(1)}</strong>
+					<p>Avg Pages / Day</p>
+					<div class="toggle avg-pages-toggle" role="tablist" aria-label="Average pages per day window">
+						<button type="button" class="is-active" data-avg-pages-window="7d" aria-pressed="true">7d</button>
+						<button type="button" data-avg-pages-window="30d" aria-pressed="false">30d</button>
+						<button type="button" data-avg-pages-window="90d" aria-pressed="false">90d</button>
+					</div>
+					<strong
+						id="avg-pages-value"
+						data-avg-pages-value
+						data-avg-pages-7d={String(Math.round(metricsPayload.userMetrics.avgPagesPerDay7d))}
+						data-avg-pages-30d={String(Math.round(metricsPayload.userMetrics.avgPagesPerDay30d))}
+						data-avg-pages-90d={String(Math.round(metricsPayload.userMetrics.avgPagesPerDay90d))}
+					>
+						{Math.round(metricsPayload.userMetrics.avgPagesPerDay7d)}
+					</strong>
 				</article>
 				<article class="widget">
 					<p>Start-to-Finish Speed (Median)</p>
@@ -1995,6 +2008,31 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 		renderPieWidgets();
 		updateExplorer();
 		updateCompare();
+	}
+
+	const avgPagesValue = document.querySelector("[data-avg-pages-value]");
+	const avgPagesButtons = Array.from(document.querySelectorAll("[data-avg-pages-window]"));
+	if (avgPagesValue instanceof HTMLElement && avgPagesButtons.length > 0) {
+		const values = {
+			"7d": String(avgPagesValue.getAttribute("data-avg-pages-7d") || "0.0"),
+			"30d": String(avgPagesValue.getAttribute("data-avg-pages-30d") || "0.0"),
+			"90d": String(avgPagesValue.getAttribute("data-avg-pages-90d") || "0.0")
+		};
+		const applyWindow = (windowKey) => {
+			const key = windowKey === "30d" || windowKey === "90d" ? windowKey : "7d";
+			avgPagesValue.textContent = values[key];
+			for (const button of avgPagesButtons) {
+				if (!(button instanceof HTMLButtonElement)) continue;
+				const active = button.dataset.avgPagesWindow === key;
+				button.classList.toggle("is-active", active);
+				button.setAttribute("aria-pressed", active ? "true" : "false");
+			}
+		};
+		for (const button of avgPagesButtons) {
+			if (!(button instanceof HTMLButtonElement)) continue;
+			button.addEventListener("click", () => applyWindow(String(button.dataset.avgPagesWindow || "7d")));
+		}
+		applyWindow("7d");
 	}
 </script>
 

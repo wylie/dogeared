@@ -18,6 +18,8 @@
     "preview": "astro preview",
     "astro": "astro",
     "backfill:genres": "node scripts/backfill-book-genres.mjs",
+    "backfill:page-counts": "node scripts/backfill-book-page-counts.mjs",
+    "backfill:publishers": "node scripts/backfill-book-publishers.mjs",
     "backfill:synopsis": "node scripts/backfill-book-synopsis.mjs",
     "backfill:author-avatars": "node scripts/backfill-author-avatars.mjs",
     "backfill:author-bios": "node scripts/backfill-author-bios.mjs",

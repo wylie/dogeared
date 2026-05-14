@@ -62,6 +62,13 @@ function normalizePositiveInt(value: unknown) {
 	return Math.floor(parsed);
 }
 
+function normalizeCatalogPageCount(value: unknown) {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed)) return 0;
+	const rounded = Math.floor(parsed);
+	return rounded > 0 ? rounded : 0;
+}
+
 function normalizeRating(value: unknown) {
 	const parsed = Number(value);
 	if (!Number.isFinite(parsed)) return null;
@@ -244,6 +251,8 @@ async function inferMetadataForBook(input: {
 		coverUrl: "",
 		language: "",
 		publishedYear: null as number | null,
+		pageCount: 0,
+		publisher: "",
 		isbn10: "",
 		isbn13: "",
 		googleBooksId: ""
@@ -295,6 +304,8 @@ async function inferMetadataForBook(input: {
 		out.coverUrl = normalizeText(info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail);
 		out.language = normalizeText(info.language);
 		out.publishedYear = publishedMatch ? Number(publishedMatch[0]) : null;
+		out.pageCount = normalizeCatalogPageCount(info.pageCount);
+		out.publisher = normalizeText(info.publisher);
 		out.isbn13 = matchedIsbn13;
 		out.isbn10 = matchedIsbn10;
 		out.googleBooksId = normalizeCatalogText(bestVolume?.id || "");
@@ -314,6 +325,13 @@ async function inferMetadataForBook(input: {
 						const y = normalizeText(row.publish_date).match(/\d{4}/);
 						out.publishedYear = y ? Number(y[0]) : null;
 					}
+					if (!out.pageCount) out.pageCount = normalizeCatalogPageCount(row.number_of_pages);
+					if (!out.publisher) {
+						const openPublisher = Array.isArray(row.publishers)
+							? row.publishers.map((item: any) => normalizeText(item?.name || item)).find(Boolean)
+							: normalizeText(row.publishers?.name || row.publishers || "");
+						out.publisher = openPublisher || out.publisher;
+					}
 				}
 			}
 		} catch {
@@ -328,6 +346,8 @@ async function ensureShelfSchema() {
 	const sql = getNeonSql();
 	await sql`alter table user_book add column if not exists rating int`;
 	await sql`alter table book add column if not exists synopsis text not null default ''`;
+	await sql`alter table book add column if not exists page_count int not null default 0`;
+	await sql`alter table book add column if not exists publisher text not null default ''`;
 	await sql`
 		create table if not exists book_tag (
 			book_id bigint not null references book(id) on delete cascade,
@@ -455,7 +475,9 @@ export const POST: APIRoute = async ({ request }) => {
 		const genres = parseGenres(bookPayload.categories);
 		const tags = normalizeTopicTagList(bookPayload.categories, 12);
 		let googleBooksId = bookPayload.googleBooksId;
-		if (!synopsis || !coverUrl || !publishedYear || !language || (!isbn10 && !isbn13) || !googleBooksId) {
+		let pageCount = totalPages;
+		let publisher = normalizeText(bookPayload.publisher);
+		if (!synopsis || !coverUrl || !publishedYear || !language || !publisher || (!isbn10 && !isbn13) || !googleBooksId) {
 			const enriched = await inferMetadataForBook({ title, author, isbn10, isbn13, googleBooksId });
 			if (!synopsis) synopsis = enriched.synopsis || synopsis;
 			if (!coverUrl) coverUrl = enriched.coverUrl || coverUrl;
@@ -464,6 +486,8 @@ export const POST: APIRoute = async ({ request }) => {
 			if (!isbn13) isbn13 = enriched.isbn13 || isbn13;
 			if (!isbn10) isbn10 = enriched.isbn10 || isbn10;
 			if (!googleBooksId) googleBooksId = enriched.googleBooksId || googleBooksId;
+			if (!pageCount && enriched.pageCount > 0) pageCount = enriched.pageCount;
+			if (!publisher) publisher = enriched.publisher || publisher;
 		}
 		const workKey = canonicalCatalogWorkKey({ title, author, isbn10, isbn13 });
 		const source = normalizeCatalogText(entry.source);
@@ -529,6 +553,11 @@ export const POST: APIRoute = async ({ request }) => {
 					synopsis = case when ${synopsis} <> '' then ${synopsis} else book.synopsis end,
 					cover_url = case when ${coverUrl} <> '' then ${coverUrl} else book.cover_url end,
 					language = case when ${language} <> '' then ${language} else book.language end,
+					publisher = case when ${publisher} <> '' then ${publisher} else book.publisher end,
+					page_count = case
+						when ${pageCount} > 0 and (book.page_count <= 0 or ${pageCount} > book.page_count) then ${pageCount}
+						else book.page_count
+					end,
 					published_year = coalesce(${publishedYear}, book.published_year),
 					updated_at = now()
 				where id = ${bookId}
@@ -546,6 +575,8 @@ export const POST: APIRoute = async ({ request }) => {
 					synopsis,
 					cover_url,
 					language,
+					publisher,
+					page_count,
 					published_year
 				)
 				values (
@@ -559,6 +590,8 @@ export const POST: APIRoute = async ({ request }) => {
 					${synopsis},
 					${coverUrl},
 					${language},
+					${publisher},
+					${pageCount},
 					${publishedYear}
 				)
 				on conflict (canonical_work_key) do update set
@@ -571,6 +604,11 @@ export const POST: APIRoute = async ({ request }) => {
 					synopsis = case when excluded.synopsis <> '' then excluded.synopsis else book.synopsis end,
 					cover_url = case when excluded.cover_url <> '' then excluded.cover_url else book.cover_url end,
 					language = case when excluded.language <> '' then excluded.language else book.language end,
+					publisher = case when excluded.publisher <> '' then excluded.publisher else book.publisher end,
+					page_count = case
+						when excluded.page_count > 0 and (book.page_count <= 0 or excluded.page_count > book.page_count) then excluded.page_count
+						else book.page_count
+					end,
 					published_year = coalesce(excluded.published_year, book.published_year),
 					updated_at = now()
 				returning id
@@ -725,7 +763,7 @@ export const POST: APIRoute = async ({ request }) => {
 				b.isbn10,
 				b.isbn13,
 				b.google_books_id,
-				null::text as publisher,
+				coalesce(b.publisher, '') as publisher,
 				coalesce(b.synopsis, '') as synopsis
 			from user_book ub
 			join book b on b.id = ub.book_id

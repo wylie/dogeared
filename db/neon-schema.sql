@@ -66,6 +66,8 @@ create table if not exists book (
 	synopsis text not null default '',
 	cover_url text not null default '',
 	language text not null default '',
+	page_count int not null default 0,
+	publisher text not null default '',
 	published_year int,
 	created_at timestamptz not null default now(),
 	updated_at timestamptz not null default now()
