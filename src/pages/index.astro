@@ -11,7 +11,12 @@ import { authorHref } from '../lib/author';
 import { resolvePublicReaderSuggestions } from "../lib/feed";
 
 export const prerender = false;
-const session = await resolveUserBySession(Astro.request);
+let session: Awaited<ReturnType<typeof resolveUserBySession>> = null;
+try {
+	session = await resolveUserBySession(Astro.request);
+} catch (error) {
+	console.error("Home session lookup failed; rendering as logged out.", error);
+}
 const isAuthenticated = !!session?.userId;
 
 type BrowseBook = {
@@ -131,9 +136,14 @@ let sections: BrowseSection[] = [];
 let errorMessage = "";
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let viewerRatingByBookId = new Map<number, number>();
-const readerSuggestions = session?.userId
-	? await resolvePublicReaderSuggestions(session.userId, 6)
-	: [];
+let readerSuggestions: Awaited<ReturnType<typeof resolvePublicReaderSuggestions>> = [];
+if (session?.userId) {
+	try {
+		readerSuggestions = await resolvePublicReaderSuggestions(session.userId, 6);
+	} catch (error) {
+		console.error("Home reader suggestions unavailable.", error);
+	}
+}
 const shelfIdeas: ShelfIdea[] = [
 	{
 		name: "Weekend One-Sitting Reads",
@@ -320,7 +330,8 @@ try {
 		}
 	}
 } catch (error) {
-	errorMessage = error instanceof Error ? error.message : "Failed to load shelves from Dogeared.";
+	console.error("Home shelves query failed.", error);
+	errorMessage = "Live home shelves are temporarily unavailable.";
 }
 ---
 
@@ -331,7 +342,7 @@ try {
 			<p class="subhead">Browse popular shelves, save what matters, and build your reading history without the noise.</p>
 		</header>
 
-		{errorMessage && <p class="error">Home shelves unavailable: {errorMessage}</p>}
+		{errorMessage && <p class="error">{errorMessage}</p>}
 		{!errorMessage && sections.length === 0 && (
 			<p class="empty">
 				No real genre shelves are ready yet. Right now Dogeared mostly has reading-status shelves rather than subject genres.

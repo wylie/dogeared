@@ -116,12 +116,12 @@ try {
 		overflow: visible;
 	}
 	.shelf-dropdown .shelf-trigger.shelf-fab {
-		width: 44px !important;
-		height: 44px !important;
-		min-width: 44px !important;
-		min-height: 44px !important;
+		width: var(--shelf-trigger-width, 44px) !important;
+		height: var(--shelf-trigger-height, 44px) !important;
+		min-width: var(--shelf-trigger-min-width, 44px) !important;
+		min-height: var(--shelf-trigger-min-height, 44px) !important;
 		border: none !important;
-		border-radius: 999px !important;
+		border-radius: var(--shelf-trigger-radius, 999px) !important;
 		padding: 0 !important;
 		background: var(--color-primary) !important;
 		color: #fff !important;
@@ -134,7 +134,7 @@ try {
 		background: var(--color-primary-hover) !important;
 	}
 	.shelf-plus {
-		font-size: 1.4rem;
+		font-size: var(--shelf-trigger-icon-size, 1.4rem);
 		line-height: 1;
 	}
 	.shelf-state {

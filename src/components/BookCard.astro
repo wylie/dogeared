@@ -22,6 +22,25 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 ---
 
 <li class="book-card">
+	{titleHref && (
+		<details class="card-menu">
+			<summary aria-label={`Open actions for ${title}`} title="More actions">
+				<span class="material-icons" aria-hidden="true">more_vert</span>
+			</summary>
+			<div class="card-menu-panel">
+				<button
+					type="button"
+					class="card-menu-item"
+					data-action="share-book"
+					data-share-title={title}
+					data-share-url={titleHref}
+				>
+					<span class="material-icons" aria-hidden="true">share</span>
+					<span>Share</span>
+				</button>
+			</div>
+		</details>
+	)}
 	{hasTopRight && <div class="top-right"><slot name="topRight" /></div>}
 	<div class="cover-wrap">
 		{thumbnail ? (
@@ -31,6 +50,9 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 		) : (
 			<div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>
 		)}
+		<div class="cover-actions">
+			<slot name="actions" />
+		</div>
 	</div>
 	<div class="card-body">
 		<slot name="preTitle" />
@@ -53,9 +75,6 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 		)}
 		<slot name="footer" />
 		<slot />
-		<div class="card-actions">
-			<slot name="actions" />
-		</div>
 	</div>
 </li>
 
@@ -70,7 +89,7 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 		isolation: isolate;
 		overflow: visible;
 		display: grid;
-		grid-template-columns: 56px minmax(0, 1fr);
+		grid-template-columns: 76px minmax(0, 1fr);
 		gap: 0.65rem;
 	}
 	.book-card:has(.shelf-menu:not([hidden])) {
@@ -79,24 +98,79 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 	.top-right {
 		position: absolute;
 		top: 0.65rem;
-		right: 0.65rem;
+		right: 2.1rem;
 		display: inline-flex;
 		flex-direction: column;
 		align-items: flex-end;
 		gap: 0.28rem;
 	}
+	.card-menu {
+		position: absolute;
+		top: 0.45rem;
+		right: 0.4rem;
+		z-index: 70;
+	}
+	.card-menu > summary {
+		list-style: none;
+		width: 28px;
+		height: 28px;
+		display: grid;
+		place-items: center;
+		border-radius: 8px;
+		cursor: pointer;
+		color: #3f4b57;
+	}
+	.card-menu > summary::-webkit-details-marker {
+		display: none;
+	}
+	.card-menu[open] > summary,
+	.card-menu > summary:hover {
+		background: #eef3f8;
+	}
+	.card-menu-panel {
+		position: absolute;
+		top: calc(100% + 4px);
+		right: 0;
+		min-width: 132px;
+		background: #fff;
+		border: 1px solid #d7dee7;
+		border-radius: 10px;
+		box-shadow: 0 10px 20px rgba(15, 23, 42, 0.14);
+		padding: 0.25rem;
+	}
+	.card-menu-item {
+		width: 100%;
+		border: none;
+		background: transparent;
+		border-radius: 8px;
+		padding: 0.42rem 0.48rem;
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		color: #222;
+		font: inherit;
+		font-size: 0.86rem;
+		cursor: pointer;
+	}
+	.card-menu-item:hover {
+		background: #f1f5f9;
+	}
+	.card-menu-item .material-icons {
+		font-size: 1rem;
+	}
 	.cover-wrap {
-		width: 56px;
-		height: 84px;
+		width: 76px;
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
 	}
 	.cover-wrap a {
 		display: block;
 		width: 100%;
-		height: 100%;
 	}
 	.cover {
-		width: 56px;
-		height: 84px;
+		width: 76px;
+		height: 114px;
 		object-fit: cover;
 		border-radius: 6px;
 		background: #f1f1f1;
@@ -116,7 +190,7 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 	}
 	.card-body h3 {
 		margin: 0;
-		padding-right: 3.6rem;
+		padding-right: 1.7rem;
 		font-size: 1rem;
 		overflow-wrap: anywhere;
 	}
@@ -163,30 +237,50 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
-	.card-actions {
-		position: absolute;
-		top: 0.65rem;
-		right: 0.65rem;
+	.cover-actions {
+		width: 100%;
 		margin: 0;
 		padding: 0;
-		z-index: 60;
 	}
-	.card-actions :global(.shelf-state) {
+	.cover-actions :global(.shelf-dropdown) {
+		width: 100%;
+		min-width: 0;
+		--shelf-trigger-width: 100%;
+		--shelf-trigger-height: 32px;
+		--shelf-trigger-min-width: 100%;
+		--shelf-trigger-min-height: 32px;
+		--shelf-trigger-radius: 8px;
+		--shelf-trigger-icon-size: 1.15rem;
+	}
+	.cover-actions :global(.shelf-state) {
 		display: none !important;
+	}
+	.cover-actions :global(.shelf-dropdown .shelf-menu) {
+		top: calc(100% + 4px);
+		right: auto !important;
+		left: 0 !important;
 	}
 	@media (max-width: 420px) {
 		.book-card {
-			grid-template-columns: 52px minmax(0, 1fr);
+			grid-template-columns: 72px minmax(0, 1fr);
 			gap: 0.55rem;
 			padding: 0.6rem;
 		}
 		.cover-wrap,
 		.cover {
-			width: 52px;
-			height: 78px;
+			width: 72px;
+			height: 108px;
+		}
+		.card-menu {
+			top: 0.35rem;
+			right: 0.3rem;
+		}
+		.cover-actions :global(.shelf-dropdown) {
+			--shelf-trigger-height: 30px;
+			--shelf-trigger-min-height: 30px;
 		}
 		.card-body h3 {
-			padding-right: 3.25rem;
+			padding-right: 1.55rem;
 			font-size: 0.95rem;
 		}
 		.description {
@@ -196,3 +290,46 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 		}
 	}
 </style>
+
+<script>
+	if (!(window as typeof window & { __bookCardMenuBound?: boolean }).__bookCardMenuBound) {
+		(window as typeof window & { __bookCardMenuBound?: boolean }).__bookCardMenuBound = true;
+		document.addEventListener("click", async (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			const shareButton = target.closest('[data-action="share-book"]');
+			if (!(shareButton instanceof HTMLButtonElement)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			const title = String(shareButton.dataset.shareTitle || "").trim();
+			const rawUrl = String(shareButton.dataset.shareUrl || "").trim();
+			if (!rawUrl) return;
+			const absoluteUrl = new URL(rawUrl, window.location.origin).toString();
+			try {
+				if (navigator.share) {
+					await navigator.share({ title, text: title, url: absoluteUrl });
+				} else if (navigator.clipboard?.writeText) {
+					await navigator.clipboard.writeText(absoluteUrl);
+					shareButton.querySelector("span:last-child").textContent = "Copied";
+					setTimeout(() => {
+						const label = shareButton.querySelector("span:last-child");
+						if (label) label.textContent = "Share";
+					}, 1200);
+				}
+			} catch {
+				// Ignore canceled share actions.
+			}
+			const details = shareButton.closest("details");
+			if (details instanceof HTMLDetailsElement) details.open = false;
+		});
+
+		document.addEventListener("click", (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			if (target.closest(".card-menu")) return;
+			for (const menu of document.querySelectorAll(".card-menu[open]")) {
+				if (menu instanceof HTMLDetailsElement) menu.open = false;
+			}
+		});
+	}
+</script>
