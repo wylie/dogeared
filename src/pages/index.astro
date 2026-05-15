@@ -8,6 +8,7 @@ import { resolveUserBySession } from '../lib/auth';
 import { getNeonSql } from '../lib/neon';
 import { formatGenreLabel } from '../lib/genres';
 import { authorHref } from '../lib/author';
+import { resolvePublicReaderSuggestions } from "../lib/feed";
 
 export const prerender = false;
 const session = await resolveUserBySession(Astro.request);
@@ -40,6 +41,13 @@ type BrowseSection = {
 	title: string;
 	subtitle: string;
 	books: BrowseBook[];
+};
+
+type ShelfIdea = {
+	name: string;
+	description: string;
+	exampleBooks: string[];
+	icon: string;
 };
 
 const NON_GENRE_SLUGS = new Set([
@@ -123,6 +131,29 @@ let sections: BrowseSection[] = [];
 let errorMessage = "";
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let viewerRatingByBookId = new Map<number, number>();
+const readerSuggestions = session?.userId
+	? await resolvePublicReaderSuggestions(session.userId, 6)
+	: [];
+const shelfIdeas: ShelfIdea[] = [
+	{
+		name: "Weekend One-Sitting Reads",
+		description: "Short, high-momentum books under ~260 pages for quick wins.",
+		exampleBooks: ["Project Hail Mary", "Piranesi", "The Sense of an Ending"],
+		icon: "bolt"
+	},
+	{
+		name: "Books That Explain the News",
+		description: "Evergreen primers for policy, economics, and world context.",
+		exampleBooks: ["The Fifth Risk", "The Deficit Myth", "The World for Sale"],
+		icon: "public"
+	},
+	{
+		name: "Comfort Re-Reads",
+		description: "Reliable mood reset books worth returning to each year.",
+		exampleBooks: ["A Wrinkle in Time", "Anne of Green Gables", "The Hobbit"],
+		icon: "self_improvement"
+	}
+];
 
 try {
 	const sql = getNeonSql();
@@ -309,11 +340,11 @@ try {
 
 		{!errorMessage && sections.length > 0 && (
 			<>
-				{sections.map((section) => (
+				{sections.map((section, sectionIndex) => (
+					<>
 					<section id={section.id} class="browse-section">
 						<div class="section-head">
 							<h2>{section.title}</h2>
-							<p>{section.subtitle}</p>
 						</div>
 						{section.books.length === 0 && <p class="empty">No books found for this shelf yet.</p>}
 						{section.books.length > 0 && (
@@ -382,6 +413,52 @@ try {
 							</ul>
 						)}
 					</section>
+					{((sectionIndex === 1 && readerSuggestions.length > 0) || sectionIndex === 4) && (
+						<section class="browse-section community-discovery-section">
+							<div class="section-head">
+								<h2>{sectionIndex === 1 ? "Readers You Might Like" : "Custom Shelf Ideas"}</h2>
+							</div>
+							{sectionIndex === 1 ? (
+								<ul class="community-suggestion-grid">
+									{readerSuggestions.map((reader) => (
+										<li class="community-suggestion-card" data-reader-card>
+											<h3><a href={`/u/${encodeURIComponent(reader.username)}`}>@{reader.username}</a></h3>
+											<p>{reader.blurb || "Public profile with recent reading activity."}</p>
+											<div class="suggestion-chip-row">
+												{reader.favoriteAuthor && <Chip className="shelf-count-badge" label={reader.favoriteAuthor} />}
+												{reader.favoriteBook && <Chip className="shelf-count-badge" label={reader.favoriteBook} />}
+												{reader.location && <Chip className="shelf-count-badge" label={reader.location} />}
+											</div>
+											<button type="button" class="reader-follow-button" data-action="follow-reader" data-username={reader.username}>Follow</button>
+											<p class="reader-feedback" data-reader-feedback hidden></p>
+										</li>
+									))}
+								</ul>
+							) : (
+								<ul class="community-suggestion-grid">
+									{shelfIdeas.map((idea) => (
+										<li class="community-suggestion-card">
+											<h3>{idea.name}</h3>
+											<p>{idea.description}</p>
+											<div class="suggestion-chip-row">
+												{idea.exampleBooks.map((title) => <Chip className="shelf-count-badge" label={title} />)}
+											</div>
+											<button
+												type="button"
+												class="mock-shelf-add-button"
+												data-action="create-mock-shelf"
+												data-shelf-name={idea.name}
+												data-shelf-icon={idea.icon}
+											>
+												Add Shelf
+											</button>
+										</li>
+									))}
+								</ul>
+							)}
+						</section>
+					)}
+					</>
 				))}
 			</>
 		)}
@@ -436,19 +513,13 @@ try {
 	.section-head {
 		position: sticky;
 		top: var(--mobile-sticky-offset, 0px);
-		padding: 0.75rem 0 0.15rem;
+		padding: 0.75rem 0;
 		background-color: var(--color-bg);
 		z-index: 20;
 		box-shadow: 0 8px 14px -16px rgba(31, 54, 66, 0.55);
 	}
 	.section-head h2 {
 		margin: 0;
-	}
-
-	.section-head p {
-		margin: 0.25rem 0 0.7rem;
-		color: #4d4d4d;
-		font-size: 0.92rem;
 	}
 
 	.list-date {
@@ -464,6 +535,82 @@ try {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.75rem;
+	}
+
+	.community-discovery-section {
+		margin-top: 1.15rem;
+	}
+	.community-suggestion-grid {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.75rem;
+	}
+	.community-suggestion-card {
+		background: #fff;
+		border-radius: 12px;
+		padding: 0.85rem;
+		border: 1px solid #e2e8f0;
+	}
+	.community-suggestion-card h3 {
+		margin: 0;
+		font-size: 1rem;
+	}
+	.community-suggestion-card p {
+		margin: 0.35rem 0 0;
+		color: #4d4d4d;
+		font-size: 0.9rem;
+		line-height: 1.45;
+	}
+	.suggestion-chip-row {
+		margin-top: 0.55rem;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+	}
+	.reader-follow-button {
+		margin-top: 0.65rem;
+		border: none;
+		border-radius: 999px;
+		padding: 0.4rem 0.72rem;
+		background: #111;
+		color: #fff;
+		font: inherit;
+		font-size: 0.84rem;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.reader-follow-button:disabled {
+		opacity: 0.72;
+		cursor: not-allowed;
+	}
+	.reader-feedback {
+		margin: 0.35rem 0 0;
+		color: #2f8f57;
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+	.mock-shelf-add-button {
+		margin-top: 0.65rem;
+		border: none;
+		border-radius: 999px;
+		padding: 0.4rem 0.72rem;
+		background: #2f8f57;
+		color: #fff;
+		font: inherit;
+		font-size: 0.84rem;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.mock-shelf-add-button.is-added {
+		background: #dbe7ef;
+		color: #345067;
+	}
+	.mock-shelf-add-button:disabled {
+		opacity: 0.72;
+		cursor: not-allowed;
 	}
 
 	.rank-stack {
@@ -647,6 +794,9 @@ try {
 		.book-grid {
 			grid-template-columns: 1fr;
 		}
+		.community-suggestion-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	@media (max-width: 420px) {
@@ -802,6 +952,74 @@ try {
 			return;
 		}
 		entries.unshift(nextEntry);
+	}
+
+	function setMockShelfButtonState(button, state) {
+		if (!(button instanceof HTMLButtonElement)) return;
+		const label = state === "added"
+			? "Added"
+			: state === "saving"
+				? "Adding..."
+				: state === "retry"
+					? "Retry"
+					: "Add Shelf";
+		button.textContent = label;
+		button.disabled = state === "saving" || state === "added";
+		button.classList.toggle("is-added", state === "added");
+	}
+
+	function markMatchingMockShelfButtonsAsAdded(shelfName) {
+		const normalized = normalizeText(shelfName);
+		if (!normalized) return;
+		const buttons = Array.from(document.querySelectorAll('[data-action="create-mock-shelf"]'));
+		for (const node of buttons) {
+			if (!(node instanceof HTMLButtonElement)) continue;
+			if (normalizeText(node.dataset.shelfName || "") !== normalized) continue;
+			setMockShelfButtonState(node, "added");
+		}
+	}
+
+	async function createMockShelf(button) {
+		if (!(button instanceof HTMLButtonElement)) return;
+		if (!isAuthenticated) {
+			promptForShelfLogin();
+			return;
+		}
+		const shelfName = String(button.dataset.shelfName || "").trim();
+		const shelfIcon = String(button.dataset.shelfIcon || "").trim();
+		if (!shelfName) return;
+		setMockShelfButtonState(button, "saving");
+		try {
+			const existingResponse = await fetch("/api/shelf/custom-shelves", { credentials: "same-origin" });
+			if (existingResponse.status === 401) {
+				setMockShelfButtonState(button, "default");
+				promptForShelfLogin();
+				return;
+			}
+			if (!existingResponse.ok) throw new Error("Failed to load shelves");
+			const existingPayload = await existingResponse.json().catch(() => ({}));
+			const shelves = Array.isArray(existingPayload?.shelves) ? existingPayload.shelves : [];
+			const alreadyExists = shelves.some((shelf) => normalizeText(shelf?.name || "") === normalizeText(shelfName));
+			if (alreadyExists) {
+				markMatchingMockShelfButtonsAsAdded(shelfName);
+				return;
+			}
+			const createResponse = await fetch("/api/shelf/custom-shelves", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "same-origin",
+				body: JSON.stringify({ name: shelfName, icon: shelfIcon || "bookmarks" })
+			});
+			if (createResponse.status === 401) {
+				setMockShelfButtonState(button, "default");
+				promptForShelfLogin();
+				return;
+			}
+			if (!createResponse.ok) throw new Error("Failed to create shelf");
+			markMatchingMockShelfButtonsAsAdded(shelfName);
+		} catch (_error) {
+			setMockShelfButtonState(button, "retry");
+		}
 	}
 
 	function setShelf(dropdown, selectedStatus) {
@@ -979,6 +1197,51 @@ try {
 				setShelf(dropdown, status);
 				closeShelfMenus(shelfDropdowns);
 			}
+			return;
+		}
+		const createShelfButton = target.closest('[data-action="create-mock-shelf"]');
+		if (createShelfButton instanceof HTMLButtonElement) {
+			event.preventDefault();
+			void createMockShelf(createShelfButton);
+			return;
+		}
+		const followButton = target.closest('[data-action="follow-reader"]');
+		if (followButton instanceof HTMLButtonElement) {
+			event.preventDefault();
+			if (!isAuthenticated) {
+				promptForShelfLogin();
+				return;
+			}
+			const username = String(followButton.dataset.username || "").trim();
+			if (!username) return;
+			const card = followButton.closest("[data-reader-card]");
+			const feedback = card?.querySelector("[data-reader-feedback]");
+			followButton.disabled = true;
+			if (feedback instanceof HTMLElement) {
+				feedback.textContent = "Following...";
+				feedback.hidden = false;
+			}
+			void (async () => {
+				try {
+					const response = await fetch("/api/follow", {
+						method: "POST",
+						credentials: "same-origin",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ username })
+					});
+					const data = await response.json().catch(() => ({}));
+					if (!response.ok) {
+						followButton.disabled = false;
+						if (feedback instanceof HTMLElement) feedback.textContent = String(data?.error || "Failed to follow.");
+						return;
+					}
+					followButton.textContent = "Following";
+					if (feedback instanceof HTMLElement) feedback.textContent = "Added to Following.";
+				} catch {
+					followButton.disabled = false;
+					if (feedback instanceof HTMLElement) feedback.textContent = "Failed to follow.";
+				}
+			})();
 			return;
 		}
 		if (target.closest(".shelf-dropdown")) return;
