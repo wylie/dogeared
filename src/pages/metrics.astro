@@ -2855,11 +2855,14 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 	}
 	@media (max-width: 720px) {
 		.widget-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+		.user-velocity-grid { grid-template-columns: 1fr; }
+		.community-grid { grid-template-columns: 1fr; }
 		.advanced-user-grid { grid-template-columns: 1fr; }
 		.insight-grid { grid-template-columns: 1fr; }
 		:global(.pie-widget-grid) { grid-template-columns: 1fr; }
 		:global(.pie-widget-body) { grid-template-columns: 1fr; justify-items: center; }
 		.controls, .controls.stack { flex-direction: column; align-items: flex-start; }
+		.toggle { width: 100%; flex-wrap: wrap; }
 		:global(.bars-scroll-head),
 		:global(.bars-row) { grid-template-columns: 1fr; }
 		:global(.bars-row-bar) { height: 20px; }
