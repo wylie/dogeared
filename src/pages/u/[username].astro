@@ -992,10 +992,12 @@ const shelfSectionOrderJson = JSON.stringify(
 											)}
 										</p>
 										<div slot="meta">
-											{isOwnerViewer ? (
-												<RatingControl bookId={item.bookId} rating={item.rating} editable={true} />
-											) : (
-												item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>
+											{String(item.eventType || "").trim().toLowerCase() === "finished" && (
+												isOwnerViewer ? (
+													<RatingControl bookId={item.bookId} rating={item.rating} editable={true} />
+												) : (
+													item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>
+												)
 											)}
 										</div>
 										<div slot="actions">
@@ -1094,7 +1096,7 @@ const shelfSectionOrderJson = JSON.stringify(
 															type="text"
 															inputmode="text"
 															placeholder="154 or 31%"
-															value="0"
+															value=""
 														/>
 														<button
 															type="button"
@@ -2799,7 +2801,7 @@ const shelfSectionOrderJson = JSON.stringify(
 				if (quickFinish instanceof HTMLButtonElement) {
 					quickFinish.dataset.currentPage = String(currentPage);
 				}
-				input.value = "0";
+				input.value = "";
 				progressSave.textContent = "Saved";
 				setTimeout(() => {
 					progressSave.textContent = originalLabel;

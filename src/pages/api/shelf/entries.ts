@@ -356,6 +356,18 @@ async function ensureShelfSchema() {
 			primary key (book_id, tag_slug)
 		)
 	`;
+	await sql`
+		create table if not exists user_reading_progress_event (
+			id bigserial primary key,
+			user_id uuid not null references app_user(id) on delete cascade,
+			book_id bigint not null references book(id) on delete cascade,
+			from_page int not null default 0,
+			to_page int not null default 0,
+			page_delta int not null default 0,
+			recorded_at timestamptz not null default now()
+		)
+	`;
+	await sql`create index if not exists idx_progress_event_user_recorded_at on user_reading_progress_event(user_id, recorded_at desc)`;
 }
 
 export const GET: APIRoute = async ({ request, url }) => {
@@ -529,8 +541,8 @@ export const POST: APIRoute = async ({ request }) => {
 			sources
 		});
 
-		const previousRows = await sql<Array<{ status: ShelfStatus; rating: number | null }>>`
-			select status, rating
+		const previousRows = await sql<Array<{ status: ShelfStatus; rating: number | null; current_page: number }>>`
+			select status, rating, current_page
 			from user_book
 			where user_id = ${userId}::uuid
 				and book_id = ${resolvedBookId || 0}
@@ -538,6 +550,7 @@ export const POST: APIRoute = async ({ request }) => {
 		`;
 		const previousStatus = String(previousRows[0]?.status || "").trim() as ShelfStatus | "";
 		const previousRating = normalizeRating(previousRows[0]?.rating);
+		const previousCurrentPage = normalizePositiveInt(previousRows[0]?.current_page);
 
 		let bookId = resolvedBookId;
 		if (bookId > 0) {
@@ -722,6 +735,27 @@ export const POST: APIRoute = async ({ request }) => {
 					${bookId},
 					'rating',
 					${rating}
+				)
+			`;
+		}
+
+		const nextCurrentPage = normalizePositiveInt(currentPage);
+		const deltaPages = Math.max(0, nextCurrentPage - previousCurrentPage);
+		if (deltaPages > 0 && (status === "reading" || status === "finished")) {
+			await sql`
+				insert into user_reading_progress_event (
+					user_id,
+					book_id,
+					from_page,
+					to_page,
+					page_delta
+				)
+				values (
+					${userId}::uuid,
+					${bookId},
+					${previousCurrentPage},
+					${nextCurrentPage},
+					${deltaPages}
 				)
 			`;
 		}

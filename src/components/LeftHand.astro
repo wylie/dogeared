@@ -1,7 +1,7 @@
 ---
 import Widget from "./Widget.astro"
 type SectionLink = { id: string; label: string };
-const { current = "/", sectionLinks = [] } = Astro.props as { current?: string; sectionLinks?: SectionLink[] };
+const { current = "/", sectionLinks = [], isAuthenticated = false } = Astro.props as { current?: string; sectionLinks?: SectionLink[]; isAuthenticated?: boolean };
 const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
 const isActive = (href: string) => normalize(current) === normalize(href);
 const currentNormalized = normalize(current);
@@ -11,7 +11,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
 ---
 
 <Widget style="height: 100%; padding: 0; overflow: visible;" background={true}>
-  <div id="left-hand-nav" data-current={current}>
+  <div id="left-hand-nav" data-current={current} data-ssr-authenticated={String(isAuthenticated)}>
     <div class="mobile-top-row">
       <h2>
         <a href="/" class="special-font">
@@ -35,8 +35,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
           </ul>
         )}
       </li>
-      <li id="left-hand-login-item"><button type="button" class="nav-text-button hover">Log In</button></li>
-      <li id="left-hand-following-item" hidden>
+      <li id="left-hand-login-item" hidden={isAuthenticated}><button type="button" class="nav-text-button hover">Log In</button></li>
+      <li id="left-hand-following-item" hidden={!isAuthenticated}>
         <a href={isActive('/following') ? undefined : '/following'} class={isActive('/following') ? 'active' : 'hover'} aria-current={isActive('/following') ? 'page' : undefined}>Following</a>
         {isActive('/following') && sectionLinks.length > 0 && (
           <ul class="section-links-nested">
@@ -46,7 +46,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
           </ul>
         )}
       </li>
-      <li id="left-hand-profile-item" hidden>
+      <li id="left-hand-profile-item" hidden={!isAuthenticated}>
         <a href="/settings#account-settings" class={isProfilePage ? 'active' : 'hover'} aria-current={isProfilePage ? 'page' : undefined}>Profile</a>
         {isProfilePage && sectionLinks.length > 0 && (
           <ul class="section-links-nested">
@@ -56,7 +56,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
           </ul>
         )}
       </li>
-      <li id="left-hand-settings-item" hidden>
+      <li id="left-hand-settings-item" hidden={!isAuthenticated}>
         <a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a>
         {isActive('/settings') && sectionLinks.length > 0 && (
           <ul class="section-links-nested">
@@ -66,8 +66,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
           </ul>
         )}
       </li>
-      <li id="left-hand-logout-item" hidden><button type="button" class="nav-text-button hover">Log Out</button></li>
-      <li id="left-hand-auth-divider" class="nav-group-divider" hidden aria-hidden="true"></li>
+      <li id="left-hand-logout-item" hidden={!isAuthenticated}><button type="button" class="nav-text-button hover">Log Out</button></li>
+      <li id="left-hand-auth-divider" class="nav-group-divider" hidden={!isAuthenticated} aria-hidden="true"></li>
       <li>
         <a href={isActive('/mission') ? undefined : '/mission'} class={isActive('/mission') ? 'active' : 'hover'} aria-current={isActive('/mission') ? 'page' : undefined}>Mission</a>
         {isActive('/mission') && sectionLinks.length > 0 && (
@@ -528,6 +528,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   import { resolveClientAuthState, subscribeAuthStateChange, setAuthPreviewMode } from "../lib/clientAuth.ts";
 
   const leftHandNav = document.getElementById("left-hand-nav");
+  const ssrAuthenticated = leftHandNav?.dataset.ssrAuthenticated === "true";
   const leftHandMenuToggle = document.getElementById("left-hand-menu-toggle");
   const leftHandPrimaryLinks = document.getElementById("left-hand-primary-links");
   const leftHandLoginItem = document.getElementById("left-hand-login-item");
@@ -583,7 +584,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   }
 
   async function syncLeftHandAuthState() {
-    const state = await resolveClientAuthState();
+    const state = await resolveClientAuthState({ ssrAuthenticated });
     applyLeftHandAuthState(state.authenticated);
     if (!state.authenticated || !(leftHandProfileLink instanceof HTMLAnchorElement)) return;
     try {

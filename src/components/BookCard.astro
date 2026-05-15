@@ -29,9 +29,7 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 				? <a href={titleHref} aria-label={`View ${title}`}><img class="cover" src={thumbnail} alt={`${title} cover`} loading="lazy" /></a>
 				: <img class="cover" src={thumbnail} alt={`${title} cover`} loading="lazy" />
 		) : (
-			titleHref
-				? <a href={titleHref} aria-label={`View ${title}`}><div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div></a>
-				: <div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>
+			<div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>
 		)}
 	</div>
 	<div class="card-body">

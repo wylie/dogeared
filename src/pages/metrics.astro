@@ -25,6 +25,7 @@ const US_STATE_ABBR: Record<string, string> = {
 };
 
 const US_COUNTRY_ALIASES = new Set(["us", "usa", "united states", "united states of america"]);
+const DEFAULT_US_COUNTRY_LABEL = "USA";
 
 function toUsStateAbbreviation(value: string) {
 	const text = normalizeLabel(value).replace(/\./g, "").trim();
@@ -36,7 +37,7 @@ function toUsStateAbbreviation(value: string) {
 
 function normalizeCountry(value: string) {
 	const text = normalizeLabel(value);
-	if (US_COUNTRY_ALIASES.has(text.toLowerCase())) return "US";
+	if (US_COUNTRY_ALIASES.has(text.toLowerCase())) return DEFAULT_US_COUNTRY_LABEL;
 	return text;
 }
 
@@ -52,15 +53,18 @@ function normalizeLocationRegion(value: string) {
 	if (parts.length === 2) {
 		const [first, second] = parts;
 		const secondNormalized = normalizeCountry(second);
-		if (secondNormalized === "US") {
+		if (secondNormalized === DEFAULT_US_COUNTRY_LABEL) {
 			const region = toUsStateAbbreviation(first) || first;
-			return `${region}, US`;
+			return `${region}, ${DEFAULT_US_COUNTRY_LABEL}`;
 		}
 		const secondAsState = toUsStateAbbreviation(second);
-		if (secondAsState) return secondAsState;
-		return secondNormalized;
+		if (secondAsState) return `${secondAsState}, ${DEFAULT_US_COUNTRY_LABEL}`;
+		return `${first}, ${secondNormalized}`;
 	}
-	return toUsStateAbbreviation(parts[0]) || parts[0] || "Unknown";
+	const single = parts[0] || "";
+	const singleAsState = toUsStateAbbreviation(single);
+	if (singleAsState) return `${singleAsState}, ${DEFAULT_US_COUNTRY_LABEL}`;
+	return single || "Unknown";
 }
 
 function slugify(value: string) {
@@ -114,19 +118,33 @@ type MetricsPayload = {
 		pagesRead30d: number;
 		pagesRead90d: number;
 		pagesRead365d: number;
+		booksAdded7d: number;
 		booksAdded30d: number;
+		booksAdded90d: number;
+		booksAdded365d: number;
 		readingStreakDays: number;
 		avgPagesPerDay7d: number;
 		avgPagesPerDay30d: number;
 		avgPagesPerDay90d: number;
+		avgPagesPerDay365d: number;
 		medianFinishDays: number;
 		topGenreThisMonth: string;
 		topGenreThisMonthCount: number;
 		topGenreLastMonth: string;
 		topGenreLastMonthCount: number;
+		newTopics7d: number;
 		newTopics30d: number;
+		newTopics90d: number;
+		newTopics365d: number;
+		avgRating7d: number;
+		avgRating30d: number;
+		avgRating90d: number;
+		avgRating365d: number;
 		avgRating: number;
+		ratingsPast7d: number;
 		ratingsPast30d: number;
+		ratingsPast90d: number;
+		ratingsPast365d: number;
 		percentBooksRated: number;
 	};
 	communityMetrics: {
@@ -136,12 +154,40 @@ type MetricsPayload = {
 		topReadingLocations: MetricRow[];
 		activeReaders7d: number;
 		activeReaders30d: number;
+		activeReaders90d: number;
+		activeReaders365d: number;
+		newReaders7d: number;
+		newReaders30d: number;
+		newReaders90d: number;
+		newReaders365d: number;
+		booksAdded7d: number;
+		booksAdded30d: number;
+		booksAdded90d: number;
+		booksAdded365d: number;
+		booksStarted7d: number;
+		booksFinished7d: number;
+		completionRate7d: number;
 		booksStarted30d: number;
 		booksFinished30d: number;
 		completionRate30d: number;
+		booksStarted90d: number;
+		booksFinished90d: number;
+		completionRate90d: number;
+		booksStarted365d: number;
+		booksFinished365d: number;
+		completionRate365d: number;
+		pagesRead7d: number;
+		pagesReadPrev7d: number;
+		pagesTrend7dPct: number;
 		pagesRead30d: number;
 		pagesReadPrev30d: number;
 		pagesTrend30dPct: number;
+		pagesRead90d: number;
+		pagesReadPrev90d: number;
+		pagesTrend90dPct: number;
+		pagesRead365d: number;
+		pagesReadPrev365d: number;
+		pagesTrend365dPct: number;
 		topGenreThisMonth: string;
 		topGenreThisMonthCount: number;
 		topGenreLastMonth: string;
@@ -175,19 +221,33 @@ const samplePayload: MetricsPayload = {
 		pagesRead30d: 0,
 		pagesRead90d: 0,
 		pagesRead365d: 0,
+		booksAdded7d: 0,
 		booksAdded30d: 0,
+		booksAdded90d: 0,
+		booksAdded365d: 0,
 		readingStreakDays: 0,
 		avgPagesPerDay7d: 0,
 		avgPagesPerDay30d: 0,
 		avgPagesPerDay90d: 0,
+		avgPagesPerDay365d: 0,
 		medianFinishDays: 0,
 		topGenreThisMonth: "None",
 		topGenreThisMonthCount: 0,
 		topGenreLastMonth: "None",
 		topGenreLastMonthCount: 0,
+		newTopics7d: 0,
 		newTopics30d: 0,
+		newTopics90d: 0,
+		newTopics365d: 0,
+		avgRating7d: 0,
+		avgRating30d: 0,
+		avgRating90d: 0,
+		avgRating365d: 0,
 		avgRating: 0,
+		ratingsPast7d: 0,
 		ratingsPast30d: 0,
+		ratingsPast90d: 0,
+		ratingsPast365d: 0,
 		percentBooksRated: 0
 	},
 	communityMetrics: {
@@ -201,12 +261,40 @@ const samplePayload: MetricsPayload = {
 		],
 		activeReaders7d: 220,
 		activeReaders30d: 480,
+		activeReaders90d: 620,
+		activeReaders365d: 780,
+		newReaders7d: 22,
+		newReaders30d: 86,
+		newReaders90d: 210,
+		newReaders365d: 640,
+		booksAdded7d: 180,
+		booksAdded30d: 760,
+		booksAdded90d: 2230,
+		booksAdded365d: 9040,
+		booksStarted7d: 140,
+		booksFinished7d: 82,
+		completionRate7d: 58.6,
 		booksStarted30d: 640,
 		booksFinished30d: 390,
 		completionRate30d: 60.9,
+		booksStarted90d: 1710,
+		booksFinished90d: 1020,
+		completionRate90d: 59.6,
+		booksStarted365d: 6800,
+		booksFinished365d: 3980,
+		completionRate365d: 58.5,
+		pagesRead7d: 92000,
+		pagesReadPrev7d: 81000,
+		pagesTrend7dPct: 13.6,
 		pagesRead30d: 402100,
 		pagesReadPrev30d: 355900,
 		pagesTrend30dPct: 13.0,
+		pagesRead90d: 1132800,
+		pagesReadPrev90d: 1007600,
+		pagesTrend90dPct: 12.4,
+		pagesRead365d: 4421000,
+		pagesReadPrev365d: 3999000,
+		pagesTrend365dPct: 10.6,
 		topGenreThisMonth: "Fantasy",
 		topGenreThisMonthCount: 220,
 		topGenreLastMonth: "Science Fiction",
@@ -293,6 +381,18 @@ try {
 	const session = await resolveUserBySession(Astro.request);
 	const viewerUserId = String(session?.userId || "");
 	const sql = getNeonSql();
+	await sql`
+		create table if not exists user_reading_progress_event (
+			id bigserial primary key,
+			user_id uuid not null references app_user(id) on delete cascade,
+			book_id bigint not null references book(id) on delete cascade,
+			from_page int not null default 0,
+			to_page int not null default 0,
+			page_delta int not null default 0,
+			recorded_at timestamptz not null default now()
+		)
+	`;
+	await sql`create index if not exists idx_progress_event_user_recorded_at on user_reading_progress_event(user_id, recorded_at desc)`;
 	const [summaryRows, statusRows, topLocationRows, authorRows, genreRows, locationRows, factsRows, myRows, communityRows, topReadingRows, streakRows, finishSpeedRows, genreShiftRows, topicExploreRows, ratingRows, communityAdvancedRows] = await Promise.all([
 		sql<Array<{ total_users: number; total_shelved_books: number; distinct_books: number; tracked_genres: number; tracked_topics: number; active_locations: number }>>`
 			with valid_users as (
@@ -467,42 +567,64 @@ try {
 			order by ub.updated_at desc, ub.book_id desc
 			limit ${METRICS_FACT_LIMIT}
 		`,
-		sql<Array<{ pages_read_7d: number; pages_read_30d: number; pages_read_90d: number; pages_read_365d: number; books_added_30d: number }>>`
+		sql<Array<{ pages_read_7d: number; pages_read_30d: number; pages_read_90d: number; pages_read_365d: number; books_added_7d: number; books_added_30d: number; books_added_90d: number; books_added_365d: number }>>`
 			select
-				coalesce(sum(
-					case
-						when ub.updated_at >= now() - interval '7 days'
-						then greatest(0, least(coalesce(ub.current_page, 0), coalesce(nullif(ub.total_pages, 0), coalesce(ub.current_page, 0))))
-						else 0
-					end
-				), 0)::int as pages_read_7d,
-				coalesce(sum(
-					case
-						when ub.updated_at >= now() - interval '30 days'
-						then greatest(0, least(coalesce(ub.current_page, 0), coalesce(nullif(ub.total_pages, 0), coalesce(ub.current_page, 0))))
-						else 0
-					end
-				), 0)::int as pages_read_30d,
-				coalesce(sum(
-					case
-						when ub.updated_at >= now() - interval '90 days'
-						then greatest(0, least(coalesce(ub.current_page, 0), coalesce(nullif(ub.total_pages, 0), coalesce(ub.current_page, 0))))
-						else 0
-					end
-				), 0)::int as pages_read_90d,
-				coalesce(sum(
-					case
-						when ub.updated_at >= now() - interval '365 days'
-						then greatest(0, least(coalesce(ub.current_page, 0), coalesce(nullif(ub.total_pages, 0), coalesce(ub.current_page, 0))))
-						else 0
-					end
-				), 0)::int as pages_read_365d,
-				count(*) filter (
-					where ub.first_added_at >= now() - interval '30 days'
-				)::int as books_added_30d
-			from user_book ub
-			where ${viewerUserId}::text <> ''
-				and ub.user_id = ${viewerUserId || null}::uuid
+				(
+					select coalesce(sum(greatest(0, coalesce(pe.page_delta, 0))), 0)::int
+					from user_reading_progress_event pe
+					where ${viewerUserId}::text <> ''
+						and pe.user_id = ${viewerUserId || null}::uuid
+						and pe.recorded_at >= now() - interval '7 days'
+				) as pages_read_7d,
+				(
+					select coalesce(sum(greatest(0, coalesce(pe.page_delta, 0))), 0)::int
+					from user_reading_progress_event pe
+					where ${viewerUserId}::text <> ''
+						and pe.user_id = ${viewerUserId || null}::uuid
+						and pe.recorded_at >= now() - interval '30 days'
+				) as pages_read_30d,
+				(
+					select coalesce(sum(greatest(0, coalesce(pe.page_delta, 0))), 0)::int
+					from user_reading_progress_event pe
+					where ${viewerUserId}::text <> ''
+						and pe.user_id = ${viewerUserId || null}::uuid
+						and pe.recorded_at >= now() - interval '90 days'
+				) as pages_read_90d,
+				(
+					select coalesce(sum(greatest(0, coalesce(pe.page_delta, 0))), 0)::int
+					from user_reading_progress_event pe
+					where ${viewerUserId}::text <> ''
+						and pe.user_id = ${viewerUserId || null}::uuid
+						and pe.recorded_at >= now() - interval '365 days'
+				) as pages_read_365d,
+				(
+					select count(*)::int
+					from user_book ub
+					where ${viewerUserId}::text <> ''
+						and ub.user_id = ${viewerUserId || null}::uuid
+						and ub.first_added_at >= now() - interval '7 days'
+				) as books_added_7d,
+				(
+					select count(*)::int
+					from user_book ub
+					where ${viewerUserId}::text <> ''
+						and ub.user_id = ${viewerUserId || null}::uuid
+						and ub.first_added_at >= now() - interval '30 days'
+				) as books_added_30d,
+				(
+					select count(*)::int
+					from user_book ub
+					where ${viewerUserId}::text <> ''
+						and ub.user_id = ${viewerUserId || null}::uuid
+						and ub.first_added_at >= now() - interval '90 days'
+				) as books_added_90d,
+				(
+					select count(*)::int
+					from user_book ub
+					where ${viewerUserId}::text <> ''
+						and ub.user_id = ${viewerUserId || null}::uuid
+						and ub.first_added_at >= now() - interval '365 days'
+				) as books_added_365d
 		`,
 		sql<Array<{ other_users: number; other_users_with_shelves: number; community_shelved_books: number; community_distinct_books: number }>>`
 			with valid_users as (
@@ -510,7 +632,6 @@ try {
 				from app_user
 				where username is not null
 					and length(trim(username)) > 0
-					and (${viewerUserId}::text = '' or id <> ${viewerUserId || null}::uuid)
 			)
 			select
 				(select count(*)::int from valid_users) as other_users,
@@ -524,7 +645,6 @@ try {
 				from app_user
 				where username is not null
 					and length(trim(username)) > 0
-					and (${viewerUserId}::text = '' or id <> ${viewerUserId || null}::uuid)
 			)
 			select
 				coalesce(nullif(trim(au.profile_data->>'location'), ''), 'Unknown') as location,
@@ -618,56 +738,103 @@ try {
 				(select genre_name from previous_top) as top_genre_last_month,
 				coalesce((select entries from previous_top), 0)::int as top_genre_last_month_count
 		`,
-		sql<Array<{ new_topics_30d: number }>>`
-			with recent_topics as (
-				select distinct bt.tag_slug
+		sql<Array<{ new_topics_7d: number; new_topics_30d: number; new_topics_90d: number; new_topics_365d: number }>>`
+			with topic_events as (
+				select distinct bt.tag_slug, ub.updated_at
 				from user_book ub
 				join book_tag bt on bt.book_id = ub.book_id
 				where ${viewerUserId}::text <> ''
 					and ub.user_id = ${viewerUserId || null}::uuid
-					and ub.updated_at >= now() - interval '30 days'
-			), prior_topics as (
-				select distinct bt.tag_slug
-				from user_book ub
-				join book_tag bt on bt.book_id = ub.book_id
-				where ${viewerUserId}::text <> ''
-					and ub.user_id = ${viewerUserId || null}::uuid
-					and ub.updated_at < now() - interval '30 days'
 			)
-			select count(*)::int as new_topics_30d
-			from recent_topics rt
-			where not exists (
-				select 1
-				from prior_topics pt
-				where pt.tag_slug = rt.tag_slug
-			)
+			select
+				(
+					select count(*)::int
+					from (select distinct tag_slug from topic_events where updated_at >= now() - interval '7 days') rt
+					where not exists (select 1 from topic_events pt where pt.tag_slug = rt.tag_slug and pt.updated_at < now() - interval '7 days')
+				) as new_topics_7d,
+				(
+					select count(*)::int
+					from (select distinct tag_slug from topic_events where updated_at >= now() - interval '30 days') rt
+					where not exists (select 1 from topic_events pt where pt.tag_slug = rt.tag_slug and pt.updated_at < now() - interval '30 days')
+				) as new_topics_30d,
+				(
+					select count(*)::int
+					from (select distinct tag_slug from topic_events where updated_at >= now() - interval '90 days') rt
+					where not exists (select 1 from topic_events pt where pt.tag_slug = rt.tag_slug and pt.updated_at < now() - interval '90 days')
+				) as new_topics_90d,
+				(
+					select count(*)::int
+					from (select distinct tag_slug from topic_events where updated_at >= now() - interval '365 days') rt
+					where not exists (select 1 from topic_events pt where pt.tag_slug = rt.tag_slug and pt.updated_at < now() - interval '365 days')
+				) as new_topics_365d
 		`,
-		sql<Array<{ avg_rating: number; ratings_past_30d: number; percent_books_rated: number }>>`
+		sql<Array<{ avg_rating: number; avg_rating_7d: number; avg_rating_30d: number; avg_rating_90d: number; avg_rating_365d: number; ratings_past_7d: number; ratings_past_30d: number; ratings_past_90d: number; ratings_past_365d: number; percent_books_rated: number }>>`
 			with base as (
 				select
 					count(*)::int as total_books,
 					count(*) filter (where ub.rating is not null)::int as rated_books,
+					count(*) filter (where ub.rating is not null and ub.updated_at >= now() - interval '7 days')::int as ratings_past_7d,
 					count(*) filter (where ub.rating is not null and ub.updated_at >= now() - interval '30 days')::int as ratings_past_30d,
-					coalesce(round(avg(ub.rating)::numeric, 2), 0)::float8 as avg_rating
+					count(*) filter (where ub.rating is not null and ub.updated_at >= now() - interval '90 days')::int as ratings_past_90d,
+					count(*) filter (where ub.rating is not null and ub.updated_at >= now() - interval '365 days')::int as ratings_past_365d,
+					coalesce(round((avg(ub.rating) filter (where ub.rating is not null and ub.updated_at >= now() - interval '7 days'))::numeric, 2), 0)::float8 as avg_rating_7d,
+					coalesce(round((avg(ub.rating) filter (where ub.rating is not null and ub.updated_at >= now() - interval '30 days'))::numeric, 2), 0)::float8 as avg_rating_30d,
+					coalesce(round((avg(ub.rating) filter (where ub.rating is not null and ub.updated_at >= now() - interval '90 days'))::numeric, 2), 0)::float8 as avg_rating_90d,
+					coalesce(round((avg(ub.rating) filter (where ub.rating is not null and ub.updated_at >= now() - interval '365 days'))::numeric, 2), 0)::float8 as avg_rating_365d
 				from user_book ub
 				where ${viewerUserId}::text <> ''
 					and ub.user_id = ${viewerUserId || null}::uuid
 			)
 			select
-				avg_rating,
+				avg_rating_30d as avg_rating,
+				avg_rating_7d,
+				avg_rating_30d,
+				avg_rating_90d,
+				avg_rating_365d,
+				ratings_past_7d,
 				ratings_past_30d,
+				ratings_past_90d,
+				ratings_past_365d,
 				case when total_books > 0 then round((rated_books::numeric / total_books::numeric) * 100, 1)::float8 else 0::float8 end as percent_books_rated
 			from base
 		`,
 		sql<Array<{
 			active_readers_7d: number;
 			active_readers_30d: number;
+			active_readers_90d: number;
+			active_readers_365d: number;
+			new_readers_7d: number;
+			new_readers_30d: number;
+			new_readers_90d: number;
+			new_readers_365d: number;
+			books_added_7d: number;
+			books_added_30d: number;
+			books_added_90d: number;
+			books_added_365d: number;
+			books_started_7d: number;
+			books_finished_7d: number;
+			completion_rate_7d: number;
 			books_started_30d: number;
 			books_finished_30d: number;
 			completion_rate_30d: number;
+			books_started_90d: number;
+			books_finished_90d: number;
+			completion_rate_90d: number;
+			books_started_365d: number;
+			books_finished_365d: number;
+			completion_rate_365d: number;
+			pages_read_7d: number;
+			pages_read_prev_7d: number;
+			pages_trend_7d_pct: number;
 			pages_read_30d: number;
 			pages_read_prev_30d: number;
 			pages_trend_30d_pct: number;
+			pages_read_90d: number;
+			pages_read_prev_90d: number;
+			pages_trend_90d_pct: number;
+			pages_read_365d: number;
+			pages_read_prev_365d: number;
+			pages_trend_365d_pct: number;
 			top_genre_this_month: string | null;
 			top_genre_this_month_count: number;
 			top_genre_last_month: string | null;
@@ -682,11 +849,19 @@ try {
 				from app_user
 				where username is not null
 					and length(trim(username)) > 0
-					and (${viewerUserId}::text = '' or id <> ${viewerUserId || null}::uuid)
+			), valid_users_all as (
+				select id
+				from app_user
+				where username is not null
+					and length(trim(username)) > 0
 			), base as (
 				select ub.*
 				from user_book ub
 				join valid_users vu on vu.id = ub.user_id
+			), base_all as (
+				select ub.*
+				from user_book ub
+				join valid_users_all vua on vua.id = ub.user_id
 			), month_bounds as (
 				select date_trunc('month', now()) as cur_start, date_trunc('month', now()) - interval '1 month' as prev_start
 			), genre_counts as (
@@ -719,13 +894,40 @@ try {
 				select label, entries from topic_counts where bucket = 'previous' order by entries desc, label asc limit 1
 			), page_rollups as (
 				select
-					coalesce(sum(case when b.updated_at >= now() - interval '30 days' then greatest(0, least(coalesce(b.current_page, 0), coalesce(nullif(b.total_pages, 0), coalesce(b.current_page, 0)))) else 0 end), 0)::int as p30,
-					coalesce(sum(case when b.updated_at >= now() - interval '60 days' and b.updated_at < now() - interval '30 days' then greatest(0, least(coalesce(b.current_page, 0), coalesce(nullif(b.total_pages, 0), coalesce(b.current_page, 0)))) else 0 end), 0)::int as pprev30
-				from base b
+					coalesce(sum(case when pe.recorded_at >= now() - interval '7 days' then greatest(0, coalesce(pe.page_delta, 0)) else 0 end), 0)::int as p7,
+					coalesce(sum(case when pe.recorded_at >= now() - interval '14 days' and pe.recorded_at < now() - interval '7 days' then greatest(0, coalesce(pe.page_delta, 0)) else 0 end), 0)::int as pprev7,
+					coalesce(sum(case when pe.recorded_at >= now() - interval '30 days' then greatest(0, coalesce(pe.page_delta, 0)) else 0 end), 0)::int as p30,
+					coalesce(sum(case when pe.recorded_at >= now() - interval '60 days' and pe.recorded_at < now() - interval '30 days' then greatest(0, coalesce(pe.page_delta, 0)) else 0 end), 0)::int as pprev30,
+					coalesce(sum(case when pe.recorded_at >= now() - interval '90 days' then greatest(0, coalesce(pe.page_delta, 0)) else 0 end), 0)::int as p90,
+					coalesce(sum(case when pe.recorded_at >= now() - interval '180 days' and pe.recorded_at < now() - interval '90 days' then greatest(0, coalesce(pe.page_delta, 0)) else 0 end), 0)::int as pprev90,
+					coalesce(sum(case when pe.recorded_at >= now() - interval '365 days' then greatest(0, coalesce(pe.page_delta, 0)) else 0 end), 0)::int as p365,
+					coalesce(sum(case when pe.recorded_at >= now() - interval '730 days' and pe.recorded_at < now() - interval '365 days' then greatest(0, coalesce(pe.page_delta, 0)) else 0 end), 0)::int as pprev365
+				from user_reading_progress_event pe
+				join valid_users vu on vu.id = pe.user_id
 			)
 			select
-				(select count(distinct b.user_id)::int from base b where b.updated_at >= now() - interval '7 days') as active_readers_7d,
-				(select count(distinct b.user_id)::int from base b where b.updated_at >= now() - interval '30 days') as active_readers_30d,
+				(select count(distinct b.user_id)::int from base_all b where b.updated_at >= now() - interval '7 days') as active_readers_7d,
+				(select count(distinct b.user_id)::int from base_all b where b.updated_at >= now() - interval '30 days') as active_readers_30d,
+				(select count(distinct b.user_id)::int from base_all b where b.updated_at >= now() - interval '90 days') as active_readers_90d,
+				(select count(distinct b.user_id)::int from base_all b where b.updated_at >= now() - interval '365 days') as active_readers_365d,
+				(select count(*)::int from app_user au join valid_users vu on vu.id = au.id where au.created_at >= now() - interval '7 days') as new_readers_7d,
+				(select count(*)::int from app_user au join valid_users vu on vu.id = au.id where au.created_at >= now() - interval '30 days') as new_readers_30d,
+				(select count(*)::int from app_user au join valid_users vu on vu.id = au.id where au.created_at >= now() - interval '90 days') as new_readers_90d,
+				(select count(*)::int from app_user au join valid_users vu on vu.id = au.id where au.created_at >= now() - interval '365 days') as new_readers_365d,
+				(select count(*)::int from base b where b.first_added_at >= now() - interval '7 days') as books_added_7d,
+				(select count(*)::int from base b where b.first_added_at >= now() - interval '30 days') as books_added_30d,
+				(select count(*)::int from base b where b.first_added_at >= now() - interval '90 days') as books_added_90d,
+				(select count(*)::int from base b where b.first_added_at >= now() - interval '365 days') as books_added_365d,
+				(select count(*)::int from base b where b.first_added_at >= now() - interval '7 days') as books_started_7d,
+				(select count(*)::int from base b where b.finished_date >= current_date - interval '7 days') as books_finished_7d,
+				(
+					select case when started > 0 then round((finished::numeric / started::numeric) * 100, 1)::float8 else 0::float8 end
+					from (
+						select
+							(select count(*)::int from base b where b.first_added_at >= now() - interval '7 days') as started,
+							(select count(*)::int from base b where b.finished_date >= current_date - interval '7 days') as finished
+					) x
+				) as completion_rate_7d,
 				(select count(*)::int from base b where b.first_added_at >= now() - interval '30 days') as books_started_30d,
 				(select count(*)::int from base b where b.finished_date >= current_date - interval '30 days') as books_finished_30d,
 				(
@@ -736,12 +938,50 @@ try {
 							(select count(*)::int from base b where b.finished_date >= current_date - interval '30 days') as finished
 					) x
 				) as completion_rate_30d,
+				(select count(*)::int from base b where b.first_added_at >= now() - interval '90 days') as books_started_90d,
+				(select count(*)::int from base b where b.finished_date >= current_date - interval '90 days') as books_finished_90d,
+				(
+					select case when started > 0 then round((finished::numeric / started::numeric) * 100, 1)::float8 else 0::float8 end
+					from (
+						select
+							(select count(*)::int from base b where b.first_added_at >= now() - interval '90 days') as started,
+							(select count(*)::int from base b where b.finished_date >= current_date - interval '90 days') as finished
+					) x
+				) as completion_rate_90d,
+				(select count(*)::int from base b where b.first_added_at >= now() - interval '365 days') as books_started_365d,
+				(select count(*)::int from base b where b.finished_date >= current_date - interval '365 days') as books_finished_365d,
+				(
+					select case when started > 0 then round((finished::numeric / started::numeric) * 100, 1)::float8 else 0::float8 end
+					from (
+						select
+							(select count(*)::int from base b where b.first_added_at >= now() - interval '365 days') as started,
+							(select count(*)::int from base b where b.finished_date >= current_date - interval '365 days') as finished
+					) x
+				) as completion_rate_365d,
+				(select p7 from page_rollups) as pages_read_7d,
+				(select pprev7 from page_rollups) as pages_read_prev_7d,
+				(
+					select case when pprev7 > 0 then round((((p7 - pprev7)::numeric / pprev7::numeric) * 100), 1)::float8 else 0::float8 end
+					from page_rollups
+				) as pages_trend_7d_pct,
 				(select p30 from page_rollups) as pages_read_30d,
 				(select pprev30 from page_rollups) as pages_read_prev_30d,
 				(
 					select case when pprev30 > 0 then round((((p30 - pprev30)::numeric / pprev30::numeric) * 100), 1)::float8 else 0::float8 end
 					from page_rollups
 				) as pages_trend_30d_pct,
+				(select p90 from page_rollups) as pages_read_90d,
+				(select pprev90 from page_rollups) as pages_read_prev_90d,
+				(
+					select case when pprev90 > 0 then round((((p90 - pprev90)::numeric / pprev90::numeric) * 100), 1)::float8 else 0::float8 end
+					from page_rollups
+				) as pages_trend_90d_pct,
+				(select p365 from page_rollups) as pages_read_365d,
+				(select pprev365 from page_rollups) as pages_read_prev_365d,
+				(
+					select case when pprev365 > 0 then round((((p365 - pprev365)::numeric / pprev365::numeric) * 100), 1)::float8 else 0::float8 end
+					from page_rollups
+				) as pages_trend_365d_pct,
 				(select label from genre_top_cur) as top_genre_this_month,
 				coalesce((select entries from genre_top_cur), 0)::int as top_genre_this_month_count,
 				(select label from genre_top_prev) as top_genre_last_month,
@@ -826,19 +1066,33 @@ try {
 			pagesRead30d: Number(myRows[0]?.pages_read_30d || 0),
 			pagesRead90d: Number(myRows[0]?.pages_read_90d || 0),
 			pagesRead365d: Number(myRows[0]?.pages_read_365d || 0),
+			booksAdded7d: Number(myRows[0]?.books_added_7d || 0),
 			booksAdded30d: Number(myRows[0]?.books_added_30d || 0),
+			booksAdded90d: Number(myRows[0]?.books_added_90d || 0),
+			booksAdded365d: Number(myRows[0]?.books_added_365d || 0),
 			readingStreakDays: Number(streakRows[0]?.streak_days || 0),
 			avgPagesPerDay7d: Math.round((Number(myRows[0]?.pages_read_7d || 0) / 7) * 10) / 10,
 			avgPagesPerDay30d: Math.round((Number(myRows[0]?.pages_read_30d || 0) / 30) * 10) / 10,
 			avgPagesPerDay90d: Math.round((Number(myRows[0]?.pages_read_90d || 0) / 90) * 10) / 10,
+			avgPagesPerDay365d: Math.round((Number(myRows[0]?.pages_read_365d || 0) / 365) * 10) / 10,
 			medianFinishDays: Number(finishSpeedRows[0]?.median_finish_days || 0),
 			topGenreThisMonth: String(genreShiftRows[0]?.top_genre_this_month || "None"),
 			topGenreThisMonthCount: Number(genreShiftRows[0]?.top_genre_this_month_count || 0),
 			topGenreLastMonth: String(genreShiftRows[0]?.top_genre_last_month || "None"),
 			topGenreLastMonthCount: Number(genreShiftRows[0]?.top_genre_last_month_count || 0),
+			newTopics7d: Number(topicExploreRows[0]?.new_topics_7d || 0),
 			newTopics30d: Number(topicExploreRows[0]?.new_topics_30d || 0),
-			avgRating: Number(ratingRows[0]?.avg_rating || 0),
+			newTopics90d: Number(topicExploreRows[0]?.new_topics_90d || 0),
+			newTopics365d: Number(topicExploreRows[0]?.new_topics_365d || 0),
+			avgRating7d: Number(ratingRows[0]?.avg_rating_7d || 0),
+			avgRating30d: Number(ratingRows[0]?.avg_rating_30d || 0),
+			avgRating90d: Number(ratingRows[0]?.avg_rating_90d || 0),
+			avgRating365d: Number(ratingRows[0]?.avg_rating_365d || 0),
+			avgRating: Number(ratingRows[0]?.avg_rating_30d || 0),
+			ratingsPast7d: Number(ratingRows[0]?.ratings_past_7d || 0),
 			ratingsPast30d: Number(ratingRows[0]?.ratings_past_30d || 0),
+			ratingsPast90d: Number(ratingRows[0]?.ratings_past_90d || 0),
+			ratingsPast365d: Number(ratingRows[0]?.ratings_past_365d || 0),
 			percentBooksRated: Number(ratingRows[0]?.percent_books_rated || 0)
 		},
 		communityMetrics: {
@@ -848,12 +1102,40 @@ try {
 			communityDistinctBooks: Number(communityRows[0]?.community_distinct_books || 0),
 			activeReaders7d: Number(communityAdvancedRows[0]?.active_readers_7d || 0),
 			activeReaders30d: Number(communityAdvancedRows[0]?.active_readers_30d || 0),
+			activeReaders90d: Number(communityAdvancedRows[0]?.active_readers_90d || communityAdvancedRows[0]?.active_readers_30d || 0),
+			activeReaders365d: Number(communityAdvancedRows[0]?.active_readers_365d || communityAdvancedRows[0]?.active_readers_30d || 0),
+			newReaders7d: Number(communityAdvancedRows[0]?.new_readers_7d || 0),
+			newReaders30d: Number(communityAdvancedRows[0]?.new_readers_30d || 0),
+			newReaders90d: Number(communityAdvancedRows[0]?.new_readers_90d || communityAdvancedRows[0]?.new_readers_30d || 0),
+			newReaders365d: Number(communityAdvancedRows[0]?.new_readers_365d || communityAdvancedRows[0]?.new_readers_30d || 0),
+			booksAdded7d: Number(communityAdvancedRows[0]?.books_added_7d || 0),
+			booksAdded30d: Number(communityAdvancedRows[0]?.books_added_30d || 0),
+			booksAdded90d: Number(communityAdvancedRows[0]?.books_added_90d || communityAdvancedRows[0]?.books_added_30d || 0),
+			booksAdded365d: Number(communityAdvancedRows[0]?.books_added_365d || communityAdvancedRows[0]?.books_added_30d || 0),
+			booksStarted7d: Number(communityAdvancedRows[0]?.books_started_7d || 0),
+			booksFinished7d: Number(communityAdvancedRows[0]?.books_finished_7d || 0),
+			completionRate7d: Number(communityAdvancedRows[0]?.completion_rate_7d || 0),
 			booksStarted30d: Number(communityAdvancedRows[0]?.books_started_30d || 0),
 			booksFinished30d: Number(communityAdvancedRows[0]?.books_finished_30d || 0),
 			completionRate30d: Number(communityAdvancedRows[0]?.completion_rate_30d || 0),
+			booksStarted90d: Number(communityAdvancedRows[0]?.books_started_90d || communityAdvancedRows[0]?.books_started_30d || 0),
+			booksFinished90d: Number(communityAdvancedRows[0]?.books_finished_90d || communityAdvancedRows[0]?.books_finished_30d || 0),
+			completionRate90d: Number(communityAdvancedRows[0]?.completion_rate_90d || communityAdvancedRows[0]?.completion_rate_30d || 0),
+			booksStarted365d: Number(communityAdvancedRows[0]?.books_started_365d || communityAdvancedRows[0]?.books_started_30d || 0),
+			booksFinished365d: Number(communityAdvancedRows[0]?.books_finished_365d || communityAdvancedRows[0]?.books_finished_30d || 0),
+			completionRate365d: Number(communityAdvancedRows[0]?.completion_rate_365d || communityAdvancedRows[0]?.completion_rate_30d || 0),
+			pagesRead7d: Number(communityAdvancedRows[0]?.pages_read_7d || 0),
+			pagesReadPrev7d: Number(communityAdvancedRows[0]?.pages_read_prev_7d || 0),
+			pagesTrend7dPct: Number(communityAdvancedRows[0]?.pages_trend_7d_pct || 0),
 			pagesRead30d: Number(communityAdvancedRows[0]?.pages_read_30d || 0),
 			pagesReadPrev30d: Number(communityAdvancedRows[0]?.pages_read_prev_30d || 0),
 			pagesTrend30dPct: Number(communityAdvancedRows[0]?.pages_trend_30d_pct || 0),
+			pagesRead90d: Number(communityAdvancedRows[0]?.pages_read_90d || communityAdvancedRows[0]?.pages_read_30d || 0),
+			pagesReadPrev90d: Number(communityAdvancedRows[0]?.pages_read_prev_90d || communityAdvancedRows[0]?.pages_read_prev_30d || 0),
+			pagesTrend90dPct: Number(communityAdvancedRows[0]?.pages_trend_90d_pct || communityAdvancedRows[0]?.pages_trend_30d_pct || 0),
+			pagesRead365d: Number(communityAdvancedRows[0]?.pages_read_365d || communityAdvancedRows[0]?.pages_read_30d || 0),
+			pagesReadPrev365d: Number(communityAdvancedRows[0]?.pages_read_prev_365d || communityAdvancedRows[0]?.pages_read_prev_30d || 0),
+			pagesTrend365dPct: Number(communityAdvancedRows[0]?.pages_trend_365d_pct || communityAdvancedRows[0]?.pages_trend_30d_pct || 0),
 			topGenreThisMonth: String(communityAdvancedRows[0]?.top_genre_this_month || "None"),
 			topGenreThisMonthCount: Number(communityAdvancedRows[0]?.top_genre_this_month_count || 0),
 			topGenreLastMonth: String(communityAdvancedRows[0]?.top_genre_last_month || "None"),
@@ -862,11 +1144,17 @@ try {
 			topTopicThisMonthCount: Number(communityAdvancedRows[0]?.top_topic_this_month_count || 0),
 			topTopicLastMonth: String(communityAdvancedRows[0]?.top_topic_last_month || "None"),
 			topTopicLastMonthCount: Number(communityAdvancedRows[0]?.top_topic_last_month_count || 0),
-			topReadingLocations: topReadingRows.map((row) => ({
-				key: slugify(normalizeLocationRegion(row.location)),
-				label: normalizeLocationRegion(row.location),
-				value: Number(row.shelves || 0)
-			}))
+			topReadingLocations: (() => {
+				const locationMap = new Map<string, number>();
+				for (const row of topReadingRows) {
+					const label = normalizeLocationRegion(row.location);
+					locationMap.set(label, (locationMap.get(label) || 0) + Number(row.shelves || 0));
+				}
+				return Array.from(locationMap.entries())
+					.map(([label, value]) => ({ key: slugify(label), label, value }))
+					.sort((a, b) => b.value - a.value || a.label.localeCompare(b.label))
+					.slice(0, 8);
+			})()
 		},
 		summary: {
 			totalUsers: Number(summaryRow.total_users || 0),
@@ -933,27 +1221,58 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 				<h2>Your Metrics</h2>
 				<p>Your personal reading velocity.</p>
 			</div>
-			<div class="widget-grid">
-				<article class="widget"><p>Pages Read (Last 7 Days)</p><strong>{metricsPayload.userMetrics.pagesRead7d.toLocaleString()}</strong></article>
-				<article class="widget"><p>Pages Read (Last 30 Days)</p><strong>{metricsPayload.userMetrics.pagesRead30d.toLocaleString()}</strong></article>
-				<article class="widget"><p>Pages Read (Last 90 Days)</p><strong>{metricsPayload.userMetrics.pagesRead90d.toLocaleString()}</strong></article>
-				<article class="widget"><p>Pages Read (Last 365 Days)</p><strong>{metricsPayload.userMetrics.pagesRead365d.toLocaleString()}</strong></article>
-				<article class="widget"><p>Books Added (Past 30 Days)</p><strong>{metricsPayload.userMetrics.booksAdded30d.toLocaleString()}</strong></article>
+			<div class="widget-grid user-velocity-grid">
+				<article class="widget">
+					<p>Pages Read</p>
+					<div class="toggle pages-read-toggle" role="tablist" aria-label="Pages read window">
+						<button type="button" class="is-active" data-pages-read-window="7d" aria-pressed="true">7d</button>
+						<button type="button" data-pages-read-window="30d" aria-pressed="false">30d</button>
+						<button type="button" data-pages-read-window="90d" aria-pressed="false">90d</button>
+						<button type="button" data-pages-read-window="365d" aria-pressed="false">365d</button>
+					</div>
+					<strong
+						id="pages-read-value"
+						data-pages-read-value
+						data-pages-read-7d={String(Math.round(metricsPayload.userMetrics.pagesRead7d))}
+						data-pages-read-30d={String(Math.round(metricsPayload.userMetrics.pagesRead30d))}
+						data-pages-read-90d={String(Math.round(metricsPayload.userMetrics.pagesRead90d))}
+						data-pages-read-365d={String(Math.round(metricsPayload.userMetrics.pagesRead365d))}
+					>
+						{Math.round(metricsPayload.userMetrics.pagesRead7d)}
+					</strong>
+				</article>
+				<article class="widget">
+					<p>Books Added</p>
+					<div class="toggle books-added-toggle" role="tablist" aria-label="Books added window">
+						<button type="button" class="is-active" data-books-added-window="7d" aria-pressed="true">7d</button>
+						<button type="button" data-books-added-window="30d" aria-pressed="false">30d</button>
+						<button type="button" data-books-added-window="90d" aria-pressed="false">90d</button>
+						<button type="button" data-books-added-window="365d" aria-pressed="false">365d</button>
+					</div>
+					<strong
+						id="books-added-value"
+						data-books-added-value
+						data-books-added-7d={String(Math.round(metricsPayload.userMetrics.booksAdded7d))}
+						data-books-added-30d={String(Math.round(metricsPayload.userMetrics.booksAdded30d))}
+						data-books-added-90d={String(Math.round(metricsPayload.userMetrics.booksAdded90d))}
+						data-books-added-365d={String(Math.round(metricsPayload.userMetrics.booksAdded365d))}
+					>
+						{Math.round(metricsPayload.userMetrics.booksAdded7d)}
+					</strong>
+				</article>
 			</div>
 			<div class="panel-head subhead">
 				<h3>Advanced Personal Metrics</h3>
 			</div>
-			<div class="advanced-user-grid">
-				<article class="widget">
-					<p>Reading Streak</p>
-					<strong>{metricsPayload.userMetrics.readingStreakDays.toLocaleString()} days</strong>
-				</article>
+			<div class="advanced-personal-layout">
+				<div class="advanced-personal-column">
 				<article class="widget">
 					<p>Avg Pages / Day</p>
 					<div class="toggle avg-pages-toggle" role="tablist" aria-label="Average pages per day window">
 						<button type="button" class="is-active" data-avg-pages-window="7d" aria-pressed="true">7d</button>
 						<button type="button" data-avg-pages-window="30d" aria-pressed="false">30d</button>
 						<button type="button" data-avg-pages-window="90d" aria-pressed="false">90d</button>
+						<button type="button" data-avg-pages-window="365d" aria-pressed="false">365d</button>
 					</div>
 					<strong
 						id="avg-pages-value"
@@ -961,9 +1280,63 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 						data-avg-pages-7d={String(Math.round(metricsPayload.userMetrics.avgPagesPerDay7d))}
 						data-avg-pages-30d={String(Math.round(metricsPayload.userMetrics.avgPagesPerDay30d))}
 						data-avg-pages-90d={String(Math.round(metricsPayload.userMetrics.avgPagesPerDay90d))}
+						data-avg-pages-365d={String(Math.round(metricsPayload.userMetrics.avgPagesPerDay365d))}
 					>
 						{Math.round(metricsPayload.userMetrics.avgPagesPerDay7d)}
 					</strong>
+				</article>
+				<article class="widget">
+					<p>New Topics Touched</p>
+					<div class="toggle" role="tablist" aria-label="New topics touched window">
+						<button type="button" class="is-active" data-new-topics-window="7d" aria-pressed="true">7d</button>
+						<button type="button" data-new-topics-window="30d" aria-pressed="false">30d</button>
+						<button type="button" data-new-topics-window="90d" aria-pressed="false">90d</button>
+						<button type="button" data-new-topics-window="365d" aria-pressed="false">365d</button>
+					</div>
+					<strong
+						data-new-topics-value
+						data-new-topics-7d={String(metricsPayload.userMetrics.newTopics7d)}
+						data-new-topics-30d={String(metricsPayload.userMetrics.newTopics30d)}
+						data-new-topics-90d={String(metricsPayload.userMetrics.newTopics90d)}
+						data-new-topics-365d={String(metricsPayload.userMetrics.newTopics365d)}
+					>
+						{metricsPayload.userMetrics.newTopics7d.toLocaleString()}
+					</strong>
+				</article>
+				<article class="widget">
+					<p>Rating Behavior</p>
+					<div class="toggle" role="tablist" aria-label="Rating behavior window">
+						<button type="button" class="is-active" data-rating-window="7d" aria-pressed="true">7d</button>
+						<button type="button" data-rating-window="30d" aria-pressed="false">30d</button>
+						<button type="button" data-rating-window="90d" aria-pressed="false">90d</button>
+						<button type="button" data-rating-window="365d" aria-pressed="false">365d</button>
+					</div>
+					<strong
+						data-rating-avg-value
+						data-rating-avg-7d={String(metricsPayload.userMetrics.avgRating7d)}
+						data-rating-avg-30d={String(metricsPayload.userMetrics.avgRating30d)}
+						data-rating-avg-90d={String(metricsPayload.userMetrics.avgRating90d)}
+						data-rating-avg-365d={String(metricsPayload.userMetrics.avgRating365d)}
+					>
+						{metricsPayload.userMetrics.avgRating7d.toFixed(2)} avg
+					</strong>
+					<span
+						class="widget-subtext"
+						data-rating-subtext
+						data-rated-pct={String(metricsPayload.userMetrics.percentBooksRated.toFixed(1))}
+						data-ratings-count-7d={String(metricsPayload.userMetrics.ratingsPast7d)}
+						data-ratings-count-30d={String(metricsPayload.userMetrics.ratingsPast30d)}
+						data-ratings-count-90d={String(metricsPayload.userMetrics.ratingsPast90d)}
+						data-ratings-count-365d={String(metricsPayload.userMetrics.ratingsPast365d)}
+					>
+						{metricsPayload.userMetrics.ratingsPast7d.toLocaleString()} ratings in 7d · {metricsPayload.userMetrics.percentBooksRated.toFixed(1)}% books rated
+					</span>
+				</article>
+				</div>
+				<div class="advanced-personal-column">
+				<article class="widget">
+					<p>Reading Streak</p>
+					<strong>{metricsPayload.userMetrics.readingStreakDays.toLocaleString()} days</strong>
 				</article>
 				<article class="widget">
 					<p>Start-to-Finish Speed (Median)</p>
@@ -971,18 +1344,14 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 				</article>
 				<article class="widget">
 					<p>Top Genre This Month</p>
-					<strong>{metricsPayload.userMetrics.topGenreThisMonth}</strong>
+					<strong>
+						{metricsPayload.userMetrics.topGenreThisMonth && metricsPayload.userMetrics.topGenreThisMonth !== "None"
+							? <a class="metric-link" href={`/related?kind=genre&value=${encodeURIComponent(metricsPayload.userMetrics.topGenreThisMonth)}`}>{metricsPayload.userMetrics.topGenreThisMonth}</a>
+							: metricsPayload.userMetrics.topGenreThisMonth}
+					</strong>
 					<span class="widget-subtext">This month: {metricsPayload.userMetrics.topGenreThisMonthCount.toLocaleString()} entries · Last month top: {metricsPayload.userMetrics.topGenreLastMonth} ({metricsPayload.userMetrics.topGenreLastMonthCount.toLocaleString()})</span>
 				</article>
-				<article class="widget">
-					<p>New Topics Touched (30d)</p>
-					<strong>{metricsPayload.userMetrics.newTopics30d.toLocaleString()}</strong>
-				</article>
-				<article class="widget">
-					<p>Rating Behavior</p>
-					<strong>{metricsPayload.userMetrics.avgRating.toFixed(2)} avg</strong>
-					<span class="widget-subtext">{metricsPayload.userMetrics.ratingsPast30d.toLocaleString()} ratings in 30d · {metricsPayload.userMetrics.percentBooksRated.toFixed(1)}% books rated</span>
-				</article>
+				</div>
 			</div>
 		</section>
 
@@ -995,7 +1364,7 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 				<article class="community-feature-card">
 					<p>Community Shelved Books</p>
 					<strong>{metricsPayload.communityMetrics.communityShelvedBooks.toLocaleString()}</strong>
-					<span>Total shelf entries excluding your account</span>
+					<span>Total shelf entries across all readers</span>
 				</article>
 				<article class="community-feature-card">
 					<p>Community Distinct Titles</p>
@@ -1004,37 +1373,145 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 				</article>
 			</div>
 			<div class="widget-grid community-grid">
-				<article class="widget"><p>Readers Besides You</p><strong>{metricsPayload.communityMetrics.otherUsers.toLocaleString()}</strong></article>
+				<article class="widget"><p>Total Readers</p><strong>{metricsPayload.communityMetrics.otherUsers.toLocaleString()}</strong></article>
 				<article class="widget"><p>Active Locations</p><strong>{metricsPayload.summary.activeLocations.toLocaleString()}</strong></article>
 			</div>
 			<div class="panel-head subhead">
 				<h3>Community Momentum</h3>
 			</div>
-			<div class="advanced-user-grid">
-				<article class="widget">
-					<p>Active Readers (7d / 30d)</p>
-					<strong>{metricsPayload.communityMetrics.activeReaders7d.toLocaleString()} / {metricsPayload.communityMetrics.activeReaders30d.toLocaleString()}</strong>
+			<div class="advanced-community-layout">
+				<div class="advanced-community-column">
+					<div class="community-momentum-grid">
+						<article class="widget">
+					<p>New Readers</p>
+					<div class="toggle" role="tablist" aria-label="New readers window">
+						<button type="button" class="is-active" data-new-readers-window="7d" aria-pressed="true">7d</button>
+						<button type="button" data-new-readers-window="30d" aria-pressed="false">30d</button>
+						<button type="button" data-new-readers-window="90d" aria-pressed="false">90d</button>
+						<button type="button" data-new-readers-window="365d" aria-pressed="false">365d</button>
+					</div>
+					<strong
+						data-new-readers-value
+						data-new-readers-7d={String(metricsPayload.communityMetrics.newReaders7d)}
+						data-new-readers-30d={String(metricsPayload.communityMetrics.newReaders30d)}
+						data-new-readers-90d={String(metricsPayload.communityMetrics.newReaders90d)}
+						data-new-readers-365d={String(metricsPayload.communityMetrics.newReaders365d)}
+					>
+						{metricsPayload.communityMetrics.newReaders7d.toLocaleString()}
+					</strong>
 				</article>
 				<article class="widget">
-					<p>Started vs Finished (30d)</p>
-					<strong>{metricsPayload.communityMetrics.booksStarted30d.toLocaleString()} / {metricsPayload.communityMetrics.booksFinished30d.toLocaleString()}</strong>
-					<span class="widget-subtext">Completion rate: {metricsPayload.communityMetrics.completionRate30d.toFixed(1)}%</span>
+					<p>Books Added to Dogeared</p>
+					<div class="toggle" role="tablist" aria-label="Books added to Dogeared window">
+						<button type="button" class="is-active" data-community-books-added-window="7d" aria-pressed="true">7d</button>
+						<button type="button" data-community-books-added-window="30d" aria-pressed="false">30d</button>
+						<button type="button" data-community-books-added-window="90d" aria-pressed="false">90d</button>
+						<button type="button" data-community-books-added-window="365d" aria-pressed="false">365d</button>
+					</div>
+					<strong
+						data-community-books-added-value
+						data-community-books-added-7d={String(metricsPayload.communityMetrics.booksAdded7d)}
+						data-community-books-added-30d={String(metricsPayload.communityMetrics.booksAdded30d)}
+						data-community-books-added-90d={String(metricsPayload.communityMetrics.booksAdded90d)}
+						data-community-books-added-365d={String(metricsPayload.communityMetrics.booksAdded365d)}
+					>
+						{metricsPayload.communityMetrics.booksAdded7d.toLocaleString()}
+					</strong>
 				</article>
 				<article class="widget">
-					<p>Pages Trend (Last 30d)</p>
-					<strong>{metricsPayload.communityMetrics.pagesRead30d.toLocaleString()}</strong>
-					<span class="widget-subtext">Prev 30d: {metricsPayload.communityMetrics.pagesReadPrev30d.toLocaleString()} · {metricsPayload.communityMetrics.pagesTrend30dPct >= 0 ? "+" : ""}{metricsPayload.communityMetrics.pagesTrend30dPct.toFixed(1)}%</span>
+					<p>Active Readers</p>
+					<div class="toggle" role="tablist" aria-label="Active readers window">
+						<button type="button" class="is-active" data-active-readers-window="7d" aria-pressed="true">7d</button>
+						<button type="button" data-active-readers-window="30d" aria-pressed="false">30d</button>
+						<button type="button" data-active-readers-window="90d" aria-pressed="false">90d</button>
+						<button type="button" data-active-readers-window="365d" aria-pressed="false">365d</button>
+					</div>
+					<strong
+						data-active-readers-value
+						data-active-readers-7d={String(metricsPayload.communityMetrics.activeReaders7d)}
+						data-active-readers-30d={String(metricsPayload.communityMetrics.activeReaders30d)}
+						data-active-readers-90d={String(metricsPayload.communityMetrics.activeReaders90d)}
+						data-active-readers-365d={String(metricsPayload.communityMetrics.activeReaders365d)}
+					>
+						{metricsPayload.communityMetrics.activeReaders7d.toLocaleString()}
+					</strong>
 				</article>
+				<article class="widget">
+					<p>Started vs Finished</p>
+					<div class="toggle" role="tablist" aria-label="Started vs finished window">
+						<button type="button" class="is-active" data-start-finish-window="7d" aria-pressed="true">7d</button>
+						<button type="button" data-start-finish-window="30d" aria-pressed="false">30d</button>
+						<button type="button" data-start-finish-window="90d" aria-pressed="false">90d</button>
+						<button type="button" data-start-finish-window="365d" aria-pressed="false">365d</button>
+					</div>
+					<strong
+						data-start-finish-value
+						data-started-7d={String(metricsPayload.communityMetrics.booksStarted7d)}
+						data-finished-7d={String(metricsPayload.communityMetrics.booksFinished7d)}
+						data-completion-7d={String(metricsPayload.communityMetrics.completionRate7d)}
+						data-started-30d={String(metricsPayload.communityMetrics.booksStarted30d)}
+						data-finished-30d={String(metricsPayload.communityMetrics.booksFinished30d)}
+						data-completion-30d={String(metricsPayload.communityMetrics.completionRate30d)}
+						data-started-90d={String(metricsPayload.communityMetrics.booksStarted90d)}
+						data-finished-90d={String(metricsPayload.communityMetrics.booksFinished90d)}
+						data-completion-90d={String(metricsPayload.communityMetrics.completionRate90d)}
+						data-started-365d={String(metricsPayload.communityMetrics.booksStarted365d)}
+						data-finished-365d={String(metricsPayload.communityMetrics.booksFinished365d)}
+						data-completion-365d={String(metricsPayload.communityMetrics.completionRate365d)}
+					>
+						{metricsPayload.communityMetrics.booksStarted7d.toLocaleString()} / {metricsPayload.communityMetrics.booksFinished7d.toLocaleString()}
+					</strong>
+					<span class="widget-subtext" data-start-finish-subtext>Completion rate: {metricsPayload.communityMetrics.completionRate7d.toFixed(1)}%</span>
+				</article>
+				<article class="widget">
+					<p>Pages Trend</p>
+					<div class="toggle" role="tablist" aria-label="Pages trend window">
+						<button type="button" class="is-active" data-pages-trend-window="7d" aria-pressed="true">7d</button>
+						<button type="button" data-pages-trend-window="30d" aria-pressed="false">30d</button>
+						<button type="button" data-pages-trend-window="90d" aria-pressed="false">90d</button>
+						<button type="button" data-pages-trend-window="365d" aria-pressed="false">365d</button>
+					</div>
+					<strong
+						data-pages-trend-value
+						data-pages-read-7d={String(metricsPayload.communityMetrics.pagesRead7d)}
+						data-pages-prev-7d={String(metricsPayload.communityMetrics.pagesReadPrev7d)}
+						data-pages-pct-7d={String(metricsPayload.communityMetrics.pagesTrend7dPct)}
+						data-pages-read-30d={String(metricsPayload.communityMetrics.pagesRead30d)}
+						data-pages-prev-30d={String(metricsPayload.communityMetrics.pagesReadPrev30d)}
+						data-pages-pct-30d={String(metricsPayload.communityMetrics.pagesTrend30dPct)}
+						data-pages-read-90d={String(metricsPayload.communityMetrics.pagesRead90d)}
+						data-pages-prev-90d={String(metricsPayload.communityMetrics.pagesReadPrev90d)}
+						data-pages-pct-90d={String(metricsPayload.communityMetrics.pagesTrend90dPct)}
+						data-pages-read-365d={String(metricsPayload.communityMetrics.pagesRead365d)}
+						data-pages-prev-365d={String(metricsPayload.communityMetrics.pagesReadPrev365d)}
+						data-pages-pct-365d={String(metricsPayload.communityMetrics.pagesTrend365dPct)}
+					>
+						{metricsPayload.communityMetrics.pagesRead7d.toLocaleString()}
+					</strong>
+					<span class="widget-subtext" data-pages-trend-subtext>Prev 7d: {metricsPayload.communityMetrics.pagesReadPrev7d.toLocaleString()} · {metricsPayload.communityMetrics.pagesTrend7dPct >= 0 ? "+" : ""}{metricsPayload.communityMetrics.pagesTrend7dPct.toFixed(1)}%</span>
+				</article>
+					</div>
+				</div>
+				<div class="advanced-community-column">
 				<article class="widget">
 					<p>Top Community Genre (Month)</p>
-					<strong>{metricsPayload.communityMetrics.topGenreThisMonth}</strong>
+					<strong>
+						{metricsPayload.communityMetrics.topGenreThisMonth && metricsPayload.communityMetrics.topGenreThisMonth !== "None"
+							? <a class="metric-link" href={`/related?kind=genre&value=${encodeURIComponent(metricsPayload.communityMetrics.topGenreThisMonth)}`}>{metricsPayload.communityMetrics.topGenreThisMonth}</a>
+							: metricsPayload.communityMetrics.topGenreThisMonth}
+					</strong>
 					<span class="widget-subtext">This month: {metricsPayload.communityMetrics.topGenreThisMonthCount.toLocaleString()} entries · Last month top: {metricsPayload.communityMetrics.topGenreLastMonth} ({metricsPayload.communityMetrics.topGenreLastMonthCount.toLocaleString()})</span>
 				</article>
 				<article class="widget">
 					<p>Top Community Topic (Month)</p>
-					<strong>{metricsPayload.communityMetrics.topTopicThisMonth}</strong>
+					<strong>
+						{metricsPayload.communityMetrics.topTopicThisMonth && metricsPayload.communityMetrics.topTopicThisMonth !== "None"
+							? <a class="metric-link" href={`/related?kind=topic&value=${encodeURIComponent(metricsPayload.communityMetrics.topTopicThisMonth)}`}>{metricsPayload.communityMetrics.topTopicThisMonth}</a>
+							: metricsPayload.communityMetrics.topTopicThisMonth}
+					</strong>
 					<span class="widget-subtext">This month: {metricsPayload.communityMetrics.topTopicThisMonthCount.toLocaleString()} entries · Last month top: {metricsPayload.communityMetrics.topTopicLastMonth} ({metricsPayload.communityMetrics.topTopicLastMonthCount.toLocaleString()})</span>
 				</article>
+				</div>
 			</div>
 			<div class="panel-head subhead">
 				<h3>Where Most Reading Happens</h3>
@@ -1296,89 +1773,51 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 				const pct = (value, total) => total > 0 ? ((Number(value || 0) / Number(total || 0)) * 100).toFixed(1) : "0.0";
 				const uncategorizedCount = Number(uncategorizedGenre?.value || 0);
 				const untaggedTopicCount = Number(untaggedTopic?.value || 0);
+				const relatedLink = (kind, value) => `/related?kind=${encodeURIComponent(String(kind || "").trim())}&value=${encodeURIComponent(String(value || "").trim())}`;
+				const linkedLabel = (kind, value) => `<a class="metric-link" href="${escapeHtml(relatedLink(kind, value))}">${escapeHtml(String(value || ""))}</a>`;
+				const genreLabel = topGenre ? linkedLabel("genre", topGenre.label) : "";
+				const topicLabel = topTopic ? linkedLabel("topic", topTopic.label) : "";
+				const monthGenreLabel = topGenreThisMonth && topGenreThisMonth !== "None" ? linkedLabel("genre", topGenreThisMonth) : escapeHtml(topGenreThisMonth);
+				const monthLastGenreLabel = topGenreLastMonth && topGenreLastMonth !== "None" ? linkedLabel("genre", topGenreLastMonth) : escapeHtml(topGenreLastMonth);
+				const monthTopicLabel = topTopicThisMonth && topTopicThisMonth !== "None" ? linkedLabel("topic", topTopicThisMonth) : escapeHtml(topTopicThisMonth);
 
 				const cards = [
 					{
-						title: "Top Genre",
-						points: topGenre
-							? [
-								{ label: "Leader", value: `${topGenre.label} (${pct(topGenre.value, taggedGenresCount)}%)` },
-								{ label: "Tagged coverage", value: `${pct(taggedGenresCount, totalShelved)}%` },
-								{ label: "Uncategorized", value: `${pct(uncategorizedCount, totalShelved)}%` }
-							]
-							: [
-								{ label: "Status", value: "No genre data yet." }
-							]
+						title: "What Readers Are Picking",
+						statHtml: topGenre ? `${genreLabel} leads (${pct(topGenre.value, taggedGenresCount)}%)` : "No genre leader yet",
+						noteHtml: topTopic
+							? `Top topic is ${topicLabel}. ${pct(taggedGenresCount, totalShelved)}% of shelves are genre-tagged.`
+							: "Topic coverage is still building."
 					},
 					{
-						title: "Top Topic",
-						points: topTopic
-							? [
-								{ label: "Leader", value: `${topTopic.label} (${pct(topTopic.value, taggedTopicsCount)}%)` },
-								{ label: "Tagged coverage", value: `${pct(taggedTopicsCount, totalShelved)}%` },
-								{ label: "Untagged", value: `${pct(untaggedTopicCount, totalShelved)}%` }
-							]
-							: [
-								{ label: "Status", value: "No topic data yet." }
-							]
-					},
-					{
-						title: "Reading Behavior",
-						points: topStatus
-							? [
-								{ label: "Top shelf", value: `${topStatus.label} (${pct(topStatus.value, totalShelved)}%)` }
-							]
-							: [
-								{ label: "Status", value: "No status data yet." }
-							]
+						title: "Shelf Balance",
+						statHtml: topStatus ? `${escapeHtml(topStatus.label)} dominates (${pct(topStatus.value, totalShelved)}%)` : "No shelf-status signal yet",
+						noteHtml: `Started vs finished (30d): ${booksStarted30d.toLocaleString()} / ${booksFinished30d.toLocaleString()} · completion ${completionRate30d.toFixed(1)}%.`
 					},
 					{
 						title: "Reader Footprint",
-						points: topRegion
-							? [
-								{ label: "Regions tracked", value: String(regions.length) },
-								{ label: "Leading region", value: `${topRegion.label} (${pct(topRegion.value, totalShelved)}%)` }
-							]
-							: [
-								{ label: "Status", value: "No region data yet." }
-							]
+						statHtml: topRegion ? `${regions.length} regions tracked` : "No location data yet",
+						noteHtml: topRegion
+							? `${escapeHtml(topRegion.label)} is the strongest cluster (${pct(topRegion.value, totalShelved)}%).`
+							: "Add location data in profiles for better regional insights."
 					},
 					{
-						title: "Community Momentum",
-						points: [
-							{ label: "Active readers", value: `${activeReaders7d.toLocaleString()} (7d) / ${activeReaders30d.toLocaleString()} (30d)` },
-							{ label: "Started vs finished", value: `${booksStarted30d.toLocaleString()} / ${booksFinished30d.toLocaleString()} (30d)` },
-							{ label: "Completion", value: `${completionRate30d.toFixed(1)}%` }
-						]
+						title: "Momentum",
+						statHtml: `${activeReaders7d.toLocaleString()} active readers in 7d`,
+						noteHtml: `Pages trend (30d): ${pagesRead30d.toLocaleString()} vs ${pagesReadPrev30d.toLocaleString()} (${pagesTrend30dPct >= 0 ? "+" : ""}${pagesTrend30dPct.toFixed(1)}%).`
 					},
 					{
-						title: "Pages Trend",
-						points: [
-							{ label: "Last 30d", value: `${pagesRead30d.toLocaleString()} pages` },
-							{ label: "Prev 30d", value: `${pagesReadPrev30d.toLocaleString()} pages` },
-							{ label: "Delta", value: `${pagesTrend30dPct >= 0 ? "+" : ""}${pagesTrend30dPct.toFixed(1)}%` }
-						]
-					},
-					{
-						title: "Shift Signals",
-						points: [
-							{ label: "Genre", value: `${topGenreThisMonth} (${topGenreThisMonthCount.toLocaleString()}) vs ${topGenreLastMonth} (${topGenreLastMonthCount.toLocaleString()})` },
-							{ label: "Topic", value: `${topTopicThisMonth} (${topTopicThisMonthCount.toLocaleString()}) vs ${topTopicLastMonth} (${topTopicLastMonthCount.toLocaleString()})` }
-						]
+						title: "Monthly Shift",
+						statHtml: `Genre: ${monthGenreLabel} (${topGenreThisMonthCount.toLocaleString()})`,
+						noteHtml: `Last month: ${monthLastGenreLabel} (${topGenreLastMonthCount.toLocaleString()}) · Topic now: ${monthTopicLabel} (${topTopicThisMonthCount.toLocaleString()}).`
 					}
 				];
 
 				insightsRoot.innerHTML = cards.map((card) => `
 					<article class="insight-card">
 						<h3>${escapeHtml(card.title)}</h3>
-						<ul class="insight-points">
-							${card.points.map((point) => `
-								<li>
-									<span class="insight-label">${escapeHtml(point.label)}:</span>
-									<span class="insight-value">${escapeHtml(point.value)}</span>
-								</li>
-							`).join("")}
-						</ul>
+						<p class="insight-stat">${card.statHtml}</p>
+						<p class="insight-note">${card.noteHtml}</p>
 					</article>
 				`).join("");
 			}
@@ -1460,6 +1899,9 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 					return `<article class="pie-widget"><h3>${escapeHtml(widget.title)}</h3><p class="pie-widget-sub">${escapeHtml(widget.subtitle)}</p><p class="empty">No data yet.</p></article>`;
 				}
 				const pie = buildPieSlices(widget.rows, 5);
+				const relatedKind = widget.title === "Tagged Genres"
+					? "genre"
+					: (widget.title === "Tagged Topics" ? "topic" : "");
 				return `
 					<article class="pie-widget">
 						<h3>${escapeHtml(widget.title)}</h3>
@@ -1474,7 +1916,11 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 							<div class="mini-legend">
 								${pie.slices.map((slice) => {
 									const share = pie.total > 0 ? ((slice.value / pie.total) * 100).toFixed(1) : "0.0";
-									return `<div class="mini-legend-row"><span class="mini-dot" style="background:${slice.color}"></span><span class="mini-label">${escapeHtml(slice.label)}</span><span class="mini-share">${share}%</span></div>`;
+									const isLinkable = !!relatedKind && String(slice.label || "").trim().toLowerCase() !== "other";
+									const labelHtml = isLinkable
+										? `<a class="metric-link" href="/related?kind=${encodeURIComponent(relatedKind)}&value=${encodeURIComponent(String(slice.label || "").trim())}">${escapeHtml(slice.label)}</a>`
+										: `<span>${escapeHtml(slice.label)}</span>`;
+									return `<div class="mini-legend-row"><span class="mini-dot" style="background:${slice.color}"></span><span class="mini-label">${labelHtml}</span><span class="mini-share">${share}%</span></div>`;
 								}).join("")}
 							</div>
 						</div>
@@ -2016,10 +2462,11 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 		const values = {
 			"7d": String(avgPagesValue.getAttribute("data-avg-pages-7d") || "0.0"),
 			"30d": String(avgPagesValue.getAttribute("data-avg-pages-30d") || "0.0"),
-			"90d": String(avgPagesValue.getAttribute("data-avg-pages-90d") || "0.0")
+			"90d": String(avgPagesValue.getAttribute("data-avg-pages-90d") || "0.0"),
+			"365d": String(avgPagesValue.getAttribute("data-avg-pages-365d") || "0.0")
 		};
 		const applyWindow = (windowKey) => {
-			const key = windowKey === "30d" || windowKey === "90d" ? windowKey : "7d";
+			const key = windowKey === "30d" || windowKey === "90d" || windowKey === "365d" ? windowKey : "7d";
 			avgPagesValue.textContent = values[key];
 			for (const button of avgPagesButtons) {
 				if (!(button instanceof HTMLButtonElement)) continue;
@@ -2034,6 +2481,248 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 		}
 		applyWindow("7d");
 	}
+
+	const pagesReadValue = document.querySelector("[data-pages-read-value]");
+	const pagesReadButtons = Array.from(document.querySelectorAll("[data-pages-read-window]"));
+	if (pagesReadValue instanceof HTMLElement && pagesReadButtons.length > 0) {
+		const values = {
+			"7d": String(pagesReadValue.getAttribute("data-pages-read-7d") || "0"),
+			"30d": String(pagesReadValue.getAttribute("data-pages-read-30d") || "0"),
+			"90d": String(pagesReadValue.getAttribute("data-pages-read-90d") || "0"),
+			"365d": String(pagesReadValue.getAttribute("data-pages-read-365d") || "0")
+		};
+		const applyWindow = (windowKey) => {
+			const key = (windowKey === "30d" || windowKey === "90d" || windowKey === "365d") ? windowKey : "7d";
+			pagesReadValue.textContent = Number(values[key] || "0").toLocaleString();
+			for (const button of pagesReadButtons) {
+				if (!(button instanceof HTMLButtonElement)) continue;
+				const active = button.dataset.pagesReadWindow === key;
+				button.classList.toggle("is-active", active);
+				button.setAttribute("aria-pressed", active ? "true" : "false");
+			}
+		};
+		for (const button of pagesReadButtons) {
+			if (!(button instanceof HTMLButtonElement)) continue;
+			button.addEventListener("click", () => applyWindow(String(button.dataset.pagesReadWindow || "7d")));
+		}
+		applyWindow("7d");
+	}
+
+	const booksAddedValue = document.querySelector("[data-books-added-value]");
+	const booksAddedButtons = Array.from(document.querySelectorAll("[data-books-added-window]"));
+	if (booksAddedValue instanceof HTMLElement && booksAddedButtons.length > 0) {
+		const values = {
+			"7d": String(booksAddedValue.getAttribute("data-books-added-7d") || "0"),
+			"30d": String(booksAddedValue.getAttribute("data-books-added-30d") || "0"),
+			"90d": String(booksAddedValue.getAttribute("data-books-added-90d") || "0"),
+			"365d": String(booksAddedValue.getAttribute("data-books-added-365d") || "0")
+		};
+		const applyWindow = (windowKey) => {
+			const key = (windowKey === "30d" || windowKey === "90d" || windowKey === "365d") ? windowKey : "7d";
+			booksAddedValue.textContent = Number(values[key] || "0").toLocaleString();
+			for (const button of booksAddedButtons) {
+				if (!(button instanceof HTMLButtonElement)) continue;
+				const active = button.dataset.booksAddedWindow === key;
+				button.classList.toggle("is-active", active);
+				button.setAttribute("aria-pressed", active ? "true" : "false");
+			}
+		};
+		for (const button of booksAddedButtons) {
+			if (!(button instanceof HTMLButtonElement)) continue;
+			button.addEventListener("click", () => applyWindow(String(button.dataset.booksAddedWindow || "7d")));
+		}
+		applyWindow("7d");
+	}
+
+	const newTopicsValue = document.querySelector("[data-new-topics-value]");
+	const newTopicsButtons = Array.from(document.querySelectorAll("[data-new-topics-window]"));
+	if (newTopicsValue instanceof HTMLElement && newTopicsButtons.length > 0) {
+		const values = {
+			"7d": String(newTopicsValue.getAttribute("data-new-topics-7d") || "0"),
+			"30d": String(newTopicsValue.getAttribute("data-new-topics-30d") || "0"),
+			"90d": String(newTopicsValue.getAttribute("data-new-topics-90d") || "0"),
+			"365d": String(newTopicsValue.getAttribute("data-new-topics-365d") || "0")
+		};
+		const applyWindow = (windowKey) => {
+			const key = (windowKey === "30d" || windowKey === "90d" || windowKey === "365d") ? windowKey : "7d";
+			newTopicsValue.textContent = Number(values[key] || "0").toLocaleString();
+			for (const button of newTopicsButtons) {
+				if (!(button instanceof HTMLButtonElement)) continue;
+				const active = button.dataset.newTopicsWindow === key;
+				button.classList.toggle("is-active", active);
+				button.setAttribute("aria-pressed", active ? "true" : "false");
+			}
+		};
+		for (const button of newTopicsButtons) {
+			if (!(button instanceof HTMLButtonElement)) continue;
+			button.addEventListener("click", () => applyWindow(String(button.dataset.newTopicsWindow || "7d")));
+		}
+		applyWindow("7d");
+	}
+
+	const ratingAvgValue = document.querySelector("[data-rating-avg-value]");
+	const ratingSubtext = document.querySelector("[data-rating-subtext]");
+	const ratingButtons = Array.from(document.querySelectorAll("[data-rating-window]"));
+	if (ratingAvgValue instanceof HTMLElement && ratingSubtext instanceof HTMLElement && ratingButtons.length > 0) {
+		const avgValues = {
+			"7d": Number(ratingAvgValue.getAttribute("data-rating-avg-7d") || "0"),
+			"30d": Number(ratingAvgValue.getAttribute("data-rating-avg-30d") || "0"),
+			"90d": Number(ratingAvgValue.getAttribute("data-rating-avg-90d") || "0"),
+			"365d": Number(ratingAvgValue.getAttribute("data-rating-avg-365d") || "0")
+		};
+		const countValues = {
+			"7d": Number(ratingSubtext.getAttribute("data-ratings-count-7d") || "0"),
+			"30d": Number(ratingSubtext.getAttribute("data-ratings-count-30d") || "0"),
+			"90d": Number(ratingSubtext.getAttribute("data-ratings-count-90d") || "0"),
+			"365d": Number(ratingSubtext.getAttribute("data-ratings-count-365d") || "0")
+		};
+		const ratedPctText = `${Number(ratingSubtext.getAttribute("data-rated-pct") || "0").toFixed(1)}% books rated`;
+		const applyWindow = (windowKey) => {
+			const key = (windowKey === "30d" || windowKey === "90d" || windowKey === "365d") ? windowKey : "7d";
+			ratingAvgValue.textContent = `${avgValues[key].toFixed(2)} avg`;
+			ratingSubtext.textContent = `${countValues[key].toLocaleString()} ratings in ${key} · ${ratedPctText}`;
+			for (const button of ratingButtons) {
+				if (!(button instanceof HTMLButtonElement)) continue;
+				const active = button.dataset.ratingWindow === key;
+				button.classList.toggle("is-active", active);
+				button.setAttribute("aria-pressed", active ? "true" : "false");
+			}
+		};
+		for (const button of ratingButtons) {
+			if (!(button instanceof HTMLButtonElement)) continue;
+			button.addEventListener("click", () => applyWindow(String(button.dataset.ratingWindow || "7d")));
+		}
+		applyWindow("7d");
+	}
+
+	const activeReadersValue = document.querySelector("[data-active-readers-value]");
+	const activeReadersButtons = Array.from(document.querySelectorAll("[data-active-readers-window]"));
+	if (activeReadersValue instanceof HTMLElement && activeReadersButtons.length > 0) {
+		const values = {
+			"7d": Number(activeReadersValue.getAttribute("data-active-readers-7d") || "0"),
+			"30d": Number(activeReadersValue.getAttribute("data-active-readers-30d") || "0"),
+			"90d": Number(activeReadersValue.getAttribute("data-active-readers-90d") || "0"),
+			"365d": Number(activeReadersValue.getAttribute("data-active-readers-365d") || "0")
+		};
+		const applyWindow = (windowKey) => {
+			const key = (windowKey === "30d" || windowKey === "90d" || windowKey === "365d") ? windowKey : "7d";
+			activeReadersValue.textContent = values[key].toLocaleString();
+			for (const button of activeReadersButtons) {
+				if (!(button instanceof HTMLButtonElement)) continue;
+				const active = button.dataset.activeReadersWindow === key;
+				button.classList.toggle("is-active", active);
+				button.setAttribute("aria-pressed", active ? "true" : "false");
+			}
+		};
+		for (const button of activeReadersButtons) {
+			if (!(button instanceof HTMLButtonElement)) continue;
+			button.addEventListener("click", () => applyWindow(String(button.dataset.activeReadersWindow || "7d")));
+		}
+		applyWindow("7d");
+	}
+
+	const newReadersValue = document.querySelector("[data-new-readers-value]");
+	const newReadersButtons = Array.from(document.querySelectorAll("[data-new-readers-window]"));
+	if (newReadersValue instanceof HTMLElement && newReadersButtons.length > 0) {
+		const values = {
+			"7d": Number(newReadersValue.getAttribute("data-new-readers-7d") || "0"),
+			"30d": Number(newReadersValue.getAttribute("data-new-readers-30d") || "0"),
+			"90d": Number(newReadersValue.getAttribute("data-new-readers-90d") || "0"),
+			"365d": Number(newReadersValue.getAttribute("data-new-readers-365d") || "0")
+		};
+		const applyWindow = (windowKey) => {
+			const key = (windowKey === "30d" || windowKey === "90d" || windowKey === "365d") ? windowKey : "7d";
+			newReadersValue.textContent = values[key].toLocaleString();
+			for (const button of newReadersButtons) {
+				if (!(button instanceof HTMLButtonElement)) continue;
+				const active = button.dataset.newReadersWindow === key;
+				button.classList.toggle("is-active", active);
+				button.setAttribute("aria-pressed", active ? "true" : "false");
+			}
+		};
+		for (const button of newReadersButtons) {
+			if (!(button instanceof HTMLButtonElement)) continue;
+			button.addEventListener("click", () => applyWindow(String(button.dataset.newReadersWindow || "7d")));
+		}
+		applyWindow("7d");
+	}
+
+	const communityBooksAddedValue = document.querySelector("[data-community-books-added-value]");
+	const communityBooksAddedButtons = Array.from(document.querySelectorAll("[data-community-books-added-window]"));
+	if (communityBooksAddedValue instanceof HTMLElement && communityBooksAddedButtons.length > 0) {
+		const values = {
+			"7d": Number(communityBooksAddedValue.getAttribute("data-community-books-added-7d") || "0"),
+			"30d": Number(communityBooksAddedValue.getAttribute("data-community-books-added-30d") || "0"),
+			"90d": Number(communityBooksAddedValue.getAttribute("data-community-books-added-90d") || "0"),
+			"365d": Number(communityBooksAddedValue.getAttribute("data-community-books-added-365d") || "0")
+		};
+		const applyWindow = (windowKey) => {
+			const key = (windowKey === "30d" || windowKey === "90d" || windowKey === "365d") ? windowKey : "7d";
+			communityBooksAddedValue.textContent = values[key].toLocaleString();
+			for (const button of communityBooksAddedButtons) {
+				if (!(button instanceof HTMLButtonElement)) continue;
+				const active = button.dataset.communityBooksAddedWindow === key;
+				button.classList.toggle("is-active", active);
+				button.setAttribute("aria-pressed", active ? "true" : "false");
+			}
+		};
+		for (const button of communityBooksAddedButtons) {
+			if (!(button instanceof HTMLButtonElement)) continue;
+			button.addEventListener("click", () => applyWindow(String(button.dataset.communityBooksAddedWindow || "7d")));
+		}
+		applyWindow("7d");
+	}
+
+	const startFinishValue = document.querySelector("[data-start-finish-value]");
+	const startFinishSubtext = document.querySelector("[data-start-finish-subtext]");
+	const startFinishButtons = Array.from(document.querySelectorAll("[data-start-finish-window]"));
+	if (startFinishValue instanceof HTMLElement && startFinishSubtext instanceof HTMLElement && startFinishButtons.length > 0) {
+		const applyWindow = (windowKey) => {
+			const key = (windowKey === "30d" || windowKey === "90d" || windowKey === "365d") ? windowKey : "7d";
+			const started = Number(startFinishValue.getAttribute(`data-started-${key}`) || "0");
+			const finished = Number(startFinishValue.getAttribute(`data-finished-${key}`) || "0");
+			const completion = Number(startFinishValue.getAttribute(`data-completion-${key}`) || "0");
+			startFinishValue.textContent = `${started.toLocaleString()} / ${finished.toLocaleString()}`;
+			startFinishSubtext.textContent = `Completion rate: ${completion.toFixed(1)}%`;
+			for (const button of startFinishButtons) {
+				if (!(button instanceof HTMLButtonElement)) continue;
+				const active = button.dataset.startFinishWindow === key;
+				button.classList.toggle("is-active", active);
+				button.setAttribute("aria-pressed", active ? "true" : "false");
+			}
+		};
+		for (const button of startFinishButtons) {
+			if (!(button instanceof HTMLButtonElement)) continue;
+			button.addEventListener("click", () => applyWindow(String(button.dataset.startFinishWindow || "7d")));
+		}
+		applyWindow("7d");
+	}
+
+	const pagesTrendValue = document.querySelector("[data-pages-trend-value]");
+	const pagesTrendSubtext = document.querySelector("[data-pages-trend-subtext]");
+	const pagesTrendButtons = Array.from(document.querySelectorAll("[data-pages-trend-window]"));
+	if (pagesTrendValue instanceof HTMLElement && pagesTrendSubtext instanceof HTMLElement && pagesTrendButtons.length > 0) {
+		const applyWindow = (windowKey) => {
+			const key = (windowKey === "30d" || windowKey === "90d" || windowKey === "365d") ? windowKey : "7d";
+			const pagesRead = Number(pagesTrendValue.getAttribute(`data-pages-read-${key}`) || "0");
+			const pagesPrev = Number(pagesTrendValue.getAttribute(`data-pages-prev-${key}`) || "0");
+			const pct = Number(pagesTrendValue.getAttribute(`data-pages-pct-${key}`) || "0");
+			pagesTrendValue.textContent = pagesRead.toLocaleString();
+			pagesTrendSubtext.textContent = `Prev ${key}: ${pagesPrev.toLocaleString()} · ${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+			for (const button of pagesTrendButtons) {
+				if (!(button instanceof HTMLButtonElement)) continue;
+				const active = button.dataset.pagesTrendWindow === key;
+				button.classList.toggle("is-active", active);
+				button.setAttribute("aria-pressed", active ? "true" : "false");
+			}
+		};
+		for (const button of pagesTrendButtons) {
+			if (!(button instanceof HTMLButtonElement)) continue;
+			button.addEventListener("click", () => applyWindow(String(button.dataset.pagesTrendWindow || "7d")));
+		}
+		applyWindow("7d");
+	}
+
 </script>
 
 <style>
@@ -2049,31 +2738,39 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 	:global(.context-v) { color: #2f2f2f; }
 	:global(.context-note) { margin-top: 0.15rem; color: #4d4d4d; }
 	.widget-grid { display: grid; gap: 1rem; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+	.user-velocity-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.widget { border: 0; border-radius: 12px; background: #fff; padding: 0.75rem; }
 	.widget p { margin: 0; text-transform: uppercase; letter-spacing: 0.06em; color: #41566c; font-size: 0.74rem; font-weight: 700; }
 	.widget strong { display: block; margin-top: 0.35rem; font-size: clamp(1.1rem, 1.8vw, 1.65rem); }
 	.widget-subtext { display: block; margin-top: 0.3rem; color: #5e5e5e; font-size: 0.84rem; line-height: 1.35; }
 	.advanced-user-grid { margin-top: 0.8rem; display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.advanced-personal-layout { margin-top: 0.8rem; display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+	.advanced-personal-column { display: grid; gap: 1rem; }
+	.advanced-community-layout { margin-top: 0.8rem; display: grid; gap: 1rem; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); align-items: start; }
+	.advanced-community-column { display: grid; gap: 1rem; }
+	.community-momentum-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.insight-grid { margin-top: 0.65rem; display: grid; gap: 0.65rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 	.insight-card { border: 0; border-radius: 12px; background: #fcfbf8; padding: 0.72rem; }
 	.insight-card h3 { margin: 0; font-size: 0.98rem; color: #2b2b2b; }
+	.insight-stat { margin: 0.45rem 0 0; font-size: 1.02rem; font-weight: 700; color: #1f2937; line-height: 1.3; }
+	.insight-note { margin: 0.35rem 0 0; font-size: 0.88rem; color: #505967; line-height: 1.45; }
 	.insight-points { margin: 0.4rem 0 0; padding: 0 0 0 1rem; display: grid; gap: 0.28rem; color: #464646; }
 	.insight-points li { margin: 0; line-height: 1.38; font-size: 0.9rem; }
 	.insight-label { font-weight: 700; color: #2c2c2c; }
 	.insight-value { color: #4b4b4b; }
-	:global(.pie-widget-grid) { margin-top: 0.65rem; display: grid; gap: 0.65rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-	:global(.pie-widget) { border: 0; border-radius: 12px; background: #fcfbf8; padding: 0.72rem; }
-	:global(.pie-widget h3) { margin: 0; font-size: 1rem; }
-	:global(.pie-widget-sub) { margin: 0.2rem 0 0; color: #5d5d5d; font-size: 0.88rem; }
-	:global(.pie-widget-body) { margin-top: 0.6rem; display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 0.6rem; align-items: center; }
-	:global(.mini-donut) { width: 110px; height: 110px; border-radius: 50%; background: conic-gradient(var(--donut)); position: relative; display: grid; place-items: center; }
-	:global(.mini-donut)::after { content: ""; position: absolute; inset: 19px; border-radius: 50%; background: #fff; }
+	:global(.pie-widget-grid) { margin-top: 0.85rem; display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	:global(.pie-widget) { border: 0; border-radius: 12px; background: #fcfbf8; padding: 0.95rem; }
+	:global(.pie-widget h3) { margin: 0; font-size: 1.12rem; }
+	:global(.pie-widget-sub) { margin: 0.26rem 0 0; color: #5d5d5d; font-size: 0.97rem; line-height: 1.35; }
+	:global(.pie-widget-body) { margin-top: 0.85rem; display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 0.9rem; align-items: center; }
+	:global(.mini-donut) { width: 150px; height: 150px; border-radius: 50%; background: conic-gradient(var(--donut)); position: relative; display: grid; place-items: center; }
+	:global(.mini-donut)::after { content: ""; position: absolute; inset: 26px; border-radius: 50%; background: #fff; }
 	:global(.mini-donut-center) { position: relative; z-index: 1; text-align: center; line-height: 1.1; }
-	:global(.mini-donut-center strong) { display: block; font-size: 1.02rem; }
-	:global(.mini-donut-center span) { color: #5f5f5f; font-size: 0.72rem; }
+	:global(.mini-donut-center strong) { display: block; font-size: 1.2rem; }
+	:global(.mini-donut-center span) { color: #5f5f5f; font-size: 0.82rem; }
 	:global(.mini-legend) { display: grid; gap: 0.28rem; }
-	:global(.mini-legend-row) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.35rem; align-items: center; font-size: 0.8rem; }
-	:global(.mini-dot) { width: 9px; height: 9px; border-radius: 50%; }
+	:global(.mini-legend-row) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
+	:global(.mini-dot) { width: 10px; height: 10px; border-radius: 50%; }
 	:global(.mini-label) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #2f2f2f; }
 	:global(.mini-share) { color: #575757; font-variant-numeric: tabular-nums; }
 	.panel { margin-top: 1.15rem; border: 0; border-radius: 12px; background: #fff; padding: 1rem; }
@@ -2146,7 +2843,11 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 	:global(.empty) { margin-top: 0.6rem; color: #616161; }
 	@media (max-width: 980px) {
 		.widget-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+		.user-velocity-grid { grid-template-columns: 1fr; }
 		.advanced-user-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.advanced-personal-layout { grid-template-columns: 1fr; }
+		.advanced-community-layout { grid-template-columns: 1fr; }
+		.community-momentum-grid { grid-template-columns: 1fr; }
 		.community-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 		.community-feature-row { grid-template-columns: 1fr; }
 		.insight-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }

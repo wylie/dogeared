@@ -1,8 +1,11 @@
 ---
 import LeftHand from '../components/LeftHand.astro';
+import { resolveUserBySession } from '../lib/auth';
 type SectionLink = { id: string; label: string };
 const { title = "Dogeared", sectionLinks = [] } = Astro.props as { title?: string; sectionLinks?: SectionLink[] };
 const currentPath = Astro.url.pathname;
+const session = await resolveUserBySession(Astro.request);
+const isAuthenticated = !!session?.userId;
 const metaDescription = "Track what matters. Find your next great read. Keep your shelves focused. Make reading feel like yours.";
 const pageTitle = `${title} | Dogeared`;
 const canonicalUrl = new URL(currentPath, Astro.site ?? Astro.url).toString();
@@ -60,7 +63,7 @@ import '../assets/global.css';
 			<div class="container">
 				<div class="column" style="padding-bottom: 0;">
 					<slot name="left">
-						<LeftHand current={currentPath} sectionLinks={sectionLinks} />
+						<LeftHand current={currentPath} sectionLinks={sectionLinks} isAuthenticated={isAuthenticated} />
 					</slot>
 				</div>
 				<main id="main-content" class="column content-column" tabindex="-1">

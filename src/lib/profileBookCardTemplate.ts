@@ -76,7 +76,7 @@ export function renderProfileBookCard(entry: ProfileEntry, options: RenderOption
 					step="1"
 					inputmode="numeric"
 					placeholder="Page # or %"
-					value="0"
+					value=""
 				/>
 				<button type="button" class="secondary progress-save" data-action="update-progress">Save</button>
 			</div>
