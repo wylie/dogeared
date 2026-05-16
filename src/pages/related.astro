@@ -54,6 +54,8 @@ const kind = normalizeText(Astro.url.searchParams.get("kind"), "author");
 const value = normalizeText(Astro.url.searchParams.get("value"));
 const canonical = canonicalKey(value);
 const genreSlug = slugify(value);
+const allowedKinds = new Set(["author", "genre", "book", "topic"]);
+const normalizedKind = allowedKinds.has(kind) ? kind : "author";
 
 const sectionLinks = [
 	{ id: "overview", label: "Overview" },
@@ -77,7 +79,7 @@ if (value) {
 	try {
 		const sql = getNeonSql();
 
-		if (kind === "author") {
+		if (normalizedKind === "author") {
 			pageTitle = value;
 			subtitle = "All books by this author in Dogeared.";
 			books = await sql<BookRow[]>`
@@ -101,7 +103,7 @@ if (value) {
 				having count(distinct ub.user_id) > 0
 				order by shelves desc, readers desc, b.title asc
 			`;
-		} else if (kind === "genre") {
+		} else if (normalizedKind === "genre") {
 			pageTitle = formatGenreLabel(value, value);
 			subtitle = "Books in this genre in Dogeared.";
 			books = await sql<BookRow[]>`
@@ -147,7 +149,7 @@ if (value) {
 				order by shelves desc, readers desc, author asc
 				limit 30
 			`;
-		} else if (kind === "book") {
+		} else if (normalizedKind === "book") {
 			pageTitle = value;
 			subtitle = "Book details and shelf activity in Dogeared.";
 			books = await sql<BookRow[]>`
@@ -173,7 +175,7 @@ if (value) {
 			`;
 		}
 
-		if (kind === "author") {
+		if (normalizedKind === "author") {
 			const totals = await sql<Array<{ active_shelves: number; readers: number }>>`
 				select
 					count(distinct ub.status)::int as active_shelves,
@@ -184,7 +186,7 @@ if (value) {
 			`;
 			activeShelves = Number(totals[0]?.active_shelves || 0);
 			distinctReaders = Number(totals[0]?.readers || 0);
-		} else if (kind === "genre") {
+		} else if (normalizedKind === "genre") {
 			const totals = await sql<Array<{ active_shelves: number; readers: number }>>`
 				select
 					count(distinct ub.status)::int as active_shelves,
@@ -198,7 +200,7 @@ if (value) {
 			`;
 			activeShelves = Number(totals[0]?.active_shelves || 0);
 			distinctReaders = Number(totals[0]?.readers || 0);
-		} else if (kind === "book") {
+		} else if (normalizedKind === "book") {
 			const totals = await sql<Array<{ active_shelves: number; readers: number }>>`
 				select
 					count(distinct ub.status)::int as active_shelves,
@@ -230,9 +232,30 @@ if (value) {
 
 if (!activeShelves) activeShelves = 0;
 if (!distinctReaders) distinctReaders = Math.max(...books.map((row) => Number(row.readers || 0)), 0);
+const relatedCanonicalUrl = value
+	? `/related?kind=${encodeURIComponent(normalizedKind)}&value=${encodeURIComponent(value)}`
+	: "/related";
+const relatedRobots = value && !error ? "index,follow" : "noindex,nofollow";
+const relatedDescription = value
+	? `${subtitle} Explore books, readers, and shelf activity connected to ${value}.`
+	: "Explore related books, authors, and genres in Dogeared.";
+const relatedStructuredData = JSON.stringify({
+	"@context": "https://schema.org",
+	"@type": "CollectionPage",
+	name: pageTitle || "Related",
+	description: subtitle || "",
+	url: relatedCanonicalUrl
+});
 ---
 
-<Layout title="Related" sectionLinks={sectionLinks}>
+<Layout
+	title="Related"
+	sectionLinks={sectionLinks}
+	metaDescription={relatedDescription}
+	canonicalUrl={relatedCanonicalUrl}
+	robots={relatedRobots}
+	structuredData={relatedStructuredData}
+>
 	<div slot="right" class="related-page">
 		<header id="overview" class="hero">
 			<h1>{pageTitle || "Related"}</h1>

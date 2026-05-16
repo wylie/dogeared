@@ -2,14 +2,42 @@
 import LeftHand from '../components/LeftHand.astro';
 import { resolveUserBySession } from '../lib/auth';
 type SectionLink = { id: string; label: string };
-const { title = "Dogeared", sectionLinks = [] } = Astro.props as { title?: string; sectionLinks?: SectionLink[] };
+const {
+	title = "Dogeared",
+	sectionLinks = [],
+	metaDescription = "Track what matters. Find your next great read. Keep your shelves focused. Make reading feel like yours.",
+	robots = "index,follow",
+	canonicalUrl = "",
+	structuredData = ""
+} = Astro.props as {
+	title?: string;
+	sectionLinks?: SectionLink[];
+	metaDescription?: string;
+	robots?: string;
+	canonicalUrl?: string;
+	structuredData?: string;
+};
 const currentPath = Astro.url.pathname;
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
-const metaDescription = "Track what matters. Find your next great read. Keep your shelves focused. Make reading feel like yours.";
 const pageTitle = `${title} | Dogeared`;
-const canonicalUrl = new URL(currentPath, Astro.site ?? Astro.url).toString();
+const canonicalHref = String(canonicalUrl || "").trim()
+	? new URL(String(canonicalUrl || "").trim(), Astro.site ?? Astro.url).toString()
+	: new URL(currentPath, Astro.site ?? Astro.url).toString();
 const ogImageUrl = new URL("/og-image.png", Astro.site ?? Astro.url).toString();
+const siteOrigin = new URL(canonicalHref).origin;
+const websiteStructuredData = JSON.stringify({
+	"@context": "https://schema.org",
+	"@type": "WebSite",
+	name: "Dogeared",
+	url: siteOrigin,
+	potentialAction: {
+		"@type": "SearchAction",
+		target: `${siteOrigin}/search?q={search_term_string}`,
+		"query-input": "required name=search_term_string"
+	}
+});
+const pageStructuredData = String(structuredData || "").trim();
 import '../assets/global.css';
 ---
 
@@ -39,13 +67,14 @@ import '../assets/global.css';
 		<link rel="icon" href="/favicon.ico" />
 		<meta name="generator" content={Astro.generator} />
 		<title>{pageTitle}</title>
-		<link rel="canonical" href={canonicalUrl} />
+		<link rel="canonical" href={canonicalHref} />
 		<meta name="description" content={metaDescription} />
+		<meta name="robots" content={robots} />
 		<meta property="og:type" content="website" />
 		<meta property="og:site_name" content="Dogeared" />
 		<meta property="og:title" content={pageTitle} />
 		<meta property="og:description" content={metaDescription} />
-		<meta property="og:url" content={canonicalUrl} />
+		<meta property="og:url" content={canonicalHref} />
 		<meta property="og:image" content={ogImageUrl} />
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="630" />
@@ -53,6 +82,8 @@ import '../assets/global.css';
 		<meta name="twitter:title" content={pageTitle} />
 		<meta name="twitter:description" content={metaDescription} />
 		<meta name="twitter:image" content={ogImageUrl} />
+		<script type="application/ld+json" set:html={websiteStructuredData}></script>
+		{pageStructuredData && <script type="application/ld+json" set:html={pageStructuredData}></script>}
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link href="https://fonts.googleapis.com/css2?family=Copse&family=Outfit:wght@100..900&display=swap" rel="stylesheet">

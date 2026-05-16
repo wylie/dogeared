@@ -144,9 +144,30 @@ if (authorId > 0) {
 		errorMessage = error instanceof Error ? error.message : "Failed to load author page.";
 	}
 }
+const authorCanonicalUrl = author.id > 0 ? `/author?authorId=${encodeURIComponent(String(author.id))}` : "/author";
+const authorRobots = author.id > 0 && !errorMessage ? "index,follow" : "noindex,nofollow";
+const authorDescription = author.id > 0
+	? `${author.name} on Dogeared: ${books.length.toLocaleString()} books, ${readersCount.toLocaleString()} readers, and shelf activity.`
+	: "Browse authors and their books in Dogeared.";
+const authorStructuredData = author.id > 0
+	? JSON.stringify({
+		"@context": "https://schema.org",
+		"@type": "Person",
+		name: author.name,
+		description: author.bio || `${author.name} author page on Dogeared`,
+		url: authorCanonicalUrl,
+		image: author.photoUrl || undefined
+	})
+	: "";
 ---
 
-<Layout title={author.name ? `${author.name} · Author` : "Author"}>
+<Layout
+	title={author.name ? `${author.name} · Author` : "Author"}
+	metaDescription={authorDescription}
+	canonicalUrl={authorCanonicalUrl}
+	robots={authorRobots}
+	structuredData={authorStructuredData}
+>
 	<div slot="right" class="author-page">
 		{errorMessage && <p class="error">{errorMessage}</p>}
 		{!errorMessage && author.id <= 0 && <p>Author not found.</p>}

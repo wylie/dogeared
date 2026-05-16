@@ -150,7 +150,12 @@ if (session?.userId) {
 }
 ---
 
-<Layout title="Search">
+<Layout
+	title="Search"
+	robots="noindex,nofollow"
+	metaDescription="Search Dogeared for books and add them to your shelves."
+	canonicalUrl="/search"
+>
 		<div slot="right" class="search-page" id="search-page" data-query={query} data-authenticated={String(isAuthenticated)}>
 		<h1>Search</h1>
 		{!query && <p>Enter a search term to find books.</p>}

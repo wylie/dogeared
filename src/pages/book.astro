@@ -501,9 +501,53 @@ try {
 }
 
 const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
+const canonicalBookId = Math.max(0, Number(book?.id || 0) || 0);
+const bookCanonicalUrl = canonicalBookId > 0
+	? `/book?bookId=${encodeURIComponent(String(canonicalBookId))}`
+	: (
+		queryGoogleBooksId
+			? `/book?googleBooksId=${encodeURIComponent(queryGoogleBooksId)}`
+			: (
+				queryIsbn13
+					? `/book?isbn13=${encodeURIComponent(queryIsbn13)}`
+					: (
+						queryIsbn10
+							? `/book?isbn10=${encodeURIComponent(queryIsbn10)}`
+							: "/book"
+					)
+			)
+	);
+const bookRobots = book && !errorMessage ? "index,follow" : "noindex,nofollow";
+const bookDescription = book
+	? `${book.title}${book.author ? ` by ${book.author}` : ""}. ${book.pageCount > 0 ? `${book.pageCount.toLocaleString()} pages. ` : ""}${book.shelves.toLocaleString()} shelf entries on Dogeared.`
+	: "Book details and shelf activity on Dogeared.";
+const bookStructuredData = book
+	? JSON.stringify({
+		"@context": "https://schema.org",
+		"@type": "Book",
+		name: book.title,
+		author: book.author ? [{ "@type": "Person", name: book.author }] : undefined,
+		image: book.coverUrl || undefined,
+		isbn: book.isbn13 || book.isbn10 || undefined,
+		numberOfPages: book.pageCount > 0 ? book.pageCount : undefined,
+		datePublished: book.publishedLabel || undefined,
+		aggregateRating: book.ratingCount > 0 ? {
+			"@type": "AggregateRating",
+			ratingValue: Number(book.averageRating || 0).toFixed(2),
+			ratingCount: book.ratingCount
+		} : undefined,
+		url: bookCanonicalUrl
+	})
+	: "";
 ---
 
-<Layout title={book?.title || "Book"}>
+<Layout
+	title={book?.title || "Book"}
+	metaDescription={bookDescription}
+	canonicalUrl={bookCanonicalUrl}
+	robots={bookRobots}
+	structuredData={bookStructuredData}
+>
 	<div slot="right" class="book-page" data-authenticated={String(isAuthenticated)}>
 		{errorMessage && <p class="error">{errorMessage}</p>}
 		{!errorMessage && !book && <p>Book not found.</p>}

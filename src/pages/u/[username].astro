@@ -699,9 +699,32 @@ const shelfSectionOrderJson = JSON.stringify(
 		? shelfSectionOrderKeys
 		: ["default:reading", "default:want_to_read", "default:finished", ...customShelves.map((shelf) => `custom:${shelf.id}`)]
 );
+const profileCanonicalUrl = profile.username ? `/u/${encodeURIComponent(profile.username)}` : `/u/${encodeURIComponent(requestedUsername)}`;
+const profileRobots = (!notFound && !privateProfile && !!profile.username) ? "index,follow" : "noindex,nofollow";
+const profileDescription = !notFound && !privateProfile
+	? `${profile.name || `@${profile.username}`}'s reading profile on Dogeared. ${shelfStats.total.toLocaleString()} books across shelves.`
+	: "Reader profile on Dogeared.";
+const profileStructuredData = (!notFound && !privateProfile && !!profile.username)
+	? JSON.stringify({
+		"@context": "https://schema.org",
+		"@type": "Person",
+		name: profile.name || `@${profile.username}`,
+		alternateName: `@${profile.username}`,
+		description: profile.blurb || undefined,
+		url: profileCanonicalUrl,
+		image: profile.avatar || undefined
+	})
+	: "";
 ---
 
-<Layout title={profile.username ? `${profile.username} • Profile` : "Profile"} sectionLinks={sectionLinks}>
+<Layout
+	title={profile.username ? `${profile.username} • Profile` : "Profile"}
+	sectionLinks={sectionLinks}
+	metaDescription={profileDescription}
+	canonicalUrl={profileCanonicalUrl}
+	robots={profileRobots}
+	structuredData={profileStructuredData}
+>
 	<div slot="right" class="public-profile-page" data-shelf-section-order={shelfSectionOrderJson}>
 		{notFound && (
 			<section class="state-card">
