@@ -47,6 +47,7 @@ let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finishe
 let viewerRatingByBookId = new Map<number, number>();
 let shelvesCount = 0;
 let readersCount = 0;
+let topGenres: string[] = [];
 
 function renderAverageStars(value: number) {
 	const rounded = Math.max(0, Math.min(5, Math.round((Number(value || 0) + Number.EPSILON) * 2) / 2));
@@ -121,6 +122,9 @@ if (authorId > 0) {
 			books = bookRows;
 			shelvesCount = bookRows.reduce((sum, item) => sum + Number(item.shelves || 0), 0);
 			readersCount = Math.max(...bookRows.map((item) => Number(item.readers || 0)), 0);
+			topGenres = Array.from(
+				new Set(bookRows.flatMap((item) => (item.genres || []).map((genre) => String(genre || "").trim()).filter(Boolean)))
+			).slice(0, 6);
 		}
 
 		if (viewerUserId && books.length > 0) {
@@ -159,6 +163,18 @@ const authorStructuredData = author.id > 0
 		image: author.photoUrl || undefined
 	})
 	: "";
+const authorBreadcrumbStructuredData = JSON.stringify({
+	"@context": "https://schema.org",
+	"@type": "BreadcrumbList",
+	itemListElement: [
+		{ "@type": "ListItem", position: 1, name: "Home", item: "/" },
+		{ "@type": "ListItem", position: 2, name: "Authors", item: "/authors" },
+		...(author.id > 0 ? [{ "@type": "ListItem", position: 3, name: author.name, item: authorCanonicalUrl }] : [{ "@type": "ListItem", position: 3, name: "Author", item: authorCanonicalUrl }])
+	]
+});
+const authorStructuredDataPayload = authorStructuredData
+	? JSON.stringify([JSON.parse(authorStructuredData), JSON.parse(authorBreadcrumbStructuredData)])
+	: "";
 ---
 
 <Layout
@@ -166,9 +182,20 @@ const authorStructuredData = author.id > 0
 	metaDescription={authorDescription}
 	canonicalUrl={authorCanonicalUrl}
 	robots={authorRobots}
-	structuredData={authorStructuredData}
+	structuredData={authorStructuredDataPayload}
 >
 	<div slot="right" class="author-page">
+		<nav class="breadcrumbs" aria-label="Breadcrumb">
+			<a href="/">Home</a>
+			<span aria-hidden="true">/</span>
+			{author.id > 0 ? (
+				<>
+					<a href="/authors">Authors</a>
+					<span aria-hidden="true">/</span>
+					<span>{author.name}</span>
+				</>
+			) : <span>Author</span>}
+		</nav>
 		{errorMessage && <p class="error">{errorMessage}</p>}
 		{!errorMessage && author.id <= 0 && <p>Author not found.</p>}
 
@@ -177,7 +204,7 @@ const authorStructuredData = author.id > 0
 				<section class="panel author-head">
 					<div class="author-photo">
 						{author.photoUrl
-							? <img src={author.photoUrl} alt={`${author.name} photo`} loading="lazy" />
+							? <img src={author.photoUrl} alt={`${author.name} portrait`} loading="lazy" decoding="async" width="120" height="120" />
 							: <div class="photo-placeholder"><span class="material-icons" aria-hidden="true">person</span></div>}
 					</div>
 					<div class="author-meta">
@@ -197,6 +224,12 @@ const authorStructuredData = author.id > 0
 
 				<section class="books-section">
 					<h2>Books</h2>
+					<div class="related-links-row">
+						<a class="related-link" href={`/related?kind=author&value=${encodeURIComponent(author.name)}`}>More related to {author.name}</a>
+						{topGenres.map((genre) => (
+							<a class="related-link" href={`/related?kind=genre&value=${encodeURIComponent(genre)}`}>{genre}</a>
+						))}
+					</div>
 					{books.length === 0 ? (
 						<p>No books found for this author yet.</p>
 					) : (
@@ -206,7 +239,7 @@ const authorStructuredData = author.id > 0
 									title={book.title}
 									titleHref={`/book?bookId=${encodeURIComponent(String(book.id))}`}
 									author={book.author}
-									authorHref={book.author ? authorHref(book.author, book.authorId) : ""}
+									authorHref=""
 									thumbnail={book.coverUrl}
 									description={book.synopsis || "Synopsis unavailable for this title."}
 								>
@@ -335,6 +368,24 @@ const authorStructuredData = author.id > 0
 
 <style>
 	.author-page { max-width: 980px; }
+	.breadcrumbs {
+		display: flex;
+		gap: 0.35rem;
+		align-items: center;
+		flex-wrap: wrap;
+		margin: 0 0 0.55rem;
+		font-size: 0.84rem;
+		color: #546374;
+	}
+	.breadcrumbs a {
+		color: var(--color-secondary);
+		text-decoration: none;
+	}
+	.breadcrumbs a:hover,
+	.breadcrumbs a:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
 	.panel { border: none; border-radius: 14px; background: var(--color-surface); padding: 1rem; }
 	.author-head { display: grid; grid-template-columns: 120px 1fr; gap: 1rem; }
 	.author-photo img, .photo-placeholder { width: 120px; height: 120px; border-radius: 12px; object-fit: cover; background: #f0f0f0; border: 1px solid #ddd; }
@@ -344,6 +395,23 @@ const authorStructuredData = author.id > 0
 	.bio { margin-top: 0.6rem; line-height: 1.5; }
 	.books-section { margin-top: 0.8rem; }
 	.books-section h2 { margin: 0 0 0.6rem; }
+	.related-links-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin-bottom: 0.6rem;
+	}
+	.related-link {
+		text-decoration: none;
+		color: #1f4f7a;
+		background: #e7edf3;
+		border: 1px solid #c7d5e1;
+		border-radius: 999px;
+		padding: 0.18rem 0.55rem;
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+	.related-link:hover { text-decoration: underline; text-underline-offset: 2px; }
 	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.8rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.book-card-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
 	.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }

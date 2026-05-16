@@ -1,0 +1,190 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getNeonSql } from "../lib/neon";
+
+export const prerender = false;
+
+function normalizeText(value: unknown) {
+	return String(value || "").trim();
+}
+
+const params = Astro.url.searchParams;
+const q = normalizeText(params.get("q"));
+const letter = normalizeText(params.get("letter")).slice(0, 1).toUpperCase();
+const sort = normalizeText(params.get("sort")) || "name";
+const dir = normalizeText(params.get("dir")) === "desc" ? "desc" : "asc";
+const page = Math.max(1, Number(params.get("page") || 1) || 1);
+const pageSize = 50;
+
+const sql = getNeonSql();
+const rows = await sql<Array<{
+	id: number;
+	name: string;
+	photo_url: string;
+	books: number;
+	readers: number;
+	shelves: number;
+	last_activity: string | null;
+}>>`
+	select
+		a.id,
+		a.name,
+		coalesce(a.photo_url, '') as photo_url,
+		count(distinct b.id)::int as books,
+		count(distinct ub.user_id)::int as readers,
+		count(ub.book_id)::int as shelves,
+		max(coalesce(ub.updated_at, b.updated_at, a.updated_at))::text as last_activity
+	from author a
+	join book b on b.author_id = a.id
+	left join user_book ub on ub.book_id = b.id
+	group by a.id, a.name, a.photo_url
+	having count(distinct b.id) > 0
+`;
+
+let filtered = rows.filter((row) => {
+	const name = normalizeText(row.name);
+	if (!name) return false;
+	if (q && !name.toLowerCase().includes(q.toLowerCase())) return false;
+	if (letter && name[0]?.toUpperCase() !== letter) return false;
+	return true;
+});
+
+const sorters: Record<string, (a: typeof filtered[number], b: typeof filtered[number]) => number> = {
+	name: (a, b) => a.name.localeCompare(b.name),
+	books: (a, b) => a.books - b.books,
+	readers: (a, b) => a.readers - b.readers,
+	shelves: (a, b) => a.shelves - b.shelves,
+	activity: (a, b) => new Date(a.last_activity || 0).getTime() - new Date(b.last_activity || 0).getTime()
+};
+const sorter = sorters[sort] || sorters.readers;
+filtered = filtered.sort((a, b) => (dir === "asc" ? sorter(a, b) : sorter(b, a)));
+
+const total = filtered.length;
+const totalPages = Math.max(1, Math.ceil(total / pageSize));
+const currentPage = Math.min(page, totalPages);
+const start = (currentPage - 1) * pageSize;
+const pageRows = filtered.slice(start, start + pageSize);
+
+const baseParams = new URLSearchParams();
+if (q) baseParams.set("q", q);
+if (letter) baseParams.set("letter", letter);
+if (sort) baseParams.set("sort", sort);
+if (dir) baseParams.set("dir", dir);
+function pageHref(nextPage: number) {
+	const p = new URLSearchParams(baseParams);
+	p.set("page", String(nextPage));
+	return `/authors?${p.toString()}`;
+}
+
+const alpha = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const authorsStructuredData = JSON.stringify([
+	{
+		"@context": "https://schema.org",
+		"@type": "CollectionPage",
+		name: "Authors",
+		description: "Browse authors with books and shelf activity in Dogeared.",
+		url: "/authors"
+	},
+	{
+		"@context": "https://schema.org",
+		"@type": "BreadcrumbList",
+		itemListElement: [
+			{ "@type": "ListItem", position: 1, name: "Home", item: "/" },
+			{ "@type": "ListItem", position: 2, name: "Authors", item: "/authors" }
+		]
+	},
+	{
+		"@context": "https://schema.org",
+		"@type": "ItemList",
+		name: "Authors",
+		itemListElement: pageRows.slice(0, 50).map((row, index) => ({
+			"@type": "ListItem",
+			position: index + 1,
+			url: `/author?authorId=${encodeURIComponent(String(row.id))}`,
+			name: row.name
+		}))
+	}
+]);
+---
+
+<Layout
+	title="Authors"
+	metaDescription="Browse all authors in Dogeared. Search, filter, and sort by readers, shelves, and book counts."
+	canonicalUrl="/authors"
+	structuredData={authorsStructuredData}
+>
+	<div slot="right" class="authors-page">
+		<nav class="breadcrumbs" aria-label="Breadcrumb">
+			<a href="/">Home</a><span aria-hidden="true">/</span><span>Authors</span>
+		</nav>
+		<header class="header">
+			<h1>Authors</h1>
+			<p>{total.toLocaleString()} authors with books in Dogeared.</p>
+		</header>
+		<form method="get" class="controls">
+			<input type="search" name="q" value={q} placeholder="Search authors" />
+			<select name="sort">
+				<option value="name" selected={sort === "name"}>Name</option>
+				<option value="readers" selected={sort === "readers"}>Most readers</option>
+				<option value="shelves" selected={sort === "shelves"}>Most shelves</option>
+				<option value="books" selected={sort === "books"}>Most books</option>
+				<option value="activity" selected={sort === "activity"}>Recent activity</option>
+			</select>
+			<select name="dir">
+				<option value="desc" selected={dir === "desc"}>Desc</option>
+				<option value="asc" selected={dir === "asc"}>Asc</option>
+			</select>
+			<select name="letter">
+				<option value="">All letters</option>
+				{alpha.map((ch) => <option value={ch} selected={letter === ch}>{ch}</option>)}
+			</select>
+			<button type="submit">Apply</button>
+		</form>
+		<ul class="author-grid">
+			{pageRows.map((row) => (
+				<li>
+					<a class="author-card" href={`/author?authorId=${encodeURIComponent(String(row.id))}`}>
+						{row.photo_url ? <img src={row.photo_url} alt={`${row.name} portrait`} loading="lazy" decoding="async" width="56" height="56" /> : <span class="avatar-fallback" aria-hidden="true">A</span>}
+						<div>
+							<strong>{row.name}</strong>
+							<p>{row.books.toLocaleString()} books · {row.readers.toLocaleString()} readers · {row.shelves.toLocaleString()} shelves</p>
+						</div>
+					</a>
+				</li>
+			))}
+		</ul>
+		<div class="pager">
+			<a href={currentPage > 1 ? pageHref(currentPage - 1) : undefined} aria-disabled={currentPage <= 1}>Previous</a>
+			<span>Page {currentPage} of {totalPages}</span>
+			<a href={currentPage < totalPages ? pageHref(currentPage + 1) : undefined} aria-disabled={currentPage >= totalPages}>Next</a>
+		</div>
+	</div>
+</Layout>
+
+<style>
+	.authors-page { max-width: 980px; display: grid; gap: 0.8rem; }
+	.breadcrumbs { display: flex; gap: 0.35rem; font-size: 0.84rem; color: #546374; }
+	.breadcrumbs a { color: var(--color-secondary); text-decoration: none; }
+	.header h1, .header p { margin: 0; }
+	.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+	.controls input, .controls select, .controls button { font: inherit; padding: 0.4rem 0.55rem; border-radius: 8px; border: 1px solid #d4d4d4; }
+	.controls button {
+		background: var(--color-primary);
+		border-color: var(--color-primary);
+		color: #fff;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.controls button:hover {
+		background: var(--color-primary-hover);
+		border-color: var(--color-primary-hover);
+	}
+	.author-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.author-card { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 0.6rem; align-items: center; text-decoration: none; color: inherit; background: #fff; border-radius: 12px; padding: 0.6rem; }
+	.author-card img, .avatar-fallback { width: 56px; height: 56px; border-radius: 999px; object-fit: cover; background: #ece7dc; display: grid; place-items: center; }
+	.author-card strong { display: block; }
+	.author-card p { margin: 0.2rem 0 0; color: #4f5d6c; font-size: 0.88rem; }
+	.pager { display: flex; justify-content: space-between; align-items: center; }
+	.pager a[aria-disabled="true"] { pointer-events: none; opacity: 0.45; }
+	@media (max-width: 760px) { .author-grid { grid-template-columns: 1fr; } }
+</style>

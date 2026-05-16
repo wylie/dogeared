@@ -715,6 +715,17 @@ const profileStructuredData = (!notFound && !privateProfile && !!profile.usernam
 		image: profile.avatar || undefined
 	})
 	: "";
+const profileBreadcrumbStructuredData = JSON.stringify({
+	"@context": "https://schema.org",
+	"@type": "BreadcrumbList",
+	itemListElement: [
+		{ "@type": "ListItem", position: 1, name: "Home", item: "/" },
+		...(profile.username ? [{ "@type": "ListItem", position: 2, name: `@${profile.username}`, item: profileCanonicalUrl }] : [{ "@type": "ListItem", position: 2, name: "Profile", item: profileCanonicalUrl }])
+	]
+});
+const profileStructuredDataPayload = profileStructuredData
+	? JSON.stringify([JSON.parse(profileStructuredData), JSON.parse(profileBreadcrumbStructuredData)])
+	: "";
 ---
 
 <Layout
@@ -723,9 +734,20 @@ const profileStructuredData = (!notFound && !privateProfile && !!profile.usernam
 	metaDescription={profileDescription}
 	canonicalUrl={profileCanonicalUrl}
 	robots={profileRobots}
-	structuredData={profileStructuredData}
+	structuredData={profileStructuredDataPayload}
 >
 	<div slot="right" class="public-profile-page" data-shelf-section-order={shelfSectionOrderJson}>
+		<nav class="breadcrumbs" aria-label="Breadcrumb">
+			<a href="/">Home</a>
+			<span aria-hidden="true">/</span>
+			{profile.username ? (
+				<>
+					<span>Profile</span>
+					<span aria-hidden="true">/</span>
+					<span>@{profile.username}</span>
+				</>
+			) : <span>Profile</span>}
+		</nav>
 		{notFound && (
 			<section class="state-card">
 				<h1>Profile not found</h1>
@@ -1339,6 +1361,24 @@ const profileStructuredData = (!notFound && !privateProfile && !!profile.usernam
 
 <style>
 	.public-profile-page { max-width: 860px; display: grid; gap: 0.9rem; }
+	.breadcrumbs {
+		display: flex;
+		gap: 0.35rem;
+		align-items: center;
+		flex-wrap: wrap;
+		margin: 0;
+		font-size: 0.84rem;
+		color: #546374;
+	}
+	.breadcrumbs a {
+		color: var(--color-secondary);
+		text-decoration: none;
+	}
+	.breadcrumbs a:hover,
+	.breadcrumbs a:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
 	.welcome-banner {
 		display: flex;
 		align-items: center;

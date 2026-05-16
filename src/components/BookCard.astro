@@ -45,8 +45,8 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 	<div class="cover-wrap">
 		{thumbnail ? (
 			titleHref
-				? <a href={titleHref} aria-label={`View ${title}`}><img class="cover" src={thumbnail} alt={`${title} cover`} loading="lazy" /></a>
-				: <img class="cover" src={thumbnail} alt={`${title} cover`} loading="lazy" />
+				? <a href={titleHref} aria-label={`View ${title}`}><img class="cover" src={thumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="76" height="114" /></a>
+				: <img class="cover" src={thumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="76" height="114" />
 		) : (
 			<div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>
 		)}
@@ -73,8 +73,10 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 				{titleHref && hasSynopsisText && <a class="description-more" href={titleHref}>Continue reading</a>}
 			</div>
 		)}
-		<slot name="footer" />
-		<slot />
+		<div class="card-tail">
+			<slot name="footer" />
+			<slot />
+		</div>
 	</div>
 </li>
 
@@ -236,6 +238,12 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 	.description-more:focus-visible {
 		text-decoration: underline;
 		text-underline-offset: 2px;
+	}
+	.card-tail {
+		margin-top: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
 	}
 	.cover-actions {
 		width: 100%;

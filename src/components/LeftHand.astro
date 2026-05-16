@@ -24,81 +24,107 @@ const query = Astro.url.searchParams.get("q") ?? "";
       <label class="visually-hidden" for="left-hand-search">Search books and authors</label>
       <input id="left-hand-search" type="search" name="q" placeholder="Search" value={query} />
     </form>
-    <ul id="left-hand-primary-links" class="primary-links">
-      <li>
-        <a href={isHomePage ? undefined : '/'} class={isHomePage ? 'active' : 'hover'} aria-current={isHomePage ? 'page' : undefined}>Discover</a>
-        {isHomePage && sectionLinks.length > 0 && (
-          <ul class="section-links-nested">
-            {sectionLinks.map((link) => (
-              <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-            ))}
-          </ul>
-        )}
-      </li>
-      <li id="left-hand-login-item" hidden={isAuthenticated}><button type="button" class="nav-text-button hover">Log In</button></li>
-      <li id="left-hand-following-item" hidden={!isAuthenticated}>
-        <a href={isActive('/following') ? undefined : '/following'} class={isActive('/following') ? 'active' : 'hover'} aria-current={isActive('/following') ? 'page' : undefined}>Following</a>
-        {isActive('/following') && sectionLinks.length > 0 && (
-          <ul class="section-links-nested">
-            {sectionLinks.map((link) => (
-              <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-            ))}
-          </ul>
-        )}
-      </li>
-      <li id="left-hand-profile-item" hidden={!isAuthenticated}>
-        <a href="/settings#account-settings" class={isProfilePage ? 'active' : 'hover'} aria-current={isProfilePage ? 'page' : undefined}>Profile</a>
-        {isProfilePage && sectionLinks.length > 0 && (
-          <ul class="section-links-nested">
-            {sectionLinks.map((link) => (
-              <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-            ))}
-          </ul>
-        )}
-      </li>
-      <li id="left-hand-settings-item" hidden={!isAuthenticated}>
-        <a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a>
-        {isActive('/settings') && sectionLinks.length > 0 && (
-          <ul class="section-links-nested">
-            {sectionLinks.map((link) => (
-              <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-            ))}
-          </ul>
-        )}
-      </li>
-      <li id="left-hand-logout-item" hidden={!isAuthenticated}><button type="button" class="nav-text-button hover">Log Out</button></li>
-      <li id="left-hand-auth-divider" class="nav-group-divider" hidden={!isAuthenticated} aria-hidden="true"></li>
-      <li>
-        <a href={isActive('/mission') ? undefined : '/mission'} class={isActive('/mission') ? 'active' : 'hover'} aria-current={isActive('/mission') ? 'page' : undefined}>Mission</a>
-        {isActive('/mission') && sectionLinks.length > 0 && (
-          <ul class="section-links-nested">
-            {sectionLinks.map((link) => (
-              <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-            ))}
-          </ul>
-        )}
-      </li>
-      <li>
-        <a href={isActive('/metrics') ? undefined : '/metrics'} class={isActive('/metrics') ? 'active' : 'hover'} aria-current={isActive('/metrics') ? 'page' : undefined}>Metrics</a>
-        {isActive('/metrics') && sectionLinks.length > 0 && (
-          <ul class="section-links-nested">
-            {sectionLinks.map((link) => (
-              <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-            ))}
-          </ul>
-        )}
-      </li>
-      <li>
-        <a href={isActive('/roadmap') ? undefined : '/roadmap'} class={isActive('/roadmap') ? 'active' : 'hover'} aria-current={isActive('/roadmap') ? 'page' : undefined}>Roadmap</a>
-        {isActive('/roadmap') && sectionLinks.length > 0 && (
-          <ul class="section-links-nested">
-            {sectionLinks.map((link) => (
-              <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-            ))}
-          </ul>
-        )}
-      </li>
-    </ul>
+    <nav id="left-hand-primary-links" class="primary-links" aria-label="Primary navigation">
+      <section class="nav-group nav-group-you">
+        <h3 class="nav-group-title">You</h3>
+        <ul>
+          <li id="left-hand-login-item" hidden={isAuthenticated}><button type="button" class="nav-text-button hover">Log In</button></li>
+          <li id="left-hand-following-item" hidden={!isAuthenticated}>
+            <a href={isActive('/following') ? undefined : '/following'} class={isActive('/following') ? 'active' : 'hover'} aria-current={isActive('/following') ? 'page' : undefined}>Following</a>
+            {isActive('/following') && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
+          <li id="left-hand-profile-item" hidden={!isAuthenticated}>
+            <a href="/settings#account-settings" class={isProfilePage ? 'active' : 'hover'} aria-current={isProfilePage ? 'page' : undefined}>Profile</a>
+            {isProfilePage && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
+          <li id="left-hand-settings-item" hidden={!isAuthenticated}>
+            <a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a>
+            {isActive('/settings') && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
+          <li id="left-hand-logout-item" hidden={!isAuthenticated}><button type="button" class="nav-text-button hover">Log Out</button></li>
+        </ul>
+      </section>
+
+      <section class="nav-group nav-group-explore">
+        <h3 class="nav-group-title">Explore</h3>
+        <ul>
+          <li>
+            <a href={isActive('/books') ? undefined : '/books'} class={isActive('/books') ? 'active' : 'hover'} aria-current={isActive('/books') ? 'page' : undefined}>Books</a>
+            {isActive('/books') && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
+          <li>
+            <a href={isActive('/authors') ? undefined : '/authors'} class={isActive('/authors') ? 'active' : 'hover'} aria-current={isActive('/authors') ? 'page' : undefined}>Authors</a>
+            {isActive('/authors') && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
+        </ul>
+      </section>
+
+      <section class="nav-group nav-group-about">
+        <h3 class="nav-group-title">About</h3>
+        <ul>
+          <li>
+            <a href={isActive('/mission') ? undefined : '/mission'} class={isActive('/mission') ? 'active' : 'hover'} aria-current={isActive('/mission') ? 'page' : undefined}>Mission</a>
+            {isActive('/mission') && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
+          <li>
+            <a href={isActive('/metrics') ? undefined : '/metrics'} class={isActive('/metrics') ? 'active' : 'hover'} aria-current={isActive('/metrics') ? 'page' : undefined}>Metrics</a>
+            {isActive('/metrics') && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
+          <li>
+            <a href={isActive('/roadmap') ? undefined : '/roadmap'} class={isActive('/roadmap') ? 'active' : 'hover'} aria-current={isActive('/roadmap') ? 'page' : undefined}>Roadmap</a>
+            {isActive('/roadmap') && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
+        </ul>
+      </section>
+    </nav>
     {sectionLinks.length > 0 && (
       <ul id="left-hand-secondary-links" class="secondary-links-mobile" aria-label="Section navigation">
         {sectionLinks.map((link) => (
@@ -139,10 +165,27 @@ const query = Astro.url.searchParams.get("q") ?? "";
     display: block;
   }
   .primary-links {
-    list-style-type: none;
     margin: 1rem 0 0;
     padding: 1rem 0 0;
     border-top: 1px solid var(--color-divider);
+    display: grid;
+    gap: 0.9rem;
+  }
+  .nav-group {
+    display: grid;
+    gap: 0.3rem;
+  }
+  .nav-group-title {
+    margin: 0;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #546374;
+  }
+  .nav-group > ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
   }
   .secondary-links-mobile {
     display: none;
@@ -180,11 +223,6 @@ const query = Astro.url.searchParams.get("q") ?? "";
     text-align: left;
     width: 100%;
     gap: .25rem;
-  }
-  .primary-links .nav-group-divider {
-    margin-top: 0.65rem;
-    padding-top: 0.7rem;
-    border-top: 1px solid rgba(32, 32, 32, 0.38);
   }
   a {
     text-decoration: none;
@@ -372,6 +410,10 @@ const query = Astro.url.searchParams.get("q") ?? "";
       border-bottom-left-radius: 18px;
       border-bottom-right-radius: 18px;
       padding: 0.6rem 0.5rem 0.55rem;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: clip;
+      box-sizing: border-box;
     }
     .mobile-top-row {
       grid-area: top;
@@ -399,6 +441,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     #left-hand-nav form {
       grid-area: search;
       margin: 0.35rem 0 0.2rem;
+      display: block;
     }
     #left-hand-nav input[type="search"] {
       margin-top: 0;
@@ -408,7 +451,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     #left-hand-nav .primary-links {
       display: flex;
       flex-wrap: nowrap;
-      column-gap: 0.95rem;
+      column-gap: 1rem;
       row-gap: 0.5rem;
       border-top: none;
       margin-top: 0;
@@ -416,30 +459,37 @@ const query = Astro.url.searchParams.get("q") ?? "";
       grid-area: links;
       align-items: center;
       min-width: 0;
+      width: 100%;
+      max-width: 100%;
       overflow-x: auto;
       overflow-y: hidden;
       scrollbar-width: none;
       -webkit-overflow-scrolling: touch;
       white-space: nowrap;
     }
-    #left-hand-nav .primary-links::-webkit-scrollbar {
-      display: none;
+    #left-hand-nav .primary-links::-webkit-scrollbar { display: none; }
+    #left-hand-nav .primary-links .nav-group {
+      gap: 0.2rem;
+      min-width: fit-content;
+      flex: 0 0 auto;
     }
-    #left-hand-nav .primary-links li {
+    #left-hand-nav .primary-links .nav-group-title {
+      font-size: 0.72rem;
+      color: #6b7280;
+      margin-bottom: 0.08rem;
+    }
+    #left-hand-nav .primary-links .nav-group > ul {
+      display: flex;
+      gap: 0.95rem;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+      align-items: center;
+      white-space: nowrap;
+    }
+    #left-hand-nav .primary-links .nav-group > ul > li {
       flex: 0 0 auto;
       width: auto;
-    }
-    #left-hand-nav .primary-links .nav-group-divider {
-      display: inline-flex;
-      align-items: center;
-      margin: 0 0.15rem;
-      padding: 0;
-      border: none;
-      color: #8c8c8c;
-      line-height: 1;
-    }
-    #left-hand-nav .primary-links .nav-group-divider::before {
-      content: "|";
     }
     #left-hand-nav .primary-links a,
     #left-hand-nav .primary-links .nav-text-button {
@@ -480,6 +530,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
       border-top: 1px solid #d7dde4;
       align-items: center;
       min-width: 0;
+      width: 100%;
+      max-width: 100%;
       overflow-x: auto;
       overflow-y: hidden;
       scrollbar-width: none;

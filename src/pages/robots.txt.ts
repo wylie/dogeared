@@ -18,8 +18,11 @@ export const GET: APIRoute = async ({ request }) => {
 		"Allow: /",
 		"Disallow: /api/",
 		"Disallow: /admin/",
+		"Disallow: /search",
 		"Disallow: /settings",
 		"Disallow: /following",
+		"Disallow: /myreads",
+		"Disallow: /feed",
 		"Disallow: /metrics",
 		"",
 		`Sitemap: ${base}/sitemap.xml`
@@ -32,4 +35,3 @@ export const GET: APIRoute = async ({ request }) => {
 		}
 	});
 };
-

@@ -7,9 +7,47 @@ const sectionLinks = [
 	{ id: "principles", label: "Principles" },
 	{ id: "vision", label: "Vision" }
 ];
+const missionStructuredData = JSON.stringify([
+	{
+		"@context": "https://schema.org",
+		"@type": "FAQPage",
+		mainEntity: [
+			{
+				"@type": "Question",
+				name: "What is Dogeared?",
+				acceptedAnswer: {
+					"@type": "Answer",
+					text: "Dogeared is a calmer reading tracker built to help readers remember what matters, discover thoughtfully, and keep their shelves focused."
+				}
+			},
+			{
+				"@type": "Question",
+				name: "How is Dogeared different from algorithmic book feeds?",
+				acceptedAnswer: {
+					"@type": "Answer",
+					text: "Dogeared prioritizes transparent reader activity over opaque recommendation feeds, so discovery comes from real shelving and reading behavior."
+				}
+			},
+			{
+				"@type": "Question",
+				name: "What principles guide Dogeared?",
+				acceptedAnswer: {
+					"@type": "Answer",
+					text: "The product is guided by privacy, transparency, accessibility, and usefulness over addictive engagement patterns."
+				}
+			}
+		]
+	}
+]);
 ---
 
-<Layout title="Mission" sectionLinks={sectionLinks}>
+<Layout
+	title="Mission"
+	sectionLinks={sectionLinks}
+	metaDescription="Read the Dogeared mission: a calmer reading tracker built for memory, taste, and thoughtful discovery."
+	canonicalUrl="/mission"
+	structuredData={missionStructuredData}
+>
 	<div slot="right" class="mission-page">
 		<header class="mission-hero">
 			<h1>A reading life with less noise, more memory, and better taste.</h1>

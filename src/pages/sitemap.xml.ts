@@ -36,8 +36,10 @@ export const GET: APIRoute = async ({ request }) => {
 	const base = resolveBase(request);
 	const staticEntries: UrlEntry[] = [
 		{ loc: toUrl(base, "/"), changefreq: "daily", priority: "1.0" },
-		{ loc: toUrl(base, "/search"), changefreq: "daily", priority: "0.9" },
 		{ loc: toUrl(base, "/related"), changefreq: "daily", priority: "0.8" },
+		{ loc: toUrl(base, "/books"), changefreq: "daily", priority: "0.85" },
+		{ loc: toUrl(base, "/authors"), changefreq: "daily", priority: "0.85" },
+		{ loc: toUrl(base, "/metrics"), changefreq: "daily", priority: "0.75" },
 		{ loc: toUrl(base, "/roadmap"), changefreq: "monthly", priority: "0.5" },
 		{ loc: toUrl(base, "/mission"), changefreq: "monthly", priority: "0.5" }
 	];
@@ -46,19 +48,31 @@ export const GET: APIRoute = async ({ request }) => {
 	try {
 		const sql = getNeonSql();
 		const [profiles, authors, books] = await Promise.all([
-			sql<Array<{ username: string }>>`
-				select username
+			sql<Array<{ username: string; lastmod: string | null; shelves_count: number }>>`
+				select
+					au.username,
+					max(coalesce(ub.updated_at, ub.created_at))::text as lastmod,
+					count(ub.book_id)::int as shelves_count
 				from app_user
+				left join user_book ub on ub.user_id = au.id
 				where nullif(trim(coalesce(username, '')), '') is not null
 					and coalesce(profile_data->'settings'->'privacy'->>'profileVisibility', 'public') <> 'private'
-				order by created_at desc
+				group by au.id, au.username, au.created_at
+				having count(ub.book_id) > 0
+				order by max(coalesce(ub.updated_at, ub.created_at)) desc nulls last, au.created_at desc
 				limit 2000
 			`,
-			sql<Array<{ id: number }>>`
-				select distinct author_id as id
-				from book
-				where author_id is not null and author_id > 0
-				order by author_id desc
+			sql<Array<{ id: number; lastmod: string | null; shelves_count: number }>>`
+				select
+					b.author_id as id,
+					max(coalesce(ub.updated_at, ub.created_at))::text as lastmod,
+					count(distinct ub.book_id)::int as shelves_count
+				from book b
+				join user_book ub on ub.book_id = b.id
+				where b.author_id is not null and b.author_id > 0
+				group by b.author_id
+				having count(distinct ub.book_id) > 0
+				order by max(coalesce(ub.updated_at, ub.created_at)) desc nulls last, b.author_id desc
 				limit 2000
 			`,
 			sql<Array<{ id: number; updated_at: string | null }>>`
@@ -71,20 +85,28 @@ export const GET: APIRoute = async ({ request }) => {
 
 		for (const row of profiles) {
 			const username = String(row?.username || "").trim();
+			const shelvesCount = Math.max(0, Number(row?.shelves_count || 0) || 0);
 			if (!username) continue;
+			if (shelvesCount <= 0) continue;
+			const lastmod = String(row?.lastmod || "").trim();
 			dynamicEntries.push({
 				loc: toUrl(base, `/u/${encodeURIComponent(username)}`),
 				changefreq: "weekly",
-				priority: "0.7"
+				priority: "0.7",
+				lastmod: lastmod ? new Date(lastmod).toISOString() : undefined
 			});
 		}
 		for (const row of authors) {
 			const authorId = Math.max(0, Number(row?.id || 0) || 0);
+			const shelvesCount = Math.max(0, Number(row?.shelves_count || 0) || 0);
 			if (!authorId) continue;
+			if (shelvesCount <= 0) continue;
+			const lastmod = String(row?.lastmod || "").trim();
 			dynamicEntries.push({
 				loc: toUrl(base, `/author?authorId=${encodeURIComponent(String(authorId))}`),
 				changefreq: "weekly",
-				priority: "0.7"
+				priority: "0.7",
+				lastmod: lastmod ? new Date(lastmod).toISOString() : undefined
 			});
 		}
 		for (const row of books) {
@@ -128,4 +150,3 @@ export const GET: APIRoute = async ({ request }) => {
 		}
 	});
 };
-

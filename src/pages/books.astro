@@ -1,0 +1,214 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+import { getNeonSql } from "../lib/neon";
+import { authorHref } from "../lib/author";
+
+export const prerender = false;
+
+type BookStatsRow = {
+	id: number;
+	title: string;
+	author: string;
+	author_id: number | null;
+	cover_url: string;
+	readers: number;
+	shelves: number;
+	rating_avg: number | null;
+	rating_count: number;
+	recent_readers_30d: number;
+	recent_shelves_30d: number;
+	last_activity: string | null;
+};
+
+type CuratedSection = {
+	id: string;
+	title: string;
+	subtitle: string;
+	books: BookStatsRow[];
+};
+
+const sql = getNeonSql();
+const rows = await sql<BookStatsRow[]>`
+	with stats as (
+		select
+			b.id,
+			b.title,
+			coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+			b.author_id,
+			coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+			count(distinct ub.user_id)::int as readers,
+			count(ub.book_id)::int as shelves,
+			round(avg(ub.rating)::numeric, 2) as rating_avg,
+			count(*) filter (where ub.rating is not null)::int as rating_count,
+			count(distinct ub.user_id) filter (
+				where ub.updated_at >= now() - interval '30 day'
+			)::int as recent_readers_30d,
+			count(ub.book_id) filter (
+				where ub.updated_at >= now() - interval '30 day'
+			)::int as recent_shelves_30d,
+			max(coalesce(ub.updated_at, b.updated_at, b.created_at))::text as last_activity
+		from book b
+		left join user_book ub on ub.book_id = b.id
+		group by b.id, b.title, b.primary_author, b.author_id, b.cover_url
+	)
+	select *
+	from stats
+	where shelves > 0
+`;
+
+const byTrending = [...rows].sort((a, b) => {
+	const scoreA = (a.recent_readers_30d * 5) + (a.recent_shelves_30d * 3) + (Number(a.rating_avg || 0) * 2);
+	const scoreB = (b.recent_readers_30d * 5) + (b.recent_shelves_30d * 3) + (Number(b.rating_avg || 0) * 2);
+	return scoreB - scoreA || b.readers - a.readers || a.title.localeCompare(b.title);
+});
+const byShelves = [...rows].sort((a, b) => b.shelves - a.shelves || b.readers - a.readers || a.title.localeCompare(b.title));
+const byRating = [...rows]
+	.filter((row) => Number(row.rating_count || 0) >= 3)
+	.sort((a, b) => Number(b.rating_avg || 0) - Number(a.rating_avg || 0) || b.rating_count - a.rating_count || a.title.localeCompare(b.title));
+const byRecent = [...rows].sort((a, b) => {
+	const at = new Date(a.last_activity || 0).getTime();
+	const bt = new Date(b.last_activity || 0).getTime();
+	return bt - at || b.recent_shelves_30d - a.recent_shelves_30d || a.title.localeCompare(b.title);
+});
+
+function uniqueBooks(items: BookStatsRow[], used: Set<number>, max = 8) {
+	const result: BookStatsRow[] = [];
+	for (const item of items) {
+		if (used.has(Number(item.id || 0))) continue;
+		result.push(item);
+		used.add(Number(item.id || 0));
+		if (result.length >= max) break;
+	}
+	return result;
+}
+
+const used = new Set<number>();
+const sections: CuratedSection[] = [
+	{
+		id: "trending",
+		title: "Trending Now",
+		subtitle: "Books with the strongest recent shelf activity in the past 30 days.",
+		books: uniqueBooks(byTrending, used)
+	},
+	{
+		id: "most-shelved",
+		title: "Most Shelved",
+		subtitle: "Books that appear on the most shelves across Dogeared.",
+		books: uniqueBooks(byShelves, used)
+	},
+	{
+		id: "top-rated",
+		title: "Top Rated",
+		subtitle: "Highest-rated books with at least 3 ratings.",
+		books: uniqueBooks(byRating, used)
+	},
+	{
+		id: "recent-activity",
+		title: "Recently Active",
+		subtitle: "Books readers have updated most recently.",
+		books: uniqueBooks(byRecent, used)
+	}
+].filter((section) => section.books.length > 0);
+
+const totalCuratedBooks = sections.reduce((sum, section) => sum + section.books.length, 0);
+const booksStructuredData = JSON.stringify([
+	{
+		"@context": "https://schema.org",
+		"@type": "CollectionPage",
+		name: "Books",
+		description: "Curated books in Dogeared based on shelf activity.",
+		url: "/books"
+	},
+	{
+		"@context": "https://schema.org",
+		"@type": "BreadcrumbList",
+		itemListElement: [
+			{ "@type": "ListItem", position: 1, name: "Home", item: "/" },
+			{ "@type": "ListItem", position: 2, name: "Books", item: "/books" }
+		]
+	},
+	{
+		"@context": "https://schema.org",
+		"@type": "ItemList",
+		name: "Curated Books",
+		itemListElement: sections
+			.flatMap((section) => section.books)
+			.slice(0, 24)
+			.map((book, index) => ({
+				"@type": "ListItem",
+				position: index + 1,
+				url: `/book?bookId=${encodeURIComponent(String(book.id))}`,
+				name: book.title
+			}))
+	}
+]);
+---
+
+<Layout
+	title="Books"
+	metaDescription="Explore curated books in Dogeared: trending now, most shelved, top rated, and recently active picks."
+	canonicalUrl="/books"
+	structuredData={booksStructuredData}
+>
+	<div slot="right" class="books-page">
+		<nav class="breadcrumbs" aria-label="Breadcrumb">
+			<a href="/">Home</a><span aria-hidden="true">/</span><span>Books</span>
+		</nav>
+		<header class="header">
+			<h1>Books</h1>
+			<p>Curated picks from Dogeared shelf activity. {totalCuratedBooks.toLocaleString()} books featured right now.</p>
+		</header>
+		{
+			sections.length === 0
+				? <p class="empty">No shelf activity yet. Add books to start building curated lists.</p>
+				: sections.map((section) => (
+					<section class="curated-section" id={section.id}>
+						<div class="section-header">
+							<h2>{section.title}</h2>
+							<p>{section.subtitle}</p>
+						</div>
+						<ul class="book-grid">
+							{section.books.map((row) => (
+								<li class="book-row">
+									<a class="cover-link" href={`/book?bookId=${encodeURIComponent(String(row.id))}`}>
+										{row.cover_url
+											? <img src={row.cover_url} alt={`${row.title} cover`} loading="lazy" decoding="async" width="64" height="96" />
+											: <span class="cover-fallback" aria-hidden="true">📘</span>}
+									</a>
+									<div class="book-content">
+										<a class="title-link" href={`/book?bookId=${encodeURIComponent(String(row.id))}`}>{row.title}</a>
+										<p class="meta">by <a href={authorHref(row.author, Number(row.author_id || 0))}>{row.author}</a></p>
+										<p class="meta">{row.readers.toLocaleString()} readers · {row.shelves.toLocaleString()} shelves</p>
+										<p class="meta">{(Number(row.rating_avg || 0)).toFixed(2)} avg · {row.rating_count.toLocaleString()} ratings</p>
+									</div>
+								</li>
+							))}
+						</ul>
+					</section>
+				))
+		}
+	</div>
+</Layout>
+
+<style>
+	.books-page { max-width: 980px; display: grid; gap: 1rem; }
+	.breadcrumbs { display: flex; gap: 0.35rem; font-size: 0.84rem; color: #546374; }
+	.breadcrumbs a { color: var(--color-secondary); text-decoration: none; }
+	.header h1, .header p { margin: 0; }
+	.curated-section { display: grid; gap: 0.55rem; }
+	.section-header h2, .section-header p { margin: 0; }
+	.section-header p { color: #4f5d6c; font-size: 0.92rem; }
+	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.book-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 0.65rem; align-items: start; background: #fff; border-radius: 12px; padding: 0.6rem; }
+	.cover-link img, .cover-fallback { width: 64px; height: 96px; border-radius: 8px; object-fit: cover; display: grid; place-items: center; background: #ece7dc; }
+	.book-content { min-width: 0; }
+	.title-link { color: inherit; font-weight: 700; text-decoration: none; }
+	.title-link:hover { text-decoration: underline; }
+	.meta { margin: 0.2rem 0 0; font-size: 0.88rem; color: #4f5d6c; }
+	.meta a { color: var(--color-secondary); text-decoration: none; }
+	.empty { margin: 0; color: #4f5d6c; }
+	@media (max-width: 900px) {
+		.book-grid { grid-template-columns: 1fr; }
+	}
+</style>

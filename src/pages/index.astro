@@ -335,12 +335,23 @@ try {
 }
 ---
 
-<Layout title="Home" sectionLinks={sections.map((section) => ({ id: section.id, label: section.title }))}>
+<Layout
+	title="Home"
+	metaDescription="Discover books readers are shelving right now on Dogeared. Track your reading, save books, and find your next favorite."
+	canonicalUrl="/"
+>
 	<div slot="right" class="browse-page" id="browse-page" data-authenticated={String(isAuthenticated)}>
 		<header class="intro">
 			<h1>Find your next book.<br/>Keep your reading life your own.</h1>
 			<p class="subhead">Browse popular shelves, save what matters, and build your reading history without the noise.</p>
 		</header>
+		{!errorMessage && sections.length > 0 && (
+			<nav class="home-jump-links" aria-label="Jump to genres">
+				{sections.map((section) => (
+					<a href={`#${section.id}`}>{section.title}</a>
+				))}
+			</nav>
+		)}
 
 		{errorMessage && <p class="error">{errorMessage}</p>}
 		{!errorMessage && sections.length === 0 && (
@@ -356,6 +367,7 @@ try {
 					<section id={section.id} class="browse-section">
 						<div class="section-head">
 							<h2>{section.title}</h2>
+							<a class="section-head-link" href={`/related?kind=genre&value=${encodeURIComponent(section.title)}`}>Explore {section.title}</a>
 						</div>
 						{section.books.length === 0 && <p class="empty">No books found for this shelf yet.</p>}
 						{section.books.length > 0 && (
@@ -484,6 +496,44 @@ try {
 	.intro {
 		margin-bottom: 1.5rem;
 	}
+	.home-jump-links {
+		display: flex;
+		flex-wrap: nowrap;
+		gap: 0.45rem;
+		margin: -0.35rem 0 0.95rem;
+		overflow-x: auto;
+		white-space: nowrap;
+		scrollbar-width: none;
+		-webkit-overflow-scrolling: touch;
+		position: sticky;
+		top: var(--mobile-sticky-offset, 0px);
+		z-index: 25;
+		background: var(--color-bg);
+		padding: 0.45rem 0 0.5rem;
+		box-shadow: 0 8px 14px -16px rgba(31, 54, 66, 0.55);
+		--home-jump-links-offset: 40px;
+	}
+	.home-jump-links::-webkit-scrollbar {
+		display: none;
+	}
+	.home-jump-links a {
+		display: inline-flex;
+		align-items: center;
+		text-decoration: none;
+		color: #1f4f7a;
+		background: #e7edf3;
+		border: 1px solid #c7d5e1;
+		border-radius: 999px;
+		padding: 0.22rem 0.62rem;
+		font-size: 0.86rem;
+		font-weight: 700;
+		line-height: 1.2;
+	}
+	.home-jump-links a:hover,
+	.home-jump-links a:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
 
 	.eyebrow {
 		margin: 0 0 0.35rem;
@@ -523,14 +573,30 @@ try {
 
 	.section-head {
 		position: sticky;
-		top: var(--mobile-sticky-offset, 0px);
+		top: calc(var(--mobile-sticky-offset, 0px) + var(--home-jump-links-offset, 44px));
 		padding: 0.75rem 0;
 		background-color: var(--color-bg);
-		z-index: 20;
+		z-index: 24;
 		box-shadow: 0 8px 14px -16px rgba(31, 54, 66, 0.55);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.6rem;
 	}
 	.section-head h2 {
 		margin: 0;
+	}
+	.section-head-link {
+		font-size: 0.84rem;
+		font-weight: 700;
+		color: var(--color-secondary);
+		text-decoration: none;
+		white-space: nowrap;
+	}
+	.section-head-link:hover,
+	.section-head-link:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 
 	.list-date {
@@ -794,6 +860,10 @@ try {
 	}
 
 	@media (max-width: 860px) {
+		.home-jump-links {
+			padding: 0.35rem 0 0.4rem;
+			--home-jump-links-offset: 36px;
+		}
 		.browse-page h1 {
 			max-width: 100%;
 			font-size: clamp(1.95rem, 7.2vw, 2.4rem);
