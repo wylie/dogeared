@@ -1,0 +1,170 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import { getNeonSql } from "../../../lib/neon";
+import { resolvePublicProfileBundle } from "../../../lib/publicProfile";
+import { resolveUserBySession } from "../../../lib/auth";
+
+export const prerender = false;
+
+const requestedUsername = String(Astro.params.username || "").trim().toLowerCase();
+const session = await resolveUserBySession(Astro.request);
+const viewerUserId = String(session?.userId || "");
+const bundle = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
+
+if (bundle.status === "not_found") {
+	return Astro.redirect("/");
+}
+if (bundle.status === "private" || !bundle.profile || !bundle.targetUserId) {
+	return Astro.redirect(`/profile/${encodeURIComponent(requestedUsername)}`);
+}
+
+const profile = bundle.profile;
+const perPage = 25;
+const currentPage = Math.max(1, Number(Astro.url.searchParams.get("p") || "1") || 1);
+const search = String(Astro.url.searchParams.get("q") || "").trim();
+const sort = String(Astro.url.searchParams.get("sort") || "recent").trim().toLowerCase() === "name" ? "name" : "recent";
+const sql = getNeonSql();
+
+const whereSearchSql = search ? sql`and (
+	lower(coalesce(au.username, '')) like ${`%${search.toLowerCase()}%`}
+	or lower(coalesce(au.profile_data->>'name', '')) like ${`%${search.toLowerCase()}%`}
+)` : sql``;
+
+const countRows = await sql<Array<{ count: number }>>`
+	select count(*)::int as count
+	from user_follow uf
+	join app_user au on au.id = uf.follower_user_id
+	where uf.followed_user_id = ${bundle.targetUserId}::uuid
+		and nullif(trim(coalesce(au.username, '')), '') is not null
+		${whereSearchSql}
+`;
+const total = Number(countRows[0]?.count || 0);
+const totalPages = Math.max(1, Math.ceil(total / perPage));
+const page = Math.min(currentPage, totalPages);
+const pageOffset = (page - 1) * perPage;
+const orderBySql = sort === "name"
+	? sql`order by lower(coalesce(au.profile_data->>'name', au.username, '')) asc, uf.created_at desc`
+	: sql`order by uf.created_at desc`;
+
+const rows = await sql<Array<{ username: string | null; profile_data: unknown }>>`
+	select au.username, au.profile_data
+	from user_follow uf
+	join app_user au on au.id = uf.follower_user_id
+	where uf.followed_user_id = ${bundle.targetUserId}::uuid
+		and nullif(trim(coalesce(au.username, '')), '') is not null
+		${whereSearchSql}
+	${orderBySql}
+	offset ${pageOffset}
+	limit ${perPage}
+`;
+
+const readers = rows.map((row) => {
+	const source = row.profile_data && typeof row.profile_data === "object" ? row.profile_data as Record<string, unknown> : {};
+	const avatarRaw = String(source.avatar || "").trim().slice(0, 500000);
+	return {
+		username: String(row.username || "").trim().toLowerCase(),
+		name: String(source.name || "").trim().slice(0, 80),
+		avatar: avatarRaw.startsWith("data:image/") || /^https?:\/\//i.test(avatarRaw) ? avatarRaw : ""
+	};
+}).filter((row) => row.username);
+
+const sectionLinks = [
+	{ id: "followers-list", label: "Followers" }
+];
+
+const listCanonical = `/profile/${encodeURIComponent(profile.username)}/followers`;
+const makeHref = (nextPage: number) => {
+	const url = new URL(listCanonical, Astro.url);
+	if (nextPage > 1) url.searchParams.set("p", String(nextPage));
+	if (search) url.searchParams.set("q", search);
+	if (sort !== "recent") url.searchParams.set("sort", sort);
+	return `${url.pathname}${url.search}`;
+};
+---
+
+<Layout
+	title={`${profile.username} • Followers`}
+	sectionLinks={sectionLinks}
+	canonicalUrl={listCanonical}
+	metaDescription={`Followers of @${profile.username} on Dogeared.`}
+>
+	<div slot="right" class="follow-page">
+		<nav class="breadcrumbs" aria-label="Breadcrumb">
+			<a href="/">Home</a>
+			<span aria-hidden="true">/</span>
+			<a href="/profile">Profile</a>
+			<span aria-hidden="true">/</span>
+			<a href={`/profile/${encodeURIComponent(profile.username)}`}>@{profile.username}</a>
+			<span aria-hidden="true">/</span>
+			<span>Followers</span>
+		</nav>
+
+		<header class="follow-header">
+			<h1>Followers</h1>
+			<p>@{profile.username} has {bundle.followersCount} follower{bundle.followersCount === 1 ? "" : "s"}.</p>
+		</header>
+
+		<form class="toolbar" method="get" action={listCanonical}>
+			<input type="search" name="q" value={search} placeholder="Search followers" />
+			<select name="sort">
+				<option value="recent" selected={sort === "recent"}>Most recent</option>
+				<option value="name" selected={sort === "name"}>Name A-Z</option>
+			</select>
+			<button type="submit">Apply</button>
+		</form>
+
+		<section id="followers-list" class="follow-list-card">
+			{readers.length === 0 ? (
+				<p class="meta">No followers found.</p>
+			) : (
+				<ul class="follow-list">
+					{readers.map((reader) => (
+						<li>
+							<a href={`/profile/${encodeURIComponent(reader.username)}`}>
+								{reader.avatar
+									? <img src={reader.avatar} alt="" class="follow-list-avatar" loading="lazy" decoding="async" />
+									: <span class="follow-list-avatar follow-list-avatar-fallback" aria-hidden="true">@</span>}
+								<span>{reader.name || `@${reader.username}`}</span>
+							</a>
+						</li>
+					))}
+				</ul>
+			)}
+		</section>
+
+		{totalPages > 1 && (
+			<nav class="pager" aria-label="Followers pagination">
+				<a class="owner-edit-link" href={makeHref(page - 1)} aria-disabled={page <= 1}>Previous</a>
+				<span>Page {page} of {totalPages}</span>
+				<a class="owner-edit-link" href={makeHref(page + 1)} aria-disabled={page >= totalPages}>Next</a>
+			</nav>
+		)}
+	</div>
+</Layout>
+
+<style>
+	.follow-page { max-width: 860px; display: grid; gap: 0.8rem; }
+	.breadcrumbs { display: flex; align-items: center; gap: 0.35rem; font-size: 0.95rem; color: #4b5563; }
+	.breadcrumbs a { color: var(--color-secondary); text-decoration: none; }
+	.breadcrumbs a:hover, .breadcrumbs a:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+	.follow-header h1 { margin: 0; }
+	.follow-header p { margin: 0.25rem 0 0; color: #4b5563; }
+	.toolbar { display: flex; gap: 0.55rem; align-items: center; flex-wrap: wrap; }
+	.toolbar input, .toolbar select { height: 36px; border: 1px solid #cfd4db; border-radius: 8px; padding: 0 0.55rem; font: inherit; }
+	.toolbar input { min-width: min(300px, 100%); }
+	.toolbar button { height: 36px; border: none; border-radius: 8px; background: var(--color-primary); color: #fff; padding: 0 0.8rem; font: inherit; font-weight: 700; cursor: pointer; }
+	.follow-list-card { border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
+	.follow-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; }
+	.follow-list li { list-style: none; }
+	.follow-list a { display: inline-flex; align-items: center; gap: 0.45rem; text-decoration: none; color: inherit; }
+	.follow-list a:hover, .follow-list a:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+	.follow-list-avatar { width: 30px; height: 30px; border-radius: 999px; object-fit: cover; flex: 0 0 auto; }
+	.follow-list-avatar-fallback { display: grid; place-items: center; background: #ece7dc; color: #4f4a40; font-weight: 700; }
+	.pager { margin-top: 0.2rem; display: flex; align-items: center; gap: 0.55rem; }
+	.owner-edit-link { border: 1px solid #d1c8ba; border-radius: 999px; padding: 0.35rem 0.8rem; background: #f3efe7; color: #222; text-decoration: none; font-weight: 700; }
+	.owner-edit-link[aria-disabled="true"] { pointer-events: none; opacity: 0.55; }
+	@media (max-width: 740px) {
+		.toolbar { display: grid; grid-template-columns: 1fr 1fr auto; }
+		.toolbar input { min-width: 0; grid-column: 1 / -1; }
+	}
+</style>

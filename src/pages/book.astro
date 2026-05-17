@@ -658,7 +658,7 @@ const bookStructuredDataPayload = bookStructuredData
 									thumbnail={book.coverUrl}
 								>
 									<p slot="preTitle" class="meta activity-headline">
-										{item.actorUsername && <span class="activity-user"><a href={`/u/${encodeURIComponent(item.actorUsername)}`}>@{item.actorUsername}</a>&nbsp;</span>}
+										{item.actorUsername && <span class="activity-user"><a href={`/profile/${encodeURIComponent(item.actorUsername)}`}>@{item.actorUsername}</a>&nbsp;</span>}
 										{!item.actorUsername && item.actorName && <span class="activity-user">{item.actorName}&nbsp;</span>}
 										<span class="activity-prefix">{activityHeading(item.eventType).prefix}</span>
 										{activityHeading(item.eventType).shelf && <>&nbsp;<em>{activityHeading(item.eventType).shelf}</em></>}

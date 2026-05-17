@@ -19,7 +19,7 @@ const rows = await sql<Array<{ username: string | null }>>`
 `;
 const existingUsername = String(rows[0]?.username || "").trim();
 if (existingUsername) {
-	return Astro.redirect(`/u/${encodeURIComponent(existingUsername)}`);
+	return Astro.redirect(`/profile/${encodeURIComponent(existingUsername)}`);
 }
 ---
 
@@ -241,7 +241,7 @@ if (existingUsername) {
 				if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
 				return;
 			}
-			window.location.href = `/u/${encodeURIComponent(savedUsername)}?welcome=1`;
+			window.location.href = `/profile/${encodeURIComponent(savedUsername)}?welcome=1`;
 		} catch {
 			showFeedback("Failed to save username.", true);
 			if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;

@@ -10,6 +10,14 @@ function normalizeProfileText(value: unknown, maxLength: number) {
 	return normalizeText(value).slice(0, maxLength);
 }
 
+function normalizeBirthYear(value: unknown) {
+	const year = Number(String(value ?? "").trim());
+	if (!Number.isFinite(year)) return "";
+	const rounded = Math.trunc(year);
+	if (rounded < 1900 || rounded > 2100) return "";
+	return String(rounded);
+}
+
 function normalizeProfilePayload(input: unknown) {
 	const source = input && typeof input === "object" ? input as Record<string, unknown> : {};
 	const genres = Array.isArray(source.genres)
@@ -20,6 +28,7 @@ function normalizeProfilePayload(input: unknown) {
 		avatar: avatar.startsWith("data:image/") || /^https?:\/\//i.test(avatar) ? avatar : "",
 		name: normalizeProfileText(source.name, 80),
 		location: normalizeProfileText(source.location, 80),
+		birthYear: normalizeBirthYear(source.birthYear),
 		readingGoal: normalizeProfileText(source.readingGoal, 80),
 		favoriteBook: normalizeProfileText(source.favoriteBook, 120),
 		favoriteAuthor: normalizeProfileText(source.favoriteAuthor, 120),
@@ -35,6 +44,7 @@ export type PublicProfileBundle = {
 		avatar: string;
 		name: string;
 		location: string;
+		birthYear: string;
 		readingGoal: string;
 		favoriteBook: string;
 		favoriteAuthor: string;
@@ -45,6 +55,7 @@ export type PublicProfileBundle = {
 	followersCount: number;
 	followingCount: number;
 	isViewerFollowing: boolean;
+	allowFollowRequests: boolean;
 	targetUserId: string;
 };
 
@@ -61,6 +72,7 @@ export async function resolvePublicProfileBundle(input: {
 			followersCount: 0,
 			followingCount: 0,
 			isViewerFollowing: false,
+			allowFollowRequests: true,
 			targetUserId: ""
 		};
 	}
@@ -92,6 +104,7 @@ export async function resolvePublicProfileBundle(input: {
 			followersCount: 0,
 			followingCount: 0,
 			isViewerFollowing: false,
+			allowFollowRequests: true,
 			targetUserId: ""
 		};
 	}
@@ -103,6 +116,7 @@ export async function resolvePublicProfileBundle(input: {
 			followersCount: 0,
 			followingCount: 0,
 			isViewerFollowing: false,
+			allowFollowRequests: true,
 			targetUserId: ""
 		};
 	}
@@ -146,6 +160,7 @@ export async function resolvePublicProfileBundle(input: {
 			followersCount,
 			followingCount,
 			isViewerFollowing,
+			allowFollowRequests: privacy.allowFollowRequests,
 			targetUserId: user.id
 		};
 	}
@@ -158,6 +173,7 @@ export async function resolvePublicProfileBundle(input: {
 		followersCount,
 		followingCount,
 		isViewerFollowing,
+		allowFollowRequests: privacy.allowFollowRequests,
 		profile: {
 			...normalized,
 			location: access.canViewLocation ? normalized.location : "",

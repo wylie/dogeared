@@ -27,7 +27,8 @@ async function resolveTarget(input: { username: string; viewerUserId: string }) 
 		targetUserId: bundle.targetUserId,
 		followersCount: bundle.followersCount,
 		followingCount: bundle.followingCount,
-		isViewerFollowing: bundle.isViewerFollowing
+		isViewerFollowing: bundle.isViewerFollowing,
+		allowFollowRequests: bundle.allowFollowRequests
 	};
 }
 
@@ -42,7 +43,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			followersCount: target.followersCount,
 			followingCount: target.followingCount,
 			isViewerFollowing: target.isViewerFollowing,
-			canFollow: !!viewerUserId && viewerUserId !== target.targetUserId
+			canFollow: !!viewerUserId && viewerUserId !== target.targetUserId && target.allowFollowRequests
 		});
 	} catch (error) {
 		return json(500, {
@@ -63,6 +64,7 @@ export const POST: APIRoute = async ({ request }) => {
 		if (!target) return json(404, { error: "User not found." });
 		const followCheck = canFollowUser(viewerUserId, target.targetUserId);
 		if (!followCheck.ok) return json(400, { error: followCheck.error });
+		if (!target.allowFollowRequests) return json(403, { error: "This user is not accepting follow requests." });
 
 		const sql = getNeonSql();
 		await sql`

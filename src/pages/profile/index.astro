@@ -1,6 +1,6 @@
 ---
-import { resolveUserBySession } from '../lib/auth';
-import { getNeonSql } from '../lib/neon';
+import { resolveUserBySession } from '../../lib/auth';
+import { getNeonSql } from '../../lib/neon';
 
 export const prerender = false;
 
@@ -18,7 +18,7 @@ const rows = await sql<Array<{ username: string | null }>>`
 `;
 const username = String(rows[0]?.username || '').trim();
 if (username) {
-	return Astro.redirect(`/u/${encodeURIComponent(username)}`);
+	return Astro.redirect(`/profile/${encodeURIComponent(username)}`);
 }
 
 return Astro.redirect('/settings#account-settings');

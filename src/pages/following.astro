@@ -74,7 +74,7 @@ const sectionLinks = [
 								Follow
 							</button>
 						</div>
-						<a class="people-strip-name" href={`/u/${encodeURIComponent(reader.username)}`}>
+						<a class="people-strip-name" href={`/profile/${encodeURIComponent(reader.username)}`}>
 							<strong>{reader.name || `@${reader.username}`}</strong>
 							<span>@{reader.username}</span>
 						</a>
@@ -113,7 +113,7 @@ const sectionLinks = [
 									: <span class="people-strip-avatar people-strip-avatar-fallback" aria-hidden="true">@</span>}
 								<button type="button" class="follow-button follow-button-small" data-action="unfollow-reader" data-username={reader.username}>Unfollow</button>
 							</div>
-							<a class="people-strip-name" href={`/u/${encodeURIComponent(reader.username)}`}>
+							<a class="people-strip-name" href={`/profile/${encodeURIComponent(reader.username)}`}>
 								<strong>{reader.name || `@${reader.username}`}</strong>
 								<span>@{reader.username}</span>
 							</a>
@@ -156,7 +156,7 @@ const sectionLinks = [
 								thumbnail={item.thumbnail}
 							>
 								<p slot="preTitle" class="meta activity-headline">
-									<a class="actor-link" href={`/u/${encodeURIComponent(item.actorUsername)}`}>@{item.actorUsername}</a>
+									<a class="actor-link" href={`/profile/${encodeURIComponent(item.actorUsername)}`}>@{item.actorUsername}</a>
 									{" "}
 									<span class="activity-prefix">{activityHeading(item.eventType).prefix}</span>
 									{activityHeading(item.eventType).shelf && <>&nbsp;<em>{activityHeading(item.eventType).shelf}</em></>}

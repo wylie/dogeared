@@ -5,7 +5,7 @@ const { current = "/", sectionLinks = [], isAuthenticated = false } = Astro.prop
 const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
 const isActive = (href: string) => normalize(current) === normalize(href);
 const currentNormalized = normalize(current);
-const isProfilePage = currentNormalized.startsWith("/u/");
+const isProfilePage = currentNormalized === "/profile" || currentNormalized.startsWith("/profile/");
 const isHomePage = currentNormalized === "/";
 const query = Astro.url.searchParams.get("q") ?? "";
 ---
@@ -22,7 +22,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     </div>
     <form action="/search" method="get">
       <label class="visually-hidden" for="left-hand-search">Search books and authors</label>
-      <input id="left-hand-search" type="search" name="q" placeholder="Search" value={query} />
+      <input id="left-hand-search" type="search" name="q" placeholder="Search for Books" value={query} />
     </form>
     <nav id="left-hand-primary-links" class="primary-links" aria-label="Primary navigation">
       <section class="nav-group nav-group-you">
@@ -644,7 +644,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       const data = await response.json().catch(() => ({}));
       const username = String(data?.user?.username || "").trim();
       leftHandProfileLink.href = username
-        ? `/u/${encodeURIComponent(username)}`
+        ? `/profile/${encodeURIComponent(username)}`
         : "/settings#account-settings";
     } catch {
       leftHandProfileLink.href = "/settings#account-settings";

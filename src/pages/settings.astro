@@ -123,7 +123,15 @@ const sectionLinks = [
 				</label>
 				<label class="checkbox-row">
 					<input type="checkbox" id="share-activity" checked />
-					<span>Show my shelf activity in activity feed</span>
+					<span>Allow activity sharing in feeds</span>
+				</label>
+				<label class="checkbox-row">
+					<input type="checkbox" id="allow-discovery" checked />
+					<span>Allow my profile in discovery suggestions</span>
+				</label>
+				<label class="checkbox-row">
+					<input type="checkbox" id="allow-follow-requests" checked />
+					<span>Allow other readers to follow me</span>
 				</label>
 			</div>
 		</section>
@@ -522,6 +530,8 @@ const sectionLinks = [
 	const profileVisibilitySelect = document.getElementById("profile-visibility");
 	const shareLocationCheckbox = document.getElementById("share-location");
 	const shareActivityCheckbox = document.getElementById("share-activity");
+	const allowDiscoveryCheckbox = document.getElementById("allow-discovery");
+	const allowFollowRequestsCheckbox = document.getElementById("allow-follow-requests");
 	const defaultShelfSelect = document.getElementById("default-shelf");
 	const homeSortSelect = document.getElementById("home-sort");
 	const favoriteGenresInput = document.getElementById("favorite-genres-input");
@@ -895,7 +905,9 @@ const sectionLinks = [
 			privacy: {
 				profileVisibility: String(profileVisibilitySelect instanceof HTMLSelectElement ? profileVisibilitySelect.value : "public"),
 				shareLocation: !!(shareLocationCheckbox instanceof HTMLInputElement && shareLocationCheckbox.checked),
-				shareActivity: !!(shareActivityCheckbox instanceof HTMLInputElement && shareActivityCheckbox.checked)
+				shareActivity: !!(shareActivityCheckbox instanceof HTMLInputElement && shareActivityCheckbox.checked),
+				allowDiscovery: !!(allowDiscoveryCheckbox instanceof HTMLInputElement && allowDiscoveryCheckbox.checked),
+				allowFollowRequests: !!(allowFollowRequestsCheckbox instanceof HTMLInputElement && allowFollowRequestsCheckbox.checked)
 			},
 			readingDefaults: {
 				defaultShelf: String(defaultShelfSelect instanceof HTMLSelectElement ? defaultShelfSelect.value : "want_to_read"),
@@ -926,6 +938,8 @@ const sectionLinks = [
 		if (profileVisibilitySelect instanceof HTMLSelectElement) profileVisibilitySelect.value = String(privacy.profileVisibility || "public");
 		if (shareLocationCheckbox instanceof HTMLInputElement) shareLocationCheckbox.checked = !!privacy.shareLocation;
 		if (shareActivityCheckbox instanceof HTMLInputElement) shareActivityCheckbox.checked = !!privacy.shareActivity;
+		if (allowDiscoveryCheckbox instanceof HTMLInputElement) allowDiscoveryCheckbox.checked = privacy.allowDiscovery !== false;
+		if (allowFollowRequestsCheckbox instanceof HTMLInputElement) allowFollowRequestsCheckbox.checked = privacy.allowFollowRequests !== false;
 
 		const readingDefaults = preferences?.readingDefaults || {};
 		if (defaultShelfSelect instanceof HTMLSelectElement) defaultShelfSelect.value = String(readingDefaults.defaultShelf || "want_to_read");
@@ -1448,7 +1462,7 @@ const sectionLinks = [
 						<ul>${updates.map((item) => {
 							const actorUsername = String(item?.actorUsername || "").trim();
 							const actor = actorUsername
-								? `<a href="/u/${encodeURIComponent(actorUsername)}">@${actorUsername}</a>`
+								? `<a href="/profile/${encodeURIComponent(actorUsername)}">@${actorUsername}</a>`
 								: String(item?.actorName || "A User");
 							return `<li>${actor} · ${item.status} · ${item.title} · ${new Date(item.timestamp).toLocaleString()}</li>`;
 						}).join("")}</ul>

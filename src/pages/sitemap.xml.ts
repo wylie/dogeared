@@ -90,7 +90,7 @@ export const GET: APIRoute = async ({ request }) => {
 			if (shelvesCount <= 0) continue;
 			const lastmod = String(row?.lastmod || "").trim();
 			dynamicEntries.push({
-				loc: toUrl(base, `/u/${encodeURIComponent(username)}`),
+				loc: toUrl(base, `/profile/${encodeURIComponent(username)}`),
 				changefreq: "weekly",
 				priority: "0.7",
 				lastmod: lastmod ? new Date(lastmod).toISOString() : undefined

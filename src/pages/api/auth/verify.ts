@@ -42,7 +42,7 @@ export const GET: APIRoute = async ({ url }) => {
 		`;
 		const username = String(userRows[0]?.username || "").trim();
 		const redirectPath = username
-			? `/u/${encodeURIComponent(username)}?auth=success`
+			? `/profile/${encodeURIComponent(username)}?auth=success`
 			: "/welcome?onboarding=1";
 
 		const headers = new Headers({ Location: redirectPath });

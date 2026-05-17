@@ -231,6 +231,7 @@ export async function resolvePublicReaderSuggestions(viewerUserId: string, limit
 				)
 			)
 			and coalesce(au.profile_data->'settings'->'privacy'->>'profileVisibility', 'public') <> 'private'
+			and coalesce((au.profile_data->'settings'->'privacy'->>'allowDiscovery')::boolean, true) = true
 			and not exists (
 				select 1
 				from user_follow uf

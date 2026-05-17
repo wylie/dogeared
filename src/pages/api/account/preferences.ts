@@ -9,6 +9,8 @@ type Preferences = {
 		profileVisibility: "public" | "private";
 		shareLocation: boolean;
 		shareActivity: boolean;
+		allowDiscovery: boolean;
+		allowFollowRequests: boolean;
 	};
 	readingDefaults: {
 		defaultShelf: "want_to_read" | "reading" | "finished";
@@ -40,7 +42,9 @@ const DEFAULT_PREFERENCES: Preferences = {
 	privacy: {
 		profileVisibility: "public",
 		shareLocation: true,
-		shareActivity: true
+		shareActivity: true,
+		allowDiscovery: true,
+		allowFollowRequests: true
 	},
 	readingDefaults: {
 		defaultShelf: "want_to_read",
@@ -113,7 +117,9 @@ function normalizePreferences(input: unknown): Preferences {
 		privacy: {
 			profileVisibility,
 			shareLocation: toBool(privacy.shareLocation, true),
-			shareActivity: toBool(privacy.shareActivity, true)
+			shareActivity: toBool(privacy.shareActivity, true),
+			allowDiscovery: toBool(privacy.allowDiscovery, true),
+			allowFollowRequests: toBool(privacy.allowFollowRequests, true)
 		},
 		readingDefaults: {
 			defaultShelf,
@@ -206,4 +212,3 @@ export const POST: APIRoute = async ({ request }) => {
 		});
 	}
 };
-
