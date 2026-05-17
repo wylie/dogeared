@@ -179,14 +179,14 @@ if (session?.userId) {
 					authorHref={result.authors[0] ? authorHref(result.authors[0], result.authorId || 0) : ""}
 					thumbnail={result.thumbnail}
 					description={truncateDescription(result.description)}
+					readers={0}
+					shelfEntries={0}
+					publishedLabel={publishedYearOnly(result.publishedDate)}
+					pageCount={result.pageCount || 0}
+					averageRating={averageRating}
 				>
 						<div slot="meta">
-							{publishedYearOnly(result.publishedDate) && <p class="meta">Published: {publishedYearOnly(result.publishedDate)}</p>}
-							{result.pageCount !== null && result.pageCount > 0 && <p class="meta">Pages: {result.pageCount.toLocaleString()}</p>}
 							{result.publisher && <p class="meta">Publisher: {result.publisher}</p>}
-							{averageRating > 0 && (
-								<p class="meta">Average rating: {"★".repeat(Math.round(averageRating)).padEnd(5, "☆")} {averageRating.toFixed(1)}{ratingCount > 0 ? ` · ${ratingCount} rating${ratingCount === 1 ? "" : "s"}` : ""}</p>
-							)}
 							{Number(result.bookId || 0) > 0 && viewerStatusByBookId.get(Number(result.bookId || 0)) === "finished" && (
 								<RatingControl
 									bookId={Number(result.bookId || 0)}

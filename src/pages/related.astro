@@ -22,6 +22,10 @@ type BookRow = {
 	language: string;
 	isbn10: string;
 	isbn13: string;
+	publishedYear: number;
+	pageCount: number;
+	averageRating: number;
+	ratingCount: number;
 };
 
 type AuthorRow = {
@@ -55,6 +59,11 @@ function canonicalKey(value: string) {
 	return normalizeText(value)
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, "");
+}
+
+function renderAverageStars(value: number) {
+	const clamped = Math.max(0, Math.min(5, Number(value) || 0));
+	return Array.from({ length: 5 }, (_, index) => (index < Math.round(clamped) ? "★" : "☆")).join("");
 }
 
 const kind = normalizeText(Astro.url.searchParams.get("kind"), "author");
@@ -115,12 +124,23 @@ if (value) {
 					coalesce(nullif(trim(b.cover_url), ''), '') as "coverUrl",
 					coalesce(nullif(trim(b.language), ''), '') as language,
 					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
-					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13
+					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+					coalesce(b.published_year, 0)::int as "publishedYear",
+					coalesce(nullif(b.page_count, 0), 0)::int as "pageCount",
+					coalesce(ra.average_rating, 0) as "averageRating",
+					coalesce(ra.rating_count, 0)::int as "ratingCount"
 				from book b
 				left join user_book ub on ub.book_id = b.id
 				left join book_genre bg on bg.book_id = b.id
+				left join lateral (
+					select
+						round(avg(ub2.rating)::numeric, 1) as average_rating,
+						count(*) filter (where ub2.rating is not null)::int as rating_count
+					from user_book ub2
+					where ub2.book_id = b.id
+				) ra on true
 				where lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
-				group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13
+				group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.published_year, b.page_count, ra.average_rating, ra.rating_count
 				having count(distinct ub.user_id) > 0
 				order by shelves desc, readers desc, b.title asc
 			`;
@@ -139,15 +159,26 @@ if (value) {
 					coalesce(nullif(trim(b.cover_url), ''), '') as "coverUrl",
 					coalesce(nullif(trim(b.language), ''), '') as language,
 					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
-					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13
+					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+					coalesce(b.published_year, 0)::int as "publishedYear",
+					coalesce(nullif(b.page_count, 0), 0)::int as "pageCount",
+					coalesce(ra.average_rating, 0) as "averageRating",
+					coalesce(ra.rating_count, 0)::int as "ratingCount"
 				from book b
 				join book_genre g on g.book_id = b.id
 				left join user_book ub on ub.book_id = b.id
 				left join book_genre bg on bg.book_id = b.id
+				left join lateral (
+					select
+						round(avg(ub2.rating)::numeric, 1) as average_rating,
+						count(*) filter (where ub2.rating is not null)::int as rating_count
+					from user_book ub2
+					where ub2.book_id = b.id
+				) ra on true
 				where
 					lower(regexp_replace(coalesce(g.genre_name, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
 					or lower(coalesce(g.genre_slug, '')) = ${genreSlug}
-				group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13
+				group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.published_year, b.page_count, ra.average_rating, ra.rating_count
 				having count(distinct ub.user_id) > 0
 				order by shelves desc, readers desc, b.title asc
 			`;
@@ -185,12 +216,23 @@ if (value) {
 					coalesce(nullif(trim(b.cover_url), ''), '') as "coverUrl",
 					coalesce(nullif(trim(b.language), ''), '') as language,
 					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
-					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13
+					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+					coalesce(b.published_year, 0)::int as "publishedYear",
+					coalesce(nullif(b.page_count, 0), 0)::int as "pageCount",
+					coalesce(ra.average_rating, 0) as "averageRating",
+					coalesce(ra.rating_count, 0)::int as "ratingCount"
 				from book b
 				left join user_book ub on ub.book_id = b.id
 				left join book_genre bg on bg.book_id = b.id
+				left join lateral (
+					select
+						round(avg(ub2.rating)::numeric, 1) as average_rating,
+						count(*) filter (where ub2.rating is not null)::int as rating_count
+					from user_book ub2
+					where ub2.book_id = b.id
+				) ra on true
 				where lower(regexp_replace(coalesce(b.title, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
-				group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13
+				group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.published_year, b.page_count, ra.average_rating, ra.rating_count
 				having count(distinct ub.user_id) > 0
 				order by shelves desc, readers desc, b.title asc
 			`;
@@ -296,11 +338,22 @@ if (value) {
 				coalesce(nullif(trim(b.cover_url), ''), '') as "coverUrl",
 				coalesce(nullif(trim(b.language), ''), '') as language,
 				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
-				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(b.published_year, 0)::int as "publishedYear",
+				coalesce(nullif(b.page_count, 0), 0)::int as "pageCount",
+				coalesce(ra.average_rating, 0) as "averageRating",
+				coalesce(ra.rating_count, 0)::int as "ratingCount"
 			from book b
 			left join user_book ub on ub.book_id = b.id
 			left join book_genre bg on bg.book_id = b.id
-			group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13
+			left join lateral (
+				select
+					round(avg(ub2.rating)::numeric, 1) as average_rating,
+					count(*) filter (where ub2.rating is not null)::int as rating_count
+				from user_book ub2
+				where ub2.book_id = b.id
+			) ra on true
+			group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.published_year, b.page_count, ra.average_rating, ra.rating_count
 			having count(distinct ub.user_id) > 0
 			order by count(distinct ub.user_id) desc, count(ub.book_id) desc, b.title asc
 			limit 12
@@ -441,22 +494,37 @@ const relatedStructuredDataPayload = JSON.stringify([
 							<div class="panel-head"><h2>Books Readers Keep Shelving</h2></div>
 							<ul class="book-grid">
 								{landingBooks.map((book) => (
-									<BookCard
-										title={book.title}
-										titleHref={`/book?bookId=${encodeURIComponent(String(book.id))}`}
-										author=""
-										thumbnail={book.coverUrl}
-									>
-										<div slot="meta">
-											<p class="meta">
-												By <a class="author-link" href={authorHref(book.author, book.authorId)}>{book.author}</a>
-											</p>
-											<p class="meta">Readers: {book.readers} · Shelf entries: {book.shelves}</p>
-										</div>
-									</BookCard>
-								))}
-							</ul>
-						</section>
+								<BookCard
+									title={book.title}
+									titleHref={`/book?bookId=${encodeURIComponent(String(book.id))}`}
+									author={book.author}
+									authorHref={authorHref(book.author, book.authorId)}
+									thumbnail={book.coverUrl}
+									readers={book.readers}
+									shelfEntries={book.shelves}
+									publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
+									pageCount={book.pageCount}
+									averageRating={book.averageRating}
+								>
+									<div slot="meta">
+									</div>
+									<div slot="actions">
+										<ShelfDropdown attrs={{
+											"data-book-id": String(book.id || 0),
+											"data-initial-status": viewerStatusByBookId.get(Number(book.id || 0)) || "",
+											"data-title": book.title,
+											"data-author": book.author,
+											"data-cover": book.coverUrl,
+											"data-language": book.language,
+											"data-isbn10": book.isbn10,
+											"data-isbn13": book.isbn13,
+											"data-categories": JSON.stringify(book.genres ?? [])
+										}} />
+									</div>
+								</BookCard>
+							))}
+						</ul>
+					</section>
 					</>
 				)}
 			</>
@@ -484,14 +552,16 @@ const relatedStructuredDataPayload = JSON.stringify([
 								<BookCard
 									title={book.title}
 									titleHref={`/book?bookId=${encodeURIComponent(String(book.id))}`}
-									author=""
+									author={book.author}
+									authorHref={authorHref(book.author, book.authorId)}
 									thumbnail={book.coverUrl}
+									readers={book.readers}
+									shelfEntries={book.shelves}
+									publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
+									pageCount={book.pageCount}
+									averageRating={book.averageRating}
 								>
 									<div slot="meta">
-										<p class="meta">
-											By <a class="author-link" href={authorHref(book.author, book.authorId)}>{book.author}</a>
-										</p>
-										<p class="meta">Readers: {book.readers} · Shelf entries: {book.shelves}</p>
 									</div>
 									<div class="genre-chips">
 										{(book.genres.length > 0 ? book.genres : ["Uncategorized"]).slice(0, 4).map((genre) => (

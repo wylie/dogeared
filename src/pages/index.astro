@@ -390,19 +390,16 @@ try {
 										authorHref={book.authors.length === 1 && book.authors[0] ? authorHref(book.authors[0], book.authorId) : ""}
 										thumbnail={book.thumbnail}
 										description={book.description || "Synopsis unavailable for this edition."}
+										readers={book.shelfCount}
+										shelfEntries={book.shelfCount}
+										publishedLabel={book.publishedDate ? formatPublishedLabel(book.publishedDate) : ""}
+										pageCount={book.pageCount}
+										averageRating={displayAverageRating}
 									>
 										<div slot="footer" class="rank-stack rank-stack-footer">
 											<Chip className="rank-badge" label={`#${index + 1}`} />
-											<Chip className="shelf-count-badge" label={`${book.shelfCount.toLocaleString()} ${book.shelfCount === 1 ? "shelf" : "shelves"}`} />
 										</div>
 										<div slot="meta">
-											{book.publishedDate && <p class="meta">Published: {formatPublishedLabel(book.publishedDate)}</p>}
-											{book.pageCount > 0 && <p class="meta">Pages: {book.pageCount.toLocaleString()}</p>}
-											{displayAverageRating > 0 && (
-												hasPersonalRatingControl
-													? <p class="meta community-rating-meta">Average rating: {renderAverageStars(displayAverageRating)} {displayAverageRating.toFixed(2)}</p>
-													: <p class="meta rating-meta">Average rating: {renderAverageStars(displayAverageRating)} {displayAverageRating.toFixed(1)} · {displayRatingCount} rating{displayRatingCount === 1 ? "" : "s"}</p>
-											)}
 											{hasPersonalRatingControl && (
 												<RatingControl
 													bookId={String(numericBookId)}

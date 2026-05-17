@@ -6,6 +6,11 @@ type Props = {
 	authorHref?: string;
 	thumbnail?: string;
 	description?: string;
+	readers?: number;
+	shelfEntries?: number;
+	publishedLabel?: string;
+	pageCount?: number;
+	averageRating?: number;
 };
 
 const {
@@ -14,11 +19,25 @@ const {
 	author = "",
 	authorHref = "",
 	thumbnail = "",
-	description = ""
+	description = "",
+	readers = -1,
+	shelfEntries = -1,
+	publishedLabel = "",
+	pageCount = 0,
+	averageRating = 0
 } = Astro.props as Props;
 
 const hasTopRight = Astro.slots.has("topRight");
 const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavailable/i.test(String(description || "").trim());
+const normalizedReaders = Number(readers);
+const normalizedShelves = Number(shelfEntries);
+const normalizedPages = Number(pageCount);
+const normalizedRating = Math.max(0, Math.min(5, Number(averageRating) || 0));
+
+function renderAverageStars(value: number) {
+	const rounded = Math.round(value);
+	return Array.from({ length: 5 }, (_, index) => (index < rounded ? "★" : "☆")).join("");
+}
 ---
 
 <li class="book-card">
@@ -64,6 +83,16 @@ const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavai
 					? <a class="author-link" href={authorHref}>{author}</a>
 					: author}
 			</p>
+		)}
+		<p class="meta">Readers: {Number.isFinite(normalizedReaders) && normalizedReaders >= 0 ? normalizedReaders.toLocaleString() : "—"} · Shelf entries: {Number.isFinite(normalizedShelves) && normalizedShelves >= 0 ? normalizedShelves.toLocaleString() : "—"}</p>
+		{String(publishedLabel || "").trim() && (
+			<p class="meta">Published: {String(publishedLabel || "").trim()}</p>
+		)}
+		{Number.isFinite(normalizedPages) && normalizedPages > 0 && (
+			<p class="meta">Pages: {normalizedPages.toLocaleString()}</p>
+		)}
+		{normalizedRating > 0 && (
+			<p class="meta">Average rating: {renderAverageStars(normalizedRating)} {normalizedRating.toFixed(2)}</p>
 		)}
 		<slot name="preMeta" />
 		<slot name="meta" />

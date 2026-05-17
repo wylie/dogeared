@@ -242,25 +242,24 @@ const authorStructuredDataPayload = authorStructuredData
 									authorHref=""
 									thumbnail={book.coverUrl}
 									description={book.synopsis || "Synopsis unavailable for this title."}
+									readers={book.readers}
+									shelfEntries={book.shelves}
+									publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
+									pageCount={book.pageCount}
+									averageRating={book.averageRating}
 								>
 									<div slot="preMeta">
-										<p class="meta">Readers: {book.readers} · Shelf entries: {book.shelves}</p>
-										<p class="meta">
-											{book.pageCount > 0 ? `${book.pageCount.toLocaleString()} pages` : "Pages unavailable"}
-											{" · "}
-											{book.genres[0] || "Uncategorized"}
-										</p>
-										{viewerStatusByBookId.get(Number(book.id || 0)) === "finished" ? (
-											<RatingControl
-												bookId={String(book.id || 0)}
-												rating={viewerRatingByBookId.get(Number(book.id || 0)) || 0}
-												editable={true}
-											/>
-										) : (
-											book.ratingCount > 0
-												? <p class="meta rating-meta">Average rating: {renderAverageStars(book.averageRating)} {book.averageRating.toFixed(2)}</p>
-												: <p class="meta">No ratings yet.</p>
-										)}
+										<p class="meta">{book.genres[0] || "Uncategorized"}</p>
+											{viewerStatusByBookId.get(Number(book.id || 0)) === "finished" && (
+												<RatingControl
+													bookId={String(book.id || 0)}
+													rating={viewerRatingByBookId.get(Number(book.id || 0)) || 0}
+													editable={true}
+												/>
+											)}
+											{viewerStatusByBookId.get(Number(book.id || 0)) !== "finished" && !(Number(book.ratingCount || 0) > 0) && (
+												<p class="meta">No ratings yet.</p>
+											)}
 									</div>
 									<div slot="footer" class="book-card-footer">
 										<div class="chips">

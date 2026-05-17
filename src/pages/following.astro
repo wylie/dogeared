@@ -154,6 +154,11 @@ const sectionLinks = [
 								author={item.author}
 								authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
 								thumbnail={item.thumbnail}
+								readers={1}
+								shelfEntries={1}
+								publishedLabel=""
+								pageCount={0}
+								averageRating={item.rating || 0}
 							>
 								<p slot="preTitle" class="meta activity-headline">
 									<a class="actor-link" href={`/profile/${encodeURIComponent(item.actorUsername)}`}>@{item.actorUsername}</a>
