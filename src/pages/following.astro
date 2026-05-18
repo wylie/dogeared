@@ -2,6 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import BookCard from "../components/BookCard.astro";
 import ShelfDropdown from "../components/ShelfDropdown.astro";
+import { getNeonSql } from "../lib/neon";
 import { resolveUserBySession } from "../lib/auth";
 import { authorHref } from "../lib/author";
 import {
@@ -33,6 +34,24 @@ const viewerStatusByBookId = await resolveViewerStatusByBookId(
 	viewerUserId,
 	activity.map((item) => item.bookId)
 );
+const viewerRatingByBookId = new Map<number, number>();
+if (activity.length > 0) {
+	const sql = getNeonSql();
+	const bookIds = Array.from(new Set(activity.map((item) => Number(item.bookId || 0)).filter((id) => id > 0)));
+	if (bookIds.length > 0) {
+		const ratings = await sql<Array<{ book_id: number; rating: number | null }>>`
+			select book_id, rating
+			from user_book
+			where user_id = ${viewerUserId}::uuid
+				and book_id = any(${bookIds}::bigint[])
+				and rating is not null
+		`;
+		for (const row of ratings) {
+			const rating = Math.max(0, Math.min(5, Number(row.rating || 0)));
+			if (rating > 0) viewerRatingByBookId.set(Number(row.book_id || 0), rating);
+		}
+	}
+}
 const peopleToFollow = suggestions;
 const sectionLinks = [
 	{ id: "people-to-follow", label: "People to Follow" },
@@ -156,9 +175,9 @@ const sectionLinks = [
 								thumbnail={item.thumbnail}
 								readers={1}
 								shelfEntries={1}
-								publishedLabel=""
-								pageCount={0}
-								averageRating={item.rating || 0}
+								publishedLabel={item.publishedLabel}
+								pageCount={item.pageCount}
+								averageRating={item.averageRating || 0}
 							>
 								<p slot="preTitle" class="meta activity-headline">
 									<a class="actor-link" href={`/profile/${encodeURIComponent(item.actorUsername)}`}>@{item.actorUsername}</a>
@@ -173,7 +192,9 @@ const sectionLinks = [
 									)}
 								</p>
 								<div slot="meta">
-									{item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>}
+									{viewerRatingByBookId.get(Number(item.bookId || 0)) && (
+										<p class="meta rating-meta">{renderRatingStars(viewerRatingByBookId.get(Number(item.bookId || 0)) || 0)} {viewerRatingByBookId.get(Number(item.bookId || 0))}/5</p>
+									)}
 								</div>
 								<div slot="actions">
 									<ShelfDropdown attrs={{
@@ -182,7 +203,7 @@ const sectionLinks = [
 										"data-title": item.title,
 										"data-author": item.author,
 										"data-description": item.description,
-										"data-pages": "0",
+										"data-pages": String(Math.max(0, Number(item.pageCount || 0))),
 										"data-cover": item.thumbnail,
 										"data-format": "Book",
 										"data-language": item.language,
@@ -204,7 +225,9 @@ const sectionLinks = [
 		max-width: 860px;
 		display: grid;
 		gap: 0.9rem;
+		min-width: 0;
 	}
+	.feed-page > * { min-width: 0; }
 	.feed-header h1,
 	.feed-header p,
 	.feed-activity h2,
@@ -214,6 +237,7 @@ const sectionLinks = [
 	.feed-header p {
 		margin-top: 0.35rem;
 		color: #444;
+		overflow-wrap: anywhere;
 	}
 	.section-heading-row {
 		display: flex;
@@ -237,6 +261,7 @@ const sectionLinks = [
 	.people-strip-copy {
 		margin: 0 0 0.6rem;
 		color: #444;
+		overflow-wrap: anywhere;
 	}
 	.people-strip {
 		list-style: none;
@@ -292,6 +317,7 @@ const sectionLinks = [
 	.people-strip-name span {
 		color: #5b6470;
 		font-size: 0.9rem;
+		overflow-wrap: anywhere;
 	}
 	.people-strip-card p {
 		margin: 0;
@@ -387,11 +413,11 @@ const sectionLinks = [
 		list-style: none;
 		margin: 0;
 		padding: 0 0 0.2rem;
-		display: grid;
-		grid-auto-flow: column;
-		grid-auto-columns: minmax(220px, 255px);
+		display: flex;
+		flex-wrap: nowrap;
 		gap: 0.75rem;
 		overflow-x: auto;
+		max-width: 100%;
 		scroll-snap-type: x proximity;
 	}
 	.reader-card {
@@ -402,6 +428,8 @@ const sectionLinks = [
 		gap: 0.55rem;
 	}
 	.following-management-card {
+		flex: 0 0 min(255px, 82vw);
+		max-width: min(255px, 82vw);
 		min-height: 220px;
 	}
 	.following-management-card.is-removing {

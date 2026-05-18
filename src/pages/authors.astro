@@ -32,7 +32,7 @@ const rows = await sql<Array<{
 		coalesce(a.photo_url, '') as photo_url,
 		count(distinct b.id)::int as books,
 		count(distinct ub.user_id)::int as readers,
-		count(ub.book_id)::int as shelves,
+		count(distinct concat(ub.user_id::text, ':', coalesce(ub.status, '')))::int as shelves,
 		max(coalesce(ub.updated_at, b.updated_at, a.updated_at))::text as last_activity
 	from author a
 	join book b on b.author_id = a.id

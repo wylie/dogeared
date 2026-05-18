@@ -42,8 +42,11 @@ export type FeedActivityItem = {
 	isbn10: string;
 	isbn13: string;
 	description: string;
+	publishedLabel: string;
+	pageCount: number;
 	eventType: string;
-	rating: number;
+	actorRating: number;
+	averageRating: number;
 	updatedAt: string;
 };
 
@@ -132,8 +135,11 @@ export async function resolveFollowingFeedActivity(viewerUserId: string, limit =
 		isbn10: string;
 		isbn13: string;
 		synopsis: string;
+		published_year: number | null;
+		page_count: number | null;
 		event_type: string;
 		rating: number | null;
+		average_rating: number | null;
 		created_at: string;
 	}>>`
 		select
@@ -150,14 +156,44 @@ export async function resolveFollowingFeedActivity(viewerUserId: string, limit =
 			b.isbn10,
 			b.isbn13,
 			b.synopsis,
+			coalesce(
+				b.published_year,
+				bmeta.published_year
+			) as published_year,
+			coalesce(
+				nullif(b.page_count, 0),
+				nullif(bmeta.page_count, 0)
+			) as page_count,
 			ua.event_type,
 			coalesce(ub.rating, ua.rating) as rating,
+			coalesce(ra.average_rating, 0) as average_rating,
 			ua.created_at::text as created_at
 		from user_follow uf
 		join user_activity ua on ua.user_id = uf.followed_user_id
 		join app_user au on au.id = ua.user_id
 		join book b on b.id = ua.book_id
 		left join user_book ub on ub.user_id = ua.user_id and ub.book_id = ua.book_id
+		left join lateral (
+			select
+				max(b2.published_year) filter (where b2.published_year is not null and b2.published_year > 0) as published_year,
+				max(b2.page_count) filter (where b2.page_count is not null and b2.page_count > 0) as page_count
+			from book b2
+			where b2.id <> b.id
+				and (
+					(nullif(trim(coalesce(b.isbn13, '')), '') is not null and b2.isbn13 = b.isbn13)
+					or (nullif(trim(coalesce(b.isbn10, '')), '') is not null and b2.isbn10 = b.isbn10)
+					or (
+						lower(trim(coalesce(b2.title, ''))) = lower(trim(coalesce(b.title, '')))
+						and lower(trim(coalesce(b2.primary_author, ''))) = lower(trim(coalesce(b.primary_author, '')))
+					)
+				)
+		) bmeta on true
+		left join lateral (
+			select round(avg(ub3.rating)::numeric, 2) as average_rating
+			from user_book ub3
+			where ub3.book_id = b.id
+				and ub3.rating is not null
+		) ra on true
 		where uf.follower_user_id = ${viewerUserId}::uuid
 			and ua.event_type in ('want_to_read', 'reading', 'finished')
 			and nullif(trim(coalesce(au.username, '')), '') is not null
@@ -193,8 +229,11 @@ export async function resolveFollowingFeedActivity(viewerUserId: string, limit =
 			isbn10: normalizeText(row.isbn10),
 			isbn13: normalizeText(row.isbn13),
 			description: normalizeText(row.synopsis),
+			publishedLabel: Number(row.published_year || 0) > 0 ? String(Number(row.published_year || 0)) : "",
+			pageCount: Math.max(0, Number(row.page_count || 0) || 0),
 			eventType: normalizeText(row.event_type),
-			rating: Math.max(0, Math.min(5, Number(row.rating || 0) || 0)),
+			actorRating: Math.max(0, Math.min(5, Number(row.rating || 0) || 0)),
+			averageRating: Math.max(0, Math.min(5, Number(row.average_rating || 0) || 0)),
 			updatedAt: normalizeText(row.created_at)
 		};
 	});

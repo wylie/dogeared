@@ -1,8 +1,12 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import BookCard from "../components/BookCard.astro";
+import ShelfDropdown from "../components/ShelfDropdown.astro";
 
 import { getNeonSql } from "../lib/neon";
 import { authorHref } from "../lib/author";
+import { resolveUserBySession } from "../lib/auth";
+import { resolveViewerStatusByBookId } from "../lib/feed";
 
 export const prerender = false;
 
@@ -12,6 +16,12 @@ type BookStatsRow = {
 	author: string;
 	author_id: number | null;
 	cover_url: string;
+	synopsis: string;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+	published_year: number;
+	page_count: number;
 	readers: number;
 	shelves: number;
 	rating_avg: number | null;
@@ -29,6 +39,8 @@ type CuratedSection = {
 };
 
 const sql = getNeonSql();
+const session = await resolveUserBySession(Astro.request);
+const viewerUserId = String(session?.userId || "");
 const rows = await sql<BookStatsRow[]>`
 	with stats as (
 		select
@@ -37,6 +49,12 @@ const rows = await sql<BookStatsRow[]>`
 			coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
 			b.author_id,
 			coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+			coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+			coalesce(nullif(trim(b.language), ''), '') as language,
+			coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+			coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+			coalesce(b.published_year, 0)::int as published_year,
+			coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 			count(distinct ub.user_id)::int as readers,
 			count(ub.book_id)::int as shelves,
 			round(avg(ub.rating)::numeric, 2) as rating_avg,
@@ -50,12 +68,17 @@ const rows = await sql<BookStatsRow[]>`
 			max(coalesce(ub.updated_at, b.updated_at, b.created_at))::text as last_activity
 		from book b
 		left join user_book ub on ub.book_id = b.id
-		group by b.id, b.title, b.primary_author, b.author_id, b.cover_url
+		group by
+			b.id, b.title, b.primary_author, b.author_id, b.cover_url,
+			b.synopsis, b.language, b.isbn10, b.isbn13, b.published_year, b.page_count
 	)
 	select *
 	from stats
 	where shelves > 0
 `;
+const viewerStatusByBookId = viewerUserId
+	? await resolveViewerStatusByBookId(viewerUserId, rows.map((row) => Number(row.id || 0)))
+	: new Map<number, "want_to_read" | "reading" | "finished">();
 
 const byTrending = [...rows].sort((a, b) => {
 	const scoreA = (a.recent_readers_30d * 5) + (a.recent_shelves_30d * 3) + (Number(a.rating_avg || 0) * 2);
@@ -170,19 +193,35 @@ const booksStructuredData = JSON.stringify([
 						</div>
 						<ul class="book-grid">
 							{section.books.map((row) => (
-								<li class="book-row">
-									<a class="cover-link" href={`/book?bookId=${encodeURIComponent(String(row.id))}`}>
-										{row.cover_url
-											? <img src={row.cover_url} alt={`${row.title} cover`} loading="lazy" decoding="async" width="64" height="96" />
-											: <span class="cover-fallback" aria-hidden="true">📘</span>}
-									</a>
-									<div class="book-content">
-										<a class="title-link" href={`/book?bookId=${encodeURIComponent(String(row.id))}`}>{row.title}</a>
-										<p class="meta">by <a href={authorHref(row.author, Number(row.author_id || 0))}>{row.author}</a></p>
-										<p class="meta">{row.readers.toLocaleString()} readers · {row.shelves.toLocaleString()} shelves</p>
-										<p class="meta">{(Number(row.rating_avg || 0)).toFixed(2)} avg · {row.rating_count.toLocaleString()} ratings</p>
+								<BookCard
+									title={row.title}
+									titleHref={`/book?bookId=${encodeURIComponent(String(row.id))}`}
+									author={row.author}
+									authorHref={authorHref(row.author, Number(row.author_id || 0))}
+									thumbnail={row.cover_url}
+									description={row.synopsis || "Synopsis unavailable for this title."}
+									readers={row.readers}
+									shelfEntries={row.shelves}
+									publishedLabel={row.published_year > 0 ? String(row.published_year) : ""}
+									pageCount={row.page_count}
+									averageRating={Number(row.rating_avg || 0)}
+								>
+									<div slot="actions">
+										<ShelfDropdown attrs={{
+											"data-book-id": String(row.id || 0),
+											"data-initial-status": viewerStatusByBookId.get(Number(row.id || 0)) || "",
+											"data-title": row.title,
+											"data-author": row.author,
+											"data-description": row.synopsis,
+											"data-pages": String(Math.max(0, Number(row.page_count || 0))),
+											"data-cover": row.cover_url,
+											"data-format": "Book",
+											"data-language": row.language,
+											"data-isbn10": row.isbn10,
+											"data-isbn13": row.isbn13
+										}} />
 									</div>
-								</li>
+								</BookCard>
 							))}
 						</ul>
 					</section>
@@ -200,13 +239,7 @@ const booksStructuredData = JSON.stringify([
 	.section-header h2, .section-header p { margin: 0; }
 	.section-header p { color: #4f5d6c; font-size: 0.92rem; }
 	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.book-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 0.65rem; align-items: start; background: #fff; border-radius: 12px; padding: 0.6rem; }
-	.cover-link img, .cover-fallback { width: 64px; height: 96px; border-radius: 8px; object-fit: cover; display: grid; place-items: center; background: #ece7dc; }
-	.book-content { min-width: 0; }
-	.title-link { color: inherit; font-weight: 700; text-decoration: none; }
-	.title-link:hover { text-decoration: underline; }
-	.meta { margin: 0.2rem 0 0; font-size: 0.88rem; color: #4f5d6c; }
-	.meta a { color: var(--color-secondary); text-decoration: none; }
+	.books-page :global(.book-card .card-body h3) { padding-right: 4.5rem; }
 	.empty { margin: 0; color: #4f5d6c; }
 	@media (max-width: 900px) {
 		.book-grid { grid-template-columns: 1fr; }

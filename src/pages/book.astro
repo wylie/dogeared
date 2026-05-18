@@ -586,46 +586,46 @@ const bookStructuredDataPayload = bookStructuredData
 		{book && (
 			<>
 				<section class="book-head">
-					<div class="cover-large">
-						{book.coverUrl
-							? <img src={book.coverUrl} alt={`${book.title}${book.author ? ` by ${book.author}` : ""} cover`} loading="eager" decoding="async" width="180" height="270" />
-							: <div class="cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>}
-					</div>
-					<div class="book-head-content">
-						<div class="book-head-actions">
-							<ShelfDropdown attrs={{
-								"data-title": book.title,
-								"data-author": book.author,
-								"data-description": book.synopsis,
-								"data-cover": book.coverUrl,
-								"data-pages": String(book.pageCount || 0),
-								"data-categories": "[]",
-								"data-isbn10": book.isbn10,
-								"data-isbn13": book.isbn13,
-								"data-google-books-id": book.googleBooksId,
-								"data-book-id": String(book.id || 0),
-								"data-initial-status": viewerShelfStatus,
-								"data-hide-label": "true"
-							}} />
-						</div>
-						<h1>{book.title}</h1>
-						<p class="meta">
-							{book.author
-								? <>by <a class="author-link" href={authorHref(book.author, book.authorId)}>{book.author}</a></>
-								: "Unknown author"}
-						</p>
-						{book.publishedLabel && <p class="meta">Published: {book.publishedLabel}</p>}
-						{book.pageCount > 0 && <p class="meta">Pages: {book.pageCount.toLocaleString()}</p>}
-						<p class="meta">Shelves: {book.shelves.toLocaleString()}</p>
-						{book.ratingCount > 0 && (
-							isAuthenticated && book.id > 0 && viewerShelfStatus === "finished"
-								? <p class="meta community-rating">Average rating: {renderAverageStars(book.averageRating)} {book.averageRating.toFixed(2)}</p>
-								: <p class="meta rating">Average rating: {renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
-						)}
-						{isAuthenticated && book.id > 0 && viewerShelfStatus === "finished" && (
-							<RatingControl bookId={book.id} rating={viewerRating} editable={true} />
-						)}
-					</div>
+					<ul class="book-head-grid">
+						<BookCard
+							title={book.title}
+							titleHref=""
+							author={book.author}
+							authorHref={book.author ? authorHref(book.author, book.authorId) : ""}
+							thumbnail={book.coverUrl}
+							description=""
+							readers={book.readers}
+							shelfEntries={book.shelves}
+							publishedLabel={book.publishedLabel}
+							pageCount={book.pageCount}
+							averageRating={book.averageRating}
+						>
+							<div slot="meta">
+								{book.ratingCount > 0 && (
+									<p class="meta rating">Average rating: {renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
+								)}
+								{isAuthenticated && book.id > 0 && viewerShelfStatus === "finished" && (
+									<RatingControl bookId={book.id} rating={viewerRating} editable={true} />
+								)}
+							</div>
+							<div slot="actions">
+								<ShelfDropdown attrs={{
+									"data-title": book.title,
+									"data-author": book.author,
+									"data-description": book.synopsis,
+									"data-cover": book.coverUrl,
+									"data-pages": String(book.pageCount || 0),
+									"data-categories": "[]",
+									"data-isbn10": book.isbn10,
+									"data-isbn13": book.isbn13,
+									"data-google-books-id": book.googleBooksId,
+									"data-book-id": String(book.id || 0),
+									"data-initial-status": viewerShelfStatus,
+									"data-hide-label": "true"
+								}} />
+							</div>
+						</BookCard>
+					</ul>
 				</section>
 
 				<section class="panel synopsis-panel">
@@ -652,10 +652,15 @@ const bookStructuredDataPayload = bookStructuredData
 							{activity.map((item) => (
 								<BookCard
 									title={book.title}
-									titleHref=""
+									titleHref={`/book?bookId=${encodeURIComponent(String(book.id || 0))}`}
 									author={book.author}
 									authorHref=""
 									thumbnail={book.coverUrl}
+									readers={1}
+									shelfEntries={1}
+									publishedLabel={book.publishedLabel}
+									pageCount={book.pageCount}
+									averageRating={book.averageRating}
 								>
 									<p slot="preTitle" class="meta activity-headline">
 										{item.actorUsername && <span class="activity-user"><a href={`/profile/${encodeURIComponent(item.actorUsername)}`}>@{item.actorUsername}</a>&nbsp;</span>}
@@ -666,6 +671,21 @@ const bookStructuredDataPayload = bookStructuredData
 									</p>
 									<div slot="meta">
 										{!item.actorUsername && <p class="meta">{item.actorName}</p>}
+									</div>
+									<div slot="actions">
+										<ShelfDropdown attrs={{
+											"data-title": book.title,
+											"data-author": book.author,
+											"data-description": book.synopsis,
+											"data-cover": book.coverUrl,
+											"data-pages": String(book.pageCount || 0),
+											"data-categories": "[]",
+											"data-isbn10": book.isbn10,
+											"data-isbn13": book.isbn13,
+											"data-google-books-id": book.googleBooksId,
+											"data-book-id": String(book.id || 0),
+											"data-initial-status": viewerShelfStatus
+										}} />
 									</div>
 								</BookCard>
 							))}
@@ -697,28 +717,12 @@ const bookStructuredDataPayload = bookStructuredData
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
-	.book-head { display: grid; grid-template-columns: 180px auto; gap: 1rem; align-items: start; border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
-	.book-head-content { position: relative; padding-right: 6rem; }
-	.book-head-content h1 { margin: 0; }
-	.book-head-actions {
-		position: absolute;
-		top: 0.1rem;
-		right: 0;
-		z-index: 2;
-	}
-	.cover-large img, .cover-placeholder { width: 180px; height: 270px; border-radius: 10px; object-fit: cover; background: #f1f1f1; }
-	.cover-placeholder { display: flex; align-items: center; justify-content: center; color: #8a8a8a; border: 1px solid #d7d7d7; }
+	.book-head { border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
+	.book-head-grid { list-style: none; margin: 0; padding: 0; }
 	.meta { margin: 0.24rem 0; color: #4d4d4d; }
 	.rating { color: #4d4d4d; font-weight: 400; }
 	.community-rating { color: #4d4d4d; font-size: 0.88rem; font-weight: 400; }
-	.book-head-actions :global(.shelf-dropdown) {
-		margin-top: 0;
-		display: inline-flex;
-		flex-direction: column;
-		align-items: flex-end;
-	}
-	.book-head-actions :global(.shelf-state) { display: none !important; }
-	.book-head-actions :global(.shelf-feedback) { margin-top: 0.35rem; text-align: right; }
+	.book-head :global(.shelf-state) { display: none !important; }
 	.panel { margin-top: 0.8rem; border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
 	.panel h2 { margin: 0 0 0.55rem; }
 	.related-links-row {
@@ -753,10 +757,7 @@ const bookStructuredDataPayload = bookStructuredData
 	@media (max-width: 860px) {
 		.activity-grid { grid-template-columns: 1fr; }
 	}
-	@media (max-width: 760px) {
-		.book-head { grid-template-columns: 1fr; }
-		.cover-large img, .cover-placeholder { width: 130px; height: 195px; }
-	}
+	@media (max-width: 760px) {}
 </style>
 
 <script>

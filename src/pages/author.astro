@@ -24,6 +24,7 @@ type BookRow = {
 	isbn13: string;
 	googleBooksId: string;
 	synopsis: string;
+	publishedYear: number;
 	pageCount: number;
 	averageRating: number;
 	ratingCount: number;
@@ -93,7 +94,7 @@ if (authorId > 0) {
 					b.title,
 					coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
 					coalesce(b.author_id, 0)::bigint as "authorId",
-					count(distinct ub.user_id)::int as shelves,
+					count(ub.book_id)::int as shelves,
 					count(distinct ub.user_id)::int as readers,
 					coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}') as genres,
 					coalesce(nullif(trim(b.cover_url), ''), '') as "coverUrl",
@@ -102,6 +103,7 @@ if (authorId > 0) {
 					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
 					coalesce(nullif(trim(b.google_books_id), ''), '') as "googleBooksId",
 					coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+					coalesce(b.published_year, 0)::int as "publishedYear",
 					coalesce(nullif(b.page_count, 0), 0)::int as "pageCount",
 					coalesce(rt.average_rating, 0) as "averageRating",
 					coalesce(rt.rating_count, 0)::int as "ratingCount"
@@ -116,12 +118,20 @@ if (authorId > 0) {
 					where ub2.book_id = b.id
 				) rt on true
 				where b.author_id = ${author.id}
-				group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis, b.page_count, rt.average_rating, rt.rating_count
+				group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis, b.published_year, b.page_count, rt.average_rating, rt.rating_count
 				order by shelves desc, readers desc, b.title asc
 			`;
 			books = bookRows;
-			shelvesCount = bookRows.reduce((sum, item) => sum + Number(item.shelves || 0), 0);
-			readersCount = Math.max(...bookRows.map((item) => Number(item.readers || 0)), 0);
+			const authorCounts = await sql<Array<{ shelves: number; readers: number }>>`
+				select
+					count(distinct concat(ub.user_id::text, ':', coalesce(ub.status, '')))::int as shelves,
+					count(distinct ub.user_id)::int as readers
+				from user_book ub
+				join book b on b.id = ub.book_id
+				where b.author_id = ${author.id}
+			`;
+			shelvesCount = Number(authorCounts[0]?.shelves || 0);
+			readersCount = Number(authorCounts[0]?.readers || 0);
 			topGenres = Array.from(
 				new Set(bookRows.flatMap((item) => (item.genres || []).map((genre) => String(genre || "").trim()).filter(Boolean)))
 			).slice(0, 6);
