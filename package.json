@@ -29,7 +29,7 @@
   "dependencies": {
     "@astrojs/vercel": "^10.0.5",
     "@neondatabase/serverless": "^1.1.0",
-    "astro": "^6.1.9",
+    "astro": "^6.3.5",
     "echarts": "^6.0.0"
   }
 }
