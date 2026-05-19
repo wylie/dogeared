@@ -238,6 +238,21 @@ let customShelfBooksByShelfId = new Map<number, Array<{
 	rating: number;
 	updatedAt: string;
 }>>();
+type MomentumBook = {
+	bookId: number;
+	title: string;
+	currentPage: number;
+	totalPages: number;
+	percent: number;
+	daysSinceUpdate: number;
+	finishProbability: number;
+	healthLabel: "On track" | "Steady" | "At risk";
+	healthTone: "good" | "neutral" | "risk";
+};
+let momentumBooks: MomentumBook[] = [];
+let momentumScore = 0;
+let momentumStreakDays = 0;
+let momentumNextAction = "";
 let favoriteBookHref = "";
 let favoriteAuthorHref = "";
 let ownerProfileData: Record<string, unknown> = {};
@@ -635,6 +650,40 @@ function formatActivityDate(value: string) {
 	});
 }
 
+function daysSinceDate(value: string) {
+	const parsed = new Date(String(value || "").trim());
+	if (!Number.isFinite(parsed.getTime())) return 999;
+	const now = new Date();
+	const delta = now.getTime() - parsed.getTime();
+	return Math.max(0, Math.floor(delta / (1000 * 60 * 60 * 24)));
+}
+
+function readingHealthFromDays(daysSinceUpdate: number) {
+	if (daysSinceUpdate <= 2) return { label: "On track" as const, tone: "good" as const, recencyScore: 1 };
+	if (daysSinceUpdate <= 7) return { label: "Steady" as const, tone: "neutral" as const, recencyScore: 0.68 };
+	return { label: "At risk" as const, tone: "risk" as const, recencyScore: 0.32 };
+}
+
+function computeReadingStreakDays(items: Array<{ updatedAt: string }>) {
+	if (items.length === 0) return 0;
+	const seenDays = new Set<string>();
+	for (const item of items) {
+		const parsed = new Date(String(item.updatedAt || "").trim());
+		if (!Number.isFinite(parsed.getTime())) continue;
+		seenDays.add(parsed.toISOString().slice(0, 10));
+	}
+	if (seenDays.size === 0) return 0;
+	let streak = 0;
+	const cursor = new Date();
+	while (true) {
+		const key = cursor.toISOString().slice(0, 10);
+		if (!seenDays.has(key)) break;
+		streak += 1;
+		cursor.setUTCDate(cursor.getUTCDate() - 1);
+	}
+	return streak;
+}
+
 function shelfHrefForOwner(sectionId: string) {
 	const map: Record<string, string> = {
 		want_to_read: "want-to-read",
@@ -745,6 +794,51 @@ const profileBreadcrumbStructuredData = JSON.stringify({
 const profileStructuredDataPayload = profileStructuredData
 	? JSON.stringify([JSON.parse(profileStructuredData), JSON.parse(profileBreadcrumbStructuredData)])
 	: "";
+momentumBooks = currentlyReading.map((item) => {
+	const totalPages = Math.max(0, Number(item.totalPages || 0) || 0);
+	const currentPage = Math.max(0, Number(item.currentPage || 0) || 0);
+	const percent = totalPages > 0 ? Math.max(0, Math.min(100, Math.round((currentPage / totalPages) * 100))) : 0;
+	const daysSinceUpdate = daysSinceDate(item.updatedAt);
+	const health = readingHealthFromDays(daysSinceUpdate);
+	const finishProbability = Math.max(
+		5,
+		Math.min(99, Math.round((percent * 0.65) + (health.recencyScore * 35)))
+	);
+	return {
+		bookId: item.bookId,
+		title: item.title,
+		currentPage,
+		totalPages,
+		percent,
+		daysSinceUpdate,
+		finishProbability,
+		healthLabel: health.label,
+		healthTone: health.tone
+	};
+});
+momentumStreakDays = computeReadingStreakDays(currentlyReading);
+momentumScore = momentumBooks.length > 0
+	? Math.round(momentumBooks.reduce((sum, item) => sum + item.finishProbability, 0) / momentumBooks.length)
+	: 0;
+const mostAtRiskBook = momentumBooks
+	.filter((item) => item.healthTone === "risk")
+	.sort((a, b) => b.daysSinceUpdate - a.daysSinceUpdate)[0];
+const bestOnTrackBook = momentumBooks
+	.slice()
+	.sort((a, b) => b.finishProbability - a.finishProbability)[0];
+if (mostAtRiskBook) {
+	const catchupPages = Math.max(
+		6,
+		Math.min(24, Math.round((mostAtRiskBook.totalPages || 180) * 0.06))
+	);
+	momentumNextAction = `Read ${catchupPages} pages in ${mostAtRiskBook.title} to get back on track.`;
+} else if (bestOnTrackBook) {
+	const nextMilestone = Math.min(100, Math.ceil(bestOnTrackBook.percent / 10) * 10);
+	momentumNextAction = nextMilestone > bestOnTrackBook.percent
+		? `Push ${bestOnTrackBook.title} to ${nextMilestone}% today.`
+		: `Keep pace in ${bestOnTrackBook.title} today.`;
+}
+const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]));
 ---
 
 <Layout
@@ -1167,6 +1261,39 @@ const profileStructuredDataPayload = profileStructuredData
 								</div>
 							)}
 						</div>
+						{isOwnerViewer && (
+							<div class="momentum-panel" data-momentum-panel>
+								<div class="momentum-stat">
+									<div class="momentum-stat-label momentum-stat-label-with-help">
+										<span>Momentum Score (out of 100)</span>
+										<span class="momentum-help">
+											<button
+												type="button"
+												class="momentum-help-trigger"
+												aria-label="How momentum score works"
+												aria-expanded="false"
+												aria-controls="momentum-help-tooltip"
+											>
+												<span class="material-icons" aria-hidden="true">info_outline</span>
+											</button>
+											<div id="momentum-help-tooltip" class="momentum-help-tooltip" role="tooltip">
+												<p><strong>How this score moves:</strong> It averages your currently-reading books based on progress percent and how recently each book was updated.</p>
+												<p><strong>Goes up:</strong> log progress often, especially on books marked “At risk.”</p>
+												<p><strong>Goes down:</strong> no updates for several days, or lots of books with low progress.</p>
+											</div>
+										</span>
+									</div>
+									<p class="momentum-stat-value"><span data-momentum-score>{momentumScore}</span><span class="momentum-stat-scale">/100</span></p>
+								</div>
+								<div class="momentum-stat">
+									<p class="momentum-stat-label">Reading Streak</p>
+									<p class="momentum-stat-value"><span data-momentum-streak>{momentumStreakDays}</span> day{momentumStreakDays === 1 ? "" : "s"}</p>
+								</div>
+								<div class="momentum-next" data-momentum-next-action>
+									{momentumNextAction || "Add progress to keep momentum moving."}
+								</div>
+							</div>
+						)}
 						{pagedReading.items.length === 0 ? (
 							<p>No books are currently marked as reading.</p>
 						) : (
@@ -1180,6 +1307,14 @@ const profileStructuredDataPayload = profileStructuredData
 										thumbnail={item.thumbnail}
 										readers={1}
 										shelfEntries={1}
+										attrs={{
+											"data-momentum-reading-item": "true",
+											"data-momentum-book-id": String(item.bookId || 0),
+											"data-momentum-title": item.title,
+											"data-momentum-current-page": String(Math.max(0, Number(item.currentPage || 0))),
+											"data-momentum-total-pages": String(Math.max(0, Number(item.totalPages || 0))),
+											"data-momentum-updated-at": item.updatedAt
+										}}
 									>
 										<p slot="preTitle" class="meta activity-headline">
 											<span class="activity-prefix">Currently Reading</span>
@@ -1204,6 +1339,15 @@ const profileStructuredDataPayload = profileStructuredData
 													</div>
 												</>
 											)}
+											{(() => {
+												const momentum = momentumByBookId.get(item.bookId);
+												if (!momentum) return null;
+												return (
+													<p class={`momentum-health momentum-health-${momentum.healthTone}`}>
+														{momentum.healthLabel} · {momentum.finishProbability}% likely to finish
+													</p>
+												);
+											})()}
 											{isOwnerViewer && (
 												<div class="progress-inline">
 													<label class="progress-inline-label" for={`progress-inline-${item.bookId}`}>Update progress (page or %)</label>
@@ -1927,6 +2071,119 @@ const profileStructuredDataPayload = profileStructuredData
 	.progress-inline {
 		margin-top: 0.35rem;
 	}
+	.momentum-panel {
+		margin-top: 0.55rem;
+		margin-bottom: 0.25rem;
+		padding: 0.75rem;
+		border: 1px solid #d6e3f4;
+		border-radius: 12px;
+		background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.55rem 0.75rem;
+	}
+	.momentum-stat-label {
+		margin: 0;
+		font-size: 0.76rem;
+		font-weight: 700;
+		color: #4a647f;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+	.momentum-stat-label-with-help {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+	.momentum-stat-value {
+		margin: 0.1rem 0 0;
+		font-size: 1.35rem;
+		font-weight: 800;
+		color: #1f2f45;
+	}
+	.momentum-stat-scale {
+		font-size: 0.9rem;
+		font-weight: 700;
+		color: #4b617a;
+		margin-left: 0.15rem;
+	}
+	.momentum-next {
+		grid-column: 1 / -1;
+		margin: 0;
+		font-size: 0.9rem;
+		color: #334155;
+		font-weight: 600;
+	}
+	.momentum-help {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+	}
+	.momentum-help-trigger {
+		width: 18px;
+		height: 18px;
+		border: none;
+		border-radius: 0;
+		background: transparent;
+		color: #3e5673;
+		line-height: 1;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		padding: 0;
+	}
+	.momentum-help-trigger .material-icons {
+		font-size: 0.95rem;
+		line-height: 1;
+		font-variation-settings: "FILL" 0, "wght" 700, "GRAD" 0, "opsz" 24;
+	}
+	.momentum-help-tooltip {
+		position: absolute;
+		top: calc(100% + 0.45rem);
+		left: 0;
+		width: min(560px, calc(100vw - 1.5rem));
+		max-width: calc(100vw - 1.5rem);
+		background: #ffffff;
+		border: 1px solid #cfdaea;
+		border-radius: 10px;
+		box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+		padding: 0.6rem 0.7rem;
+		opacity: 0;
+		pointer-events: none;
+		transform: translateY(-4px);
+		transition: opacity 130ms ease, transform 130ms ease;
+		z-index: 30;
+		text-transform: none;
+		letter-spacing: normal;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+	.momentum-help-tooltip p {
+		margin: 0.18rem 0;
+		font-size: 0.9rem;
+		font-weight: 500;
+		line-height: 1.35;
+		color: #3f5268;
+		text-transform: none;
+		letter-spacing: normal;
+	}
+	.momentum-help-tooltip strong { font-weight: 700; }
+	.momentum-help:hover .momentum-help-tooltip,
+	.momentum-help:focus-within .momentum-help-tooltip,
+	.momentum-help[data-open="true"] .momentum-help-tooltip {
+		opacity: 1;
+		pointer-events: auto;
+		transform: translateY(0);
+	}
+	.momentum-health {
+		margin: 0.3rem 0 0;
+		font-size: 0.8rem;
+		font-weight: 700;
+	}
+	.momentum-health-good { color: #166534; }
+	.momentum-health-neutral { color: #0f4d7a; }
+	.momentum-health-risk { color: #9a3412; }
 	.currently-reading-grid :global(.book-card .card-body .reading-progress-block) {
 		margin-top: auto;
 	}
@@ -2098,6 +2355,7 @@ const profileStructuredDataPayload = profileStructuredData
 		.activity-grid { grid-template-columns: 1fr; }
 		.profile-card-actions { position: static; margin-bottom: 0.2rem; justify-content: flex-end; }
 		.custom-shelf-heading-row { align-items: flex-start; }
+		.momentum-panel { grid-template-columns: 1fr; }
 	}
 </style>
 
@@ -2129,6 +2387,13 @@ const profileStructuredDataPayload = profileStructuredData
 	const profileActionsMenu = document.querySelector("[data-profile-actions-menu]");
 	const avatarUrlInput = document.querySelector('input[name="avatarUrl"]');
 	const avatarFileInput = document.querySelector("[data-avatar-file]");
+	const momentumPanel = document.querySelector("[data-momentum-panel]");
+	const momentumHelp = document.querySelector(".momentum-help");
+	const momentumHelpTrigger = document.querySelector(".momentum-help-trigger");
+	const momentumHelpTooltip = document.querySelector(".momentum-help-tooltip");
+	const momentumScoreNode = document.querySelector("[data-momentum-score]");
+	const momentumStreakNode = document.querySelector("[data-momentum-streak]");
+	const momentumNextActionNode = document.querySelector("[data-momentum-next-action]");
 	const shelfSectionNodes = Array.from(document.querySelectorAll("[data-shelf-section-key]"));
 	let shelfSectionOrder = (() => {
 		try {
@@ -2573,6 +2838,90 @@ const profileStructuredDataPayload = profileStructuredData
 		};
 	}
 
+	function getDaysSince(dateText) {
+		const parsed = new Date(String(dateText || "").trim());
+		if (!Number.isFinite(parsed.getTime())) return 999;
+		return Math.max(0, Math.floor((Date.now() - parsed.getTime()) / (1000 * 60 * 60 * 24)));
+	}
+
+	function readingHealth(daysSinceUpdate) {
+		if (daysSinceUpdate <= 2) return { label: "On track", tone: "good", recencyScore: 1 };
+		if (daysSinceUpdate <= 7) return { label: "Steady", tone: "neutral", recencyScore: 0.68 };
+		return { label: "At risk", tone: "risk", recencyScore: 0.32 };
+	}
+
+	function recalcMomentumFromDom() {
+		if (!momentumPanel) return;
+		const cards = Array.from(document.querySelectorAll('[data-momentum-reading-item="true"]'));
+		const items = cards.map((card) => {
+			if (!(card instanceof HTMLElement)) return null;
+			const title = String(card.dataset.momentumTitle || "").trim();
+			const currentPage = Math.max(0, Number(card.dataset.momentumCurrentPage || 0) || 0);
+			const totalPages = Math.max(0, Number(card.dataset.momentumTotalPages || 0) || 0);
+			const updatedAt = String(card.dataset.momentumUpdatedAt || "").trim();
+			const percent = totalPages > 0 ? Math.max(0, Math.min(100, Math.round((currentPage / totalPages) * 100))) : 0;
+			const days = getDaysSince(updatedAt);
+			const health = readingHealth(days);
+			const finishProbability = Math.max(5, Math.min(99, Math.round((percent * 0.65) + (health.recencyScore * 35))));
+			return { card, title, currentPage, totalPages, percent, daysSinceUpdate: days, ...health, finishProbability };
+		}).filter(Boolean);
+		if (items.length === 0) return;
+		for (const item of items) {
+			const healthNode = item.card.querySelector(".momentum-health");
+			if (!(healthNode instanceof HTMLElement)) continue;
+			healthNode.classList.remove("momentum-health-good", "momentum-health-neutral", "momentum-health-risk");
+			healthNode.classList.add(`momentum-health-${item.tone}`);
+			healthNode.textContent = `${item.label} · ${item.finishProbability}% likely to finish`;
+		}
+		const avgScore = Math.round(items.reduce((sum, item) => sum + item.finishProbability, 0) / items.length);
+		if (momentumScoreNode instanceof HTMLElement) momentumScoreNode.textContent = String(avgScore);
+
+		const seenDays = new Set(
+			items.map((item) => {
+				const d = new Date(String(item.card.dataset.momentumUpdatedAt || "").trim());
+				return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : "";
+			}).filter(Boolean)
+		);
+		let streak = 0;
+		const cursor = new Date();
+		while (true) {
+			const key = cursor.toISOString().slice(0, 10);
+			if (!seenDays.has(key)) break;
+			streak += 1;
+			cursor.setUTCDate(cursor.getUTCDate() - 1);
+		}
+		if (momentumStreakNode instanceof HTMLElement) momentumStreakNode.textContent = String(streak);
+
+		const atRisk = items.slice().sort((a, b) => b.daysSinceUpdate - a.daysSinceUpdate).find((item) => item.tone === "risk");
+		const best = items.slice().sort((a, b) => b.finishProbability - a.finishProbability)[0];
+		if (momentumNextActionNode instanceof HTMLElement) {
+			if (atRisk) {
+				const catchupPages = Math.max(6, Math.min(24, Math.round((atRisk.totalPages || 180) * 0.06)));
+				momentumNextActionNode.textContent = `Read ${catchupPages} pages in ${atRisk.title} to get back on track.`;
+			} else if (best) {
+				const nextMilestone = Math.min(100, Math.ceil(best.percent / 10) * 10);
+				momentumNextActionNode.textContent = nextMilestone > best.percent
+					? `Push ${best.title} to ${nextMilestone}% today.`
+					: `Keep pace in ${best.title} today.`;
+			}
+		}
+	}
+
+	function positionMomentumTooltip() {
+		if (!(momentumHelp instanceof HTMLElement)) return;
+		if (!(momentumHelpTooltip instanceof HTMLElement)) return;
+		momentumHelpTooltip.style.left = "0px";
+		const gutter = 8;
+		const helpRect = momentumHelp.getBoundingClientRect();
+		const tooltipRect = momentumHelpTooltip.getBoundingClientRect();
+		let offset = 0;
+		const overflowRight = tooltipRect.right - (window.innerWidth - gutter);
+		if (overflowRight > 0) offset -= overflowRight;
+		const overflowLeft = (helpRect.left + offset) - gutter;
+		if (overflowLeft < 0) offset += Math.abs(overflowLeft);
+		momentumHelpTooltip.style.left = `${Math.round(offset)}px`;
+	}
+
 	function promptForFinishRating() {
 		return new Promise((resolve) => {
 			const existing = document.getElementById("finish-rating-overlay");
@@ -2984,6 +3333,11 @@ const profileStructuredDataPayload = profileStructuredData
 				if (quickFinish instanceof HTMLButtonElement) {
 					quickFinish.dataset.currentPage = String(currentPage);
 				}
+				if (card instanceof HTMLElement) {
+					card.dataset.momentumCurrentPage = String(currentPage);
+					card.dataset.momentumUpdatedAt = new Date().toISOString();
+					recalcMomentumFromDom();
+				}
 				input.value = "";
 				progressSave.textContent = "Saved";
 				setTimeout(() => {
@@ -3137,6 +3491,38 @@ const profileStructuredDataPayload = profileStructuredData
 		const willOpen = menu.hidden;
 		menu.hidden = !willOpen;
 		toggleButton.setAttribute("aria-expanded", willOpen ? "true" : "false");
+	});
+
+	momentumHelpTrigger?.addEventListener("click", (event) => {
+		event.preventDefault();
+		event.stopPropagation();
+		if (!(momentumHelp instanceof HTMLElement)) return;
+		if (!(momentumHelpTrigger instanceof HTMLButtonElement)) return;
+		const isOpen = momentumHelp.getAttribute("data-open") === "true";
+		momentumHelp.setAttribute("data-open", isOpen ? "false" : "true");
+		momentumHelpTrigger.setAttribute("aria-expanded", isOpen ? "false" : "true");
+		if (!isOpen) positionMomentumTooltip();
+	});
+
+	momentumHelp?.addEventListener("mouseenter", () => {
+		positionMomentumTooltip();
+	});
+
+	momentumHelpTrigger?.addEventListener("focus", () => {
+		positionMomentumTooltip();
+	});
+
+	window.addEventListener("resize", () => {
+		if (momentumHelp?.getAttribute("data-open") === "true") positionMomentumTooltip();
+	});
+
+	document.addEventListener("click", (event) => {
+		const target = event.target instanceof Element ? event.target : null;
+		if (!(momentumHelp instanceof HTMLElement)) return;
+		if (!(momentumHelpTrigger instanceof HTMLButtonElement)) return;
+		if (target && momentumHelp.contains(target)) return;
+		momentumHelp.setAttribute("data-open", "false");
+		momentumHelpTrigger.setAttribute("aria-expanded", "false");
 	});
 
 	document.addEventListener("click", async (event) => {

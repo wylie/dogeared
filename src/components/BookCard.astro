@@ -11,6 +11,7 @@ type Props = {
 	publishedLabel?: string;
 	pageCount?: number;
 	averageRating?: number;
+	attrs?: Record<string, string>;
 };
 
 const {
@@ -24,7 +25,8 @@ const {
 	shelfEntries = -1,
 	publishedLabel = "",
 	pageCount = 0,
-	averageRating = 0
+	averageRating = 0,
+	attrs = {}
 } = Astro.props as Props;
 
 const hasTopRight = Astro.slots.has("topRight");
@@ -40,7 +42,7 @@ function renderAverageStars(value: number) {
 }
 ---
 
-<li class="book-card">
+<li class="book-card" {...attrs}>
 	{titleHref && (
 		<details class="card-menu">
 			<summary aria-label={`Open actions for ${title}`} title="More actions">
