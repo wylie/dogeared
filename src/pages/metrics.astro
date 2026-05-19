@@ -108,6 +108,25 @@ type AnalyticsFact = {
 	yearBucket: string;
 };
 
+type TasteSignalRow = {
+	title: string;
+	rating: number;
+	pageCount: number;
+	genre: string;
+	tag: string;
+};
+
+type TasteGraphPayload = {
+	bookCount: number;
+	paceScore: number;
+	proseScore: number;
+	tone: string;
+	topGenres: Array<{ label: string; score: number; books: number }>;
+	topThemes: Array<{ label: string; count: number }>;
+	fitReasons: Array<{ kind: "genre" | "theme" | "note"; label: string; prefix: string; suffix: string }>;
+	antiRecs: string[];
+};
+
 type MetricsPayload = {
 	generatedAt: string;
 	dataSource: "live" | "sample";
@@ -209,7 +228,129 @@ type MetricsPayload = {
 	topLocations: MetricRow[];
 	authors: DrillAuthor[];
 	analyticsFacts: AnalyticsFact[];
+	tasteGraph: TasteGraphPayload;
 };
+
+function clamp(value: number, min: number, max: number) {
+	return Math.max(min, Math.min(max, value));
+}
+
+function toTitleCase(value: string) {
+	return String(value || "")
+		.trim()
+		.toLowerCase()
+		.replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function splitGenreSegments(label: string) {
+	return String(label || "")
+		.split(",")
+		.map((part) => String(part || "").trim())
+		.filter(Boolean);
+}
+
+function buildTasteGraph(rows: TasteSignalRow[]): TasteGraphPayload {
+	const safeRows = rows.filter((row) => Number(row.rating) >= 1 && Number(row.rating) <= 5);
+	const bookCount = safeRows.length;
+	if (bookCount === 0) {
+		return {
+			bookCount: 0,
+			paceScore: 0,
+			proseScore: 0,
+			tone: "Unknown",
+			topGenres: [],
+			topThemes: [],
+			fitReasons: [{ kind: "note", label: "", prefix: "Rate a few finished books to generate your taste graph.", suffix: "" }],
+			antiRecs: []
+		};
+	}
+
+	const avgPages = safeRows.reduce((sum, row) => sum + Math.max(0, Number(row.pageCount || 0)), 0) / bookCount;
+	const avgRating = safeRows.reduce((sum, row) => sum + Number(row.rating || 0), 0) / bookCount;
+	const paceScore = Math.round(clamp(((avgPages - 120) / 400) * 100, 0, 100));
+	const proseScore = Math.round(clamp(((avgRating - 1) / 4) * 100, 0, 100));
+
+	const genreMap = new Map<string, { books: number; ratingSum: number }>();
+	const tagMap = new Map<string, number>();
+	for (const row of safeRows) {
+		const genre = toTitleCase(row.genre || "Uncategorized");
+		const tag = toTitleCase(row.tag || "");
+		const existingGenre = genreMap.get(genre) || { books: 0, ratingSum: 0 };
+		existingGenre.books += 1;
+		existingGenre.ratingSum += Number(row.rating || 0);
+		genreMap.set(genre, existingGenre);
+		if (tag) tagMap.set(tag, (tagMap.get(tag) || 0) + 1);
+	}
+
+	const topGenres = Array.from(genreMap.entries())
+		.map(([label, stats]) => ({
+			label,
+			books: stats.books,
+			score: Math.round((stats.ratingSum / Math.max(1, stats.books)) * 20)
+		}))
+		.sort((a, b) => b.score - a.score || b.books - a.books || a.label.localeCompare(b.label))
+		.slice(0, 4);
+
+	const topThemes = Array.from(tagMap.entries())
+		.map(([label, count]) => ({ label, count }))
+		.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+		.slice(0, 5);
+
+	const toneBuckets = {
+		dark: 0,
+		hopeful: 0,
+		intellectual: 0,
+		adventurous: 0
+	};
+	for (const [tag, count] of tagMap.entries()) {
+		const text = tag.toLowerCase();
+		if (/(dark|bleak|gritty|tragic|dystopian|horror)/.test(text)) toneBuckets.dark += count;
+		if (/(hope|uplift|warm|comfort|heart|inspiring)/.test(text)) toneBuckets.hopeful += count;
+		if (/(philosophy|psychology|history|science|politics|essay)/.test(text)) toneBuckets.intellectual += count;
+		if (/(adventure|action|thriller|mystery|quest|survival)/.test(text)) toneBuckets.adventurous += count;
+	}
+	const tone = (Object.entries(toneBuckets).sort((a, b) => b[1] - a[1])[0]?.[1] || 0) > 0
+		? toTitleCase(Object.entries(toneBuckets).sort((a, b) => b[1] - a[1])[0]?.[0] || "Unknown")
+		: "Balanced";
+
+	const fitReasons = [
+		...(topGenres[0] ? [{
+			kind: "genre" as const,
+			label: topGenres[0].label,
+			prefix: "Strongest affinity: ",
+			suffix: ` (${topGenres[0].score}/100).`
+		}] : []),
+		...(topThemes[0] ? [{
+			kind: "theme" as const,
+			label: topThemes[0].label,
+			prefix: "Recurring theme: ",
+			suffix: "."
+		}] : []),
+		{
+			kind: "note" as const,
+			label: "",
+			prefix: paceScore >= 60 ? "You tend to like longer, denser books." : "You tend to prefer brisk, lower-friction reads.",
+			suffix: ""
+		}
+	];
+	const antiRecs = Array.from(genreMap.entries())
+		.map(([label, stats]) => ({ label, avg: stats.ratingSum / Math.max(1, stats.books), books: stats.books }))
+		.filter((row) => row.books >= 2 && row.avg <= 2.6)
+		.sort((a, b) => a.avg - b.avg || b.books - a.books)
+		.slice(0, 3)
+		.map((row) => `${row.label} (avg ${row.avg.toFixed(1)}★ across ${row.books} books)`);
+
+	return {
+		bookCount,
+		paceScore,
+		proseScore,
+		tone,
+		topGenres,
+		topThemes,
+		fitReasons,
+		antiRecs
+	};
+}
 
 const samplePayload: MetricsPayload = {
 	generatedAt: new Date().toISOString(),
@@ -371,7 +512,17 @@ const samplePayload: MetricsPayload = {
 			language: "EN",
 			yearBucket: "1970s"
 		}
-	]
+	],
+	tasteGraph: {
+		bookCount: 0,
+		paceScore: 0,
+		proseScore: 0,
+		tone: "Unknown",
+		topGenres: [],
+		topThemes: [],
+		fitReasons: ["Rate a few finished books to generate your taste graph."],
+		antiRecs: []
+	}
 };
 
 let metricsPayload: MetricsPayload = samplePayload;
@@ -393,7 +544,7 @@ try {
 		)
 	`;
 	await sql`create index if not exists idx_progress_event_user_recorded_at on user_reading_progress_event(user_id, recorded_at desc)`;
-	const [summaryRows, statusRows, topLocationRows, authorRows, genreRows, locationRows, factsRows, myRows, communityRows, topReadingRows, streakRows, finishSpeedRows, genreShiftRows, topicExploreRows, ratingRows, communityAdvancedRows] = await Promise.all([
+	const [summaryRows, statusRows, topLocationRows, authorRows, genreRows, locationRows, factsRows, myRows, communityRows, topReadingRows, streakRows, finishSpeedRows, genreShiftRows, topicExploreRows, ratingRows, tasteRows, communityAdvancedRows] = await Promise.all([
 		sql<Array<{ total_users: number; total_shelved_books: number; distinct_books: number; tracked_genres: number; tracked_topics: number; active_locations: number }>>`
 			with valid_users as (
 				select id
@@ -798,6 +949,36 @@ try {
 				case when total_books > 0 then round((rated_books::numeric / total_books::numeric) * 100, 1)::float8 else 0::float8 end as percent_books_rated
 			from base
 		`,
+		sql<Array<{ title: string; rating: number; page_count: number; genre: string; tag: string }>>`
+			select
+				coalesce(b.title, '') as title,
+				coalesce(ub.rating, 0)::int as rating,
+				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
+				coalesce(bg.genre_name, 'Uncategorized') as genre,
+				coalesce(bt.tag_name, '') as tag
+			from user_book ub
+			join book b on b.id = ub.book_id
+			left join lateral (
+				select genre_name
+				from book_genre
+				where book_id = b.id
+				order by genre_name asc
+				limit 1
+			) bg on true
+			left join lateral (
+				select tag_name
+				from book_tag
+				where book_id = b.id
+				order by tag_name asc
+				limit 1
+			) bt on true
+			where ${viewerUserId}::text <> ''
+				and ub.user_id = ${viewerUserId || null}::uuid
+				and ub.status = 'finished'
+				and ub.rating is not null
+			order by ub.updated_at desc
+			limit 600
+		`,
 		sql<Array<{
 			active_readers_7d: number;
 			active_readers_30d: number;
@@ -1185,7 +1366,14 @@ try {
 				language: normalizeLabel(row.language),
 				yearBucket
 			};
-		})
+		}),
+		tasteGraph: buildTasteGraph(tasteRows.map((row) => ({
+			title: String(row.title || ""),
+			rating: Number(row.rating || 0),
+			pageCount: Number(row.page_count || 0),
+			genre: String(row.genre || ""),
+			tag: String(row.tag || "")
+		})))
 	};
 } catch (error) {
 	metricsPayload = { ...samplePayload, error: error instanceof Error ? error.message : "Failed to load live metrics." };
@@ -1193,6 +1381,7 @@ try {
 
 const sectionLinks = [
 	{ id: "your-metrics", label: "You" },
+	{ id: "taste-graph", label: "Taste Graph" },
 	{ id: "community-metrics", label: "Community" },
 	{ id: "books-metrics", label: "Books" },
 	{ id: "explorer", label: "Explorer" },
@@ -1352,6 +1541,105 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 					<span class="widget-subtext">This month: {metricsPayload.userMetrics.topGenreThisMonthCount.toLocaleString()} entries · Last month top: {metricsPayload.userMetrics.topGenreLastMonth} ({metricsPayload.userMetrics.topGenreLastMonthCount.toLocaleString()})</span>
 				</article>
 				</div>
+			</div>
+		</section>
+
+		<section id="taste-graph" class="panel">
+			<div class="panel-head">
+				<h2>Taste Graph</h2>
+				<p>Why books fit your taste, based on your finished ratings.</p>
+			</div>
+			<div class="taste-grid">
+				<article class="widget">
+					<p class="taste-metric-head">Training Set <span class="taste-help"><span class="material-icons taste-help-icon" aria-hidden="true">info_outline</span><span class="taste-help-tip" role="tooltip">How many finished books with ratings we used to model your taste. More books = more reliable vectors.</span></span></p>
+					<strong>{metricsPayload.tasteGraph.bookCount.toLocaleString()} books</strong>
+				</article>
+				<article class="widget">
+					<p class="taste-metric-head">Pace Vector <span class="taste-help"><span class="material-icons taste-help-icon" aria-hidden="true">info_outline</span><span class="taste-help-tip" role="tooltip">A 0-100 signal based on the typical length of books you finish and rate. Higher leans long-form; lower leans quick reads.</span></span></p>
+					<strong>{metricsPayload.tasteGraph.paceScore}/100</strong>
+					<span class="widget-subtext">{metricsPayload.tasteGraph.paceScore >= 60 ? "Leans long-form" : "Leans brisk reads"}</span>
+				</article>
+				<article class="widget">
+					<p class="taste-metric-head">Prose Density <span class="taste-help"><span class="material-icons taste-help-icon" aria-hidden="true">info_outline</span><span class="taste-help-tip" role="tooltip">A 0-100 proxy for how demanding your preferred books are, inferred from rating patterns across finished reads.</span></span></p>
+					<strong>{metricsPayload.tasteGraph.proseScore}/100</strong>
+					<span class="widget-subtext">Estimated from finish + rating behavior</span>
+				</article>
+				<article class="widget">
+					<p class="taste-metric-head">Tone <span class="taste-help"><span class="material-icons taste-help-icon" aria-hidden="true">info_outline</span><span class="taste-help-tip" role="tooltip">Dominant mood cluster inferred from recurring tags/themes across your finished, rated books.</span></span></p>
+					<strong>{metricsPayload.tasteGraph.tone}</strong>
+				</article>
+			</div>
+			<div class="taste-columns">
+				<article class="widget">
+					<p>Top Genre Affinities</p>
+					<ul class="metric-list taste-list">
+						{metricsPayload.tasteGraph.topGenres.length === 0 ? (
+							<li><span>Not enough finished ratings yet.</span></li>
+						) : metricsPayload.tasteGraph.topGenres.map((row) => (
+							<li>
+								<span>
+									{splitGenreSegments(row.label).map((segment, index) => (
+										<>
+											{index > 0 && ", "}
+											<a class="metric-link" href={`/related?kind=genre&value=${encodeURIComponent(segment)}`}>{segment}</a>
+										</>
+									))}
+								</span>
+								<strong>{row.score}/100 · {row.books} books</strong>
+							</li>
+						))}
+					</ul>
+				</article>
+				<article class="widget">
+					<p>Recurring Themes</p>
+					<ul class="metric-list taste-list">
+						{metricsPayload.tasteGraph.topThemes.length === 0 ? (
+							<li><span>No strong theme signals yet.</span></li>
+						) : metricsPayload.tasteGraph.topThemes.map((row) => (
+							<li>
+								<span><a class="metric-link" href={`/related?kind=topic&value=${encodeURIComponent(row.label)}`}>{row.label}</a></span>
+								<strong>{row.count} hits</strong>
+							</li>
+						))}
+					</ul>
+				</article>
+				<article class="widget">
+					<p>Because It Fits</p>
+					<ul class="metric-list taste-list">
+						{metricsPayload.tasteGraph.fitReasons.map((reason) => (
+							<li>
+								<span>
+									{reason.prefix}
+									{reason.kind === "genre" && reason.label && (
+										<>
+											{splitGenreSegments(reason.label).map((segment, index) => (
+												<>
+													{index > 0 && ", "}
+													<a class="metric-link" href={`/related?kind=genre&value=${encodeURIComponent(segment)}`}>{segment}</a>
+												</>
+											))}
+										</>
+									)}
+									{reason.kind === "theme" && reason.label && (
+										<a class="metric-link" href={`/related?kind=topic&value=${encodeURIComponent(reason.label)}`}>{reason.label}</a>
+									)}
+									{reason.kind === "note" && reason.label && reason.label}
+									{reason.suffix}
+								</span>
+							</li>
+						))}
+					</ul>
+				</article>
+				<article class="widget">
+					<p>Anti-Recs</p>
+					<ul class="metric-list taste-list">
+						{metricsPayload.tasteGraph.antiRecs.length === 0 ? (
+							<li><span>No clear avoid-patterns yet.</span></li>
+						) : metricsPayload.tasteGraph.antiRecs.map((reason) => (
+							<li><span>{reason}</span></li>
+						))}
+					</ul>
+				</article>
 			</div>
 		</section>
 
@@ -2723,6 +3011,37 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 		applyWindow("7d");
 	}
 
+	const tasteHelpNodes = Array.from(document.querySelectorAll(".taste-help"));
+	function positionTasteTooltip(helpNode) {
+		if (!(helpNode instanceof HTMLElement)) return;
+		const tip = helpNode.querySelector(".taste-help-tip");
+		if (!(tip instanceof HTMLElement)) return;
+		tip.style.left = "0px";
+		const gutter = 8;
+		const helpRect = helpNode.getBoundingClientRect();
+		const tipRect = tip.getBoundingClientRect();
+		let offset = 0;
+		const overflowRight = tipRect.right - (window.innerWidth - gutter);
+		if (overflowRight > 0) offset -= overflowRight;
+		const overflowLeft = (helpRect.left + offset) - gutter;
+		if (overflowLeft < 0) offset += Math.abs(overflowLeft);
+		tip.style.left = `${Math.round(offset)}px`;
+	}
+
+	for (const node of tasteHelpNodes) {
+		if (!(node instanceof HTMLElement)) continue;
+		node.addEventListener("mouseenter", () => positionTasteTooltip(node));
+		const icon = node.querySelector(".taste-help-icon");
+		if (icon instanceof HTMLElement) {
+			icon.setAttribute("tabindex", "0");
+			icon.addEventListener("focus", () => positionTasteTooltip(node));
+		}
+	}
+
+	window.addEventListener("resize", () => {
+		for (const node of tasteHelpNodes) positionTasteTooltip(node);
+	});
+
 </script>
 
 <style>
@@ -2783,6 +3102,59 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 	.community-feature-card p { margin: 0; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.07em; color: #37506a; font-weight: 700; }
 	.community-feature-card strong { display: block; margin-top: 0.2rem; font-size: 2rem; line-height: 1; color: #262626; }
 	.community-feature-card span { display: block; margin-top: 0.22rem; font-size: 0.84rem; color: #5d5d5d; }
+	.taste-grid { margin-top: 0.7rem; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.7rem; }
+	.taste-columns { margin-top: 0.7rem; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
+	.taste-list { margin-top: 0.5rem; }
+	.taste-list li { align-items: flex-start; }
+	.taste-list li span { line-height: 1.35; }
+	.taste-metric-head {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.24rem;
+	}
+	.taste-help {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+	}
+	.taste-help-icon {
+		font-size: 0.95rem;
+		line-height: 1;
+		color: #436180;
+		font-variation-settings: "FILL" 0, "wght" 700, "GRAD" 0, "opsz" 24;
+		cursor: pointer;
+	}
+	.taste-help-tip {
+		position: absolute;
+		top: calc(100% + 0.4rem);
+		left: 0;
+		width: min(320px, calc(100vw - 2rem));
+		max-width: calc(100vw - 2rem);
+		padding: 0.5rem 0.6rem;
+		border-radius: 10px;
+		border: 1px solid #cfdaea;
+		background: #fff;
+		box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+		color: #3f5268;
+		font-size: 0.8rem;
+		font-weight: 500;
+		line-height: 1.35;
+		text-transform: none;
+		letter-spacing: normal;
+		white-space: normal;
+		overflow-wrap: anywhere;
+		opacity: 0;
+		pointer-events: none;
+		transform: translateY(-4px);
+		transition: opacity 120ms ease, transform 120ms ease;
+		z-index: 30;
+	}
+	.taste-help:hover .taste-help-tip,
+	.taste-help:focus-within .taste-help-tip {
+		opacity: 1;
+		pointer-events: auto;
+		transform: translateY(0);
+	}
 	.community-grid { margin-top: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.metric-list { list-style: none; margin: 0.65rem 0 0; padding: 0; display: grid; gap: 0.55rem; }
 	.metric-list li { display: flex; justify-content: space-between; align-items: center; gap: 0.65rem; padding: 0.45rem 0.56rem; border: 1px solid #d9d9d9; border-radius: 9px; background: #fff; }
@@ -2850,6 +3222,8 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 		.community-momentum-grid { grid-template-columns: 1fr; }
 		.community-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 		.community-feature-row { grid-template-columns: 1fr; }
+		.taste-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.taste-columns { grid-template-columns: 1fr; }
 		.insight-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
 		:global(.pie-widget-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	}

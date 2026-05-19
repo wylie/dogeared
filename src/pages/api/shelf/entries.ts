@@ -42,6 +42,7 @@ type ShelfEntryInput = {
 	sourceEditionId?: unknown;
 	sourceUrl?: unknown;
 	googleBooksId?: unknown;
+	finishedReflection?: unknown;
 };
 
 const GOOGLE_BOOKS_API_KEY = normalizeCatalogText(import.meta.env.GOOGLE_BOOKS_API_KEY);
@@ -345,6 +346,7 @@ async function inferMetadataForBook(input: {
 async function ensureShelfSchema() {
 	const sql = getNeonSql();
 	await sql`alter table user_book add column if not exists rating int`;
+	await sql`alter table user_book add column if not exists finished_reflection text not null default ''`;
 	await sql`alter table book add column if not exists synopsis text not null default ''`;
 	await sql`alter table book add column if not exists page_count int not null default 0`;
 	await sql`alter table book add column if not exists publisher text not null default ''`;
@@ -388,6 +390,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			total_pages: number;
 			current_page: number;
 			finished_date: string | null;
+			finished_reflection: string;
 			first_added_at: string;
 			updated_at: string;
 			genres: string[] | null;
@@ -405,6 +408,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 				ub.total_pages,
 				ub.current_page,
 				ub.finished_date::text as finished_date,
+				coalesce(ub.finished_reflection, '') as finished_reflection,
 				ub.first_added_at::text as first_added_at,
 				ub.updated_at::text as updated_at,
 				array_agg(bg.genre_name order by bg.genre_name asc) filter (where bg.genre_name is not null) as genres,
@@ -427,6 +431,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			totalPages: normalizePositiveInt(row.total_pages),
 			currentPage: normalizePositiveInt(row.current_page),
 			finishedDate: row.finished_date || "",
+			finishedReflection: row.finished_reflection || "",
 			addedAt: Date.parse(row.first_added_at || "") || Date.now(),
 			coverUrl: row.cover_url || "",
 			format: "",
@@ -476,6 +481,9 @@ export const POST: APIRoute = async ({ request }) => {
 		const currentPage = normalizePositiveInt(entry.currentPage);
 		const finishedDateRaw = normalizeText(entry.finishedDate);
 		const finishedDate = status === "finished" && finishedDateRaw ? finishedDateRaw : "";
+		const finishedReflection = status === "finished"
+			? normalizeText(entry.finishedReflection).slice(0, 280)
+			: "";
 		let coverUrl = bookPayload.coverUrl;
 		let language = bookPayload.language;
 		let synopsis = bookPayload.description;
@@ -677,6 +685,7 @@ export const POST: APIRoute = async ({ request }) => {
 				total_pages,
 				current_page,
 				finished_date,
+				finished_reflection,
 				first_added_at,
 				updated_at
 			)
@@ -688,6 +697,7 @@ export const POST: APIRoute = async ({ request }) => {
 				${totalPages},
 				${currentPage},
 				${finishedDate ? finishedDate : null}::date,
+				${finishedReflection},
 				now(),
 				now()
 			)
@@ -697,6 +707,7 @@ export const POST: APIRoute = async ({ request }) => {
 				total_pages = excluded.total_pages,
 				current_page = excluded.current_page,
 				finished_date = excluded.finished_date,
+				finished_reflection = excluded.finished_reflection,
 				updated_at = now()
 		`;
 		// Single-shelf mode: putting a book on a default shelf removes it from
@@ -779,6 +790,7 @@ export const POST: APIRoute = async ({ request }) => {
 			google_books_id: string;
 			publisher: string | null;
 			synopsis: string;
+			finished_reflection: string;
 		}>>`
 			select
 				b.id as book_id,
@@ -798,7 +810,8 @@ export const POST: APIRoute = async ({ request }) => {
 				b.isbn13,
 				b.google_books_id,
 				coalesce(b.publisher, '') as publisher,
-				coalesce(b.synopsis, '') as synopsis
+				coalesce(b.synopsis, '') as synopsis,
+				coalesce(ub.finished_reflection, '') as finished_reflection
 			from user_book ub
 			join book b on b.id = ub.book_id
 			left join book_genre bg on bg.book_id = b.id
@@ -827,6 +840,7 @@ export const POST: APIRoute = async ({ request }) => {
 			googleBooksId: persisted.google_books_id || "",
 			publisher: persisted.publisher || "",
 			description: persisted.synopsis || "",
+			finishedReflection: persisted.finished_reflection || "",
 			categories: Array.isArray(persisted.genres) ? persisted.genres : [],
 			updatedAt: Date.parse(persisted.updated_at || "") || Date.now()
 		} : null;

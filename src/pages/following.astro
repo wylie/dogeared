@@ -195,6 +195,9 @@ const sectionLinks = [
 									{viewerRatingByBookId.get(Number(item.bookId || 0)) && (
 										<p class="meta rating-meta">{renderRatingStars(viewerRatingByBookId.get(Number(item.bookId || 0)) || 0)} {viewerRatingByBookId.get(Number(item.bookId || 0))}/5</p>
 									)}
+									{String(item.eventType || "").trim().toLowerCase() === "finished" && item.finishedReflection && (
+										<p class="meta finished-reflection">“{item.finishedReflection}”</p>
+									)}
 								</div>
 								<div slot="actions">
 									<ShelfDropdown attrs={{
@@ -390,6 +393,11 @@ const sectionLinks = [
 	.rating-meta {
 		color: var(--color-rating);
 		font-weight: 700;
+	}
+	.finished-reflection {
+		margin-top: 0.2rem;
+		font-style: italic;
+		color: #475569;
 	}
 	.feed-page :global(.shelf-state) {
 		display: none !important;

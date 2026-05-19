@@ -57,6 +57,21 @@ function normalizeBirthYear(value: unknown) {
 	return String(rounded);
 }
 
+function normalizeBookIdentityPart(value: unknown) {
+	return String(value || "")
+		.toLowerCase()
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim();
+}
+
+function bookIdentityKey(input: { title: unknown; author: unknown }) {
+	const title = normalizeBookIdentityPart(input.title);
+	const author = normalizeBookIdentityPart(input.author);
+	return `${title}::${author}`;
+}
+
 if (Astro.request.method === "POST" && viewerUserId && requestedUsername) {
 	const formData = await Astro.request.formData();
 	const profileIntent = String(formData.get("profileIntent") || "").trim().toLowerCase();
@@ -518,6 +533,14 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		description: "",
 		updatedAt: String(row.updated_at || "").trim()
 	}));
+	// Keep default shelves mutually exclusive in the profile UI when catalog duplicates
+	// exist for the same work under different book IDs.
+	const currentlyReadingKeys = new Set(
+		currentlyReading.map((item) => bookIdentityKey({ title: item.title, author: item.author }))
+	);
+	wantToReadBooks = wantToReadBooks.filter((item) => (
+		!currentlyReadingKeys.has(bookIdentityKey({ title: item.title, author: item.author }))
+	));
 	finishedBooks = finishedRows.map((row) => ({
 		bookId: Number(row.book_id || 0),
 		title: String(row.title || "").trim(),
@@ -1120,7 +1143,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 								</div>
 							</div>
 						</div>
-						<p class="meta custom-shelf-count">{shelf.bookCount} {shelf.bookCount === 1 ? "book" : "books"}</p>
 						{(customShelfBooksByShelfId.get(shelf.id) || []).length === 0 ? (
 							<p class="meta">No books on this shelf yet.</p>
 						) : (
@@ -1176,7 +1198,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 
 				{(canViewActivity || isOwnerViewer) && (
 					<section id="recent-activity" class="activity-card activity-card-plain">
-						<h2>Recent Activity</h2>
+						<h2><span class="material-icons custom-shelf-heading-icon default-shelf-heading-icon" aria-hidden="true">schedule</span>Recent Activity</h2>
 						{pagedRecent.items.length === 0 ? (
 							<p>No recent activity.</p>
 						) : (
@@ -1248,7 +1270,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 						style={shelfSectionOrderStyle("default:reading")}
 					>
 						<div class="custom-shelf-heading-row">
-							<h2>Currently Reading</h2>
+							<h2><span class="material-icons custom-shelf-heading-icon default-shelf-heading-icon" aria-hidden="true">menu_book</span>Currently Reading</h2>
 							{isOwnerViewer && (
 								<div class="custom-shelf-menu-wrap">
 									<button type="button" class="custom-shelf-menu-trigger" data-action="toggle-custom-shelf-menu" aria-expanded="false" aria-label="Actions for Currently Reading">
@@ -1265,7 +1287,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 							<div class="momentum-panel" data-momentum-panel>
 								<div class="momentum-stat">
 									<div class="momentum-stat-label momentum-stat-label-with-help">
-										<span>Momentum Score (out of 100)</span>
+										<span>Momentum Score</span>
 										<span class="momentum-help">
 											<button
 												type="button"
@@ -1434,7 +1456,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				{(canViewActivity || isOwnerViewer) && (
 					<section id="want-to-read" class="activity-card activity-card-plain" data-shelf-section-key="default:want_to_read" style={shelfSectionOrderStyle("default:want_to_read")}>
 						<div class="custom-shelf-heading-row">
-							<h2>Want to Read</h2>
+							<h2><span class="material-icons custom-shelf-heading-icon default-shelf-heading-icon default-shelf-heading-icon-bold" aria-hidden="true">add</span>Want to Read</h2>
 							{isOwnerViewer && (
 								<div class="custom-shelf-menu-wrap">
 									<button type="button" class="custom-shelf-menu-trigger" data-action="toggle-custom-shelf-menu" aria-expanded="false" aria-label="Actions for Want to Read">
@@ -1503,7 +1525,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				{(canViewActivity || isOwnerViewer) && (
 					<section id="read" class="activity-card activity-card-plain" data-shelf-section-key="default:finished" style={shelfSectionOrderStyle("default:finished")}>
 						<div class="custom-shelf-heading-row">
-							<h2>Read</h2>
+							<h2><span class="material-icons custom-shelf-heading-icon default-shelf-heading-icon default-shelf-heading-icon-bold" aria-hidden="true">done</span>Read</h2>
 							{isOwnerViewer && (
 								<div class="custom-shelf-menu-wrap">
 									<button type="button" class="custom-shelf-menu-trigger" data-action="toggle-custom-shelf-menu" aria-expanded="false" aria-label="Actions for Read">
@@ -1971,6 +1993,12 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		justify-content: space-between;
 		gap: 0.55rem;
 	}
+	.custom-shelf-heading-row h2 {
+		margin-block-end: 0;
+	}
+	#recent-activity > h2 {
+		margin-block-end: 0;
+	}
 	.custom-shelf-books-section h3 {
 		margin: 0;
 		font-size: 1.35rem;
@@ -1986,6 +2014,15 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		font-size: 1.2rem;
 		line-height: 1;
 		color: #4b5563;
+	}
+	.default-shelf-heading-icon {
+		margin-right: 0.18rem;
+		font-size: 1.28rem;
+	}
+	.default-shelf-heading-icon-bold {
+		font-size: 1.34rem;
+		font-variation-settings: "FILL" 1, "wght" 700, "GRAD" 200, "opsz" 24;
+		-webkit-text-stroke: 0.15px currentColor;
 	}
 	:global(.icon-picker-overlay) {
 		position: fixed;
@@ -2303,6 +2340,48 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		display: flex;
 		gap: 0.3rem;
 	}
+	.finish-reflection-wrap {
+		margin-top: 0.65rem;
+		display: grid;
+		gap: 0.3rem;
+	}
+	.finish-reflection-label {
+		display: block;
+		margin: 0;
+		font-size: 0.85rem;
+		font-weight: 700;
+		color: #334155;
+	}
+	.finish-reflection-input {
+		width: 100%;
+		box-sizing: border-box;
+		border: 1px solid #d6dde7;
+		border-radius: 10px;
+		padding: 0.62rem 0.72rem;
+		font: inherit;
+		font-size: 0.9rem;
+		line-height: 1.35;
+		color: #243244;
+		background: #f8fbff;
+		transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+		resize: vertical;
+		min-height: 92px;
+	}
+	.finish-reflection-input::placeholder {
+		color: #8b97a8;
+	}
+	.finish-reflection-input:focus {
+		outline: none;
+		border-color: #8ba7c9;
+		background: #fff;
+		box-shadow: 0 0 0 3px rgba(139, 167, 201, 0.22);
+	}
+	.finish-reflection-count {
+		margin: 0;
+		font-size: 0.76rem;
+		color: #64748b;
+		text-align: right;
+	}
 	.finish-rating-star {
 		border: none;
 		background: transparent;
@@ -2343,6 +2422,121 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.finish-rating-save:disabled {
 		opacity: 0.7;
+		cursor: default;
+	}
+	:global(.finish-rating-overlay) {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.45);
+		display: grid;
+		place-items: center;
+		z-index: 1200;
+		padding: 1rem;
+	}
+	:global(.finish-rating-modal) {
+		width: min(560px, 100%);
+		background: #fff;
+		border-radius: 14px;
+		padding: 1rem;
+		box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
+	}
+	:global(.finish-rating-title) {
+		margin: 0;
+		font-size: 2rem;
+		font-weight: 800;
+		color: #1f2937;
+	}
+	:global(.finish-rating-subtitle) {
+		margin: 0.2rem 0 0.75rem;
+		color: #5b6470;
+		font-size: 0.9rem;
+	}
+	:global(.finish-rating-stars) {
+		display: flex;
+		gap: 0.3rem;
+	}
+	:global(.finish-rating-star) {
+		border: none;
+		background: transparent;
+		font-size: 2rem;
+		line-height: 1;
+		padding: 0.1rem;
+		color: #f59e0b;
+		cursor: pointer;
+	}
+	:global(.finish-reflection-wrap) {
+		margin-top: 0.65rem;
+		display: grid;
+		gap: 0.3rem;
+	}
+	:global(.finish-reflection-label) {
+		display: block;
+		margin: 0;
+		font-size: 0.85rem;
+		font-weight: 700;
+		color: #334155;
+	}
+	:global(.finish-reflection-input) {
+		display: block;
+		width: 100%;
+		box-sizing: border-box;
+		border: 1px solid #d6dde7;
+		border-radius: 10px;
+		padding: 0.62rem 0.72rem;
+		font: inherit;
+		font-size: 0.9rem;
+		line-height: 1.35;
+		color: #243244;
+		background: #f8fbff;
+		resize: vertical;
+		min-height: 92px;
+	}
+	:global(.finish-reflection-input::placeholder) {
+		color: #8b97a8;
+	}
+	:global(.finish-reflection-input:focus) {
+		outline: none;
+		border-color: #8ba7c9;
+		background: #fff;
+		box-shadow: 0 0 0 3px rgba(139, 167, 201, 0.22);
+	}
+	:global(.finish-reflection-count) {
+		margin: 0;
+		font-size: 0.76rem;
+		color: #64748b;
+		text-align: right;
+	}
+	:global(.finish-rating-actions) {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.45rem;
+		margin-top: 0.8rem;
+	}
+	:global(.finish-rating-cancel),
+	:global(.finish-rating-skip),
+	:global(.finish-rating-save) {
+		border: none;
+		border-radius: 8px;
+		height: 34px;
+		padding: 0 0.8rem;
+		font: inherit;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	:global(.finish-rating-cancel) {
+		background: #eceff3;
+		color: #1f2937;
+	}
+	:global(.finish-rating-skip) {
+		background: #f3efe7;
+		color: #374151;
+	}
+	:global(.finish-rating-save) {
+		background: var(--color-primary);
+		color: #fff;
+	}
+	:global(.finish-rating-save:disabled) {
+		opacity: 0.6;
 		cursor: default;
 	}
 	.public-profile-page :global(.shelf-state) { display: none !important; }
@@ -2578,6 +2772,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				googleBooksId: String(dropdown.dataset.googleBooksId || "")
 			});
 			if (existing) {
+				if (appliedSeed) continue;
 				setDropdownLabel(dropdown, String(existing.status || ""));
 				setShelvedState(dropdown, true);
 			} else if (!appliedSeed) {
@@ -2955,25 +3150,34 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 
 			const title = document.createElement("p");
 			title.className = "finish-rating-title";
-			title.textContent = "Rate this book";
-			Object.assign(title.style, {
-				margin: "0",
-				fontSize: "1.75rem",
-				fontWeight: "800",
-				color: "#1f2937"
-			});
+			title.textContent = "Finish this book";
 
 			const subtitle = document.createElement("p");
 			subtitle.className = "finish-rating-subtitle";
-			subtitle.textContent = "";
+			subtitle.textContent = "Add a rating and an optional reflection.";
 
 			const stars = document.createElement("div");
 			stars.className = "finish-rating-stars";
 			stars.setAttribute("aria-label", "Rating stars");
-			Object.assign(stars.style, {
-				display: "flex",
-				gap: "0.3rem"
+			const reflectionLabel = document.createElement("label");
+			reflectionLabel.className = "finish-reflection-label";
+			reflectionLabel.textContent = "Reflection (optional)";
+
+			const reflectionInput = document.createElement("textarea");
+			reflectionInput.className = "finish-reflection-input";
+			reflectionInput.maxLength = 280;
+			reflectionInput.rows = 3;
+			reflectionInput.placeholder = "What stood out?";
+
+			const reflectionCount = document.createElement("p");
+			reflectionCount.className = "finish-reflection-count";
+			reflectionCount.textContent = "0/280";
+			reflectionInput.addEventListener("input", () => {
+				reflectionCount.textContent = `${reflectionInput.value.length}/280`;
 			});
+			const reflectionWrap = document.createElement("div");
+			reflectionWrap.className = "finish-reflection-wrap";
+			reflectionWrap.append(reflectionLabel, reflectionInput, reflectionCount);
 
 			const actions = document.createElement("div");
 			actions.className = "finish-rating-actions";
@@ -3043,39 +3247,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				stars.append(star);
 			}
 
-			cancelButton.addEventListener("click", () => close({ cancelled: true, rating: null }));
-			skipButton.addEventListener("click", () => close({ cancelled: false, rating: null }));
-			saveButton.addEventListener("click", () => close({ cancelled: false, rating: selectedRating }));
-			Object.assign(cancelButton.style, {
-				border: "none",
-				borderRadius: "8px",
-				height: "34px",
-				padding: "0 0.8rem",
-				fontWeight: "700",
-				background: "#eceff3",
-				color: "#1f2937",
-				cursor: "pointer"
-			});
-			Object.assign(skipButton.style, {
-				border: "none",
-				borderRadius: "8px",
-				height: "34px",
-				padding: "0 0.8rem",
-				fontWeight: "700",
-				background: "#f3efe7",
-				color: "#374151",
-				cursor: "pointer"
-			});
-			Object.assign(saveButton.style, {
-				border: "none",
-				borderRadius: "8px",
-				height: "34px",
-				padding: "0 0.8rem",
-				fontWeight: "700",
-				background: "var(--color-primary)",
-				color: "#fff",
-				cursor: "pointer"
-			});
+			const currentReflection = () => String(reflectionInput.value || "").trim().slice(0, 280);
+			cancelButton.addEventListener("click", () => close({ cancelled: true, rating: null, reflection: "" }));
+			skipButton.addEventListener("click", () => close({ cancelled: false, rating: null, reflection: currentReflection() }));
+			saveButton.addEventListener("click", () => close({ cancelled: false, rating: selectedRating, reflection: currentReflection() }));
 			overlay.addEventListener("click", (event) => {
 				if (event.target === overlay) close({ cancelled: true, rating: null });
 			});
@@ -3084,7 +3259,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			}, { once: true });
 
 			actions.append(cancelButton, skipButton, saveButton);
-			modal.append(title, stars, actions);
+			modal.append(title, subtitle, stars, reflectionWrap, actions);
 			overlay.append(modal);
 			document.body.append(overlay);
 			renderStars();
@@ -3205,6 +3380,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					const finishRating = await promptForFinishRating();
 					if (finishRating.cancelled) return;
 					if (finishRating.rating) entry.rating = finishRating.rating;
+					entry.finishedReflection = String(finishRating.reflection || "").trim().slice(0, 280);
 				}
 				if (!entry.title) return;
 				try {
@@ -3254,6 +3430,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const finishRating = await promptForFinishRating();
 			if (finishRating.cancelled) return;
 			if (finishRating.rating) entry.rating = finishRating.rating;
+			entry.finishedReflection = String(finishRating.reflection || "").trim().slice(0, 280);
 			if (!entry.title) return;
 			quickFinish.disabled = true;
 			try {
@@ -3373,6 +3550,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				const finishRating = await promptForFinishRating();
 				if (finishRating.cancelled) return;
 				if (finishRating.rating) entry.rating = finishRating.rating;
+				entry.finishedReflection = String(finishRating.reflection || "").trim().slice(0, 280);
 			}
 			if (!entry.title) return;
 			try {

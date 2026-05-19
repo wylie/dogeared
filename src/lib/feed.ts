@@ -48,6 +48,7 @@ export type FeedActivityItem = {
 	actorRating: number;
 	averageRating: number;
 	updatedAt: string;
+	finishedReflection: string;
 };
 
 export type PublicReaderSuggestion = {
@@ -139,6 +140,7 @@ export async function resolveFollowingFeedActivity(viewerUserId: string, limit =
 		page_count: number | null;
 		event_type: string;
 		rating: number | null;
+		finished_reflection: string | null;
 		average_rating: number | null;
 		created_at: string;
 	}>>`
@@ -166,6 +168,7 @@ export async function resolveFollowingFeedActivity(viewerUserId: string, limit =
 			) as page_count,
 			ua.event_type,
 			coalesce(ub.rating, ua.rating) as rating,
+			coalesce(ub.finished_reflection, '') as finished_reflection,
 			coalesce(ra.average_rating, 0) as average_rating,
 			ua.created_at::text as created_at
 		from user_follow uf
@@ -233,6 +236,7 @@ export async function resolveFollowingFeedActivity(viewerUserId: string, limit =
 			pageCount: Math.max(0, Number(row.page_count || 0) || 0),
 			eventType: normalizeText(row.event_type),
 			actorRating: Math.max(0, Math.min(5, Number(row.rating || 0) || 0)),
+			finishedReflection: normalizeText(row.finished_reflection),
 			averageRating: Math.max(0, Math.min(5, Number(row.average_rating || 0) || 0)),
 			updatedAt: normalizeText(row.created_at)
 		};
