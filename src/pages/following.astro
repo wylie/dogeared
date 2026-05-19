@@ -195,9 +195,6 @@ const sectionLinks = [
 									{viewerRatingByBookId.get(Number(item.bookId || 0)) && (
 										<p class="meta rating-meta">{renderRatingStars(viewerRatingByBookId.get(Number(item.bookId || 0)) || 0)} {viewerRatingByBookId.get(Number(item.bookId || 0))}/5</p>
 									)}
-									{String(item.eventType || "").trim().toLowerCase() === "finished" && item.finishedReflection && (
-										<p class="meta finished-reflection">“{item.finishedReflection}”</p>
-									)}
 								</div>
 								<div slot="actions">
 									<ShelfDropdown attrs={{
@@ -213,6 +210,34 @@ const sectionLinks = [
 										"data-isbn10": item.isbn10,
 										"data-isbn13": item.isbn13
 									}} />
+								</div>
+								<div slot="social" class="activity-comments-wrap" data-comments-wrap data-activity-id={String(item.id || 0)}>
+									<div class="activity-social-row">
+										<div class="activity-like-wrap">
+											<button
+												type="button"
+												class={`activity-like-button${item.viewerLiked ? " is-liked" : ""}`}
+												data-action="toggle-activity-like"
+												data-activity-id={String(item.id || 0)}
+												data-liked={item.viewerLiked ? "1" : "0"}
+												data-like-count={String(Math.max(0, Number(item.likeCount || 0)))}
+												aria-label={item.viewerLiked ? "Unlike this activity" : "Like this activity"}
+												title={item.viewerLiked ? "Unlike" : "Like"}
+											>
+												<span class="activity-like-label">{item.viewerLiked ? "Liked" : "Like"}</span>
+											</button>
+											<span class="activity-like-count" data-like-count-static>{Math.max(0, Number(item.likeCount || 0))}</span>
+										</div>
+										<form class="activity-comment-form" data-comment-form>
+											<input type="text" name="comment" maxlength="500" placeholder="Leave a comment…" />
+											<button type="submit">Post</button>
+										</form>
+									</div>
+									{String(item.eventType || "").trim().toLowerCase() === "finished" && item.finishedReflection && (
+										<p class="meta finished-reflection">“{item.finishedReflection}”</p>
+									)}
+									<div class="activity-comments-list" data-comments-list></div>
+									<p class="activity-comment-feedback" data-comment-feedback hidden></p>
 								</div>
 							</BookCard>
 						))}
@@ -395,12 +420,127 @@ const sectionLinks = [
 		font-weight: 700;
 	}
 	.finished-reflection {
-		margin-top: 0.2rem;
+		margin: 0;
 		font-style: italic;
 		color: #475569;
+		overflow-wrap: anywhere;
 	}
 	.feed-page :global(.shelf-state) {
 		display: none !important;
+	}
+	.activity-social-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.6rem;
+		width: 100%;
+		min-width: 0;
+		flex-wrap: nowrap;
+	}
+	.activity-like-button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		border: none;
+		background: transparent;
+		color: #496587;
+		padding: 0;
+		font: inherit;
+		font-weight: 700;
+		line-height: 1;
+		cursor: pointer;
+		transition: color .16s ease;
+	}
+	.activity-like-wrap {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		line-height: 1;
+	}
+	.activity-like-button:hover,
+	.activity-like-button:focus-visible {
+		color: #36597f;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.activity-like-button.is-liked {
+		color: #244c76;
+	}
+	.activity-like-button:disabled {
+		opacity: .72;
+		cursor: default;
+	}
+	.activity-like-label {
+		line-height: 1.2;
+	}
+	.activity-like-count {
+		font-size: 0.86rem;
+		color: #64748b;
+		line-height: 1.2;
+		align-self: center;
+	}
+	.activity-comments-wrap {
+		width: 100%;
+		display: grid;
+		gap: 0.4rem;
+	}
+	.activity-comments-list {
+		display: grid;
+		gap: 0.3rem;
+	}
+	.activity-comment-item {
+		margin: 0;
+		font-size: 0.84rem;
+		color: #334155;
+		line-height: 1.35;
+		overflow-wrap: anywhere;
+	}
+	.activity-comment-user {
+		font-weight: 700;
+		color: #1e3a5f;
+		text-decoration: none;
+	}
+	.activity-comment-user:hover,
+	.activity-comment-user:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.activity-comment-form {
+		display: flex;
+		gap: 0.45rem;
+		align-items: flex-start;
+		flex: 1 1 340px;
+		min-width: 240px;
+	}
+	.activity-comment-form input {
+		flex: 1 1 auto;
+		min-width: 0;
+		border: 1px solid #c8d3df;
+		border-radius: 999px;
+		padding: 0.35rem 0.65rem;
+		font: inherit;
+		font-size: 0.84rem;
+		background: #fff;
+	}
+	.activity-comment-form button {
+		border: none;
+		border-radius: 999px;
+		padding: 0.35rem 0.7rem;
+		font: inherit;
+		font-size: 0.8rem;
+		font-weight: 700;
+		background: #dde8f5;
+		color: #22466b;
+		cursor: pointer;
+	}
+	.activity-comment-feedback {
+		margin: 0;
+		font-size: 0.78rem;
+		color: #64748b;
+	}
+	@media (max-width: 600px) {
+		.activity-social-row {
+			flex-wrap: wrap;
+		}
 	}
 	.empty-following-panel {
 		border: none;
@@ -541,6 +681,12 @@ const sectionLinks = [
 
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	const feedbackTimers = new WeakMap();
+	const escapeHtml = (value) => String(value || "")
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;")
+		.replaceAll("'", "&#39;");
 
 	document.addEventListener("click", (event) => {
 		const target = event.target;
@@ -592,6 +738,51 @@ const sectionLinks = [
 	document.addEventListener("click", async (event) => {
 		const target = event.target;
 		if (!(target instanceof HTMLElement)) return;
+		const likeButton = target.closest('[data-action="toggle-activity-like"]');
+		if (likeButton instanceof HTMLButtonElement) {
+			const activityId = Number(likeButton.dataset.activityId || 0);
+			if (!Number.isFinite(activityId) || activityId <= 0) return;
+			const currentLiked = String(likeButton.dataset.liked || "") === "1";
+			const currentCount = Math.max(0, Number(likeButton.dataset.likeCount || 0) || 0);
+			const nextLiked = !currentLiked;
+			const nextCount = Math.max(0, currentCount + (nextLiked ? 1 : -1));
+			const countNode = likeButton.parentElement?.querySelector("[data-like-count-static]");
+			const applyState = (liked, count) => {
+				likeButton.dataset.liked = liked ? "1" : "0";
+				likeButton.dataset.likeCount = String(Math.max(0, count));
+				likeButton.classList.toggle("is-liked", liked);
+				likeButton.setAttribute("aria-label", liked ? "Unlike this activity" : "Like this activity");
+				likeButton.setAttribute("title", liked ? "Unlike" : "Like");
+				const label = likeButton.querySelector(".activity-like-label");
+				if (label instanceof HTMLElement) label.textContent = liked ? "Liked" : "Like";
+				if (countNode instanceof HTMLElement) countNode.textContent = String(Math.max(0, count));
+			};
+			applyState(nextLiked, nextCount);
+			likeButton.disabled = true;
+			try {
+				const response = await fetch("/api/activity/like", {
+					method: nextLiked ? "POST" : "DELETE",
+					credentials: "same-origin",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ activityId })
+				});
+				const data = await response.json().catch(() => ({}));
+				if (response.status === 401) {
+					window.location.href = "/?next=/following";
+					return;
+				}
+				if (!response.ok) {
+					applyState(currentLiked, currentCount);
+					return;
+				}
+				applyState(!!data?.viewerLiked, Math.max(0, Number(data?.likeCount || 0) || 0));
+			} catch {
+				applyState(currentLiked, currentCount);
+			} finally {
+				likeButton.disabled = false;
+			}
+			return;
+		}
 		const unfollowButton = target.closest('[data-action="unfollow-reader"]');
 		if (unfollowButton instanceof HTMLButtonElement) {
 			const card = unfollowButton.closest("[data-reader-card]");
@@ -662,4 +853,111 @@ const sectionLinks = [
 			if (feedback instanceof HTMLElement) feedback.textContent = "Failed to follow.";
 		}
 	});
+
+	document.addEventListener("submit", async (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLFormElement)) return;
+		if (!target.matches("[data-comment-form]")) return;
+		event.preventDefault();
+		const wrap = target.closest("[data-comments-wrap]");
+		if (!(wrap instanceof HTMLElement)) return;
+		const activityId = Number(wrap.dataset.activityId || 0);
+		if (!Number.isFinite(activityId) || activityId <= 0) return;
+		const input = target.querySelector('input[name="comment"]');
+		const list = wrap.querySelector("[data-comments-list]");
+		const feedback = wrap.querySelector("[data-comment-feedback]");
+		const button = target.querySelector("button[type='submit']");
+		if (!(input instanceof HTMLInputElement) || !(button instanceof HTMLButtonElement)) return;
+		const body = String(input.value || "").trim().slice(0, 500);
+		if (!body) return;
+		input.disabled = true;
+		button.disabled = true;
+		if (feedback instanceof HTMLElement) {
+			feedback.hidden = false;
+			feedback.textContent = "Posting...";
+		}
+		try {
+			const response = await fetch("/api/activity/comments", {
+				method: "POST",
+				credentials: "same-origin",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ activityId, body })
+			});
+			const data = await response.json().catch(() => ({}));
+			if (response.status === 401) {
+				window.location.href = "/?next=/following";
+				return;
+			}
+			if (!response.ok) {
+				if (feedback instanceof HTMLElement) feedback.textContent = String(data?.error || "Failed to post comment.");
+				return;
+			}
+			if (list instanceof HTMLElement) {
+				const username = String(data?.comment?.username || "reader");
+				const safeBody = escapeHtml(body);
+				const profileHref = `/profile/${encodeURIComponent(username)}`;
+				const node = document.createElement("p");
+				node.className = "activity-comment-item";
+				node.innerHTML = `<a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a> ${safeBody}`;
+				list.append(node);
+			}
+			input.value = "";
+			wrap.dataset.loaded = "1";
+			if (feedback instanceof HTMLElement) {
+				feedback.hidden = true;
+				feedback.textContent = "";
+			}
+		} catch {
+			if (feedback instanceof HTMLElement) {
+				feedback.hidden = false;
+				feedback.textContent = "Failed to post comment.";
+			}
+		} finally {
+			input.disabled = false;
+			button.disabled = false;
+		}
+	});
+
+	const commentWraps = Array.from(document.querySelectorAll("[data-comments-wrap]"));
+	for (const wrap of commentWraps) {
+		if (!(wrap instanceof HTMLElement)) continue;
+		const activityId = Number(wrap.dataset.activityId || 0);
+		if (!Number.isFinite(activityId) || activityId <= 0) continue;
+		const list = wrap.querySelector("[data-comments-list]");
+		const feedback = wrap.querySelector("[data-comment-feedback]");
+		if (feedback instanceof HTMLElement) {
+			feedback.hidden = false;
+			feedback.textContent = "Loading comments...";
+		}
+		try {
+			const response = await fetch(`/api/activity/comments?activityId=${encodeURIComponent(String(activityId))}`, {
+				credentials: "same-origin"
+			});
+			const data = await response.json().catch(() => ({}));
+			if (response.status === 401) {
+				window.location.href = "/?next=/following";
+				break;
+			}
+			if (!response.ok) {
+				if (feedback instanceof HTMLElement) feedback.textContent = String(data?.error || "Failed to load comments.");
+				continue;
+			}
+			if (list instanceof HTMLElement) {
+				const comments = Array.isArray(data?.comments) ? data.comments : [];
+				list.innerHTML = comments.map((comment) => {
+					const username = String(comment?.username || "reader");
+					const body = String(comment?.body || "");
+					const profileHref = `/profile/${encodeURIComponent(username)}`;
+					return `<p class="activity-comment-item"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a> ${escapeHtml(body)}</p>`;
+				}).join("");
+			}
+			wrap.dataset.loaded = "1";
+			if (feedback instanceof HTMLElement) feedback.hidden = true;
+		} catch {
+			if (feedback instanceof HTMLElement) {
+				feedback.hidden = false;
+				feedback.textContent = "Failed to load comments.";
+			}
+		}
+	}
 </script>

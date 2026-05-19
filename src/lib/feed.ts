@@ -49,6 +49,9 @@ export type FeedActivityItem = {
 	averageRating: number;
 	updatedAt: string;
 	finishedReflection: string;
+	likeCount: number;
+	viewerLiked: boolean;
+	commentCount: number;
 };
 
 export type PublicReaderSuggestion = {
@@ -121,6 +124,28 @@ export async function resolveFollowingCount(viewerUserId: string) {
 
 export async function resolveFollowingFeedActivity(viewerUserId: string, limit = 50) {
 	const sql = getNeonSql();
+	await sql`
+		create table if not exists user_activity_like (
+			activity_id bigint not null references user_activity(id) on delete cascade,
+			user_id uuid not null references app_user(id) on delete cascade,
+			created_at timestamptz not null default now(),
+			primary key (activity_id, user_id)
+		)
+	`;
+	await sql`create index if not exists idx_user_activity_like_activity on user_activity_like(activity_id)`;
+	await sql`create index if not exists idx_user_activity_like_user on user_activity_like(user_id, created_at desc)`;
+	await sql`
+		create table if not exists user_activity_comment (
+			id bigserial primary key,
+			activity_id bigint not null references user_activity(id) on delete cascade,
+			user_id uuid not null references app_user(id) on delete cascade,
+			body text not null default '',
+			created_at timestamptz not null default now(),
+			check (char_length(trim(body)) between 1 and 500)
+		)
+	`;
+	await sql`create index if not exists idx_user_activity_comment_activity on user_activity_comment(activity_id, created_at asc, id asc)`;
+	await sql`create index if not exists idx_user_activity_comment_user on user_activity_comment(user_id, created_at desc)`;
 	const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
 	const rows = await sql<Array<{
 		id: number;
@@ -143,6 +168,9 @@ export async function resolveFollowingFeedActivity(viewerUserId: string, limit =
 		finished_reflection: string | null;
 		average_rating: number | null;
 		created_at: string;
+		like_count: number;
+		viewer_liked: boolean;
+		comment_count: number;
 	}>>`
 		select
 			ua.id,
@@ -170,6 +198,9 @@ export async function resolveFollowingFeedActivity(viewerUserId: string, limit =
 			coalesce(ub.rating, ua.rating) as rating,
 			coalesce(ub.finished_reflection, '') as finished_reflection,
 			coalesce(ra.average_rating, 0) as average_rating,
+			coalesce(al.like_count, 0)::int as like_count,
+			coalesce(al.viewer_liked, false) as viewer_liked,
+			coalesce(ac.comment_count, 0)::int as comment_count,
 			ua.created_at::text as created_at
 		from user_follow uf
 		join user_activity ua on ua.user_id = uf.followed_user_id
@@ -197,6 +228,18 @@ export async function resolveFollowingFeedActivity(viewerUserId: string, limit =
 			where ub3.book_id = b.id
 				and ub3.rating is not null
 		) ra on true
+		left join lateral (
+			select
+				count(*)::int as like_count,
+				bool_or(ual.user_id = ${viewerUserId}::uuid) as viewer_liked
+			from user_activity_like ual
+			where ual.activity_id = ua.id
+		) al on true
+		left join lateral (
+			select count(*)::int as comment_count
+			from user_activity_comment uac
+			where uac.activity_id = ua.id
+		) ac on true
 		where uf.follower_user_id = ${viewerUserId}::uuid
 			and ua.event_type in ('want_to_read', 'reading', 'finished')
 			and nullif(trim(coalesce(au.username, '')), '') is not null
@@ -238,6 +281,9 @@ export async function resolveFollowingFeedActivity(viewerUserId: string, limit =
 			actorRating: Math.max(0, Math.min(5, Number(row.rating || 0) || 0)),
 			finishedReflection: normalizeText(row.finished_reflection),
 			averageRating: Math.max(0, Math.min(5, Number(row.average_rating || 0) || 0)),
+			likeCount: Math.max(0, Number(row.like_count || 0) || 0),
+			viewerLiked: !!row.viewer_liked,
+			commentCount: Math.max(0, Number(row.comment_count || 0) || 0),
 			updatedAt: normalizeText(row.created_at)
 		};
 	});
