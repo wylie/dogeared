@@ -596,6 +596,31 @@ const query = Astro.url.searchParams.get("q") ?? "";
   const leftHandLoginForm = document.getElementById("left-hand-login-form");
   const leftHandLoginEmail = document.getElementById("left-hand-login-email");
   const leftHandLoginFeedback = document.getElementById("left-hand-login-feedback");
+  const leftHandSecondaryLinks = document.getElementById("left-hand-secondary-links");
+  const NAV_SCROLL_KEY_PRIMARY = "dogeared:left-nav:primary-scroll-left";
+  const NAV_SCROLL_KEY_SECONDARY = "dogeared:left-nav:secondary-scroll-left";
+
+  function restoreNavScrollPosition() {
+    if (typeof window === "undefined") return;
+    const primary = Number(window.sessionStorage.getItem(NAV_SCROLL_KEY_PRIMARY) || "0");
+    const secondary = Number(window.sessionStorage.getItem(NAV_SCROLL_KEY_SECONDARY) || "0");
+    if (leftHandPrimaryLinks instanceof HTMLElement && Number.isFinite(primary) && primary > 0) {
+      leftHandPrimaryLinks.scrollLeft = primary;
+    }
+    if (leftHandSecondaryLinks instanceof HTMLElement && Number.isFinite(secondary) && secondary > 0) {
+      leftHandSecondaryLinks.scrollLeft = secondary;
+    }
+  }
+
+  function persistNavScrollPosition() {
+    if (typeof window === "undefined") return;
+    if (leftHandPrimaryLinks instanceof HTMLElement) {
+      window.sessionStorage.setItem(NAV_SCROLL_KEY_PRIMARY, String(Math.max(0, Math.round(leftHandPrimaryLinks.scrollLeft || 0))));
+    }
+    if (leftHandSecondaryLinks instanceof HTMLElement) {
+      window.sessionStorage.setItem(NAV_SCROLL_KEY_SECONDARY, String(Math.max(0, Math.round(leftHandSecondaryLinks.scrollLeft || 0))));
+    }
+  }
 
   // Safari can clip fixed overlays when nested inside sticky/scroll containers.
   // Portal the modal to <body> so it always covers the full viewport.
@@ -731,8 +756,21 @@ const query = Astro.url.searchParams.get("q") ?? "";
       leftHandMenuToggle.textContent = "☰";
       leftHandMenuToggle.setAttribute("aria-label", "Open navigation menu");
     }
+    persistNavScrollPosition();
     updateMobileStickyOffset();
   });
+
+  leftHandSecondaryLinks?.addEventListener("click", () => {
+    persistNavScrollPosition();
+  });
+
+  leftHandPrimaryLinks?.addEventListener("scroll", () => {
+    persistNavScrollPosition();
+  }, { passive: true });
+
+  leftHandSecondaryLinks?.addEventListener("scroll", () => {
+    persistNavScrollPosition();
+  }, { passive: true });
 
   function updateMobileStickyOffset() {
     if (!(leftHandNav instanceof HTMLElement)) return;
@@ -743,6 +781,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
   }
 
   updateMobileStickyOffset();
+  restoreNavScrollPosition();
+  window.addEventListener("pageshow", restoreNavScrollPosition);
   window.addEventListener("resize", updateMobileStickyOffset);
   window.addEventListener("load", updateMobileStickyOffset);
 
