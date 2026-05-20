@@ -201,10 +201,20 @@ export async function resolvePublicShelfSummary(targetUserId: string) {
 	return summary;
 }
 
-export async function resolvePublicRecentActivity(targetUserId: string, limit = 10) {
+export async function resolvePublicRecentActivity(targetUserId: string, limit = 10, viewerUserId = "") {
 	const sql = getNeonSql();
+	await sql`
+		create table if not exists user_activity_like (
+			activity_id bigint not null references user_activity(id) on delete cascade,
+			user_id uuid not null references app_user(id) on delete cascade,
+			created_at timestamptz not null default now(),
+			primary key (activity_id, user_id)
+		)
+	`;
+	await sql`create index if not exists idx_user_activity_like_activity on user_activity_like(activity_id)`;
 	const safeLimit = Math.min(25, Math.max(1, Number(limit) || 10));
 	const rows = await sql<Array<{
+		activity_id: number;
 		book_id: number;
 		title: string;
 		primary_author: string;
@@ -219,6 +229,7 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 	}>>`
 		select
 			ua.book_id,
+			ua.id as activity_id,
 			b.title,
 			b.primary_author,
 			b.author_id,
@@ -238,6 +249,7 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 	`;
 
 	const byBook = new Map<number, {
+		activityId: number;
 		bookId: number;
 		title: string;
 		author: string;
@@ -256,6 +268,7 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 		const bookId = Number(row.book_id || 0);
 		if (!bookId || byBook.has(bookId)) continue;
 		byBook.set(bookId, {
+			activityId: Math.max(0, Number(row.activity_id || 0)),
 			bookId,
 			title: normalizeText(row.title),
 			author: normalizeText(row.primary_author),
@@ -287,8 +300,31 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 		if (rating >= 1 && rating <= 5) ratingByBook.set(Number(row.book_id || 0), rating);
 	}
 
+	const activityIds = deduped.map((item) => item.activityId).filter((id) => id > 0);
+	const likeByActivityId = new Map<number, { likeCount: number; viewerLiked: boolean }>();
+	if (activityIds.length > 0) {
+		const likeRows = await sql<Array<{ activity_id: number; like_count: number; viewer_liked: boolean }>>`
+			select
+				ua.id as activity_id,
+				coalesce(count(ual.user_id), 0)::int as like_count,
+				coalesce(bool_or(ual.user_id = ${viewerUserId || "00000000-0000-0000-0000-000000000000"}::uuid), false) as viewer_liked
+			from user_activity ua
+			left join user_activity_like ual on ual.activity_id = ua.id
+			where ua.id = any(${activityIds}::bigint[])
+			group by ua.id
+		`;
+		for (const row of likeRows) {
+			likeByActivityId.set(Math.max(0, Number(row.activity_id || 0)), {
+				likeCount: Math.max(0, Number(row.like_count || 0)),
+				viewerLiked: !!row.viewer_liked
+			});
+		}
+	}
+
 	return deduped.map((item) => ({
 		...item,
-		rating: ratingByBook.get(item.bookId) || 0
+		rating: ratingByBook.get(item.bookId) || 0,
+		likeCount: likeByActivityId.get(item.activityId)?.likeCount || 0,
+		viewerLiked: likeByActivityId.get(item.activityId)?.viewerLiked || false
 	}));
 }

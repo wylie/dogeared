@@ -98,6 +98,30 @@ function activityHeading(eventType: string) {
 	return { prefix: "Updated shelf", shelf: "" };
 }
 
+async function ensureActivitySocialTables() {
+	const sql = getNeonSql();
+	await sql`
+		create table if not exists user_activity_like (
+			activity_id bigint not null references user_activity(id) on delete cascade,
+			user_id uuid not null references app_user(id) on delete cascade,
+			created_at timestamptz not null default now(),
+			primary key (activity_id, user_id)
+		)
+	`;
+	await sql`create index if not exists idx_user_activity_like_activity on user_activity_like(activity_id)`;
+	await sql`
+		create table if not exists user_activity_comment (
+			id bigserial primary key,
+			activity_id bigint not null references user_activity(id) on delete cascade,
+			user_id uuid not null references app_user(id) on delete cascade,
+			body text not null default '',
+			created_at timestamptz not null default now(),
+			check (char_length(trim(body)) between 1 and 500)
+		)
+	`;
+	await sql`create index if not exists idx_user_activity_comment_activity on user_activity_comment(activity_id, created_at asc, id asc)`;
+}
+
 type BookDetails = {
 	id: number;
 	title: string;
@@ -125,7 +149,15 @@ const queryTitle = normalizeText(params.get("title"));
 const queryAuthor = normalizeText(params.get("author"));
 
 let book: BookDetails | null = null;
-let activity: Array<{ eventType: string; timestamp: string; actorName: string; actorUsername: string }> = [];
+let activity: Array<{
+	id: number;
+	eventType: string;
+	timestamp: string;
+	actorName: string;
+	actorUsername: string;
+	likeCount: number;
+	viewerLiked: boolean;
+}> = [];
 let errorMessage = "";
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
@@ -387,28 +419,45 @@ try {
 		bookGenres = genreRows.map((row) => normalizeText(row.genre_name)).filter(Boolean);
 
 		const encryptionKey = getEncryptionKey();
+		await ensureActivitySocialTables();
 		const activityRows = await sql<Array<{
+			id: number;
 			event_type: string;
 			created_at: string;
 			username: string | null;
 			email_local: string | null;
+			like_count: number;
+			viewer_liked: boolean;
 		}>>`
 			select
+				ua.id,
 				ua.event_type,
 				ua.created_at::text as created_at,
 				au.username,
-				nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local
+				nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local,
+				coalesce(la.like_count, 0)::int as like_count,
+				coalesce(la.viewer_liked, false) as viewer_liked
 			from user_activity ua
 			join app_user au on au.id = ua.user_id
+			left join lateral (
+				select
+					count(*)::int as like_count,
+					bool_or(ual.user_id = ${session?.userId || "00000000-0000-0000-0000-000000000000"}::uuid) as viewer_liked
+				from user_activity_like ual
+				where ual.activity_id = ua.id
+			) la on true
 			where ua.book_id = ${book.id}
 			order by ua.created_at desc, ua.id desc
 			limit 40
 		`;
 		activity = activityRows.map((item) => ({
+			id: Math.max(0, Number(item.id || 0)),
 			eventType: normalizeText(item.event_type),
 			timestamp: item.created_at,
 			actorUsername: normalizeText(item.username),
-			actorName: normalizeText(item.username) || normalizeText(item.email_local) || "A Reader"
+			actorName: normalizeText(item.username) || normalizeText(item.email_local) || "A Reader",
+			likeCount: Math.max(0, Number(item.like_count || 0)),
+			viewerLiked: !!item.viewer_liked
 		}));
 	} else {
 		const google = await fetchGoogleBook();
@@ -602,7 +651,7 @@ const bookStructuredDataPayload = bookStructuredData
 						>
 							<div slot="meta">
 								{book.ratingCount > 0 && (
-									<p class="meta rating">Average rating: {renderAverageStars(book.averageRating)} {book.averageRating.toFixed(1)} · {book.ratingCount} rating{book.ratingCount === 1 ? "" : "s"}</p>
+									<p class="meta rating">Ratings: {book.ratingCount} total</p>
 								)}
 								{isAuthenticated && book.id > 0 && viewerShelfStatus === "finished" && (
 									<RatingControl bookId={book.id} rating={viewerRating} editable={true} />
@@ -660,7 +709,7 @@ const bookStructuredDataPayload = bookStructuredData
 									shelfEntries={1}
 									publishedLabel={book.publishedLabel}
 									pageCount={book.pageCount}
-									averageRating={book.averageRating}
+									averageRating={0}
 								>
 									<p slot="preTitle" class="meta activity-headline">
 										{item.actorUsername && <span class="activity-user"><a href={`/profile/${encodeURIComponent(item.actorUsername)}`}>@{item.actorUsername}</a>&nbsp;</span>}
@@ -687,6 +736,38 @@ const bookStructuredDataPayload = bookStructuredData
 											"data-initial-status": viewerShelfStatus
 										}} />
 									</div>
+									<div
+										slot="social"
+										class="activity-comments-wrap"
+										data-comments-wrap
+										data-activity-id={String(item.id || 0)}
+										data-comments-empty="1"
+										data-loaded="0"
+									>
+										<div class="activity-social-row">
+											<div class="activity-like-wrap">
+												<button
+													type="button"
+													class={`activity-like-button${item.viewerLiked ? " is-liked" : ""}`}
+													data-action="toggle-activity-like"
+													data-activity-id={String(item.id || 0)}
+													data-liked={String(!!item.viewerLiked)}
+													disabled={!isAuthenticated}
+													aria-label={item.viewerLiked ? "Unlike this activity" : "Like this activity"}
+													title={!isAuthenticated ? "Log in to like activity" : ""}
+												>
+													<span class="activity-like-label">{item.viewerLiked ? "Liked" : "Like"}</span>
+												</button>
+												<span class="activity-like-count" data-like-count-static>{Math.max(0, Number(item.likeCount || 0))}</span>
+											</div>
+											<form class="activity-comment-form" data-comment-form>
+												<input type="text" name="comment" maxlength="500" placeholder="Leave a comment..." {...(!isAuthenticated ? { disabled: true } : {})} />
+												<button type="submit" {...(!isAuthenticated ? { disabled: true, title: "Log in to comment" } : {})}>Post</button>
+											</form>
+										</div>
+										<div class="activity-comments-list" data-comments-list></div>
+										<p class="activity-comment-feedback" data-comment-feedback hidden></p>
+									</div>
 								</BookCard>
 							))}
 						</ul>
@@ -696,6 +777,166 @@ const bookStructuredDataPayload = bookStructuredData
 		)}
 	</div>
 </Layout>
+
+<script type="module">
+	const root = document.querySelector(".book-page");
+	if (root instanceof HTMLElement) {
+		const isAuthenticated = root.dataset.authenticated === "true";
+		const nextPath = `${window.location.pathname}${window.location.search}`;
+		const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
+			"&": "&amp;",
+			"<": "&lt;",
+			">": "&gt;",
+			'"': "&quot;",
+			"'": "&#39;"
+		}[char] || char));
+		const toAgeLabel = (value) => {
+			const parsed = new Date(String(value || ""));
+			if (!Number.isFinite(parsed.getTime())) return "";
+			const diffMs = Math.max(0, Date.now() - parsed.getTime());
+			const diffHours = diffMs / (1000 * 60 * 60);
+			if (diffHours < 24) {
+				const hours = Math.max(0, Math.round(diffHours));
+				return `${hours} ${hours === 1 ? "hour" : "hours"}`;
+			}
+			const days = Math.max(1, Math.round(diffHours / 24));
+			return `${days} ${days === 1 ? "day" : "days"}`;
+		};
+		const renderCommentHtml = (comment) => {
+			const username = String(comment?.username || "").trim().replace(/^@+/, "") || "reader";
+			const body = String(comment?.body || "").trim();
+			if (!body) return "";
+			const ageLabel = toAgeLabel(comment?.createdAt);
+			const profileHref = `/profile/${encodeURIComponent(username)}`;
+			return `<p class="activity-comment-item"><span class="activity-comment-head"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a>${ageLabel ? `<span class="activity-comment-age">${escapeHtml(ageLabel)}</span>` : ""}</span><span class="activity-comment-body">${escapeHtml(body)}</span></p>`;
+		};
+
+		document.addEventListener("click", async (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			const likeButton = target.closest('[data-action="toggle-activity-like"]');
+			if (!(likeButton instanceof HTMLButtonElement)) return;
+			const activityId = Number(likeButton.dataset.activityId || 0);
+			if (!Number.isFinite(activityId) || activityId <= 0) return;
+			if (!isAuthenticated) {
+				window.location.href = `/?next=${encodeURIComponent(nextPath)}`;
+				return;
+			}
+			const liked = likeButton.dataset.liked === "true";
+			likeButton.disabled = true;
+			try {
+				const response = await fetch("/api/activity/like", {
+					method: liked ? "DELETE" : "POST",
+					headers: { "Content-Type": "application/json" },
+					credentials: "same-origin",
+					body: JSON.stringify({ activityId })
+				});
+				const data = await response.json().catch(() => ({}));
+				if (!response.ok) throw new Error(String(data?.error || "Request failed"));
+				const nextLiked = !!data.viewerLiked;
+				likeButton.dataset.liked = String(nextLiked);
+				likeButton.classList.toggle("is-liked", nextLiked);
+				likeButton.setAttribute("aria-label", nextLiked ? "Unlike this activity" : "Like this activity");
+				const label = likeButton.querySelector(".activity-like-label");
+				if (label) label.textContent = nextLiked ? "Liked" : "Like";
+				const countTarget = likeButton.closest(".activity-like-wrap")?.querySelector("[data-like-count-static]");
+				if (countTarget) countTarget.textContent = String(Math.max(0, Number(data.likeCount || 0)));
+			} catch {
+				// no-op
+			} finally {
+				likeButton.disabled = false;
+			}
+		});
+
+		document.addEventListener("submit", async (event) => {
+			const form = event.target;
+			if (!(form instanceof HTMLFormElement) || !form.matches("[data-comment-form]")) return;
+			event.preventDefault();
+			const wrap = form.closest("[data-comments-wrap]");
+			if (!(wrap instanceof HTMLElement)) return;
+			const activityId = Number(wrap.dataset.activityId || 0);
+			if (!Number.isFinite(activityId) || activityId <= 0) return;
+			const input = form.querySelector('input[name="comment"]');
+			const button = form.querySelector('button[type="submit"]');
+			const list = wrap.querySelector("[data-comments-list]");
+			const feedback = wrap.querySelector("[data-comment-feedback]");
+			if (!(input instanceof HTMLInputElement) || !(button instanceof HTMLButtonElement)) return;
+			const message = String(input.value || "").trim();
+			if (!message) return;
+			input.disabled = true;
+			button.disabled = true;
+			try {
+				const response = await fetch("/api/activity/comments", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					credentials: "same-origin",
+					body: JSON.stringify({ activityId, body: message })
+				});
+				const data = await response.json().catch(() => ({}));
+				if (response.status === 401) {
+					window.location.href = `/?next=${encodeURIComponent(nextPath)}`;
+					return;
+				}
+				if (!response.ok) throw new Error(String(data?.error || "Failed to post comment."));
+				if (list instanceof HTMLElement && data?.comment) {
+					const wrapper = document.createElement("div");
+					wrapper.innerHTML = renderCommentHtml(data.comment);
+					const node = wrapper.firstElementChild;
+					if (node) list.append(node);
+				}
+				input.value = "";
+				if (feedback instanceof HTMLElement) {
+					feedback.hidden = true;
+					feedback.textContent = "";
+				}
+			} catch {
+				if (feedback instanceof HTMLElement) {
+					feedback.hidden = false;
+					feedback.textContent = "Failed to post comment.";
+				}
+			} finally {
+				input.disabled = false;
+				button.disabled = false;
+			}
+		});
+
+		const wraps = Array.from(document.querySelectorAll(".activity-panel [data-comments-wrap]"));
+		for (const wrap of wraps) {
+			if (!(wrap instanceof HTMLElement)) continue;
+			const activityId = Number(wrap.dataset.activityId || 0);
+			if (!Number.isFinite(activityId) || activityId <= 0) continue;
+			const list = wrap.querySelector("[data-comments-list]");
+			const feedback = wrap.querySelector("[data-comment-feedback]");
+			if (feedback instanceof HTMLElement) {
+				feedback.hidden = false;
+				feedback.textContent = "Loading comments...";
+			}
+			try {
+				const response = await fetch(`/api/activity/comments?activityId=${encodeURIComponent(String(activityId))}`, { credentials: "same-origin" });
+				const data = await response.json().catch(() => ({}));
+				if (response.status === 401) {
+					if (list instanceof HTMLElement) list.innerHTML = "";
+					if (feedback instanceof HTMLElement) feedback.hidden = true;
+					continue;
+				}
+				if (!response.ok) {
+					if (feedback instanceof HTMLElement) feedback.textContent = String(data?.error || "Failed to load comments.");
+					continue;
+				}
+				if (list instanceof HTMLElement) {
+					const comments = Array.isArray(data?.comments) ? data.comments : [];
+					list.innerHTML = comments.map((comment) => renderCommentHtml(comment)).join("");
+				}
+				if (feedback instanceof HTMLElement) feedback.hidden = true;
+			} catch {
+				if (feedback instanceof HTMLElement) {
+					feedback.hidden = false;
+					feedback.textContent = "Failed to load comments.";
+				}
+			}
+		}
+	}
+</script>
 
 <style>
 	.book-page { max-width: 980px; }
@@ -753,6 +994,103 @@ const bookStructuredDataPayload = bookStructuredData
 	.activity-user a { color: var(--color-secondary); text-decoration: none; }
 	.activity-user a:hover { text-decoration: underline; }
 	.activity-date { color: #5b6470; font-weight: 600; }
+	.activity-social-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		min-width: 0;
+	}
+	.activity-like-wrap {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.3rem;
+		flex: 0 0 auto;
+	}
+	.activity-like-button {
+		appearance: none;
+		border: none;
+		background: transparent;
+		color: #2f4c77;
+		font: inherit;
+		font-weight: 700;
+		padding: 0;
+		cursor: pointer;
+	}
+	.activity-like-button.is-liked { color: #1f4f7a; }
+	.activity-like-button:disabled { opacity: 0.6; cursor: not-allowed; }
+	.activity-like-count {
+		color: #546374;
+		font-size: 0.9rem;
+	}
+	.activity-comment-form {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		min-width: 0;
+		flex: 1 1 auto;
+	}
+	.activity-comment-form input {
+		flex: 1 1 auto;
+		min-width: 0;
+		height: 1.9rem;
+		border-radius: 999px;
+		border: 1px solid #bac9dc;
+		padding: 0 0.72rem;
+		background: #fdfefe;
+		color: #1f2937;
+		font-size: 0.86rem;
+	}
+	.activity-comment-form button {
+		height: 1.9rem;
+		padding: 0 0.74rem;
+		border-radius: 999px;
+		border: none;
+		background: #d8e4f4;
+		color: #1f4f7a;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.activity-comments-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.18rem;
+	}
+	.activity-comments-list:empty { display: none; }
+	:global(.activity-comment-item) {
+		margin: 0;
+		font-size: 1.03rem;
+		color: #2f3b52;
+		line-height: 1.32;
+	}
+	:global(.activity-comment-head) {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+	:global(.activity-comment-user) {
+		color: #254f82;
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 2px;
+		font-weight: 700;
+	}
+	:global(.activity-comment-body) { color: #1f2937; }
+	:global(.activity-comment-age) {
+		font-size: 0.78rem;
+		color: #64748b;
+		white-space: nowrap;
+	}
+	:global(.activity-comment-item + .activity-comment-item) {
+		margin-top: 0.22rem;
+		padding-top: 0.22rem;
+		border-top: 1px solid #e7edf5;
+	}
+	.activity-comment-feedback {
+		margin: 0;
+		font-size: 0.76rem;
+		color: #8b1d1d;
+	}
 	.error { color: #991b1b; }
 	@media (max-width: 860px) {
 		.activity-grid { grid-template-columns: 1fr; }
