@@ -30,6 +30,22 @@ async function ensureActivityLikeTable() {
 	await sql`create index if not exists idx_user_activity_like_user on user_activity_like(user_id, created_at desc)`;
 }
 
+async function ensureNotificationTable() {
+	const sql = getNeonSql();
+	await sql`
+		create table if not exists user_notification (
+			id bigserial primary key,
+			user_id uuid not null references app_user(id) on delete cascade,
+			actor_user_id uuid not null references app_user(id) on delete cascade,
+			activity_id bigint not null references user_activity(id) on delete cascade,
+			type text not null check (type in ('activity_like', 'activity_comment')),
+			created_at timestamptz not null default now(),
+			read_at timestamptz null
+		)
+	`;
+	await sql`create index if not exists idx_user_notification_user_read on user_notification(user_id, read_at, created_at desc)`;
+}
+
 async function resolveLikeState(activityId: number, viewerUserId: string) {
 	const sql = getNeonSql();
 	const rows = await sql<Array<{ like_count: number; viewer_liked: boolean }>>`
@@ -55,6 +71,7 @@ export const POST: APIRoute = async ({ request }) => {
 		if (activityId <= 0) return json(400, { error: "Invalid activity id." });
 
 		await ensureActivityLikeTable();
+		await ensureNotificationTable();
 		const sql = getNeonSql();
 		const activityRows = await sql<Array<{ actor_user_id: string }>>`
 			select user_id::text as actor_user_id
@@ -67,11 +84,26 @@ export const POST: APIRoute = async ({ request }) => {
 			return json(400, { error: "You cannot like your own activity." });
 		}
 
-		await sql`
-			insert into user_activity_like (activity_id, user_id)
-			values (${activityId}, ${viewerUserId}::uuid)
-			on conflict (activity_id, user_id) do nothing
+		const insertedLike = await sql<Array<{ inserted: number }>>`
+			with inserted as (
+				insert into user_activity_like (activity_id, user_id)
+				values (${activityId}, ${viewerUserId}::uuid)
+				on conflict (activity_id, user_id) do nothing
+				returning 1 as inserted
+			)
+			select coalesce(sum(inserted), 0)::int as inserted
+			from inserted
 		`;
+		const likeInserted = Math.max(0, Number(insertedLike[0]?.inserted || 0)) > 0;
+		if (likeInserted) {
+			const ownerUserId = String(activityRows[0]?.actor_user_id || "");
+			if (ownerUserId && ownerUserId !== viewerUserId) {
+				await sql`
+					insert into user_notification (user_id, actor_user_id, activity_id, type)
+					values (${ownerUserId}::uuid, ${viewerUserId}::uuid, ${activityId}, 'activity_like')
+				`;
+			}
+		}
 		const state = await resolveLikeState(activityId, viewerUserId);
 		return json(200, { ok: true, ...state });
 	} catch (error) {

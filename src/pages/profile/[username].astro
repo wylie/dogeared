@@ -72,6 +72,35 @@ function bookIdentityKey(input: { title: unknown; author: unknown }) {
 	return `${title}::${author}`;
 }
 
+function formatNotificationAge(value: unknown) {
+	const date = new Date(String(value || ""));
+	if (Number.isNaN(date.getTime())) return "";
+	const diffMs = Math.max(0, Date.now() - date.getTime());
+	const diffHours = diffMs / (1000 * 60 * 60);
+	if (diffHours < 24) {
+		const roundedHours = Math.max(0, Math.round(diffHours));
+		return `${roundedHours} ${roundedHours === 1 ? "hour" : "hours"}`;
+	}
+	const diffDays = Math.max(1, Math.round(diffHours / 24));
+	return `${diffDays} ${diffDays === 1 ? "day" : "days"}`;
+}
+
+async function ensureNotificationTable() {
+	const sql = getNeonSql();
+	await sql`
+		create table if not exists user_notification (
+			id bigserial primary key,
+			user_id uuid not null references app_user(id) on delete cascade,
+			actor_user_id uuid not null references app_user(id) on delete cascade,
+			activity_id bigint not null references user_activity(id) on delete cascade,
+			type text not null check (type in ('activity_like', 'activity_comment')),
+			created_at timestamptz not null default now(),
+			read_at timestamptz null
+		)
+	`;
+	await sql`create index if not exists idx_user_notification_user_read on user_notification(user_id, read_at, created_at desc)`;
+}
+
 if (Astro.request.method === "POST" && viewerUserId && requestedUsername) {
 	const formData = await Astro.request.formData();
 	const profileIntent = String(formData.get("profileIntent") || "").trim().toLowerCase();
@@ -153,6 +182,39 @@ if (Astro.request.method === "POST" && viewerUserId && requestedUsername) {
 			}
 		}
 		return Astro.redirect(`/profile/${encodeURIComponent(requestedUsername)}`);
+	}
+	const notificationIntent = String(formData.get("notificationIntent") || "").trim().toLowerCase();
+	if (notificationIntent === "mark_all_read" || notificationIntent === "clear_all" || notificationIntent === "clear_one") {
+		const target = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
+		if (target.targetUserId && target.targetUserId === viewerUserId) {
+			const sql = getNeonSql();
+			await ensureNotificationTable();
+			if (notificationIntent === "mark_all_read") {
+				await sql`
+					update user_notification
+					set read_at = now()
+					where user_id = ${viewerUserId}::uuid
+						and read_at is null
+				`;
+			}
+			if (notificationIntent === "clear_all") {
+				await sql`
+					delete from user_notification
+					where user_id = ${viewerUserId}::uuid
+				`;
+			}
+			if (notificationIntent === "clear_one") {
+				const notificationId = Math.max(0, Number(formData.get("notificationId") || 0));
+				if (notificationId > 0) {
+					await sql`
+						delete from user_notification
+						where id = ${notificationId}
+							and user_id = ${viewerUserId}::uuid
+					`;
+				}
+			}
+		}
+		return Astro.redirect(`/profile/${encodeURIComponent(requestedUsername)}#notifications`);
 	}
 }
 
@@ -271,6 +333,16 @@ let momentumNextAction = "";
 let favoriteBookHref = "";
 let favoriteAuthorHref = "";
 let ownerProfileData: Record<string, unknown> = {};
+let notifications: Array<{
+	id: number;
+	type: "activity_like" | "activity_comment";
+	createdAt: string;
+	readAt: string;
+	actorUsername: string;
+	bookTitle: string;
+	bookId: number;
+	activityId: number;
+}> = [];
 const PAGE_SIZE = 12;
 const recentPage = Math.max(1, Number(Astro.url.searchParams.get("ra_page") || "1") || 1);
 const readingPage = Math.max(1, Number(Astro.url.searchParams.get("cr_page") || "1") || 1);
@@ -295,6 +367,44 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		ownerProfileData = (ownerRows[0]?.profile_data && typeof ownerRows[0].profile_data === "object")
 			? ownerRows[0].profile_data as Record<string, unknown>
 			: {};
+		await ensureNotificationTable();
+		const notificationRows = await sql<Array<{
+			id: number;
+			type: "activity_like" | "activity_comment";
+			created_at: string;
+			read_at: string | null;
+			actor_username: string | null;
+			book_title: string | null;
+			book_id: number;
+			activity_id: number;
+		}>>`
+			select
+				n.id,
+				n.type,
+				n.created_at::text as created_at,
+				n.read_at::text as read_at,
+				actor.username as actor_username,
+				coalesce(b.title, '') as book_title,
+				ua.book_id,
+				n.activity_id
+			from user_notification n
+			join app_user actor on actor.id = n.actor_user_id
+			join user_activity ua on ua.id = n.activity_id
+			join book b on b.id = ua.book_id
+			where n.user_id = ${viewerUserId}::uuid
+			order by n.created_at desc
+			limit 100
+		`;
+		notifications = notificationRows.map((row) => ({
+			id: Math.max(0, Number(row.id || 0)),
+			type: row.type === "activity_comment" ? "activity_comment" : "activity_like",
+			createdAt: String(row.created_at || ""),
+			readAt: String(row.read_at || ""),
+			actorUsername: String(row.actor_username || "").trim().replace(/^@+/, "") || "reader",
+			bookTitle: String(row.book_title || "").trim() || "a book",
+			bookId: Math.max(0, Number(row.book_id || 0)),
+			activityId: Math.max(0, Number(row.activity_id || 0))
+		}));
 	}
 	followState = {
 		followersCount: bundle.followersCount,
@@ -747,6 +857,7 @@ function shelfSectionOrderStyle(key: string) {
 }
 
 const baseSectionLinks = [
+	...(isOwnerViewer ? [{ id: "notifications", label: "Notifications" }] : []),
 	{ id: "about", label: "About" },
 	{ id: "shelf-summary", label: "Shelf Summary" },
 	{ id: "recent-activity", label: "Recent Activity" }
@@ -902,6 +1013,59 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					<section class="welcome-banner" role="status" aria-live="polite">
 						<p><strong>Welcome to Dogeared.</strong> Your account setup is complete and your profile is live.</p>
 						<a id="dismiss-welcome-banner" class="welcome-banner-dismiss" href={dismissWelcomeUrl}>Dismiss</a>
+					</section>
+				)}
+				{isOwnerViewer && (
+					<section id="notifications" class={`activity-card activity-card-plain notifications-card${notifications.length === 0 ? " notifications-card-empty" : ""}`}>
+						<div class="notifications-head">
+							<h2>Notifications</h2>
+							<div class="notifications-actions">
+								{notifications.some((item) => !item.readAt) && (
+									<form method="post" action={`/profile/${encodeURIComponent(profile.username)}#notifications`}>
+										<input type="hidden" name="notificationIntent" value="mark_all_read" />
+										<button type="submit" class="owner-edit-link">Mark all read</button>
+									</form>
+								)}
+								{notifications.length > 0 && (
+									<form method="post" action={`/profile/${encodeURIComponent(profile.username)}#notifications`}>
+										<input type="hidden" name="notificationIntent" value="clear_all" />
+										<button type="submit" class="owner-edit-link owner-edit-link-muted">Clear all</button>
+									</form>
+								)}
+							</div>
+						</div>
+						{notifications.length === 0 ? (
+							<p class="meta notifications-empty">You're all caught up.</p>
+						) : (
+							<ul class="notifications-list">
+								{notifications.map((note) => (
+									<li class={`notification-item${note.readAt ? "" : " notification-item-unread"}`}>
+										<a
+											class="notification-row-stretch-link"
+											href={note.bookId > 0 ? `/book?bookId=${encodeURIComponent(String(note.bookId))}` : `/book?title=${encodeURIComponent(note.bookTitle)}`}
+											aria-label={`Open notification about ${note.bookTitle}`}
+										></a>
+										<div class="notification-row-content">
+											<p class="notification-title">
+												<a class="author-link notification-actor-link" href={`/profile/${encodeURIComponent(note.actorUsername)}`}>@{note.actorUsername}</a>
+												{" "}
+												{note.type === "activity_like" ? "liked your update on" : "commented on your update for"}
+												{" "}
+												<strong>{note.bookTitle}</strong>
+											</p>
+											<div class="notification-meta-actions">
+												<p class="notification-age">{formatNotificationAge(note.createdAt)}</p>
+												<form method="post" action={`/profile/${encodeURIComponent(profile.username)}#notifications`} class="notification-clear-form">
+													<input type="hidden" name="notificationIntent" value="clear_one" />
+													<input type="hidden" name="notificationId" value={String(note.id)} />
+													<button type="submit" class="notification-clear-btn" aria-label="Clear notification">×</button>
+												</form>
+											</div>
+										</div>
+									</li>
+								))}
+							</ul>
+						)}
 					</section>
 				)}
 				<section id="about" class="profile-card">
@@ -1649,6 +1813,131 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.state-card, .profile-card, .shelf-card, .activity-card { border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
 	.activity-card-plain { border: none; background: transparent; border-radius: 0; padding: 0; }
+	.notifications-card {
+		border: none;
+		border-radius: 12px;
+		background: var(--color-surface);
+		padding: 0.9rem;
+	}
+	.notifications-card-empty {
+		padding: 0.6rem 0.8rem;
+	}
+	.notifications-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.7rem;
+		margin-bottom: 0.5rem;
+	}
+	.notifications-actions {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+	}
+	.notifications-card-empty .notifications-head {
+		margin-bottom: 0.2rem;
+	}
+	.notifications-head h2 {
+		margin: 0;
+	}
+	.notifications-empty {
+		margin: 0;
+		font-size: 0.88rem;
+		color: #64748b;
+	}
+	.notifications-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.45rem;
+	}
+	.notification-item {
+		border: 1px solid #d5dee8;
+		border-radius: 10px;
+		padding: 0;
+		background: #fff;
+		position: relative;
+		overflow: hidden;
+	}
+	.notification-row-stretch-link {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		border-radius: 10px;
+	}
+	.notification-row-content {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 0.4rem 0.6rem;
+		padding: 0.55rem 0.65rem;
+		color: inherit;
+		position: relative;
+		z-index: 2;
+		pointer-events: none;
+	}
+	.notification-row-stretch-link:hover + .notification-row-content,
+	.notification-row-stretch-link:focus-visible + .notification-row-content {
+		background: #f9fbfe;
+	}
+	.notification-actor-link {
+		position: relative;
+		z-index: 3;
+		pointer-events: auto;
+	}
+	.notification-meta-actions {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		position: relative;
+		z-index: 3;
+		pointer-events: auto;
+	}
+	.notification-item-unread {
+		border-color: #c9d3df;
+		background: #fbfdff;
+		box-shadow: inset 3px 0 0 #cfd8e3;
+	}
+	.notification-title,
+	.notification-age {
+		margin: 0;
+	}
+	.notification-age {
+		font-size: 0.78rem;
+		color: #6b7280;
+		font-weight: 700;
+		white-space: nowrap;
+	}
+	.notification-clear-form {
+		margin: 0;
+	}
+	.notification-clear-btn {
+		display: inline-grid;
+		place-items: center;
+		width: 1.05rem;
+		height: 1.05rem;
+		border: none;
+		background: transparent;
+		color: #7c8798;
+		font-size: 1rem;
+		line-height: 1;
+		padding: 0;
+		cursor: pointer;
+		border-radius: 999px;
+	}
+	.notification-clear-btn:hover,
+	.notification-clear-btn:focus-visible {
+		color: #475569;
+		background: #eef2f6;
+	}
+	.notifications-head .owner-edit-link {
+		cursor: pointer;
+	}
+	.owner-edit-link-muted {
+		background: #f2f5f9;
+		border-color: #d4dce7;
+		color: #4b5563;
+	}
 	.profile-card { position: relative; }
 	.profile-card-actions {
 		position: absolute;

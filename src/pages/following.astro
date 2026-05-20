@@ -211,7 +211,13 @@ const sectionLinks = [
 										"data-isbn13": item.isbn13
 									}} />
 								</div>
-								<div slot="social" class="activity-comments-wrap" data-comments-wrap data-activity-id={String(item.id || 0)}>
+								<div
+									slot="social"
+									class="activity-comments-wrap"
+									data-comments-wrap
+									data-activity-id={String(item.id || 0)}
+									data-comments-empty={Math.max(0, Number(item.commentCount || 0)) > 0 ? "0" : "1"}
+								>
 									<div class="activity-social-row">
 										<div class="activity-like-wrap">
 											<button
@@ -391,9 +397,26 @@ const sectionLinks = [
 	}
 	.activity-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+		align-items: stretch;
+		row-gap: 0.75rem;
+		column-gap: 0.75rem;
 	}
 	.feed-page :global(.activity-grid .book-card .card-body h3) {
 		padding-right: 4.5rem;
+	}
+	.feed-page :global(.activity-grid .book-card) {
+		overflow: hidden;
+	}
+	.feed-page :global(.activity-grid .book-card .card-body) {
+		min-height: 0;
+	}
+	.feed-page :global(.activity-grid .book-card .card-social) {
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+		border-top: none !important;
+		padding-top: 0 !important;
+		margin-top: 0 !important;
 	}
 	.activity-headline {
 		font-weight: 700;
@@ -430,11 +453,13 @@ const sectionLinks = [
 	}
 	.activity-social-row {
 		display: flex;
-		align-items: flex-start;
+		align-items: stretch;
 		gap: 0.6rem;
 		width: 100%;
 		min-width: 0;
 		flex-wrap: nowrap;
+		border-top: 1px solid #e6edf4;
+		padding-top: 0.48rem;
 	}
 	.activity-like-button {
 		display: inline-flex;
@@ -444,17 +469,20 @@ const sectionLinks = [
 		background: transparent;
 		color: #496587;
 		padding: 0;
+		min-height: 2rem;
 		font: inherit;
 		font-weight: 700;
 		line-height: 1;
 		cursor: pointer;
 		transition: color .16s ease;
+		box-sizing: border-box;
 	}
 	.activity-like-wrap {
-		display: inline-flex;
-		align-items: center;
+		display: flex;
+		align-items: stretch;
 		gap: 0.45rem;
 		line-height: 1;
+		min-height: 2rem;
 	}
 	.activity-like-button:hover,
 	.activity-like-button:focus-visible {
@@ -480,27 +508,67 @@ const sectionLinks = [
 	}
 	.activity-comments-wrap {
 		width: 100%;
-		display: grid;
-		gap: 0.4rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		height: 100%;
+		min-height: 0;
+	}
+	.activity-comments-wrap[data-comments-empty="1"] {
+		justify-content: flex-end;
+	}
+	.activity-comments-wrap[data-comments-empty="0"] {
+		justify-content: flex-start;
 	}
 	.activity-comments-list {
 		display: grid;
-		gap: 0.3rem;
+		gap: 0.15rem;
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+		padding-right: 0.1rem;
 	}
-	.activity-comment-item {
+	.activity-comments-list:empty {
+		display: none;
+		max-height: 0;
+		overflow: hidden;
+		padding-right: 0;
+	}
+	:global(.activity-comment-item) {
 		margin: 0;
+		padding: 0.45rem 0;
 		font-size: 0.84rem;
 		color: #334155;
 		line-height: 1.35;
 		overflow-wrap: anywhere;
+		display: grid;
+		gap: 0.12rem;
 	}
-	.activity-comment-user {
+	:global(.activity-comment-head) {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.4rem;
+	}
+	:global(.activity-comment-body) {
+		display: block;
+	}
+	:global(.activity-comment-age) {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: #7b8794;
+		white-space: nowrap;
+	}
+	:global(.activity-comment-item + .activity-comment-item) {
+		border-top: 1px solid #e6edf5;
+	}
+	:global(.activity-comment-user) {
 		font-weight: 700;
 		color: #1e3a5f;
 		text-decoration: none;
 	}
-	.activity-comment-user:hover,
-	.activity-comment-user:focus-visible {
+	:global(.activity-comment-user:hover),
+	:global(.activity-comment-user:focus-visible) {
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
@@ -517,20 +585,24 @@ const sectionLinks = [
 		border: 1px solid #c8d3df;
 		border-radius: 999px;
 		padding: 0.35rem 0.65rem;
+		min-height: 2rem;
 		font: inherit;
 		font-size: 0.84rem;
 		background: #fff;
+		box-sizing: border-box;
 	}
 	.activity-comment-form button {
 		border: none;
 		border-radius: 999px;
 		padding: 0.35rem 0.7rem;
+		min-height: 2rem;
 		font: inherit;
 		font-size: 0.8rem;
 		font-weight: 700;
 		background: #dde8f5;
 		color: #22466b;
 		cursor: pointer;
+		box-sizing: border-box;
 	}
 	.activity-comment-feedback {
 		margin: 0;
@@ -687,6 +759,32 @@ const sectionLinks = [
 		.replaceAll(">", "&gt;")
 		.replaceAll('"', "&quot;")
 		.replaceAll("'", "&#39;");
+	const parseDate = (value) => {
+		if (!value) return null;
+		const date = new Date(String(value));
+		return Number.isNaN(date.getTime()) ? null : date;
+	};
+	const formatCommentAge = (value) => {
+		const date = parseDate(value);
+		if (!date) return "";
+		const diffMs = Math.max(0, Date.now() - date.getTime());
+		const diffHours = diffMs / (1000 * 60 * 60);
+		if (diffHours < 24) {
+			const roundedHours = Math.max(0, Math.round(diffHours));
+			return `${roundedHours} ${roundedHours === 1 ? "hour" : "hours"}`;
+		}
+		const diffDays = diffHours / 24;
+		const roundedDays = Math.max(1, Math.round(diffDays));
+		return `${roundedDays} ${roundedDays === 1 ? "day" : "days"}`;
+	};
+	const renderCommentHtml = (comment) => {
+		const username = String(comment?.username || "reader");
+		const body = String(comment?.body || "");
+		const createdAt = String(comment?.createdAt || "");
+		const profileHref = `/profile/${encodeURIComponent(username)}`;
+		const ageLabel = formatCommentAge(createdAt);
+		return `<p class="activity-comment-item"><span class="activity-comment-head"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a>${ageLabel ? `<span class="activity-comment-age">${escapeHtml(ageLabel)}</span>` : ""}</span><span class="activity-comment-body">${escapeHtml(body)}</span></p>`;
+	};
 
 	document.addEventListener("click", (event) => {
 		const target = event.target;
@@ -893,13 +991,15 @@ const sectionLinks = [
 				return;
 			}
 			if (list instanceof HTMLElement) {
-				const username = String(data?.comment?.username || "reader");
-				const safeBody = escapeHtml(body);
-				const profileHref = `/profile/${encodeURIComponent(username)}`;
-				const node = document.createElement("p");
-				node.className = "activity-comment-item";
-				node.innerHTML = `<a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a> ${safeBody}`;
-				list.append(node);
+				const wrapper = document.createElement("div");
+				wrapper.innerHTML = renderCommentHtml({
+					username: data?.comment?.username,
+					body,
+					createdAt: data?.comment?.createdAt
+				});
+				const nextComment = wrapper.firstElementChild;
+				if (nextComment) list.append(nextComment);
+				wrap.dataset.commentsEmpty = "0";
 			}
 			input.value = "";
 			wrap.dataset.loaded = "1";
@@ -944,12 +1044,9 @@ const sectionLinks = [
 			}
 			if (list instanceof HTMLElement) {
 				const comments = Array.isArray(data?.comments) ? data.comments : [];
-				list.innerHTML = comments.map((comment) => {
-					const username = String(comment?.username || "reader");
-					const body = String(comment?.body || "");
-					const profileHref = `/profile/${encodeURIComponent(username)}`;
-					return `<p class="activity-comment-item"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a> ${escapeHtml(body)}</p>`;
-				}).join("");
+				const commentsForDisplay = [...comments];
+				list.innerHTML = commentsForDisplay.map((comment) => renderCommentHtml(comment)).join("");
+				wrap.dataset.commentsEmpty = commentsForDisplay.length > 0 ? "0" : "1";
 			}
 			wrap.dataset.loaded = "1";
 			if (feedback instanceof HTMLElement) feedback.hidden = true;

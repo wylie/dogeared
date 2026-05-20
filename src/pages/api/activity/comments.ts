@@ -36,6 +36,22 @@ async function ensureCommentTable() {
 	await sql`create index if not exists idx_user_activity_comment_user on user_activity_comment(user_id, created_at desc)`;
 }
 
+async function ensureNotificationTable() {
+	const sql = getNeonSql();
+	await sql`
+		create table if not exists user_notification (
+			id bigserial primary key,
+			user_id uuid not null references app_user(id) on delete cascade,
+			actor_user_id uuid not null references app_user(id) on delete cascade,
+			activity_id bigint not null references user_activity(id) on delete cascade,
+			type text not null check (type in ('activity_like', 'activity_comment')),
+			created_at timestamptz not null default now(),
+			read_at timestamptz null
+		)
+	`;
+	await sql`create index if not exists idx_user_notification_user_read on user_notification(user_id, read_at, created_at desc)`;
+}
+
 export const GET: APIRoute = async ({ request, url }) => {
 	try {
 		const session = await resolveUserBySession(request);
@@ -88,7 +104,15 @@ export const POST: APIRoute = async ({ request }) => {
 		if (activityId <= 0) return json(400, { error: "Invalid activity id." });
 		if (!message) return json(400, { error: "Comment cannot be empty." });
 		await ensureCommentTable();
+		await ensureNotificationTable();
 		const sql = getNeonSql();
+		const activityRows = await sql<Array<{ actor_user_id: string }>>`
+			select user_id::text as actor_user_id
+			from user_activity
+			where id = ${activityId}
+			limit 1
+		`;
+		if (activityRows.length === 0) return json(404, { error: "Activity not found." });
 		const inserted = await sql<Array<{ id: number; created_at: string; username: string | null }>>`
 			with inserted as (
 				insert into user_activity_comment (activity_id, user_id, body)
@@ -104,6 +128,13 @@ export const POST: APIRoute = async ({ request }) => {
 			from user_activity_comment
 			where activity_id = ${activityId}
 		`;
+		const ownerUserId = String(activityRows[0]?.actor_user_id || "");
+		if (ownerUserId && ownerUserId !== session.userId) {
+			await sql`
+				insert into user_notification (user_id, actor_user_id, activity_id, type)
+				values (${ownerUserId}::uuid, ${session.userId}::uuid, ${activityId}, 'activity_comment')
+			`;
+		}
 		return json(200, {
 			ok: true,
 			commentCount: Math.max(0, Number(counts[0]?.comment_count || 0)),

@@ -40,7 +40,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
             )}
           </li>
           <li id="left-hand-profile-item" hidden={!isAuthenticated}>
-            <a href="/settings#account-settings" class={isProfilePage ? 'active' : 'hover'} aria-current={isProfilePage ? 'page' : undefined}>Profile</a>
+            <a href="/settings#account-settings" class={isProfilePage ? 'active' : 'hover'} aria-current={isProfilePage ? 'page' : undefined}><span id="left-hand-profile-label">Profile</span></a>
             {isProfilePage && sectionLinks.length > 0 && (
               <ul class="section-links-nested">
                 {sectionLinks.map((link) => (
@@ -588,6 +588,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   const leftHandFollowingItem = document.getElementById("left-hand-following-item");
   const leftHandProfileItem = document.getElementById("left-hand-profile-item");
   const leftHandProfileLink = leftHandProfileItem?.querySelector("a");
+  const leftHandProfileLabel = document.getElementById("left-hand-profile-label");
   const leftHandSettingsItem = document.getElementById("left-hand-settings-item");
   const leftHandLogoutItem = document.getElementById("left-hand-logout-item");
   const leftHandAuthDivider = document.getElementById("left-hand-auth-divider");
@@ -660,9 +661,27 @@ const query = Astro.url.searchParams.get("q") ?? "";
     window.requestAnimationFrame(updateMobileStickyOffset);
   }
 
+  async function syncNotificationCount(authenticated) {
+    if (!(leftHandProfileLabel instanceof HTMLElement)) return;
+    if (!authenticated) {
+      leftHandProfileLabel.textContent = "Profile";
+      return;
+    }
+    try {
+      const response = await fetch("/api/notifications/count", { credentials: "same-origin" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(String(data?.error || "Failed to load notifications."));
+      const unreadCount = Math.max(0, Number(data?.unreadCount || 0));
+      leftHandProfileLabel.textContent = unreadCount > 0 ? `Profile (${unreadCount})` : "Profile";
+    } catch {
+      leftHandProfileLabel.textContent = "Profile";
+    }
+  }
+
   async function syncLeftHandAuthState() {
     const state = await resolveClientAuthState({ ssrAuthenticated });
     applyLeftHandAuthState(state.authenticated);
+    await syncNotificationCount(state.authenticated);
     if (!state.authenticated || !(leftHandProfileLink instanceof HTMLAnchorElement)) return;
     try {
       const response = await fetch("/api/auth/me", { credentials: "same-origin" });
@@ -849,6 +868,15 @@ const query = Astro.url.searchParams.get("q") ?? "";
 
   subscribeAuthStateChange(() => {
     void syncLeftHandAuthState();
+  });
+  window.addEventListener("dogeared:notifications-updated", (event) => {
+    const detail = (event instanceof CustomEvent && event.detail && typeof event.detail === "object")
+      ? event.detail
+      : {};
+    const unreadCount = Math.max(0, Number((detail as { unreadCount?: unknown }).unreadCount || 0));
+    if (leftHandProfileLabel instanceof HTMLElement) {
+      leftHandProfileLabel.textContent = unreadCount > 0 ? `Profile (${unreadCount})` : "Profile";
+    }
   });
   void syncLeftHandAuthState();
 </script>

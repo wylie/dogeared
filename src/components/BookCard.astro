@@ -282,6 +282,10 @@ function renderAverageStars(value: number) {
 		flex-direction: column;
 		gap: 0.3rem;
 	}
+	.card-tail:empty {
+		display: none;
+		margin-top: 0;
+	}
 	.cover-actions {
 		width: 100%;
 		margin: 0;
@@ -310,8 +314,8 @@ function renderAverageStars(value: number) {
 		margin-top: 0.2rem;
 		padding-top: 0.48rem;
 		border-top: 1px solid #e6edf4;
-		display: flex;
-		align-items: center;
+		/* display: flex; */
+		/* align-items: center; */
 		gap: 0.6rem;
 		min-width: 0;
 	}
