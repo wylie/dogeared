@@ -35,9 +35,11 @@ export const GET: APIRoute = async ({ request }) => {
 		const sql = getNeonSql();
 		const rows = await sql<Array<{ unread_count: number }>>`
 			select count(*)::int as unread_count
-			from user_notification
-			where user_id = ${session.userId}::uuid
-				and read_at is null
+			from user_notification n
+			join user_activity ua on ua.id = n.activity_id
+			join book b on b.id = ua.book_id
+			where n.user_id = ${session.userId}::uuid
+				and n.read_at is null
 		`;
 		const unreadCount = Math.max(0, Number(rows[0]?.unread_count || 0));
 		return json(200, { unreadCount });
