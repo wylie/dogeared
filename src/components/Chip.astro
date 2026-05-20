@@ -5,6 +5,7 @@ type Props = {
 	className?: string;
 	tone?: "highlight" | "secondary";
 	variant?: "clickable" | "static";
+	kind?: "genre" | "topic";
 };
 
 const {
@@ -12,12 +13,14 @@ const {
 	href = "",
 	className = "",
 	tone = "highlight",
-	variant = href ? "clickable" : "static"
+	variant = href ? "clickable" : "static",
+	kind
 } = Astro.props as Props;
 
 const toneClass = tone === "secondary" ? "chip--secondary" : "chip--highlight";
 const variantClass = variant === "static" ? "chip--static" : "";
-const classes = `chip ${toneClass} ${variantClass} ${className}`.trim();
+const kindClass = kind === "topic" ? "chip--topic" : kind === "genre" ? "chip--genre" : "";
+const classes = `chip ${toneClass} ${variantClass} ${kindClass} ${className}`.trim();
 ---
 
 {variant === "clickable" && href ? (

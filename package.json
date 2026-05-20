@@ -24,7 +24,8 @@
     "backfill:author-avatars": "node scripts/backfill-author-avatars.mjs",
     "backfill:author-bios": "node scripts/backfill-author-bios.mjs",
     "backfill:report": "node scripts/metadata-quality-report.mjs",
-    "backfill:metadata": "node scripts/run-metadata-backfills.mjs"
+    "backfill:metadata": "node scripts/run-metadata-backfills.mjs",
+    "backfill:cleanup-genres-topics": "node scripts/cleanup-book-genres-topics-once.mjs"
   },
   "dependencies": {
     "@astrojs/vercel": "^10.0.7",

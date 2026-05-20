@@ -7,7 +7,7 @@ import Chip from "../components/Chip.astro";
 import { getNeonSql } from "../lib/neon";
 import { getEncryptionKey, resolveUserBySession } from "../lib/auth";
 import { authorHref } from "../lib/author";
-import { formatGenreLabel } from "../lib/genres";
+import { normalizeGenreEntry } from "../lib/genres";
 
 export const prerender = false;
 
@@ -110,6 +110,16 @@ function formatTopicLabel(value: string) {
 		.filter(Boolean)
 		.map((word) => `${word[0]?.toUpperCase() || ""}${word.slice(1)}`)
 		.join(" ");
+}
+
+function canonicalTagKey(value: string) {
+	return normalizeText(value)
+		.toLowerCase()
+		.replace(/\bscifi\b/g, "science fiction")
+		.replace(/\bsci[\s-]*fi\b/g, "science fiction")
+		.replace(/&/g, "and")
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim();
 }
 
 function isDisplayNoise(value: string) {
@@ -417,11 +427,19 @@ try {
 			order by genre_name asc
 			limit 6
 		`;
+		const genreDedupe = new Set<string>();
 		bookGenres = genreRows
 			.map((row) => normalizeText(row.genre_name))
 			.filter((value) => value && !isDisplayNoise(value))
-			.map((value) => formatGenreLabel(value, value))
-			.slice(0, 6);
+			.flatMap((value) => normalizeGenreEntry(value))
+			.map((item) => item.name)
+			.filter((label) => {
+				const key = canonicalTagKey(label);
+				if (!key || genreDedupe.has(key)) return false;
+				genreDedupe.add(key);
+				return true;
+			})
+			.slice(0, 8);
 		const topicRows = await sql<Array<{ tag_name: string }>>`
 			select distinct coalesce(nullif(trim(tag_name), ''), '') as tag_name
 			from book_tag
@@ -429,10 +447,18 @@ try {
 			order by tag_name asc
 			limit 8
 		`;
+		const genreKeySet = new Set(bookGenres.map((value) => canonicalTagKey(value)).filter(Boolean));
+		const topicDedupe = new Set<string>();
 		bookTopics = topicRows
 			.map((row) => normalizeText(row.tag_name))
 			.filter((value) => value && !isDisplayNoise(value))
 			.map((value) => formatTopicLabel(value))
+			.filter((label) => {
+				const key = canonicalTagKey(label);
+				if (!key || genreKeySet.has(key) || topicDedupe.has(key)) return false;
+				topicDedupe.add(key);
+				return true;
+			})
 			.filter(Boolean)
 			.slice(0, 8);
 
@@ -731,15 +757,25 @@ const bookStructuredDataPayload = bookStructuredData
 
 				<section class="panel synopsis-panel">
 					<h2>Synopsis</h2>
-					<div class="related-links-row">
-						{book.author && <a class="related-link author-link-chip" href={`/related?kind=author&value=${encodeURIComponent(book.author)}`}>More by {book.author}</a>}
-						{bookGenres.map((genre) => (
-							<Chip className="genre-chip" kind="genre" label={genre} href={`/related?kind=genre&value=${encodeURIComponent(genre)}`} />
-						))}
-						{bookTopics.map((topic) => (
-							<Chip className="topic-chip" kind="topic" label={topic} href={`/related?kind=topic&value=${encodeURIComponent(topic)}`} />
-						))}
-					</div>
+					{book.author && (
+						<div class="related-links-row related-links-row--author">
+							<a class="related-link author-link-chip" href={`/related?kind=author&value=${encodeURIComponent(book.author)}`}>More by {book.author}</a>
+						</div>
+					)}
+					{bookGenres.length > 0 && (
+						<div class="related-links-row related-links-row--genres">
+							{bookGenres.map((genre) => (
+								<Chip className="genre-chip" kind="genre" label={genre} href={`/related?kind=genre&value=${encodeURIComponent(genre)}`} />
+							))}
+						</div>
+					)}
+					{bookTopics.length > 0 && (
+						<div class="related-links-row related-links-row--topics">
+							{bookTopics.map((topic) => (
+								<Chip className="topic-chip" kind="topic" label={topic} href={`/related?kind=topic&value=${encodeURIComponent(topic)}`} />
+							))}
+						</div>
+					)}
 					{synopsisBlocks.length === 0 ? (
 						<p class="synopsis-text">Synopsis unavailable.</p>
 					) : (
@@ -1027,6 +1063,7 @@ const bookStructuredDataPayload = bookStructuredData
 		gap: 0.4rem;
 		margin: 0 0 0.45rem;
 	}
+	.related-links-row:last-of-type { margin-bottom: 0.55rem; }
 	.related-link {
 		text-decoration: none;
 		color: #1f4f7a;
@@ -1038,10 +1075,34 @@ const bookStructuredDataPayload = bookStructuredData
 		font-weight: 700;
 	}
 	.author-link-chip {
-		background: #e7edf3;
-		color: #1f4f7a;
+		background: #f6ebd9;
+		color: #6b4a1e;
+		border-color: #dfc79f;
+	}
+	.author-link-chip:hover,
+	.author-link-chip:focus-visible {
+		background: #f3e1c4;
+		color: #5b3e18;
+	}
+	.synopsis-panel :global(.chip) {
+		border: 1px solid transparent;
+		padding: 0.18rem 0.55rem;
+		font-size: 0.82rem;
+		font-weight: 700;
+		line-height: 1.2;
+	}
+	.synopsis-panel :global(.chip--genre) {
+		border-color: #9fbc89;
+	}
+	.synopsis-panel :global(.chip--topic) {
+		border-color: #b8c9dc;
 	}
 	.related-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+	.synopsis-panel :global(a.chip:hover),
+	.synopsis-panel :global(a.chip:focus-visible) {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
 	.synopsis-panel { line-height: 1.7; }
 	.synopsis-text { margin: 0.75rem 0 0; font-size: 1.04rem; color: #252525; }
 	.synopsis-text:first-of-type { margin-top: 0.2rem; }

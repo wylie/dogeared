@@ -73,6 +73,44 @@ function bookIdentityKey(input: { title: unknown; author: unknown }) {
 	return `${title}::${author}`;
 }
 
+function toTimestamp(value: unknown) {
+	const time = new Date(String(value || "")).getTime();
+	return Number.isFinite(time) ? time : 0;
+}
+
+function dedupeByWorkIdentity<T extends {
+	title: string;
+	author: string;
+	updatedAt?: string;
+	currentPage?: number;
+	totalPages?: number;
+}>(
+	items: T[]
+) {
+	const byKey = new Map<string, T>();
+	for (const item of items) {
+		const key = bookIdentityKey({ title: item.title, author: item.author });
+		if (!key || key === "::") continue;
+		const existing = byKey.get(key);
+		if (!existing) {
+			byKey.set(key, item);
+			continue;
+		}
+		const existingTime = toTimestamp(existing.updatedAt);
+		const itemTime = toTimestamp(item.updatedAt);
+		if (itemTime > existingTime) {
+			byKey.set(key, item);
+			continue;
+		}
+		if (itemTime === existingTime) {
+			const existingProgress = Math.max(0, Number(existing.currentPage || 0));
+			const itemProgress = Math.max(0, Number(item.currentPage || 0));
+			if (itemProgress > existingProgress) byKey.set(key, item);
+		}
+	}
+	return Array.from(byKey.values());
+}
+
 function formatNotificationAge(value: unknown) {
 	const date = new Date(String(value || ""));
 	if (Number.isNaN(date.getTime())) return "";
@@ -633,6 +671,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		totalPages: Math.max(0, Number(row.total_pages || 0) || 0),
 		updatedAt: String(row.updated_at || "").trim()
 	}));
+	currentlyReading = dedupeByWorkIdentity(currentlyReading);
 	wantToReadBooks = wantToReadRows.map((row) => ({
 		bookId: Number(row.book_id || 0),
 		title: String(row.title || "").trim(),
@@ -645,6 +684,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		description: "",
 		updatedAt: String(row.updated_at || "").trim()
 	}));
+	wantToReadBooks = dedupeByWorkIdentity(wantToReadBooks);
 	// Keep default shelves mutually exclusive in the profile UI when catalog duplicates
 	// exist for the same work under different book IDs.
 	const currentlyReadingKeys = new Set(
@@ -667,6 +707,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		finishedDate: String(row.finished_date || "").trim(),
 		updatedAt: String(row.updated_at || "").trim()
 	}));
+	finishedBooks = dedupeByWorkIdentity(finishedBooks);
 	customShelves = customShelfRows.map((row) => ({
 		id: Math.max(0, Number(row.id || 0) || 0),
 		name: String(row.name || "").trim(),

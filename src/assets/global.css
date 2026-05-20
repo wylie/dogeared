@@ -19,6 +19,8 @@
   --color-accent: var(--palette-1);
   --color-highlight: var(--palette-3);
   --color-chip-static: var(--palette-6);
+  --color-chip-genre: #bfd9ab;
+  --color-chip-topic: #d6e4f2;
   --color-rating: var(--palette-4);
   --color-text: #222222;
   --color-border: var(--palette-9);
@@ -95,6 +97,12 @@ a.author-link:focus-visible {
   text-decoration: none;
 }
 
+a.chip:hover,
+a.chip:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .chip--highlight {
   background: var(--color-highlight);
 }
@@ -106,6 +114,18 @@ a.author-link:focus-visible {
 
 .chip--static {
   background: var(--color-chip-static);
+}
+
+.chip--genre,
+.chip.genre-chip {
+  background: var(--color-chip-genre);
+  color: #1f2937;
+}
+
+.chip--topic,
+.chip.topic-chip {
+  background: var(--color-chip-topic);
+  color: #1f4f7a;
 }
 
 @media (max-width: 900px) {

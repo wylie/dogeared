@@ -149,8 +149,7 @@ const GENRE_ALIASES: Record<string, { slug: string; name: string }> = {
 	"humorous-stories": { slug: "humorous", name: "Humorous" },
 	"mystery-stories": { slug: "mystery", name: "Mystery" },
 	"survival-stories": { slug: "survival", name: "Survival" },
-	"time-travel-in-fiction": { slug: "time-travel", name: "Time Travel" },
-	"war-stories": { slug: "war", name: "War" }
+	"time-travel-in-fiction": { slug: "time-travel", name: "Time Travel" }
 };
 
 function slugify(value: string) {
