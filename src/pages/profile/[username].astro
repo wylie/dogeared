@@ -15,6 +15,7 @@ export const prerender = false;
 const requestedUsername = String(Astro.params.username || "").trim().toLowerCase();
 const session = await resolveUserBySession(Astro.request);
 const viewerUserId = String(session?.userId || "");
+const isAuthenticated = !!viewerUserId;
 const editMode = String(Astro.url.searchParams.get("edit") || "").trim() === "1";
 const showWelcomeBanner = String(Astro.url.searchParams.get("welcome") || "").trim() === "1";
 const dismissWelcomeUrl = (() => {
@@ -547,63 +548,71 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			: Promise.resolve([]),
 		isOwnerViewer
 			? (async () => {
-				await ensureCustomShelfSchema(sql);
-				return sql<Array<{ id: number; name: string; slug: string; icon: string; position: number; book_count: number }>>`
-					select
-						s.id,
-						s.name,
-						s.slug,
-						s.icon,
-						s.position,
-						coalesce(count(sb.book_id), 0)::int as book_count
-					from user_custom_shelf s
-					left join user_custom_shelf_book sb
-						on sb.shelf_id = s.id
-						and sb.user_id = s.user_id
-					where s.user_id = ${bundle.targetUserId}::uuid
-					group by s.id, s.name, s.slug, s.position
-					order by s.position asc, s.id asc
-				`;
+				try {
+					await ensureCustomShelfSchema(sql);
+					return sql<Array<{ id: number; name: string; slug: string; icon: string; position: number; book_count: number }>>`
+						select
+							s.id,
+							s.name,
+							s.slug,
+							s.icon,
+							s.position,
+							coalesce(count(sb.book_id), 0)::int as book_count
+						from user_custom_shelf s
+						left join user_custom_shelf_book sb
+							on sb.shelf_id = s.id
+							and sb.user_id = s.user_id
+						where s.user_id = ${bundle.targetUserId}::uuid
+						group by s.id, s.name, s.slug, s.position
+						order by s.position asc, s.id asc
+					`;
+				} catch {
+					return [];
+				}
 			})()
 			: Promise.resolve([]),
 		isOwnerViewer
 			? (async () => {
-				await ensureCustomShelfSchema(sql);
-				return sql<Array<{
-					shelf_id: number;
-					book_id: number;
-					title: string;
-					primary_author: string;
-					author_id: number | null;
-					cover_url: string;
-					language: string;
-					isbn10: string;
-					isbn13: string;
-					status: string | null;
-					rating: number | null;
-					updated_at: string | null;
-				}>>`
-					select
-						sb.shelf_id,
-						b.id as book_id,
-						b.title,
-						b.primary_author,
-						b.author_id,
-						b.cover_url,
-						b.language,
-						b.isbn10,
-						b.isbn13,
-						ub.status,
-						ub.rating,
-						coalesce(ub.updated_at::text, sb.created_at::text) as updated_at
-					from user_custom_shelf_book sb
-					join book b on b.id = sb.book_id
-					left join user_book ub
-						on ub.user_id = sb.user_id
-						and ub.book_id = sb.book_id
-					where sb.user_id = ${bundle.targetUserId}::uuid
-					order by sb.shelf_id asc, coalesce(ub.updated_at, sb.created_at) desc
-				`;
+				try {
+					await ensureCustomShelfSchema(sql);
+					return sql<Array<{
+						shelf_id: number;
+						book_id: number;
+						title: string;
+						primary_author: string;
+						author_id: number | null;
+						cover_url: string;
+						language: string;
+						isbn10: string;
+						isbn13: string;
+						status: string | null;
+						rating: number | null;
+						updated_at: string | null;
+					}>>`
+						select
+							sb.shelf_id,
+							b.id as book_id,
+							b.title,
+							b.primary_author,
+							b.author_id,
+							b.cover_url,
+							b.language,
+							b.isbn10,
+							b.isbn13,
+							ub.status,
+							ub.rating,
+							coalesce(ub.updated_at::text, sb.created_at::text) as updated_at
+						from user_custom_shelf_book sb
+						join book b on b.id = sb.book_id
+						left join user_book ub
+							on ub.user_id = sb.user_id
+							and ub.book_id = sb.book_id
+						where sb.user_id = ${bundle.targetUserId}::uuid
+						order by sb.shelf_id asc, coalesce(ub.updated_at, sb.created_at) desc
+					`;
+				} catch {
+					return [];
+				}
 			})()
 			: Promise.resolve([])
 	]);
