@@ -85,22 +85,6 @@ function formatNotificationAge(value: unknown) {
 	return `${diffDays} ${diffDays === 1 ? "day" : "days"}`;
 }
 
-async function ensureNotificationTable() {
-	const sql = getNeonSql();
-	await sql`
-		create table if not exists user_notification (
-			id bigserial primary key,
-			user_id uuid not null references app_user(id) on delete cascade,
-			actor_user_id uuid not null references app_user(id) on delete cascade,
-			activity_id bigint not null references user_activity(id) on delete cascade,
-			type text not null check (type in ('activity_like', 'activity_comment')),
-			created_at timestamptz not null default now(),
-			read_at timestamptz null
-		)
-	`;
-	await sql`create index if not exists idx_user_notification_user_read on user_notification(user_id, read_at, created_at desc)`;
-}
-
 if (Astro.request.method === "POST" && viewerUserId && requestedUsername) {
 	const formData = await Astro.request.formData();
 	const profileIntent = String(formData.get("profileIntent") || "").trim().toLowerCase();
@@ -188,30 +172,33 @@ if (Astro.request.method === "POST" && viewerUserId && requestedUsername) {
 		const target = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
 		if (target.targetUserId && target.targetUserId === viewerUserId) {
 			const sql = getNeonSql();
-			await ensureNotificationTable();
-			if (notificationIntent === "mark_all_read") {
-				await sql`
-					update user_notification
-					set read_at = now()
-					where user_id = ${viewerUserId}::uuid
-						and read_at is null
-				`;
-			}
-			if (notificationIntent === "clear_all") {
-				await sql`
-					delete from user_notification
-					where user_id = ${viewerUserId}::uuid
-				`;
-			}
-			if (notificationIntent === "clear_one") {
-				const notificationId = Math.max(0, Number(formData.get("notificationId") || 0));
-				if (notificationId > 0) {
+			try {
+				if (notificationIntent === "mark_all_read") {
 					await sql`
-						delete from user_notification
-						where id = ${notificationId}
-							and user_id = ${viewerUserId}::uuid
+						update user_notification
+						set read_at = now()
+						where user_id = ${viewerUserId}::uuid
+							and read_at is null
 					`;
 				}
+				if (notificationIntent === "clear_all") {
+					await sql`
+						delete from user_notification
+						where user_id = ${viewerUserId}::uuid
+					`;
+				}
+				if (notificationIntent === "clear_one") {
+					const notificationId = Math.max(0, Number(formData.get("notificationId") || 0));
+					if (notificationId > 0) {
+						await sql`
+							delete from user_notification
+							where id = ${notificationId}
+								and user_id = ${viewerUserId}::uuid
+						`;
+					}
+				}
+			} catch {
+				// Keep profile requests resilient even if notifications table is unavailable.
 			}
 		}
 		return Astro.redirect(`/profile/${encodeURIComponent(requestedUsername)}#notifications`);
@@ -370,44 +357,47 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		ownerProfileData = (ownerRows[0]?.profile_data && typeof ownerRows[0].profile_data === "object")
 			? ownerRows[0].profile_data as Record<string, unknown>
 			: {};
-		await ensureNotificationTable();
-		const notificationRows = await sql<Array<{
-			id: number;
-			type: "activity_like" | "activity_comment";
-			created_at: string;
-			read_at: string | null;
-			actor_username: string | null;
-			book_title: string | null;
-			book_id: number;
-			activity_id: number;
-		}>>`
-			select
-				n.id,
-				n.type,
-				n.created_at::text as created_at,
-				n.read_at::text as read_at,
-				actor.username as actor_username,
-				coalesce(b.title, '') as book_title,
-				ua.book_id,
-				n.activity_id
-			from user_notification n
-			join app_user actor on actor.id = n.actor_user_id
-			join user_activity ua on ua.id = n.activity_id
-			join book b on b.id = ua.book_id
-			where n.user_id = ${viewerUserId}::uuid
-			order by n.created_at desc
-			limit 100
-		`;
-		notifications = notificationRows.map((row) => ({
-			id: Math.max(0, Number(row.id || 0)),
-			type: row.type === "activity_comment" ? "activity_comment" : "activity_like",
-			createdAt: String(row.created_at || ""),
-			readAt: String(row.read_at || ""),
-			actorUsername: String(row.actor_username || "").trim().replace(/^@+/, "") || "reader",
-			bookTitle: String(row.book_title || "").trim() || "a book",
-			bookId: Math.max(0, Number(row.book_id || 0)),
-			activityId: Math.max(0, Number(row.activity_id || 0))
-		}));
+		try {
+			const notificationRows = await sql<Array<{
+				id: number;
+				type: "activity_like" | "activity_comment";
+				created_at: string;
+				read_at: string | null;
+				actor_username: string | null;
+				book_title: string | null;
+				book_id: number;
+				activity_id: number;
+			}>>`
+				select
+					n.id,
+					n.type,
+					n.created_at::text as created_at,
+					n.read_at::text as read_at,
+					actor.username as actor_username,
+					coalesce(b.title, '') as book_title,
+					ua.book_id,
+					n.activity_id
+				from user_notification n
+				join app_user actor on actor.id = n.actor_user_id
+				join user_activity ua on ua.id = n.activity_id
+				join book b on b.id = ua.book_id
+				where n.user_id = ${viewerUserId}::uuid
+				order by n.created_at desc
+				limit 100
+			`;
+			notifications = notificationRows.map((row) => ({
+				id: Math.max(0, Number(row.id || 0)),
+				type: row.type === "activity_comment" ? "activity_comment" : "activity_like",
+				createdAt: String(row.created_at || ""),
+				readAt: String(row.read_at || ""),
+				actorUsername: String(row.actor_username || "").trim().replace(/^@+/, "") || "reader",
+				bookTitle: String(row.book_title || "").trim() || "a book",
+				bookId: Math.max(0, Number(row.book_id || 0)),
+				activityId: Math.max(0, Number(row.activity_id || 0))
+			}));
+		} catch {
+			notifications = [];
+		}
 	}
 	followState = {
 		followersCount: bundle.followersCount,
