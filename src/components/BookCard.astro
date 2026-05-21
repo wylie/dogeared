@@ -30,7 +30,8 @@ const {
 } = Astro.props as Props;
 
 const hasTopRight = Astro.slots.has("topRight");
-const hasSocial = Astro.slots.has("social");
+const socialSlotHtml = Astro.slots.has("social") ? (await Astro.slots.render("social")).trim() : "";
+const hasSocial = socialSlotHtml.length > 0;
 const hasSynopsisText = !!String(description || "").trim() && !/^synopsis unavailable/i.test(String(description || "").trim());
 const normalizedReaders = Number(readers);
 const normalizedShelves = Number(shelfEntries);
@@ -111,9 +112,7 @@ function renderAverageStars(value: number) {
 		</div>
 	</div>
 	{hasSocial && (
-		<div class="card-social">
-			<slot name="social" />
-		</div>
+		<div class="card-social" set:html={socialSlotHtml}></div>
 	)}
 </li>
 
