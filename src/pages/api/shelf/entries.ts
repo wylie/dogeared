@@ -732,6 +732,7 @@ export const POST: APIRoute = async ({ request }) => {
 				and book_id = ${bookId}
 		`;
 
+		const nextCurrentPage = normalizePositiveInt(currentPage);
 		if (!previousStatus || previousStatus !== status) {
 			await sql`
 				insert into user_activity (
@@ -743,6 +744,21 @@ export const POST: APIRoute = async ({ request }) => {
 					${userId}::uuid,
 					${bookId},
 					${status}
+				)
+			`;
+		}
+		const progressChanged = nextCurrentPage !== previousCurrentPage;
+		if (previousStatus === status && status === "reading" && progressChanged) {
+			await sql`
+				insert into user_activity (
+					user_id,
+					book_id,
+					event_type
+				)
+				values (
+					${userId}::uuid,
+					${bookId},
+					'reading'
 				)
 			`;
 		}
@@ -764,7 +780,6 @@ export const POST: APIRoute = async ({ request }) => {
 			`;
 		}
 
-		const nextCurrentPage = normalizePositiveInt(currentPage);
 		const deltaPages = Math.max(0, nextCurrentPage - previousCurrentPage);
 		if (deltaPages > 0 && (status === "reading" || status === "finished")) {
 			await sql`

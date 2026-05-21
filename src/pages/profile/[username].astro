@@ -4025,6 +4025,19 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					card.dataset.momentumUpdatedAt = new Date().toISOString();
 					recalcMomentumFromDom();
 				}
+				const now = new Date();
+				const updatedLabel = now.toLocaleDateString("en-US", {
+					month: "long",
+					day: "numeric",
+					year: "numeric"
+				});
+				if (card instanceof HTMLElement) {
+					card.dataset.updatedAt = now.toISOString();
+				}
+				const dateNode = card?.querySelector(".activity-date");
+				if (dateNode instanceof HTMLElement) {
+					dateNode.textContent = `Updated ${updatedLabel}`;
+				}
 				input.value = "";
 				progressSave.textContent = "Saved";
 				setTimeout(() => {
