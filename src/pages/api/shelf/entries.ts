@@ -464,6 +464,7 @@ export const POST: APIRoute = async ({ request }) => {
 		if (!session?.userId) return new Response(JSON.stringify({ error: "You must be logged in to save shelf entries." }), { status: 401, headers: { "Content-Type": "application/json" } });
 		const body = await request.json() as { entry?: ShelfEntryInput };
 		const entry = body?.entry || {};
+		const directBookId = normalizePositiveInt(entry.bookId);
 		const bookPayload = fromShelfEntryInput(entry);
 		const title = bookPayload.title;
 		if (!title) {
@@ -497,7 +498,8 @@ export const POST: APIRoute = async ({ request }) => {
 		let googleBooksId = bookPayload.googleBooksId;
 		let pageCount = totalPages;
 		let publisher = normalizeText(bookPayload.publisher);
-		if (!synopsis || !coverUrl || !publishedYear || !language || !publisher || (!isbn10 && !isbn13) || !googleBooksId) {
+		const shouldAttemptMetadataEnrichment = directBookId <= 0;
+		if (shouldAttemptMetadataEnrichment && (!synopsis || !coverUrl || !publishedYear || !language || !publisher || (!isbn10 && !isbn13) || !googleBooksId)) {
 			const enriched = await inferMetadataForBook({ title, author, isbn10, isbn13, googleBooksId });
 			if (!synopsis) synopsis = enriched.synopsis || synopsis;
 			if (!coverUrl) coverUrl = enriched.coverUrl || coverUrl;
@@ -539,15 +541,27 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 		const userId = session.userId;
 		const sql = getNeonSql();
-		const resolvedBookId = await resolveBestCatalogBookId(sql, {
-			canonicalWorkKey: workKey,
-			title,
-			author,
-			isbn10,
-			isbn13,
-			googleBooksId,
-			sources
-		});
+		let resolvedBookId = 0;
+		if (directBookId > 0) {
+			const directRows = await sql<Array<{ id: number }>>`
+				select id
+				from book
+				where id = ${directBookId}
+				limit 1
+			`;
+			resolvedBookId = Number(directRows[0]?.id || 0);
+		}
+		if (resolvedBookId <= 0) {
+			resolvedBookId = await resolveBestCatalogBookId(sql, {
+				canonicalWorkKey: workKey,
+				title,
+				author,
+				isbn10,
+				isbn13,
+				googleBooksId,
+				sources
+			});
+		}
 
 		const previousRows = await sql<Array<{ status: ShelfStatus; rating: number | null; current_page: number }>>`
 			select status, rating, current_page

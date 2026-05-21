@@ -151,3 +151,39 @@ export const POST: APIRoute = async ({ request }) => {
 		return json(500, { error: "Failed to post comment.", detail: error instanceof Error ? error.message : "Unknown error" });
 	}
 };
+
+export const DELETE: APIRoute = async ({ request }) => {
+	try {
+		const session = await resolveUserBySession(request);
+		if (!session?.userId) return json(401, { error: "You must be logged in to delete comments." });
+		const body = await request.json().catch(() => ({})) as { commentId?: unknown; activityId?: unknown };
+		const commentId = normalizeActivityId(body?.commentId);
+		const activityId = normalizeActivityId(body?.activityId);
+		if (commentId <= 0) return json(400, { error: "Invalid comment id." });
+		await ensureCommentTable();
+		const sql = getNeonSql();
+		const deleted = await sql<Array<{ id: number; activity_id: number }>>`
+			delete from user_activity_comment
+			where id = ${commentId}
+				and user_id = ${session.userId}::uuid
+			returning id, activity_id
+		`;
+		if (deleted.length === 0) return json(404, { error: "Comment not found." });
+		const resolvedActivityId = Math.max(0, Number(deleted[0]?.activity_id || 0) || activityId);
+		const counts = resolvedActivityId > 0
+			? await sql<Array<{ comment_count: number }>>`
+				select count(*)::int as comment_count
+				from user_activity_comment
+				where activity_id = ${resolvedActivityId}
+			`
+			: [{ comment_count: 0 }];
+		return json(200, {
+			ok: true,
+			commentId,
+			activityId: resolvedActivityId,
+			commentCount: Math.max(0, Number(counts[0]?.comment_count || 0))
+		});
+	} catch (error) {
+		return json(500, { error: "Failed to delete comment.", detail: error instanceof Error ? error.message : "Unknown error" });
+	}
+};

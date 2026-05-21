@@ -1455,44 +1455,46 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 												"data-isbn13": item.isbn13
 											}} />
 										</div>
-										<div
-											slot="social"
-											class="activity-comments-wrap"
-											data-comments-wrap
-											data-activity-id={String(item.activityId || 0)}
-											data-comments-empty="1"
-											data-loaded="0"
-										>
-											<div class="activity-social-row">
-												<div class="activity-like-wrap">
-													<button
-														type="button"
-														class={`activity-like-button${item.viewerLiked ? " is-liked" : ""}`}
-														data-action="toggle-activity-like"
-														data-activity-id={String(item.activityId || 0)}
-														data-liked={String(!!item.viewerLiked)}
-														disabled={!isAuthenticated}
-														aria-label={item.viewerLiked ? "Unlike this activity" : "Like this activity"}
-														title={!isAuthenticated ? "Log in to like activity" : ""}
-													>
-														<span class="activity-like-label">{item.viewerLiked ? "Liked" : "Like"}</span>
-													</button>
-													<span class="activity-like-count" data-like-count-static>{Math.max(0, Number(item.likeCount || 0))}</span>
+										{!isOwnerViewer && (
+											<div
+												slot="social"
+												class="activity-comments-wrap"
+												data-comments-wrap
+												data-activity-id={String(item.activityId || 0)}
+												data-comments-empty="1"
+												data-loaded="0"
+											>
+												<div class="activity-social-row">
+													<div class="activity-like-wrap">
+														<button
+															type="button"
+															class={`activity-like-button${item.viewerLiked ? " is-liked" : ""}`}
+															data-action="toggle-activity-like"
+															data-activity-id={String(item.activityId || 0)}
+															data-liked={String(!!item.viewerLiked)}
+															disabled={!isAuthenticated}
+															aria-label={item.viewerLiked ? "Unlike this activity" : "Like this activity"}
+															title={!isAuthenticated ? "Log in to like activity" : ""}
+														>
+															<span class="activity-like-label">{item.viewerLiked ? "Liked" : "Like"}</span>
+														</button>
+														<span class="activity-like-count" data-like-count-static>{Math.max(0, Number(item.likeCount || 0))}</span>
+													</div>
+													<form class="activity-comment-form" data-comment-form>
+														<input
+															type="text"
+															name="comment"
+															maxlength="500"
+															placeholder="Leave a comment..."
+															{...(!isAuthenticated ? { disabled: true } : {})}
+														/>
+														<button type="submit" {...(!isAuthenticated ? { disabled: true, title: "Log in to comment" } : {})}>Post</button>
+													</form>
 												</div>
-												<form class="activity-comment-form" data-comment-form>
-													<input
-														type="text"
-														name="comment"
-														maxlength="500"
-														placeholder="Leave a comment..."
-														{...(!isAuthenticated ? { disabled: true } : {})}
-													/>
-													<button type="submit" {...(!isAuthenticated ? { disabled: true, title: "Log in to comment" } : {})}>Post</button>
-												</form>
+												<div class="activity-comments-list" data-comments-list></div>
+												<p class="activity-comment-feedback" data-comment-feedback hidden></p>
 											</div>
-											<div class="activity-comments-list" data-comments-list></div>
-											<p class="activity-comment-feedback" data-comment-feedback hidden></p>
-										</div>
+										)}
 									</BookCard>
 								))}
 							</ul>
@@ -2541,6 +2543,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		justify-content: space-between;
 		gap: 0.5rem;
 	}
+	:global(.activity-comment-meta) {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
 	:global(.activity-comment-user) {
 		color: #254f82;
 		text-decoration: underline;
@@ -2556,6 +2563,19 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		font-size: 0.78rem;
 		color: #64748b;
 		white-space: nowrap;
+	}
+	:global(.activity-comment-delete) {
+		padding: 0 0.2rem;
+		border: 0;
+		background: transparent;
+		color: #52627c;
+		font-size: 1rem;
+		line-height: 1;
+		cursor: pointer;
+	}
+	:global(.activity-comment-delete:hover),
+	:global(.activity-comment-delete:focus-visible) {
+		color: #1f2a44;
 	}
 	:global(.activity-comment-item + .activity-comment-item) {
 		margin-top: 0.22rem;
@@ -4391,13 +4411,58 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const body = String(comment?.body || "").trim();
 			if (!body) return "";
 			const ageLabel = toAgeLabel(comment?.createdAt);
+			const commentId = Math.max(0, Number(comment?.id || 0) || 0);
+			const isMine = !!comment?.isMine && commentId > 0;
 			const profileHref = `/profile/${encodeURIComponent(username)}`;
-			return `<p class="activity-comment-item"><span class="activity-comment-head"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a>${ageLabel ? `<span class="activity-comment-age">${escapeHtml(ageLabel)}</span>` : ""}</span><span class="activity-comment-body">${escapeHtml(body)}</span></p>`;
+			return `<p class="activity-comment-item"${commentId > 0 ? ` data-comment-id="${commentId}"` : ""}><span class="activity-comment-head"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a><span class="activity-comment-meta">${ageLabel ? `<span class="activity-comment-age">${escapeHtml(ageLabel)}</span>` : ""}${isMine ? `<button type="button" class="activity-comment-delete" data-action="delete-comment" data-comment-id="${commentId}" aria-label="Delete comment" title="Delete comment">&times;</button>` : ""}</span></span><span class="activity-comment-body">${escapeHtml(body)}</span></p>`;
 		};
 
 		document.addEventListener("click", async (event) => {
 			const target = event.target;
 			if (!(target instanceof HTMLElement)) return;
+			const deleteButton = target.closest('[data-action="delete-comment"]');
+			if (deleteButton instanceof HTMLButtonElement) {
+				const commentId = Number(deleteButton.dataset.commentId || 0);
+				if (!Number.isFinite(commentId) || commentId <= 0) return;
+				const commentItem = deleteButton.closest(".activity-comment-item");
+				const wrap = deleteButton.closest("[data-comments-wrap]");
+				const feedback = wrap?.querySelector("[data-comment-feedback]");
+				const activityId = Number(wrap?.getAttribute("data-activity-id") || 0);
+				deleteButton.disabled = true;
+				try {
+					const response = await fetch("/api/activity/comments", {
+						method: "DELETE",
+						headers: { "Content-Type": "application/json" },
+						credentials: "same-origin",
+						body: JSON.stringify({ commentId, activityId })
+					});
+					const data = await response.json().catch(() => ({}));
+					if (response.status === 401) {
+						window.location.href = "/?next=/profile";
+						return;
+					}
+					if (!response.ok) {
+						deleteButton.disabled = false;
+						if (feedback instanceof HTMLElement) {
+							feedback.hidden = false;
+							feedback.textContent = String(data?.error || "Failed to delete comment.");
+						}
+						return;
+					}
+					commentItem?.remove();
+					if (wrap instanceof HTMLElement) {
+						const remaining = wrap.querySelectorAll(".activity-comment-item").length;
+						wrap.dataset.commentsEmpty = remaining > 0 ? "0" : "1";
+					}
+					if (feedback instanceof HTMLElement) {
+						feedback.hidden = true;
+						feedback.textContent = "";
+					}
+				} catch {
+					deleteButton.disabled = false;
+				}
+				return;
+			}
 			const likeButton = target.closest('[data-action="toggle-activity-like"]');
 			if (!(likeButton instanceof HTMLButtonElement)) return;
 			const activityId = Number(likeButton.dataset.activityId || 0);
