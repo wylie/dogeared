@@ -3971,16 +3971,24 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			entry.finishedReflection = String(finishRating.reflection || "").trim().slice(0, 280);
 			if (!entry.title) return;
 			quickFinish.disabled = true;
+			const card = quickFinish.closest(".book-card");
+			const dropdown = card?.querySelector(".shelf-dropdown");
 			try {
 				const result = await saveShelfEntryWithRetry(entry);
 				if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
-			const card = quickFinish.closest(".book-card");
-			const dropdown = card?.querySelector(".shelf-dropdown");
 				if (dropdown) {
 					setDropdownLabel(dropdown, "finished");
 					setShelvedState(dropdown, true);
 					showShelfFeedback(dropdown, "Saved to Read.", feedbackTimers);
 					removeCardFromShelfSection(dropdown, "finished");
+				}
+				await hydrateShelfEntriesFromServer();
+				syncExistingState();
+			} catch (error) {
+				if (dropdown) {
+					showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
+				} else {
+					quickFinish.title = error instanceof Error ? error.message : "Failed to save.";
 				}
 			} finally {
 				quickFinish.disabled = false;
@@ -4004,6 +4012,62 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				return;
 			}
 			const currentPage = parsed.currentPage;
+			const shouldFinish = totalPages > 0 && currentPage >= totalPages;
+			if (shouldFinish) {
+				const finishRating = await promptForFinishRating();
+				if (finishRating.cancelled) return;
+				const finishEntry = buildShelfEntryFromRecord({
+					title: String(progressSave.dataset.title || "").trim(),
+					author: String(progressSave.dataset.author || "").trim(),
+					description: String(progressSave.dataset.description || "").trim(),
+					pageCount: totalPages,
+					coverUrl: String(progressSave.dataset.cover || "").trim(),
+					format: "Book",
+					language: String(progressSave.dataset.language || "").trim(),
+					isbn10: String(progressSave.dataset.isbn10 || "").trim(),
+					isbn13: String(progressSave.dataset.isbn13 || "").trim(),
+					googleBooksId: String(progressSave.dataset.googleBooksId || "").trim()
+				}, {
+					status: "finished",
+					totalPages,
+					currentPage: totalPages,
+					finishedDate: new Date().toISOString().slice(0, 10)
+				});
+				if (finishRating.rating) finishEntry.rating = finishRating.rating;
+				finishEntry.finishedReflection = String(finishRating.reflection || "").trim().slice(0, 280);
+				const directBookId = Math.max(0, Number(progressSave.dataset.bookId || 0) || 0);
+				if (directBookId > 0) finishEntry.bookId = directBookId;
+				if (!finishEntry.title) return;
+
+				const card = progressSave.closest(".book-card");
+				const dropdown = card?.querySelector(".shelf-dropdown");
+				const originalLabel = progressSave.textContent || "Save";
+				progressSave.disabled = true;
+				progressSave.textContent = "Saving...";
+				try {
+					const result = await saveShelfEntryWithRetry(finishEntry);
+					if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
+					if (dropdown) {
+						setDropdownLabel(dropdown, "finished");
+						setShelvedState(dropdown, true);
+						showShelfFeedback(dropdown, "Saved to Read.", feedbackTimers);
+						removeCardFromShelfSection(dropdown, "finished");
+					}
+					await hydrateShelfEntriesFromServer();
+					syncExistingState();
+				} catch (error) {
+					if (dropdown) {
+						showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
+					}
+					progressSave.textContent = "Retry";
+					setTimeout(() => {
+						progressSave.textContent = originalLabel;
+					}, 1200);
+				} finally {
+					progressSave.disabled = false;
+				}
+				return;
+			}
 
 			const entry = buildShelfEntryFromRecord({
 				title: String(progressSave.dataset.title || "").trim(),
