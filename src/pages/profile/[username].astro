@@ -4035,35 +4035,50 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				if (!result.ok) throw new Error(result.message || "Failed to save progress.");
 				persisted = true;
 				try {
+					await hydrateShelfEntriesFromServer();
+					const freshEntries = loadShelfEntries();
+					const persistedEntry = findEntry(freshEntries, {
+						bookId: Number(progressSave.dataset.bookId || 0),
+						title: String(progressSave.dataset.title || ""),
+						author: String(progressSave.dataset.author || ""),
+						isbn10: String(progressSave.dataset.isbn10 || ""),
+						isbn13: String(progressSave.dataset.isbn13 || ""),
+						googleBooksId: String(progressSave.dataset.googleBooksId || "")
+					});
+					const nextTotalPages = Math.max(0, Number((persistedEntry && persistedEntry.totalPages) || totalPages || 0) || 0);
+					const nextCurrentPage = Math.max(0, Number((persistedEntry && persistedEntry.currentPage) || currentPage || 0) || 0);
+					const updatedAtValue = String((persistedEntry && persistedEntry.updatedAt) || "").trim();
 					const progressNode = card?.querySelector(".progress-current-value");
 					if (progressNode instanceof HTMLElement) {
-						const percent = totalPages > 0 ? Math.max(0, Math.min(100, Math.round((currentPage / totalPages) * 100))) : 0;
-						progressNode.textContent = totalPages > 0
-							? `Progress: ${currentPage}/${totalPages} pages (${percent}%)`
-							: `Progress: ${currentPage} pages`;
+						const percent = nextTotalPages > 0 ? Math.max(0, Math.min(100, Math.round((nextCurrentPage / nextTotalPages) * 100))) : 0;
+						progressNode.textContent = nextTotalPages > 0
+							? `Progress: ${nextCurrentPage}/${nextTotalPages} pages (${percent}%)`
+							: `Progress: ${nextCurrentPage} pages`;
 					}
 					const progressFill = card?.querySelector(".progress-fill");
-					if (progressFill instanceof HTMLElement && totalPages > 0) {
-						const percent = Math.max(0, Math.min(100, Math.round((currentPage / totalPages) * 100)));
+					if (progressFill instanceof HTMLElement && nextTotalPages > 0) {
+						const percent = Math.max(0, Math.min(100, Math.round((nextCurrentPage / nextTotalPages) * 100)));
 						progressFill.style.width = `${percent}%`;
 					}
 					const quickFinish = card?.querySelector('[data-action="mark-finished-quick"]');
 					if (quickFinish instanceof HTMLButtonElement) {
-						quickFinish.dataset.currentPage = String(currentPage);
+						quickFinish.dataset.currentPage = String(nextCurrentPage);
+						quickFinish.dataset.totalPages = String(nextTotalPages);
 					}
 					if (card instanceof HTMLElement) {
-						card.dataset.momentumCurrentPage = String(currentPage);
-						card.dataset.momentumUpdatedAt = new Date().toISOString();
+						card.dataset.momentumCurrentPage = String(nextCurrentPage);
+						card.dataset.momentumTotalPages = String(nextTotalPages);
+						card.dataset.momentumUpdatedAt = updatedAtValue || new Date().toISOString();
 						recalcMomentumFromDom();
 					}
-					const now = new Date();
-					const updatedLabel = now.toLocaleDateString("en-US", {
+					const updatedDate = updatedAtValue ? new Date(updatedAtValue) : new Date();
+					const updatedLabel = updatedDate.toLocaleDateString("en-US", {
 						month: "long",
 						day: "numeric",
 						year: "numeric"
 					});
 					if (card instanceof HTMLElement) {
-						card.dataset.updatedAt = now.toISOString();
+						card.dataset.updatedAt = updatedAtValue || updatedDate.toISOString();
 					}
 					const dateNode = card?.querySelector(".activity-date");
 					if (dateNode instanceof HTMLElement) {
