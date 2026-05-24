@@ -418,7 +418,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			join book b on b.id = ub.book_id
 			left join book_genre bg on bg.book_id = b.id
 			where ub.user_id = ${userId}::uuid
-			group by b.id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at
+			group by b.id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection
 			order by ub.updated_at desc
 		`;
 
@@ -846,7 +846,7 @@ export const POST: APIRoute = async ({ request }) => {
 			left join book_genre bg on bg.book_id = b.id
 			where ub.user_id = ${userId}::uuid
 				and ub.book_id = ${bookId}
-			group by b.id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at
+			group by b.id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection
 			limit 1
 		`;
 		const persisted = persistedRows[0];
