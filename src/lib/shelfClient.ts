@@ -324,15 +324,20 @@ export function resolveShelfSaveMessage(result: {
 	error?: unknown;
 }) {
 	if (result.ok) return "";
+	const apiError = (result.data && typeof result.data === "object")
+		? String(
+			(result.data as Record<string, unknown>).error
+			|| (result.data as Record<string, unknown>).detail
+			|| ""
+		).trim()
+		: "";
+	if (apiError) return apiError;
 	if (result.unauthorized || result.response?.status === 401) return "Please log in to save books.";
 	if (result.response?.status === 400) return "Invalid book data. Please try again.";
 	if (result.response?.status === 409) return "Conflict while saving. Please retry.";
 	if (result.response && result.response.status >= 500) return "Server error while saving. Please retry.";
 	if (result.error) return "Network error while saving. Please retry.";
-	const apiError = (result.data && typeof result.data === "object")
-		? String((result.data as Record<string, unknown>).error || "").trim()
-		: "";
-	return apiError || "Failed to save shelf entry.";
+	return "Failed to save shelf entry.";
 }
 
 export async function saveShelfEntryWithRetry(
