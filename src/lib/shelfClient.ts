@@ -326,8 +326,8 @@ export function resolveShelfSaveMessage(result: {
 	if (result.ok) return "";
 	const apiError = (result.data && typeof result.data === "object")
 		? String(
-			(result.data as Record<string, unknown>).error
-			|| (result.data as Record<string, unknown>).detail
+			(result.data as Record<string, unknown>).detail
+			|| (result.data as Record<string, unknown>).error
 			|| ""
 		).trim()
 		: "";
