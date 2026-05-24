@@ -563,8 +563,14 @@ export const POST: APIRoute = async ({ request }) => {
 			});
 		}
 
-		const previousRows = await sql<Array<{ status: ShelfStatus; rating: number | null; current_page: number }>>`
-			select status, rating, current_page
+		const previousRows = await sql<Array<{
+			status: ShelfStatus;
+			rating: number | null;
+			current_page: number;
+			finished_date: string | null;
+			finished_reflection: string | null;
+		}>>`
+			select status, rating, current_page, finished_date::text as finished_date, coalesce(finished_reflection, '') as finished_reflection
 			from user_book
 			where user_id = ${userId}::uuid
 				and book_id = ${resolvedBookId || 0}
@@ -573,6 +579,8 @@ export const POST: APIRoute = async ({ request }) => {
 		const previousStatus = String(previousRows[0]?.status || "").trim() as ShelfStatus | "";
 		const previousRating = normalizeRating(previousRows[0]?.rating);
 		const previousCurrentPage = normalizePositiveInt(previousRows[0]?.current_page);
+		const previousFinishedDate = String(previousRows[0]?.finished_date || "").trim();
+		const previousFinishedReflection = String(previousRows[0]?.finished_reflection || "").trim().slice(0, 280);
 
 		let bookId = resolvedBookId;
 		if (bookId > 0) {
@@ -744,6 +752,26 @@ export const POST: APIRoute = async ({ request }) => {
 					${userId}::uuid,
 					${bookId},
 					${status}
+				)
+			`;
+		}
+		const finishedMetadataChanged = status === "finished" && (
+			previousStatus !== "finished"
+			|| previousRating !== rating
+			|| previousFinishedDate !== finishedDate
+			|| previousFinishedReflection !== finishedReflection
+		);
+		if (finishedMetadataChanged && previousStatus === "finished") {
+			await sql`
+				insert into user_activity (
+					user_id,
+					book_id,
+					event_type
+				)
+				values (
+					${userId}::uuid,
+					${bookId},
+					'finished'
 				)
 			`;
 		}
