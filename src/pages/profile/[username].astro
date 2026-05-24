@@ -3655,7 +3655,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		momentumHelpTooltip.style.left = `${Math.round(offset)}px`;
 	}
 
-	function promptForFinishRating() {
+	function promptForFinishRating(options = {}) {
+		const initialRating = Math.max(0, Math.min(5, Number(options?.initialRating || 0) || 0));
+		const initialReflection = String(options?.initialReflection || "").trim().slice(0, 280);
+		const initialError = String(options?.errorMessage || "").trim();
+		const onSubmit = typeof options?.onSubmit === "function" ? options.onSubmit : null;
 		return new Promise((resolve) => {
 			const existing = document.getElementById("finish-rating-overlay");
 			if (existing) existing.remove();
@@ -3693,6 +3697,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const subtitle = document.createElement("p");
 			subtitle.className = "finish-rating-subtitle";
 			subtitle.textContent = "Add a rating and an optional reflection.";
+			const errorNode = document.createElement("p");
+			errorNode.className = "finish-rating-error";
+			errorNode.hidden = !initialError;
+			errorNode.textContent = initialError;
 
 			const stars = document.createElement("div");
 			stars.className = "finish-rating-stars";
@@ -3706,6 +3714,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			reflectionInput.maxLength = 280;
 			reflectionInput.rows = 3;
 			reflectionInput.placeholder = "What stood out?";
+			reflectionInput.value = initialReflection;
 
 			const reflectionCount = document.createElement("p");
 			reflectionCount.className = "finish-reflection-count";
@@ -3742,7 +3751,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			saveButton.textContent = "Save";
 			saveButton.disabled = true;
 
-			let selectedRating = 0;
+			let selectedRating = initialRating;
 
 			const renderStars = (hoverValue = 0) => {
 				const active = hoverValue || selectedRating;
@@ -3758,6 +3767,17 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const close = (result) => {
 				overlay.remove();
 				resolve(result);
+			};
+			const setBusy = (busy) => {
+				cancelButton.disabled = busy;
+				skipButton.disabled = busy;
+				saveButton.disabled = busy || selectedRating < 1 || selectedRating > 5;
+				reflectionInput.disabled = busy;
+				for (const button of Array.from(stars.querySelectorAll("button"))) {
+					button.disabled = busy;
+				}
+				saveButton.textContent = busy ? "Saving..." : "Save";
+				skipButton.textContent = busy ? "Saving..." : "Skip";
 			};
 
 			for (let i = 1; i <= 5; i += 1) {
@@ -3786,9 +3806,36 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			}
 
 			const currentReflection = () => String(reflectionInput.value || "").trim().slice(0, 280);
+			const submitResult = async (payload) => {
+				if (!onSubmit) {
+					close(payload);
+					return;
+				}
+				errorNode.hidden = true;
+				errorNode.textContent = "";
+				setBusy(true);
+				try {
+					const result = await onSubmit(payload);
+					if (result?.ok) {
+						close(payload);
+						return;
+					}
+					errorNode.textContent = String(result?.message || "Failed to save. Please try again.");
+					errorNode.hidden = false;
+				} catch (error) {
+					errorNode.textContent = error instanceof Error ? error.message : "Failed to save. Please try again.";
+					errorNode.hidden = false;
+				} finally {
+					setBusy(false);
+				}
+			};
 			cancelButton.addEventListener("click", () => close({ cancelled: true, rating: null, reflection: "" }));
-			skipButton.addEventListener("click", () => close({ cancelled: false, rating: null, reflection: currentReflection() }));
-			saveButton.addEventListener("click", () => close({ cancelled: false, rating: selectedRating, reflection: currentReflection() }));
+			skipButton.addEventListener("click", async () => {
+				await submitResult({ cancelled: false, rating: null, reflection: currentReflection() });
+			});
+			saveButton.addEventListener("click", async () => {
+				await submitResult({ cancelled: false, rating: selectedRating, reflection: currentReflection() });
+			});
 			overlay.addEventListener("click", (event) => {
 				if (event.target === overlay) close({ cancelled: true, rating: null });
 			});
@@ -3797,11 +3844,27 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			}, { once: true });
 
 			actions.append(cancelButton, skipButton, saveButton);
-			modal.append(title, subtitle, stars, reflectionWrap, actions);
+			modal.append(title, subtitle, errorNode, stars, reflectionWrap, actions);
 			overlay.append(modal);
 			document.body.append(overlay);
 			renderStars();
 		});
+	}
+
+	async function promptAndSaveFinishedEntry(entry) {
+		const result = await promptForFinishRating({
+			onSubmit: async (finishRating) => {
+				entry.rating = finishRating.rating;
+				entry.finishedReflection = String(finishRating.reflection || "").trim().slice(0, 280);
+				const saveResult = await saveShelfEntryWithRetry(entry);
+				return {
+					ok: !!saveResult?.ok,
+					message: String(saveResult?.message || "Failed to save.")
+				};
+			}
+		});
+		if (result?.cancelled) return { ok: false, cancelled: true };
+		return { ok: true, cancelled: false };
 	}
 
 	function buildEntryFromDropdown(dropdown, status) {
@@ -3915,15 +3978,15 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				const status = option.dataset.status || "want_to_read";
 				const entry = buildEntryFromDropdown(dropdown, status);
 				if (status === "finished") {
-					const finishRating = await promptForFinishRating();
-					if (finishRating.cancelled) return;
-					if (finishRating.rating) entry.rating = finishRating.rating;
-					entry.finishedReflection = String(finishRating.reflection || "").trim().slice(0, 280);
+					const finishResult = await promptAndSaveFinishedEntry(entry);
+					if (!finishResult.ok) return;
 				}
 				if (!entry.title) return;
 				try {
-					const result = await saveShelfEntryWithRetry(entry);
-					if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
+					if (status !== "finished") {
+						const result = await saveShelfEntryWithRetry(entry);
+						if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
+					}
 					setDropdownLabel(dropdown, status);
 					setShelvedState(dropdown, true);
 					showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
@@ -3965,17 +4028,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				currentPage: finishedPage,
 				finishedDate: new Date().toISOString().slice(0, 10)
 			});
-			const finishRating = await promptForFinishRating();
-			if (finishRating.cancelled) return;
-			if (finishRating.rating) entry.rating = finishRating.rating;
-			entry.finishedReflection = String(finishRating.reflection || "").trim().slice(0, 280);
 			if (!entry.title) return;
 			quickFinish.disabled = true;
 			const card = quickFinish.closest(".book-card");
 			const dropdown = card?.querySelector(".shelf-dropdown");
 			try {
-				const result = await saveShelfEntryWithRetry(entry);
-				if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
+				const finishResult = await promptAndSaveFinishedEntry(entry);
+				if (!finishResult.ok) return;
 				if (dropdown) {
 					setDropdownLabel(dropdown, "finished");
 					setShelvedState(dropdown, true);
@@ -4014,8 +4073,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const currentPage = parsed.currentPage;
 			const shouldFinish = totalPages > 0 && currentPage >= totalPages;
 			if (shouldFinish) {
-				const finishRating = await promptForFinishRating();
-				if (finishRating.cancelled) return;
 				const finishEntry = buildShelfEntryFromRecord({
 					title: String(progressSave.dataset.title || "").trim(),
 					author: String(progressSave.dataset.author || "").trim(),
@@ -4033,8 +4090,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					currentPage: totalPages,
 					finishedDate: new Date().toISOString().slice(0, 10)
 				});
-				if (finishRating.rating) finishEntry.rating = finishRating.rating;
-				finishEntry.finishedReflection = String(finishRating.reflection || "").trim().slice(0, 280);
 				const directBookId = Math.max(0, Number(progressSave.dataset.bookId || 0) || 0);
 				if (directBookId > 0) finishEntry.bookId = directBookId;
 				if (!finishEntry.title) return;
@@ -4045,8 +4100,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				progressSave.disabled = true;
 				progressSave.textContent = "Saving...";
 				try {
-					const result = await saveShelfEntryWithRetry(finishEntry);
-					if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
+					const finishResult = await promptAndSaveFinishedEntry(finishEntry);
+					if (!finishResult.ok) return;
 					if (dropdown) {
 						setDropdownLabel(dropdown, "finished");
 						setShelvedState(dropdown, true);
@@ -4184,15 +4239,15 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const status = option.dataset.status || "want_to_read";
 			const entry = buildEntryFromDropdown(dropdown, status);
 			if (status === "finished") {
-				const finishRating = await promptForFinishRating();
-				if (finishRating.cancelled) return;
-				if (finishRating.rating) entry.rating = finishRating.rating;
-				entry.finishedReflection = String(finishRating.reflection || "").trim().slice(0, 280);
+				const finishResult = await promptAndSaveFinishedEntry(entry);
+				if (!finishResult.ok) return;
 			}
 			if (!entry.title) return;
 			try {
-				const result = await saveShelfEntryWithRetry(entry);
-				if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
+				if (status !== "finished") {
+					const result = await saveShelfEntryWithRetry(entry);
+					if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
+				}
 				setDropdownLabel(dropdown, status);
 				setShelvedState(dropdown, true);
 				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
