@@ -37,3 +37,12 @@ test("shelf removal client surfaces specific API errors", () => {
 	assert.equal(source.includes("resolveShelfRemoveMessage"), true);
 	assert.equal(source.includes("This book is already off your shelves."), true);
 });
+
+test("profile momentum messaging is onboarding-friendly and supportive", () => {
+	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
+	assert.equal(source.includes("Too early to estimate"), true);
+	assert.equal(source.includes("Add a few progress updates and Dogeared will start estimating reading momentum."), true);
+	assert.equal(source.includes("likely to finish"), false);
+	assert.equal(source.includes("At risk"), false);
+	assert.equal(source.includes("get back on track"), false);
+});
