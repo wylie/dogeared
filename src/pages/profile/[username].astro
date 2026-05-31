@@ -9,7 +9,6 @@ import { getNeonSql } from "../../lib/neon";
 import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicShelfSummary } from "../../lib/publicProfile";
 import { authorHref } from "../../lib/author";
 import { ensureCustomShelfSchema } from "../../lib/customShelves";
-import { buildReviewComment } from "../../lib/activityComments";
 
 export const prerender = false;
 
@@ -828,10 +827,6 @@ function formatActivityDate(value: string) {
 	});
 }
 
-function safeJsonAttr(value: unknown) {
-	return JSON.stringify(value).replace(/"/g, "&quot;");
-}
-
 function daysSinceDate(value: string) {
 	const parsed = new Date(String(value || "").trim());
 	if (!Number.isFinite(parsed.getTime())) return 999;
@@ -1466,17 +1461,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 											data-activity-id={String(item.activityId || 0)}
 											data-comments-empty="1"
 											data-loaded="0"
-											data-seeded-comments={safeJsonAttr(
-												(() => {
-													const seeded = buildReviewComment({
-														body: item.finishedReflection,
-														username: profile.username || requestedUsername,
-														createdAt: item.updatedAt,
-														isMine: isOwnerViewer
-													});
-													return seeded ? [seeded] : [];
-												})()
-											)}
 										>
 											<div class="activity-social-row">
 												<div class="activity-like-wrap">
@@ -4622,7 +4606,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	syncLeftNavShelfOrder(shelfSectionOrder);
 </script>
 <script type="module">
-	import { mergeActivityComments } from "../../lib/activityComments.ts";
 	const page = document.querySelector(".public-profile-page");
 	if (!(page instanceof HTMLElement)) {
 		// no-op
@@ -4657,16 +4640,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const isMine = !!comment?.isMine && commentId > 0;
 			const profileHref = `/profile/${encodeURIComponent(username)}`;
 			return `<p class="activity-comment-item"${commentId > 0 ? ` data-comment-id="${commentId}"` : ""}><span class="activity-comment-head"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a><span class="activity-comment-meta">${ageLabel ? `<span class="activity-comment-age">${escapeHtml(ageLabel)}</span>` : ""}${isMine ? `<button type="button" class="activity-comment-delete" data-action="delete-comment" data-comment-id="${commentId}" aria-label="Delete comment" title="Delete comment">&times;</button>` : ""}</span></span><span class="activity-comment-body">${escapeHtml(body)}</span></p>`;
-		};
-		const readSeededComments = (wrap) => {
-			if (!(wrap instanceof HTMLElement)) return [];
-			const raw = String(wrap.dataset.seededComments || "[]").trim();
-			try {
-				const parsed = JSON.parse(raw);
-				return Array.isArray(parsed) ? parsed : [];
-			} catch {
-				return [];
-			}
 		};
 
 		document.addEventListener("click", async (event) => {
@@ -4820,10 +4793,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				});
 				const data = await response.json().catch(() => ({}));
 				if (response.status === 401) {
-					if (list instanceof HTMLElement) {
-						const seeded = readSeededComments(wrap);
-						list.innerHTML = seeded.map((comment) => renderCommentHtml(comment)).join("");
-					}
+					if (list instanceof HTMLElement) list.innerHTML = "";
 					wrap.dataset.commentsEmpty = "1";
 					if (feedback instanceof HTMLElement) feedback.hidden = true;
 					continue;
@@ -4834,10 +4804,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				}
 				if (list instanceof HTMLElement) {
 					const comments = Array.isArray(data?.comments) ? data.comments : [];
-					const seeded = readSeededComments(wrap);
-					const merged = mergeActivityComments(seeded, comments);
-					list.innerHTML = merged.map((comment) => renderCommentHtml(comment)).join("");
-					wrap.dataset.commentsEmpty = merged.length > 0 ? "0" : "1";
+					list.innerHTML = comments.map((comment) => renderCommentHtml(comment)).join("");
+					wrap.dataset.commentsEmpty = comments.length > 0 ? "0" : "1";
 				}
 				if (feedback instanceof HTMLElement) feedback.hidden = true;
 			} catch {

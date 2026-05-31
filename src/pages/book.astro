@@ -8,7 +8,7 @@ import { getNeonSql } from "../lib/neon";
 import { getEncryptionKey, resolveUserBySession } from "../lib/auth";
 import { authorHref } from "../lib/author";
 import { normalizeGenreEntry } from "../lib/genres";
-import { buildReviewComment } from "../lib/activityComments";
+import { buildBookReviewList, type BookReview } from "../lib/bookReviews";
 
 export const prerender = false;
 
@@ -101,10 +101,6 @@ function activityHeading(eventType: string) {
 	return { prefix: "Updated shelf", shelf: "" };
 }
 
-function safeJsonAttr(value: unknown) {
-	return JSON.stringify(value).replace(/"/g, "&quot;");
-}
-
 function formatTopicLabel(value: string) {
 	return normalizeText(value)
 		.replace(/[-_]+/g, " ")
@@ -166,16 +162,15 @@ const queryAuthor = normalizeText(params.get("author"));
 let book: BookDetails | null = null;
 let activity: Array<{
 	id: number;
-	actorUserId: string;
 	eventType: string;
 	timestamp: string;
 	actorName: string;
 	actorUsername: string;
 	rating: number;
-	finishedReflection: string;
 	likeCount: number;
 	viewerLiked: boolean;
 }> = [];
+let reviews: BookReview[] = [];
 let errorMessage = "";
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
@@ -473,36 +468,32 @@ try {
 		const encryptionKey = getEncryptionKey();
 		let activityRows: Array<{
 			id: number;
-			actor_user_id: string;
 			event_type: string;
 			created_at: string;
 			username: string | null;
 			email_local: string | null;
 			rating: number | null;
-			finished_reflection: string | null;
 			like_count: number;
 			viewer_liked: boolean;
 		}> = [];
 		try {
 			activityRows = await sql<Array<{
 				id: number;
-				actor_user_id: string;
 				event_type: string;
 				created_at: string;
 				username: string | null;
 				email_local: string | null;
+				rating: number | null;
 				like_count: number;
 				viewer_liked: boolean;
 			}>>`
 				select
 					ua.id,
-					ua.user_id::text as actor_user_id,
 					ua.event_type,
 					ua.created_at::text as created_at,
 					au.username,
 					nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local,
 					coalesce(ub.rating, ua.rating) as rating,
-					coalesce(ub.finished_reflection, '') as finished_reflection,
 					coalesce(la.like_count, 0)::int as like_count,
 					coalesce(la.viewer_liked, false) as viewer_liked
 				from user_activity ua
@@ -522,12 +513,12 @@ try {
 		} catch {
 			activityRows = await sql<Array<{
 				id: number;
+				actor_user_id: string;
 				event_type: string;
 				created_at: string;
 				username: string | null;
 				email_local: string | null;
 				rating: number | null;
-				finished_reflection: string | null;
 				like_count: number;
 				viewer_liked: boolean;
 			}>>`
@@ -539,7 +530,6 @@ try {
 					au.username,
 					nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local,
 					coalesce(ub.rating, ua.rating) as rating,
-					coalesce(ub.finished_reflection, '') as finished_reflection,
 					0::int as like_count,
 					false as viewer_liked
 				from user_activity ua
@@ -552,16 +542,36 @@ try {
 		}
 		activity = activityRows.map((item) => ({
 			id: Math.max(0, Number(item.id || 0)),
-			actorUserId: normalizeText(item.actor_user_id),
 			eventType: normalizeText(item.event_type),
 			timestamp: item.created_at,
 			actorUsername: normalizeText(item.username),
 			actorName: normalizeText(item.username) || normalizeText(item.email_local) || "A Reader",
 			rating: Math.max(0, Math.min(5, Number(item.rating || 0) || 0)),
-			finishedReflection: normalizeText(item.finished_reflection),
 			likeCount: Math.max(0, Number(item.like_count || 0)),
 			viewerLiked: !!item.viewer_liked
 		}));
+		const reviewRows = await sql<Array<{
+			user_id: string;
+			username: string | null;
+			email_local: string | null;
+			rating: number | null;
+			finished_reflection: string | null;
+			updated_at: string;
+		}>>`
+			select
+				ub.user_id::text as user_id,
+				au.username,
+				nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local,
+				ub.rating,
+				ub.finished_reflection,
+				ub.updated_at::text as updated_at
+			from user_book ub
+			join app_user au on au.id = ub.user_id
+			where ub.book_id = ${book.id}
+				and char_length(trim(coalesce(ub.finished_reflection, ''))) > 0
+			order by ub.updated_at desc, ub.user_id asc
+		`;
+		reviews = buildBookReviewList(reviewRows);
 	} else {
 		const google = await fetchGoogleBook();
 		if (google) {
@@ -807,6 +817,23 @@ const bookStructuredDataPayload = bookStructuredData
 						synopsisBlocks.map((paragraph) => <p class="synopsis-text">{paragraph}</p>)
 					)}
 				</section>
+				<section class="panel reviews-panel">
+					<h2>Reviews</h2>
+					{reviews.length === 0 ? (
+						<p>No written reviews for this book yet.</p>
+					) : (
+						<ul class="reviews-list">
+							{reviews.map((review) => (
+								<li class="review-card">
+									<p class="review-rating">{renderAverageStars(review.rating)} {review.rating}/5</p>
+									<p class="review-user">@{review.username.replace(/^@+/, "")}</p>
+									<p class="review-date">{formatActivityDate(review.reviewDate)}</p>
+									<p class="review-body">{review.body}</p>
+								</li>
+							))}
+						</ul>
+					)}
+				</section>
 
 				<section class="panel activity-panel">
 					<h2>Recent Activity</h2>
@@ -860,17 +887,6 @@ const bookStructuredDataPayload = bookStructuredData
 										data-activity-id={String(item.id || 0)}
 										data-comments-empty="1"
 										data-loaded="0"
-										data-seeded-comments={safeJsonAttr(
-											(() => {
-												const seeded = buildReviewComment({
-													body: item.finishedReflection,
-													username: item.actorUsername || item.actorName,
-													createdAt: item.timestamp,
-													isMine: !!session?.userId && String(session.userId) === String(item.actorUserId || "")
-												});
-												return seeded ? [seeded] : [];
-											})()
-										)}
 									>
 										<div class="activity-social-row">
 											<div class="activity-like-wrap">
@@ -907,7 +923,6 @@ const bookStructuredDataPayload = bookStructuredData
 </Layout>
 
 <script type="module">
-	import { mergeActivityComments } from "../lib/activityComments.ts";
 	const root = document.querySelector(".book-page");
 	if (root instanceof HTMLElement) {
 		const isAuthenticated = root.dataset.authenticated === "true";
@@ -940,16 +955,6 @@ const bookStructuredDataPayload = bookStructuredData
 			const isMine = !!comment?.isMine && commentId > 0;
 			const profileHref = `/profile/${encodeURIComponent(username)}`;
 			return `<p class="activity-comment-item"${commentId > 0 ? ` data-comment-id="${commentId}"` : ""}><span class="activity-comment-head"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a><span class="activity-comment-meta">${ageLabel ? `<span class="activity-comment-age">${escapeHtml(ageLabel)}</span>` : ""}${isMine ? `<button type="button" class="activity-comment-delete" data-action="delete-comment" data-comment-id="${commentId}" aria-label="Delete comment" title="Delete comment">&times;</button>` : ""}</span></span><span class="activity-comment-body">${escapeHtml(body)}</span></p>`;
-		};
-		const readSeededComments = (wrap) => {
-			if (!(wrap instanceof HTMLElement)) return [];
-			const raw = String(wrap.dataset.seededComments || "[]").trim();
-			try {
-				const parsed = JSON.parse(raw);
-				return Array.isArray(parsed) ? parsed : [];
-			} catch {
-				return [];
-			}
 		};
 
 		document.addEventListener("click", async (event) => {
@@ -1099,10 +1104,7 @@ const bookStructuredDataPayload = bookStructuredData
 				const response = await fetch(`/api/activity/comments?activityId=${encodeURIComponent(String(activityId))}`, { credentials: "same-origin" });
 				const data = await response.json().catch(() => ({}));
 				if (response.status === 401) {
-					if (list instanceof HTMLElement) {
-						const seeded = readSeededComments(wrap);
-						list.innerHTML = seeded.map((comment) => renderCommentHtml(comment)).join("");
-					}
+					if (list instanceof HTMLElement) list.innerHTML = "";
 					if (feedback instanceof HTMLElement) feedback.hidden = true;
 					continue;
 				}
@@ -1112,9 +1114,7 @@ const bookStructuredDataPayload = bookStructuredData
 				}
 				if (list instanceof HTMLElement) {
 					const comments = Array.isArray(data?.comments) ? data.comments : [];
-					const seeded = readSeededComments(wrap);
-					const merged = mergeActivityComments(seeded, comments);
-					list.innerHTML = merged.map((comment) => renderCommentHtml(comment)).join("");
+					list.innerHTML = comments.map((comment) => renderCommentHtml(comment)).join("");
 				}
 				if (feedback instanceof HTMLElement) feedback.hidden = true;
 			} catch {
@@ -1204,6 +1204,45 @@ const bookStructuredDataPayload = bookStructuredData
 	.synopsis-panel { line-height: 1.7; }
 	.synopsis-text { margin: 0.75rem 0 0; font-size: 1.04rem; color: #252525; }
 	.synopsis-text:first-of-type { margin-top: 0.2rem; }
+	.reviews-panel { border: none; background: transparent; padding: 0; }
+	.reviews-list {
+		list-style: none;
+		margin: 0.6rem 0 0;
+		padding: 0;
+		display: grid;
+		gap: 0.65rem;
+	}
+	.review-card {
+		background: #fffef7;
+		border: 1px solid #ecd8b7;
+		border-radius: 12px;
+		padding: 0.7rem;
+	}
+	.review-rating {
+		margin: 0;
+		font-size: 0.92rem;
+		font-weight: 700;
+		color: var(--color-rating);
+	}
+	.review-user {
+		margin: 0.3rem 0 0;
+		font-size: 0.86rem;
+		font-weight: 700;
+		color: var(--color-secondary);
+	}
+	.review-date {
+		margin: 0.14rem 0 0;
+		font-size: 0.8rem;
+		color: #5b6470;
+	}
+	.review-body {
+		margin: 0.42rem 0 0;
+		font-size: 0.92rem;
+		color: #1f2937;
+		line-height: 1.45;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
 	.activity-panel { border: none; background: transparent; padding: 0; }
 	.activity-grid { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.activity-headline { font-weight: 700; color: #2f2f2f; }
@@ -1330,6 +1369,7 @@ const bookStructuredDataPayload = bookStructuredData
 	.error { color: #991b1b; }
 	@media (max-width: 860px) {
 		.activity-grid { grid-template-columns: 1fr; }
+		.review-card { padding: 0.65rem; }
 	}
 	@media (max-width: 760px) {}
 </style>
