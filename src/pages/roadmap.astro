@@ -12,189 +12,69 @@ const SUPPORT_LINKS = {
 
 const roadmapItems = [
 	{
-		status: "Finished",
-		title: "Security + Dependency Maintenance",
-		description: "Added weekly Dependabot updates, automated dependency/security checks, and release-process guidance for recurring maintenance."
+		status: "Now",
+		title: "Recommendations",
+		description: "Find books you are likely to love with signals like “Because you liked Murderbot,” similar authors, similar genres, and similar readers. Reader benefit: less time searching, more great books."
 	},
 	{
 		status: "Now",
-		title: "Reader Onboarding v2",
-		description: "Guide new readers through importing, setting favorites, following people, and rating a few read books."
-	},
-	{
-		status: "Finished",
-		title: "Custom Shelves",
-		description: "Let readers create and manage their own shelves beyond the defaults, including naming, ordering, and assigning books."
-	},
-	{
-		status: "Finished",
-		title: "SEO Foundation Pass",
-		description: "Shipped robots+sitemap endpoints, route-level canonical and robots controls, plus structured data for key public pages and cleaner index hygiene on private/internal surfaces."
+		title: "Reader Onboarding",
+		description: "Get new readers to a useful library fast with import, starter ratings, follows, and reading preferences. Reader benefit: better personalization in the first session."
 	},
 	{
 		status: "Next",
-		title: "Google Search Console Discoverability",
-		description: "Set up and monitor Search Console coverage, sitemaps, indexing, and query performance so Dogeared ranks cleanly in Google search."
-	},
-	{
-		status: "Now",
-		title: "Ratings + Taste Signals",
-		description: "Use ratings, follows, favorite books, and shelf behavior to improve recommendations and reader discovery."
+		title: "Followed Readers Feed",
+		description: "See what people you follow are reading, rating, and recommending in one clean feed. Reader benefit: discover books through readers you already trust."
 	},
 	{
 		status: "Next",
-		title: "Recommendations v1",
-		description: "Ship lightweight “because you shelved X” recommendations from genre and author overlap."
-	},
-	{
-		status: "Next",
-		title: "Richer Metrics Views",
-		description: "Expand drill-downs from authors to genres, tags, and location snapshots with cleaner exportable views."
-	},
-	{
-		status: "Next",
-		title: "Related Page UX Refresh",
-		description: "Rethink the Related detail page layout and hierarchy so drill-down context is clearer and the page feels intentional even with sparse result sets."
-	},
-	{
-		status: "Now",
-		title: "Accessibility Pass",
-		description: "Tighten keyboard flows, focus states, screen-reader labels, reduced motion, and contrast across core workflows."
-	},
-	{
-		status: "Next",
-		title: "Mobile Reading Workflow Pass",
-		description: "Tune add-to-shelf, progress updates, ratings, and search specifically for small screens."
-	},
-	{
-		status: "Next",
-		title: "Library Export Improvements",
-		description: "Export filtered shelves, ratings, progress, and profile data in friendlier CSV and JSON formats."
-	},
-	{
-		status: "Next",
-		title: "Completion Reviews (UI + Feed + Storage)",
-		description: "Let readers add a short review when marking a book as Read, then show that review in Following activity and Profile views with a clean DB model for create/edit timestamps and queryable feed rendering."
+		title: "Related Books",
+		description: "Every book page answers “If I liked this, what should I read next?” with stronger related suggestions. Reader benefit: better discovery from every detail page."
 	},
 	{
 		status: "Later",
-		title: "Reading Trends Over Time",
-		description: "Add month-over-month trend lines for genres, completion rates, and reading velocity."
+		title: "Reading Taste Profile",
+		description: "Summarize your favorite genres, themes, and reading patterns into a personal taste profile. Reader benefit: recommendations that feel tailored to you."
 	},
 	{
 		status: "Later",
-		title: "Review Notes / Private Notes",
-		description: "Let readers add private notes or short public blurbs to rated and read books."
+		title: "Reading Stats & Insights",
+		description: "Expand reading metrics and trends so you can understand your habits over time. Reader benefit: clearer progress and reading patterns."
 	},
 	{
 		status: "Later",
-		title: "Public Sharing Cards",
-		description: "Create polished preview cards for profiles, books, shelves, and reading goals when shared."
+		title: "Series Tracking",
+		description: "Track completed books, next-in-series, and what remains. Reader benefit: never lose track of a series again."
 	},
 	{
 		status: "Later",
-		title: "Notification Preferences + Email Digests",
-		description: "Add per-user digest preferences for follows, ratings, and reading activity before browser notifications."
+		title: "Book Lists",
+		description: "Create and share collections like favorite sci-fi, books about nature, or beginner-friendly picks. Reader benefit: organize and share recommendations."
 	},
 	{
 		status: "Later",
-		title: "Browser Notifications",
-		description: "Add opt-in browser notifications for key events like follows, reading reminders, and activity digests with per-user controls."
+		title: "Goodreads Import + Migration",
+		description: "Add migration paths for Goodreads CSV, StoryGraph, and other library handoff tools. Reader benefit: move your library without starting over."
 	},
 	{
 		status: "Later",
-		title: "Audiobooks Support",
-		description: "Add audiobook-specific search, edition handling, and shelf views once core book workflows are fully stable."
+		title: "Recommendations Expansion",
+		description: "Expand recommendation phases for author similarity, genre similarity, and reader-similarity models. Reader benefit: deeper discovery beyond one-off suggestions."
 	},
 	{
-		status: "Finished",
-		title: "Import Pipeline Reliability",
-		description: "Made Goodreads/CSV imports idempotent with dry-run planning, duplicate protection, retrying sync, and clearer progress."
+		status: "Later",
+		title: "Reading Goals",
+		description: "Support yearly goals, monthly goals, and streak tracking. Reader benefit: keep momentum without losing the joy of reading."
 	},
 	{
-		status: "Finished",
-		title: "Data Quality & Metadata Backfills",
-		description: "Added recurring metadata backfill orchestration, scheduled automation, and quality coverage reporting for authors/books."
+		status: "Later",
+		title: "Community Discovery",
+		description: "Discover readers, reviewers, and lists that match your interests. Reader benefit: more trusted paths to your next favorite book."
 	},
 	{
-		status: "Finished",
-		title: "Performance & Caching Pass",
-		description: "Added cache headers/runtime memoization for read APIs and capped heavy metrics payload generation for faster repeat loads."
-	},
-	{
-		status: "Finished",
-		title: "Production QA + Monitoring",
-		description: "Added CI smoke coverage for critical endpoints plus scheduled production health/API checks with automatic issue alerts."
-	},
-	{
-		status: "Finished",
-		title: "Admin/Data Health Dashboard",
-		description: "Shipped an admin-only dashboard with metadata gap coverage, import reliability signals, duplicate clusters, and backfill movement."
-	},
-	{
-		status: "Finished",
-		title: "Rating UX Polish",
-		description: "Cleaned up editable rating controls, rating feedback, clear actions, and community-versus-personal rating presentation."
-	},
-	{
-		status: "Finished",
-		title: "Release Workflow + Main Protection",
-		description: "Added semantic versioning, changelog tracking, GitHub Releases, CI checks, and branch protection rules for main."
-	},
-	{
-		status: "Finished",
-		title: "Following Activity Feed",
-		description: "Shipped Following as a logged-in activity page with reader discovery, follow management, and followed-reader shelf activity."
-	},
-	{
-		status: "Finished",
-		title: "Book Ratings",
-		description: "Let readers rate books from key surfaces and feed those ratings into profile, activity, and book pages."
-	},
-	{
-		status: "Finished",
-		title: "Profile & Library Polish",
-		description: "Refined profile pages, responsive book cards, mobile navigation, section highlighting, and book metadata presentation."
-	},
-	{
-		status: "Finished",
-		title: "New Account Creation",
-		description: "Added a clear sign-up flow so new readers can create an account, set a username, and land in profile setup."
-	},
-	{
-		status: "Finished",
-		title: "Genre Cleanup & Normalization",
-		description: "Deduplicate genres, split combo genres, and standardize genre names/slugs so shelves and discovery stay clean."
-	},
-	{
-		status: "Finished",
-		title: "Shelf & Search Reliability",
-		description: "Improve add-to-shelf flows, deduplication, and search result quality so the core reading workflow is dependable."
-	},
-	{
-		status: "Finished",
-		title: "Public Profiles + Follow Graph Foundations",
-		description: "Shipped public profile privacy gates, follow relationships, and profile activity views for multi-user groundwork."
-	},
-	{
-		status: "Finished",
-		title: "Auth & Account Hardening",
-		description: "Tighten sign-in/session behavior, account recovery, and auth error handling so onboarding is stable."
-	},
-	{
-		status: "Finished",
-		title: "Centralized Auth State + Local Auth Preview",
-		description: "Unified auth handling across the site with localhost-only auth state preview switching for fast UX checks."
-	},
-	{
-		status: "Finished",
-		title: "Reusable Book Card System",
-		description: "Standardized book display UI across index, profile, search, and book pages with shared components."
-	},
-	{
-		status: "Finished",
-		title: "Core Site Setup & Stabilization",
-		description: "Finish baseline setup, tighten navigation and mobile UX, and make key pages feel consistent and reliable."
+		status: "Later",
+		title: "Series Tracking Expansion",
+		description: "Add reading order support, full series completion views, and upcoming releases. Reader benefit: finish series in the right order with less effort."
 	}
 ];
 
@@ -202,7 +82,6 @@ const statusOrder: Record<string, number> = { Now: 0, Next: 1, Later: 2 };
 const activeRoadmapItems = roadmapItems
 	.filter((item) => item.status !== "Finished")
 	.sort((a, b) => (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99));
-const finishedRoadmapItems = roadmapItems.filter((item) => item.status === "Finished");
 
 const supportOptions = [
 	{
@@ -278,25 +157,6 @@ const supportOptions = [
 					</article>
 				))}
 			</div>
-			{finishedRoadmapItems.length > 0 && (
-				<>
-					<div class="panel-head finished-head">
-						<h3>Finished</h3>
-					</div>
-					<div class="roadmap-grid finished-grid">
-						{finishedRoadmapItems.map((item, index) => (
-							<article class="roadmap-item roadmap-item-finished">
-								<div class="roadmap-item-head">
-									<p class="status-pill status-finished">Finished</p>
-									<p class="rank-pill finished-rank-pill">#{index + 1}</p>
-								</div>
-								<h3>{item.title}</h3>
-								<p>{item.description}</p>
-							</article>
-						))}
-					</div>
-				</>
-			)}
 		</section>
 
 	</div>
@@ -349,10 +209,6 @@ const supportOptions = [
 	.status-later { background: #e8e8e8; color: #5e5e5e; }
 	.status-finished { background: #dbeafe; color: #1e40af; }
 	.finished-rank-pill { background: #e2e8f0; color: #475569; }
-	.finished-head { margin-top: 0.9rem; }
-	.finished-head h3 { margin: 0; font-size: 1rem; }
-	.finished-grid { margin-top: 0.45rem; }
-	.roadmap-item-finished { background: #f8fbff; }
 	.support-grid { margin-top: 0.7rem; display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.support-card { border: none; border-radius: 12px; padding: 0.75rem; background: #fcfbf8; display: flex; flex-direction: column; min-height: 180px; }
 	.support-card h3 { margin: 0; font-size: 1rem; }

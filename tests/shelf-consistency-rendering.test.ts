@@ -14,3 +14,24 @@ test("comment loading text is not rendered for passive card hydration", () => {
 	assert.equal(profileSource.includes("Loading comments..."), false);
 	assert.equal(bookSource.includes("Loading comments..."), false);
 });
+
+test("mobile comment form buttons enforce symmetric padding and min width", () => {
+	const profileSource = readFileSync("src/pages/profile/[username].astro", "utf8");
+	assert.equal(profileSource.includes("min-width: 3.1rem;"), true);
+	assert.equal(profileSource.includes("padding: 0 0.9rem;"), true);
+});
+
+test("roadmap prioritizes reader-facing ordering", () => {
+	const source = readFileSync("src/pages/roadmap.astro", "utf8");
+	const idxRecommendations = source.indexOf('title: "Recommendations"');
+	const idxOnboarding = source.indexOf('title: "Reader Onboarding"');
+	const idxFollowedFeed = source.indexOf('title: "Followed Readers Feed"');
+	const idxRelated = source.indexOf('title: "Related Books"');
+	assert.ok(idxRecommendations > -1);
+	assert.ok(idxOnboarding > -1);
+	assert.ok(idxFollowedFeed > -1);
+	assert.ok(idxRelated > -1);
+	assert.ok(idxRecommendations < idxOnboarding);
+	assert.ok(idxOnboarding < idxFollowedFeed);
+	assert.ok(idxFollowedFeed < idxRelated);
+});
