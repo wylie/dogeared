@@ -215,6 +215,8 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 		synopsis: string;
 		event_type: string;
 		created_at: string;
+		rating: number | null;
+		finished_reflection: string | null;
 	}>>`
 		select
 			ua.book_id,
@@ -229,10 +231,13 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 			b.synopsis,
 			ua.event_type,
 			ua.created_at::text as created_at
+			,ub.rating
+			,coalesce(ub.finished_reflection, '') as finished_reflection
 		from user_activity ua
 		join book b on b.id = ua.book_id
+		left join user_book ub on ub.user_id = ua.user_id and ub.book_id = ua.book_id
 		where ua.user_id = ${targetUserId}::uuid
-			and ua.event_type in ('want_to_read', 'reading', 'finished')
+			and ua.event_type in ('want_to_read', 'reading', 'finished', 'rating')
 		order by ua.created_at desc, ua.id desc
 		limit ${safeLimit * 4}
 	`;
@@ -251,6 +256,8 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 		isbn13: string;
 		description: string;
 		updatedAt: string;
+		rating: number;
+		finishedReflection: string;
 	}>();
 
 	for (const row of rows) {
@@ -269,25 +276,15 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 			isbn10: normalizeText(row.isbn10),
 			isbn13: normalizeText(row.isbn13),
 			description: normalizeText(row.synopsis),
-			updatedAt: row.created_at
+			updatedAt: row.created_at,
+			rating: Math.max(0, Math.min(5, Number(row.rating || 0) || 0)),
+			finishedReflection: normalizeText(row.finished_reflection)
 		});
 		if (byBook.size >= safeLimit) break;
 	}
 
 	const deduped = Array.from(byBook.values());
 	if (deduped.length === 0) return deduped;
-
-	const ratingRows = await sql<Array<{ book_id: number; rating: number | null }>>`
-		select book_id, rating
-		from user_book
-		where user_id = ${targetUserId}::uuid
-			and book_id = any(${deduped.map((item) => item.bookId)}::bigint[])
-	`;
-	const ratingByBook = new Map<number, number>();
-	for (const row of ratingRows) {
-		const rating = Number(row.rating || 0);
-		if (rating >= 1 && rating <= 5) ratingByBook.set(Number(row.book_id || 0), rating);
-	}
 
 	const activityIds = deduped.map((item) => item.activityId).filter((id) => id > 0);
 	const likeByActivityId = new Map<number, { likeCount: number; viewerLiked: boolean }>();
@@ -316,7 +313,6 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 
 	return deduped.map((item) => ({
 		...item,
-		rating: ratingByBook.get(item.bookId) || 0,
 		likeCount: likeByActivityId.get(item.activityId)?.likeCount || 0,
 		viewerLiked: likeByActivityId.get(item.activityId)?.viewerLiked || false
 	}));

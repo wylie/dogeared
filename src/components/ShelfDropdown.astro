@@ -101,6 +101,15 @@ try {
 				))}
 			</>
 		)}
+		<div class="shelf-option-divider" role="separator" aria-hidden="true"></div>
+		<button
+			type="button"
+			class="shelf-option shelf-option-danger"
+			data-action="remove-from-shelves"
+		>
+			<span class="material-icons shelf-option-icon" aria-hidden="true">remove_circle</span>
+			<span>Remove from Shelves</span>
+		</button>
 	</div>
 	<p class="shelf-feedback" hidden></p>
 </div>
@@ -194,14 +203,14 @@ try {
 		background: #ececec;
 	}
 	.shelf-feedback {
-		position: absolute;
-		top: calc(100% + 6px);
-		right: 0;
-		margin: 0;
+		position: static;
+		margin: 0.28rem 0 0;
+		max-width: 100%;
 		font-size: 0.82rem;
 		color: var(--color-secondary);
 		line-height: 1.25;
-		white-space: nowrap;
+		white-space: normal;
+		overflow-wrap: anywhere;
 		background: transparent !important;
 		border: none !important;
 		border-radius: 0 !important;
@@ -209,5 +218,11 @@ try {
 		outline: none !important;
 		padding: 0 !important;
 		z-index: 40;
+	}
+	.shelf-option-danger {
+		color: #8a1d1d;
+	}
+	.shelf-option-danger .shelf-option-icon {
+		color: #8a1d1d;
 	}
 </style>

@@ -165,6 +165,8 @@ let activity: Array<{
 	timestamp: string;
 	actorName: string;
 	actorUsername: string;
+	rating: number;
+	finishedReflection: string;
 	likeCount: number;
 	viewerLiked: boolean;
 }> = [];
@@ -469,6 +471,8 @@ try {
 			created_at: string;
 			username: string | null;
 			email_local: string | null;
+			rating: number | null;
+			finished_reflection: string | null;
 			like_count: number;
 			viewer_liked: boolean;
 		}> = [];
@@ -488,10 +492,13 @@ try {
 					ua.created_at::text as created_at,
 					au.username,
 					nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local,
+					coalesce(ub.rating, ua.rating) as rating,
+					coalesce(ub.finished_reflection, '') as finished_reflection,
 					coalesce(la.like_count, 0)::int as like_count,
 					coalesce(la.viewer_liked, false) as viewer_liked
 				from user_activity ua
 				join app_user au on au.id = ua.user_id
+				left join user_book ub on ub.user_id = ua.user_id and ub.book_id = ua.book_id
 				left join lateral (
 					select
 						count(*)::int as like_count,
@@ -510,6 +517,8 @@ try {
 				created_at: string;
 				username: string | null;
 				email_local: string | null;
+				rating: number | null;
+				finished_reflection: string | null;
 				like_count: number;
 				viewer_liked: boolean;
 			}>>`
@@ -519,10 +528,13 @@ try {
 					ua.created_at::text as created_at,
 					au.username,
 					nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local,
+					coalesce(ub.rating, ua.rating) as rating,
+					coalesce(ub.finished_reflection, '') as finished_reflection,
 					0::int as like_count,
 					false as viewer_liked
 				from user_activity ua
 				join app_user au on au.id = ua.user_id
+				left join user_book ub on ub.user_id = ua.user_id and ub.book_id = ua.book_id
 				where ua.book_id = ${book.id}
 				order by ua.created_at desc, ua.id desc
 				limit 40
@@ -534,6 +546,8 @@ try {
 			timestamp: item.created_at,
 			actorUsername: normalizeText(item.username),
 			actorName: normalizeText(item.username) || normalizeText(item.email_local) || "A Reader",
+			rating: Math.max(0, Math.min(5, Number(item.rating || 0) || 0)),
+			finishedReflection: normalizeText(item.finished_reflection),
 			likeCount: Math.max(0, Number(item.like_count || 0)),
 			viewerLiked: !!item.viewer_liked
 		}));
@@ -811,6 +825,8 @@ const bookStructuredDataPayload = bookStructuredData
 									</p>
 									<div slot="meta">
 										{!item.actorUsername && <p class="meta">{item.actorName}</p>}
+										{item.rating > 0 && <p class="meta rating-meta">{renderAverageStars(item.rating)} {item.rating}/5</p>}
+										{item.finishedReflection && <p class="meta">“{item.finishedReflection}”</p>}
 									</div>
 									<div slot="actions">
 										<ShelfDropdown attrs={{
@@ -1292,6 +1308,7 @@ const bookStructuredDataPayload = bookStructuredData
 		showShelfFeedback,
 		statusLabel,
 		saveShelfEntryWithRetry,
+		removeBookFromAllShelvesOnServer,
 		toggleShelfMenu,
 		initRatingControls
 	} from "../lib/shelfClient.ts";
@@ -1362,6 +1379,25 @@ const bookStructuredDataPayload = bookStructuredData
 			}
 
 			const option = target.closest('[data-action="set-shelf"]');
+			const removeOption = target.closest('[data-action="remove-from-shelves"]');
+			if (removeOption) {
+				closeShelfMenus([dropdown]);
+				if (!isAuthenticated) {
+					promptForShelfLogin();
+					return;
+				}
+				const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
+				if (!bookId) return;
+				const result = await removeBookFromAllShelvesOnServer(bookId);
+				if (result.ok) {
+					setShelvedState(dropdown, false);
+					setDropdownLabel(dropdown, "");
+					showShelfFeedback(dropdown, "Removed from shelves.", feedbackTimers);
+				} else {
+					showShelfFeedback(dropdown, "Failed to remove from shelves.", feedbackTimers);
+				}
+				return;
+			}
 			if (!option) return;
 			const status = String(option.getAttribute("data-status") || "want_to_read");
 			closeShelfMenus([dropdown]);

@@ -800,6 +800,7 @@ function activityHeading(eventType: string) {
 	if (type === "reading") return { prefix: "Added to", shelf: "Currently Reading" };
 	if (type === "finished") return { prefix: "Finished Reading", shelf: "" };
 	if (type === "want_to_read") return { prefix: "Added to", shelf: "Want to Read" };
+	if (type === "rating") return { prefix: "Rated this book", shelf: "" };
 	return { prefix: "Added to", shelf: "Shelf" };
 }
 
@@ -1431,13 +1432,12 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 											)}
 										</p>
 										<div slot="meta">
-											{String(item.eventType || "").trim().toLowerCase() === "finished" && (
-												isOwnerViewer ? (
-													<RatingControl bookId={item.bookId} rating={item.rating} editable={true} />
-												) : (
-													item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>
-												)
+											{String(item.eventType || "").trim().toLowerCase() === "finished" && isOwnerViewer ? (
+												<RatingControl bookId={item.bookId} rating={item.rating} editable={true} />
+											) : (
+												item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>
 											)}
+											{String(item.finishedReflection || "").trim() && <p class="meta">“{item.finishedReflection}”</p>}
 										</div>
 										<div slot="actions">
 											<ShelfDropdown attrs={{
@@ -3095,6 +3095,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	import {
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
+		removeBookFromAllShelvesOnServer,
 		setDropdownLabel,
 		setShelvedState,
 		showShelfFeedback,
@@ -3577,6 +3578,20 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		return Math.max(0, Math.floor((Date.now() - parsed.getTime()) / (1000 * 60 * 60 * 24)));
 	}
 
+	function safeFormatActivityDate(value) {
+		const parsed = new Date(String(value || "").trim());
+		if (!Number.isFinite(parsed.getTime())) return "";
+		return parsed.toLocaleDateString("en-US", {
+			month: "long",
+			day: "numeric",
+			year: "numeric"
+		});
+	}
+
+	async function removeBookFromAllShelves(bookId) {
+		return removeBookFromAllShelvesOnServer(bookId);
+	}
+
 	function readingHealth(daysSinceUpdate) {
 		if (daysSinceUpdate <= 2) return { label: "On track", tone: "good", recencyScore: 1 };
 		if (daysSinceUpdate <= 7) return { label: "Steady", tone: "neutral", recencyScore: 0.68 };
@@ -3975,6 +3990,24 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					}
 					return;
 				}
+				if (action === "remove-from-shelves") {
+					const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
+					if (!bookId) return;
+					try {
+						const result = await removeBookFromAllShelves(bookId);
+						if (!result.ok) throw new Error("Failed to remove from shelves.");
+						setDropdownLabel(dropdown, "");
+						setShelvedState(dropdown, false);
+						showShelfFeedback(dropdown, "Removed from shelves.", feedbackTimers);
+						removeCardFromShelfSection(dropdown, "remove");
+						closeShelfMenus(shelfDropdowns);
+						await hydrateShelfEntriesFromServer();
+						syncExistingState();
+					} catch (error) {
+						showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to remove.", feedbackTimers);
+					}
+					return;
+				}
 				const status = option.dataset.status || "want_to_read";
 				const entry = buildEntryFromDropdown(dropdown, status);
 				if (status === "finished") {
@@ -4154,16 +4187,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				if (!result.ok) throw new Error(result.message || "Failed to save progress.");
 				persisted = true;
 				try {
-					await hydrateShelfEntriesFromServer();
-					const freshEntries = loadShelfEntries();
-					const persistedEntry = findEntry(freshEntries, {
-						bookId: Number(progressSave.dataset.bookId || 0),
-						title: String(progressSave.dataset.title || ""),
-						author: String(progressSave.dataset.author || ""),
-						isbn10: String(progressSave.dataset.isbn10 || ""),
-						isbn13: String(progressSave.dataset.isbn13 || ""),
-						googleBooksId: String(progressSave.dataset.googleBooksId || "")
-					});
+					const persistedEntry = result?.data && typeof result.data === "object"
+						? (result.data.entry || null)
+						: null;
 					const nextTotalPages = Math.max(0, Number((persistedEntry && persistedEntry.totalPages) || totalPages || 0) || 0);
 					const nextCurrentPage = Math.max(0, Number((persistedEntry && persistedEntry.currentPage) || currentPage || 0) || 0);
 					const updatedAtValue = String((persistedEntry && persistedEntry.updatedAt) || "").trim();
@@ -4190,19 +4216,16 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 						card.dataset.momentumUpdatedAt = updatedAtValue || new Date().toISOString();
 						recalcMomentumFromDom();
 					}
-					const updatedDate = updatedAtValue ? new Date(updatedAtValue) : new Date();
-					const updatedLabel = updatedDate.toLocaleDateString("en-US", {
-						month: "long",
-						day: "numeric",
-						year: "numeric"
-					});
+					const updatedLabel = safeFormatActivityDate(updatedAtValue) || safeFormatActivityDate(new Date().toISOString());
 					if (card instanceof HTMLElement) {
-						card.dataset.updatedAt = updatedAtValue || updatedDate.toISOString();
+						card.dataset.updatedAt = updatedAtValue || new Date().toISOString();
 					}
 					const dateNode = card?.querySelector(".activity-date");
 					if (dateNode instanceof HTMLElement) {
 						dateNode.textContent = `Updated ${updatedLabel}`;
 					}
+					await hydrateShelfEntriesFromServer();
+					syncExistingState();
 				} catch (uiError) {
 					console.warn("Progress saved but local UI sync failed.", uiError);
 				}
@@ -4276,6 +4299,29 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				closeShelfMenus(shelfDropdowns);
 			} catch (error) {
 				showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
+			}
+			return;
+		}
+		const removeOption = target.closest('[data-action="remove-from-shelves"]');
+		if (removeOption) {
+			event.preventDefault();
+			event.stopPropagation();
+			const dropdown = removeOption.closest(".shelf-dropdown");
+			if (!(dropdown instanceof HTMLElement)) return;
+			const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
+			if (!bookId) return;
+			try {
+				const result = await removeBookFromAllShelves(bookId);
+				if (!result.ok) throw new Error("Failed to remove from shelves.");
+				setDropdownLabel(dropdown, "");
+				setShelvedState(dropdown, false);
+				showShelfFeedback(dropdown, "Removed from shelves.", feedbackTimers);
+				removeCardFromShelfSection(dropdown, "remove");
+				closeShelfMenus(shelfDropdowns);
+				await hydrateShelfEntriesFromServer();
+				syncExistingState();
+			} catch (error) {
+				showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to remove.", feedbackTimers);
 			}
 			return;
 		}

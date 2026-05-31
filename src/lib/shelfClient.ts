@@ -316,6 +316,25 @@ export async function deleteShelfEntryFromServer(entry: unknown, redirectPath = 
 	return { ok: response.ok, unauthorized: false, response, data };
 }
 
+export async function removeBookFromAllShelvesOnServer(bookId: unknown, redirectPath = "/settings#account-settings") {
+	const response = await fetch("/api/shelf/entries", {
+		method: "DELETE",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ bookId: Math.max(0, Number(bookId || 0) || 0) })
+	});
+	if (response.status === 401) {
+		window.location.href = redirectPath;
+		return { ok: false, unauthorized: true, response, data: null };
+	}
+	let data: unknown = null;
+	try {
+		data = await response.json();
+	} catch {
+		data = null;
+	}
+	return { ok: response.ok, unauthorized: false, response, data };
+}
+
 export function resolveShelfSaveMessage(result: {
 	ok: boolean;
 	unauthorized?: boolean;

@@ -5,6 +5,7 @@ import {
 	normalizeRatingValue,
 	parseCategories,
 	resolveShelfSaveMessage,
+	removeBookFromAllShelvesOnServer,
 	saveShelfEntryWithRetry,
 	syncShelfRatingToServer,
 	statusLabel,
@@ -89,6 +90,32 @@ test("syncShelfRatingToServer reports unauthorized and sets redirect", async () 
 
 	try {
 		const result = await syncShelfRatingToServer({ bookId: 123, rating: 5 });
+		assert.equal(result.ok, false);
+		assert.equal(result.unauthorized, true);
+		const href = ((globalThis as Record<string, unknown>).window as { location: { href: string } }).location.href;
+		assert.equal(href, "/settings#account-settings");
+	} finally {
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
+		(globalThis as Record<string, unknown>).window = originalWindow;
+	}
+});
+
+test("removeBookFromAllShelvesOnServer sends book id and handles unauthorized", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWindow = (globalThis as Record<string, unknown>).window;
+
+	(globalThis as unknown as { fetch: typeof fetch }).fetch = (async (_url, init) => {
+		assert.equal(_url, "/api/shelf/entries");
+		assert.equal((init as RequestInit).method, "DELETE");
+		assert.match(String((init as RequestInit).body || ""), /"bookId":123/);
+		return new Response("{}", { status: 401, headers: { "Content-Type": "application/json" } });
+	}) as typeof fetch;
+	(globalThis as Record<string, unknown>).window = {
+		location: { href: "http://localhost/" }
+	};
+
+	try {
+		const result = await removeBookFromAllShelvesOnServer(123);
 		assert.equal(result.ok, false);
 		assert.equal(result.unauthorized, true);
 		const href = ((globalThis as Record<string, unknown>).window as { location: { href: string } }).location.href;

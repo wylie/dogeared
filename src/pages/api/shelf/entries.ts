@@ -15,6 +15,7 @@ import {
 } from "../../../lib/catalog";
 import { normalizeGenreList } from "../../../lib/genres";
 import { normalizeTopicTagList } from "../../../lib/genres";
+import { ensureCustomShelfSchema } from "../../../lib/customShelves";
 
 export const prerender = false;
 
@@ -922,7 +923,27 @@ export const DELETE: APIRoute = async ({ request }) => {
 		await ensureShelfSchema();
 		const session = await resolveUserBySession(request);
 		if (!session?.userId) return new Response(JSON.stringify({ error: "You must be logged in to delete shelf entries." }), { status: 401, headers: { "Content-Type": "application/json" } });
-		const body = await request.json() as { entry?: ShelfEntryInput };
+		await ensureCustomShelfSchema(getNeonSql());
+		const body = await request.json().catch(() => ({})) as { entry?: ShelfEntryInput; bookId?: unknown };
+		const directBookId = Math.max(0, Number(body.bookId || 0) || 0);
+		const userId = session.userId;
+		const sql = getNeonSql();
+		if (directBookId > 0) {
+			await sql`
+				delete from user_book
+				where user_id = ${userId}::uuid
+					and book_id = ${directBookId}
+			`;
+			await sql`
+				delete from user_custom_shelf_book
+				where user_id = ${userId}::uuid
+					and book_id = ${directBookId}
+			`;
+			return new Response(JSON.stringify({ ok: true }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" }
+			});
+		}
 		const entry = body?.entry || {};
 		const title = normalizeText(entry.title);
 		const author = normalizeText(entry.author);
@@ -930,8 +951,6 @@ export const DELETE: APIRoute = async ({ request }) => {
 		const isbn13 = normalizeIsbn(entry.isbn13);
 		const workKey = canonicalCatalogWorkKey({ title, author, isbn10, isbn13 });
 
-		const userId = session.userId;
-		const sql = getNeonSql();
 		const googleBooksId = normalizeCatalogText(entry.googleBooksId);
 		const bookId = await resolveBestCatalogBookId(sql, {
 			canonicalWorkKey: workKey,
@@ -945,6 +964,11 @@ export const DELETE: APIRoute = async ({ request }) => {
 			delete from user_book ub
 			where ub.user_id = ${userId}::uuid
 				and ub.book_id = ${bookId || 0}
+		`;
+		await sql`
+			delete from user_custom_shelf_book
+			where user_id = ${userId}::uuid
+				and book_id = ${bookId || 0}
 		`;
 
 		return new Response(JSON.stringify({ ok: true }), {
