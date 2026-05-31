@@ -100,7 +100,7 @@ test("syncShelfRatingToServer reports unauthorized and sets redirect", async () 
 	}
 });
 
-test("removeBookFromAllShelvesOnServer sends book id and handles unauthorized", async () => {
+test("removeBookFromAllShelvesOnServer sends book id + entry and handles unauthorized", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalWindow = (globalThis as Record<string, unknown>).window;
 
@@ -108,6 +108,7 @@ test("removeBookFromAllShelvesOnServer sends book id and handles unauthorized", 
 		assert.equal(_url, "/api/shelf/entries");
 		assert.equal((init as RequestInit).method, "DELETE");
 		assert.match(String((init as RequestInit).body || ""), /"bookId":123/);
+		assert.match(String((init as RequestInit).body || ""), /"title":"Book"/);
 		return new Response("{}", { status: 401, headers: { "Content-Type": "application/json" } });
 	}) as typeof fetch;
 	(globalThis as Record<string, unknown>).window = {
@@ -115,7 +116,7 @@ test("removeBookFromAllShelvesOnServer sends book id and handles unauthorized", 
 	};
 
 	try {
-		const result = await removeBookFromAllShelvesOnServer(123);
+		const result = await removeBookFromAllShelvesOnServer(123, { title: "Book" });
 		assert.equal(result.ok, false);
 		assert.equal(result.unauthorized, true);
 		const href = ((globalThis as Record<string, unknown>).window as { location: { href: string } }).location.href;

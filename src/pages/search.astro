@@ -6,7 +6,7 @@ import RatingControl from '../components/RatingControl.astro';
 import { resolveUserBySession } from '../lib/auth';
 import { authorHref } from '../lib/author';
 import { getNeonSql } from '../lib/neon';
-import { ensureCustomShelfSchema } from '../lib/customShelves';
+import { resolveCustomShelfOptions } from '../lib/customShelves';
 
 export const prerender = false;
 const session = await resolveUserBySession(Astro.request);
@@ -127,23 +127,7 @@ if (query) {
 if (session?.userId) {
 	try {
 		const sql = getNeonSql();
-		await ensureCustomShelfSchema(sql);
-		const customShelfRows = await sql<Array<{ id: number; name: string; icon: string; position: number }>>`
-			select id, name, icon, position
-			from user_custom_shelf
-			where user_id = ${session.userId}::uuid
-			order by position asc, id asc
-		`;
-		customShelfOptionsJson = JSON.stringify(
-			customShelfRows
-				.map((row) => ({
-					id: Math.max(0, Number(row.id || 0) || 0),
-					name: String(row.name || "").trim(),
-					icon: String(row.icon || "bookmarks").trim() || "bookmarks"
-				}))
-				.filter((row) => row.id > 0 && row.name)
-				.slice(0, 24)
-		);
+		customShelfOptionsJson = JSON.stringify(await resolveCustomShelfOptions(sql, session.userId));
 	} catch {
 		customShelfOptionsJson = "[]";
 	}

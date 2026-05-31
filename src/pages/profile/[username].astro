@@ -2602,12 +2602,17 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.activity-comment-form button {
 		height: 1.9rem;
-		padding: 0 0.74rem;
+		min-width: 3.1rem;
+		padding: 0 0.9rem;
 		border-radius: 999px;
 		border: none;
 		background: #d8e4f4;
 		color: #1f4f7a;
 		font-weight: 700;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
 		cursor: pointer;
 	}
 	.activity-comment-feedback {
@@ -3585,8 +3590,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		});
 	}
 
-	async function removeBookFromAllShelves(bookId) {
-		return removeBookFromAllShelvesOnServer(bookId);
+	async function removeBookFromAllShelves(bookId, entry) {
+		return removeBookFromAllShelvesOnServer(bookId, entry);
 	}
 
 	function readingHealth(daysSinceUpdate) {
@@ -3989,9 +3994,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				}
 				if (action === "remove-from-shelves") {
 					const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
-					if (!bookId) return;
+					const entry = buildEntryFromDropdown(dropdown, "want_to_read");
 					try {
-						const result = await removeBookFromAllShelves(bookId);
+						const result = await removeBookFromAllShelves(bookId, entry);
 						if (!result.ok) throw new Error("Failed to remove from shelves.");
 						setDropdownLabel(dropdown, "");
 						setShelvedState(dropdown, false);
@@ -4043,6 +4048,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const currentPageRaw = Math.max(0, Number(quickFinish.dataset.currentPage || 0) || 0);
 			const finishedPage = totalPages > 0 ? totalPages : currentPageRaw;
 			const entry = buildShelfEntryFromRecord({
+				bookId: Number(quickFinish.dataset.bookId || 0),
 				title: String(quickFinish.dataset.title || "").trim(),
 				author: String(quickFinish.dataset.author || "").trim(),
 				description: String(quickFinish.dataset.description || "").trim(),
@@ -4051,7 +4057,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				format: "Book",
 				language: String(quickFinish.dataset.language || "").trim(),
 				isbn10: String(quickFinish.dataset.isbn10 || "").trim(),
-				isbn13: String(quickFinish.dataset.isbn13 || "").trim()
+				isbn13: String(quickFinish.dataset.isbn13 || "").trim(),
+				googleBooksId: String(quickFinish.dataset.googleBooksId || "").trim()
 			}, {
 				status: "finished",
 				totalPages,
@@ -4306,9 +4313,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const dropdown = removeOption.closest(".shelf-dropdown");
 			if (!(dropdown instanceof HTMLElement)) return;
 			const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
-			if (!bookId) return;
+			const entry = buildEntryFromDropdown(dropdown, "want_to_read");
 			try {
-				const result = await removeBookFromAllShelves(bookId);
+				const result = await removeBookFromAllShelves(bookId, entry);
 				if (!result.ok) throw new Error("Failed to remove from shelves.");
 				setDropdownLabel(dropdown, "");
 				setShelvedState(dropdown, false);
@@ -4784,8 +4791,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const list = wrap.querySelector("[data-comments-list]");
 			const feedback = wrap.querySelector("[data-comment-feedback]");
 			if (feedback instanceof HTMLElement) {
-				feedback.hidden = false;
-				feedback.textContent = "Loading comments...";
+				feedback.hidden = true;
+				feedback.textContent = "";
 			}
 			try {
 				const response = await fetch(`/api/activity/comments?activityId=${encodeURIComponent(String(activityId))}`, {

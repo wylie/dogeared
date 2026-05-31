@@ -268,10 +268,61 @@ export function closeShelfMenus(shelfDropdowns: Element[]) {
 	}
 }
 
-export function toggleShelfMenu(dropdown: Element, shelfDropdowns: Element[]) {
+let customShelvesFetchPromise: Promise<Array<{ id: number; name: string; icon: string }>> | null = null;
+
+async function fetchCustomShelvesForDropdown() {
+	if (!customShelvesFetchPromise) {
+		customShelvesFetchPromise = fetch("/api/shelf/custom-shelves", { credentials: "same-origin" })
+			.then(async (response) => {
+				if (!response.ok) return [];
+				const data = await response.json().catch(() => ({}));
+				const shelves = Array.isArray((data as { shelves?: unknown[] })?.shelves) ? (data as { shelves: unknown[] }).shelves : [];
+				return shelves.map((row) => ({
+					id: Math.max(0, Number((row as { id?: unknown }).id || 0) || 0),
+					name: String((row as { name?: unknown }).name || "").trim(),
+					icon: String((row as { icon?: unknown }).icon || "bookmarks").trim() || "bookmarks"
+				})).filter((row) => row.id > 0 && row.name).slice(0, 24);
+			})
+			.catch(() => []);
+	}
+	return customShelvesFetchPromise;
+}
+
+async function ensureCustomShelfOptions(dropdown: Element) {
+	if (!(dropdown instanceof HTMLElement)) return;
+	if (dropdown.dataset.customShelvesLoaded === "true") return;
+	const optionsWrap = dropdown.querySelector("[data-custom-shelf-options]");
+	if (!(optionsWrap instanceof HTMLElement)) return;
+	const existing = optionsWrap.querySelector('[data-action="assign-custom-shelf"]');
+	if (existing) {
+		dropdown.dataset.customShelvesLoaded = "true";
+		return;
+	}
+	const shelves = await fetchCustomShelvesForDropdown();
+	if (shelves.length === 0) return;
+	const currentCustomShelfId = Math.max(0, Number(dropdown.dataset.currentCustomShelfId || 0) || 0);
+	const divider = document.createElement("div");
+	divider.className = "shelf-option-divider";
+	divider.setAttribute("role", "separator");
+	divider.setAttribute("aria-hidden", "true");
+	optionsWrap.append(divider);
+	for (const shelf of shelves) {
+		const button = document.createElement("button");
+		button.type = "button";
+		button.className = `shelf-option${currentCustomShelfId === shelf.id ? " is-current" : ""}`;
+		button.setAttribute("data-action", "assign-custom-shelf");
+		button.setAttribute("data-shelf-id", String(shelf.id));
+		button.innerHTML = `<span class="material-icons shelf-option-icon" aria-hidden="true">${shelf.icon}</span><span>${shelf.name}</span>`;
+		optionsWrap.append(button);
+	}
+	dropdown.dataset.customShelvesLoaded = "true";
+}
+
+export async function toggleShelfMenu(dropdown: Element, shelfDropdowns: Element[]) {
 	const trigger = dropdown.querySelector('[data-action="toggle-shelf"]');
 	const menu = dropdown.querySelector(".shelf-menu");
 	if (!(trigger instanceof HTMLElement) || !(menu instanceof HTMLElement)) return;
+	await ensureCustomShelfOptions(dropdown);
 	const willOpen = menu.hidden;
 	closeShelfMenus(shelfDropdowns);
 	menu.hidden = !willOpen;
@@ -316,11 +367,16 @@ export async function deleteShelfEntryFromServer(entry: unknown, redirectPath = 
 	return { ok: response.ok, unauthorized: false, response, data };
 }
 
-export async function removeBookFromAllShelvesOnServer(bookId: unknown, redirectPath = "/settings#account-settings") {
+export async function removeBookFromAllShelvesOnServer(
+	bookId: unknown,
+	entry?: unknown,
+	redirectPath = "/settings#account-settings"
+) {
+	const normalizedBookId = Math.max(0, Number(bookId || 0) || 0);
 	const response = await fetch("/api/shelf/entries", {
 		method: "DELETE",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ bookId: Math.max(0, Number(bookId || 0) || 0) })
+		body: JSON.stringify({ bookId: normalizedBookId, entry: entry && typeof entry === "object" ? entry : undefined })
 	});
 	if (response.status === 401) {
 		window.location.href = redirectPath;
@@ -475,6 +531,7 @@ export function buildShelfEntryFromRecord(record: Record<string, unknown>, optio
 
 	return {
 		id: `book_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+		bookId: Math.max(0, Number(record.bookId || 0) || 0),
 		title: payload.title,
 		author: payload.author,
 		description: payload.description,

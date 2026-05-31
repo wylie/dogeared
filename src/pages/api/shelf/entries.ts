@@ -929,16 +929,24 @@ export const DELETE: APIRoute = async ({ request }) => {
 		const userId = session.userId;
 		const sql = getNeonSql();
 		if (directBookId > 0) {
-			await sql`
+			const removedDefault = await sql<Array<{ book_id: number }>>`
 				delete from user_book
 				where user_id = ${userId}::uuid
 					and book_id = ${directBookId}
+				returning book_id
 			`;
-			await sql`
+			const removedCustom = await sql<Array<{ book_id: number }>>`
 				delete from user_custom_shelf_book
 				where user_id = ${userId}::uuid
 					and book_id = ${directBookId}
+				returning book_id
 			`;
+			if (removedDefault.length === 0 && removedCustom.length === 0) {
+				return new Response(JSON.stringify({ error: "Book is not on your shelves." }), {
+					status: 404,
+					headers: { "Content-Type": "application/json" }
+				});
+			}
 			return new Response(JSON.stringify({ ok: true }), {
 				status: 200,
 				headers: { "Content-Type": "application/json" }
@@ -952,6 +960,12 @@ export const DELETE: APIRoute = async ({ request }) => {
 		const workKey = canonicalCatalogWorkKey({ title, author, isbn10, isbn13 });
 
 		const googleBooksId = normalizeCatalogText(entry.googleBooksId);
+		if (!workKey && !googleBooksId) {
+			return new Response(JSON.stringify({ error: "Book identity is required to remove shelf entries." }), {
+				status: 400,
+				headers: { "Content-Type": "application/json" }
+			});
+		}
 		const bookId = await resolveBestCatalogBookId(sql, {
 			canonicalWorkKey: workKey,
 			title,
@@ -960,16 +974,24 @@ export const DELETE: APIRoute = async ({ request }) => {
 			isbn13,
 			googleBooksId
 		});
-		await sql`
+		const removedDefault = await sql<Array<{ book_id: number }>>`
 			delete from user_book ub
 			where ub.user_id = ${userId}::uuid
 				and ub.book_id = ${bookId || 0}
+			returning ub.book_id
 		`;
-		await sql`
+		const removedCustom = await sql<Array<{ book_id: number }>>`
 			delete from user_custom_shelf_book
 			where user_id = ${userId}::uuid
 				and book_id = ${bookId || 0}
+			returning book_id
 		`;
+		if (removedDefault.length === 0 && removedCustom.length === 0) {
+			return new Response(JSON.stringify({ error: "Book is not on your shelves." }), {
+				status: 404,
+				headers: { "Content-Type": "application/json" }
+			});
+		}
 
 		return new Response(JSON.stringify({ ok: true }), {
 			status: 200,

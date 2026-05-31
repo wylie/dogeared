@@ -85,22 +85,24 @@ try {
 			<span class="material-icons shelf-option-icon" aria-hidden="true">check</span>
 			<span>Read</span>
 		</button>
-		{customShelves.length > 0 && (
-			<>
-				<div class="shelf-option-divider" role="separator" aria-hidden="true"></div>
-				{customShelves.map((shelf) => (
-					<button
-						type="button"
-						class={`shelf-option${currentCustomShelfId === shelf.id ? " is-current" : ""}`}
-						data-action="assign-custom-shelf"
-						data-shelf-id={String(shelf.id)}
-					>
-						<span class="material-icons shelf-option-icon" aria-hidden="true">{shelf.icon}</span>
-						<span>{shelf.name}</span>
-					</button>
-				))}
-			</>
-		)}
+		<div data-custom-shelf-options>
+			{customShelves.length > 0 && (
+				<>
+					<div class="shelf-option-divider" role="separator" aria-hidden="true"></div>
+					{customShelves.map((shelf) => (
+						<button
+							type="button"
+							class={`shelf-option${currentCustomShelfId === shelf.id ? " is-current" : ""}`}
+							data-action="assign-custom-shelf"
+							data-shelf-id={String(shelf.id)}
+						>
+							<span class="material-icons shelf-option-icon" aria-hidden="true">{shelf.icon}</span>
+							<span>{shelf.name}</span>
+						</button>
+					))}
+				</>
+			)}
+		</div>
 		<div class="shelf-option-divider" role="separator" aria-hidden="true"></div>
 		<button
 			type="button"

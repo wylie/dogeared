@@ -612,13 +612,18 @@ const sectionLinks = [
 	.activity-comment-form button {
 		border: none;
 		border-radius: 999px;
-		padding: 0.35rem 0.7rem;
+		padding: 0 0.9rem;
+		min-width: 3.1rem;
 		min-height: 2rem;
 		font: inherit;
 		font-size: 0.8rem;
 		font-weight: 700;
 		background: #dde8f5;
 		color: #22466b;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
 		cursor: pointer;
 		box-sizing: border-box;
 	}
@@ -1084,10 +1089,10 @@ const sectionLinks = [
 		if (!Number.isFinite(activityId) || activityId <= 0) continue;
 		const list = wrap.querySelector("[data-comments-list]");
 		const feedback = wrap.querySelector("[data-comment-feedback]");
-		if (feedback instanceof HTMLElement) {
-			feedback.hidden = false;
-			feedback.textContent = "Loading comments...";
-		}
+			if (feedback instanceof HTMLElement) {
+				feedback.hidden = true;
+				feedback.textContent = "";
+			}
 		try {
 			const response = await fetch(`/api/activity/comments?activityId=${encodeURIComponent(String(activityId))}`, {
 				credentials: "same-origin"

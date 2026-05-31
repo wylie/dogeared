@@ -84,3 +84,21 @@ export async function ensureCustomShelfSchema(sql: NeonQueryFunction<false, fals
 		on user_custom_shelf_book (user_id, book_id)
 	`;
 }
+
+export async function resolveCustomShelfOptions(sql: NeonQueryFunction<false, false>, userId: string) {
+	await ensureCustomShelfSchema(sql);
+	const rows = await sql<Array<{ id: number; name: string; icon: string; position: number }>>`
+		select id, name, icon, position
+		from user_custom_shelf
+		where user_id = ${userId}::uuid
+		order by position asc, id asc
+	`;
+	return rows
+		.map((row) => ({
+			id: Math.max(0, Number(row.id || 0) || 0),
+			name: String(row.name || "").trim(),
+			icon: normalizeCustomShelfIcon(row.icon)
+		}))
+		.filter((row) => row.id > 0 && row.name)
+		.slice(0, 24);
+}

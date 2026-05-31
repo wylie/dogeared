@@ -9,6 +9,7 @@ import { getEncryptionKey, resolveUserBySession } from "../lib/auth";
 import { authorHref } from "../lib/author";
 import { normalizeGenreEntry } from "../lib/genres";
 import { buildBookReviewList, type BookReview } from "../lib/bookReviews";
+import { resolveCustomShelfOptions } from "../lib/customShelves";
 
 export const prerender = false;
 
@@ -178,6 +179,7 @@ let viewerShelfStatus: "want_to_read" | "reading" | "finished" | "" = "";
 let viewerRating = 0;
 let bookGenres: string[] = [];
 let bookTopics: string[] = [];
+let customShelfOptionsJson = "[]";
 
 async function fetchGoogleBook() {
 	const apiKey = normalizeText(import.meta.env.GOOGLE_BOOKS_API_KEY);
@@ -617,8 +619,13 @@ try {
 		}
 	}
 
-	if (book && session?.userId) {
-		const directBookId = Number(book.id || 0);
+if (book && session?.userId) {
+	try {
+		customShelfOptionsJson = JSON.stringify(await resolveCustomShelfOptions(sql, session.userId));
+	} catch {
+		customShelfOptionsJson = "[]";
+	}
+	const directBookId = Number(book.id || 0);
 		if (directBookId > 0) {
 			const rows = await sql<Array<{ status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
 				select ub.status, ub.rating
@@ -782,6 +789,7 @@ const bookStructuredDataPayload = bookStructuredData
 									"data-isbn13": book.isbn13,
 									"data-google-books-id": book.googleBooksId,
 									"data-book-id": String(book.id || 0),
+									"data-custom-shelves": customShelfOptionsJson,
 									"data-initial-status": viewerShelfStatus,
 									"data-hide-label": "true"
 								}} />
@@ -877,6 +885,7 @@ const bookStructuredDataPayload = bookStructuredData
 											"data-isbn13": book.isbn13,
 											"data-google-books-id": book.googleBooksId,
 											"data-book-id": String(book.id || 0),
+											"data-custom-shelves": customShelfOptionsJson,
 											"data-initial-status": viewerShelfStatus
 										}} />
 									</div>
@@ -1097,8 +1106,8 @@ const bookStructuredDataPayload = bookStructuredData
 			const list = wrap.querySelector("[data-comments-list]");
 			const feedback = wrap.querySelector("[data-comment-feedback]");
 			if (feedback instanceof HTMLElement) {
-				feedback.hidden = false;
-				feedback.textContent = "Loading comments...";
+				feedback.hidden = true;
+				feedback.textContent = "";
 			}
 			try {
 				const response = await fetch(`/api/activity/comments?activityId=${encodeURIComponent(String(activityId))}`, { credentials: "same-origin" });
@@ -1299,12 +1308,17 @@ const bookStructuredDataPayload = bookStructuredData
 	}
 	.activity-comment-form button {
 		height: 1.9rem;
-		padding: 0 0.74rem;
+		min-width: 3.1rem;
+		padding: 0 0.9rem;
 		border-radius: 999px;
 		border: none;
 		background: #d8e4f4;
 		color: #1f4f7a;
 		font-weight: 700;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
 		cursor: pointer;
 	}
 	.activity-comments-list {
@@ -1414,6 +1428,7 @@ const bookStructuredDataPayload = bookStructuredData
 			googleBooksId: String(dropdown.dataset.googleBooksId || "").trim()
 		});
 		return buildShelfEntryFromRecord({
+			bookId: Number(dropdown.dataset.bookId || 0),
 			title: bookPayload.title,
 			author: bookPayload.author,
 			description: bookPayload.description,
@@ -1464,8 +1479,8 @@ const bookStructuredDataPayload = bookStructuredData
 					return;
 				}
 				const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
-				if (!bookId) return;
-				const result = await removeBookFromAllShelvesOnServer(bookId);
+				const entry = buildEntry("want_to_read");
+				const result = await removeBookFromAllShelvesOnServer(bookId, entry);
 				if (result.ok) {
 					setShelvedState(dropdown, false);
 					setDropdownLabel(dropdown, "");
