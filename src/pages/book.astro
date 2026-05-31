@@ -8,6 +8,7 @@ import { getNeonSql } from "../lib/neon";
 import { getEncryptionKey, resolveUserBySession } from "../lib/auth";
 import { authorHref } from "../lib/author";
 import { normalizeGenreEntry } from "../lib/genres";
+import { buildReviewComment } from "../lib/activityComments";
 
 export const prerender = false;
 
@@ -100,6 +101,10 @@ function activityHeading(eventType: string) {
 	return { prefix: "Updated shelf", shelf: "" };
 }
 
+function safeJsonAttr(value: unknown) {
+	return JSON.stringify(value).replace(/"/g, "&quot;");
+}
+
 function formatTopicLabel(value: string) {
 	return normalizeText(value)
 		.replace(/[-_]+/g, " ")
@@ -161,6 +166,7 @@ const queryAuthor = normalizeText(params.get("author"));
 let book: BookDetails | null = null;
 let activity: Array<{
 	id: number;
+	actorUserId: string;
 	eventType: string;
 	timestamp: string;
 	actorName: string;
@@ -467,6 +473,7 @@ try {
 		const encryptionKey = getEncryptionKey();
 		let activityRows: Array<{
 			id: number;
+			actor_user_id: string;
 			event_type: string;
 			created_at: string;
 			username: string | null;
@@ -479,6 +486,7 @@ try {
 		try {
 			activityRows = await sql<Array<{
 				id: number;
+				actor_user_id: string;
 				event_type: string;
 				created_at: string;
 				username: string | null;
@@ -488,6 +496,7 @@ try {
 			}>>`
 				select
 					ua.id,
+					ua.user_id::text as actor_user_id,
 					ua.event_type,
 					ua.created_at::text as created_at,
 					au.username,
@@ -524,6 +533,7 @@ try {
 			}>>`
 				select
 					ua.id,
+					ua.user_id::text as actor_user_id,
 					ua.event_type,
 					ua.created_at::text as created_at,
 					au.username,
@@ -542,6 +552,7 @@ try {
 		}
 		activity = activityRows.map((item) => ({
 			id: Math.max(0, Number(item.id || 0)),
+			actorUserId: normalizeText(item.actor_user_id),
 			eventType: normalizeText(item.event_type),
 			timestamp: item.created_at,
 			actorUsername: normalizeText(item.username),
@@ -826,7 +837,6 @@ const bookStructuredDataPayload = bookStructuredData
 									<div slot="meta">
 										{!item.actorUsername && <p class="meta">{item.actorName}</p>}
 										{item.rating > 0 && <p class="meta rating-meta">{renderAverageStars(item.rating)} {item.rating}/5</p>}
-										{item.finishedReflection && <p class="meta">“{item.finishedReflection}”</p>}
 									</div>
 									<div slot="actions">
 										<ShelfDropdown attrs={{
@@ -850,6 +860,17 @@ const bookStructuredDataPayload = bookStructuredData
 										data-activity-id={String(item.id || 0)}
 										data-comments-empty="1"
 										data-loaded="0"
+										data-seeded-comments={safeJsonAttr(
+											(() => {
+												const seeded = buildReviewComment({
+													body: item.finishedReflection,
+													username: item.actorUsername || item.actorName,
+													createdAt: item.timestamp,
+													isMine: !!session?.userId && String(session.userId) === String(item.actorUserId || "")
+												});
+												return seeded ? [seeded] : [];
+											})()
+										)}
 									>
 										<div class="activity-social-row">
 											<div class="activity-like-wrap">
@@ -886,6 +907,7 @@ const bookStructuredDataPayload = bookStructuredData
 </Layout>
 
 <script type="module">
+	import { mergeActivityComments } from "../lib/activityComments.ts";
 	const root = document.querySelector(".book-page");
 	if (root instanceof HTMLElement) {
 		const isAuthenticated = root.dataset.authenticated === "true";
@@ -918,6 +940,16 @@ const bookStructuredDataPayload = bookStructuredData
 			const isMine = !!comment?.isMine && commentId > 0;
 			const profileHref = `/profile/${encodeURIComponent(username)}`;
 			return `<p class="activity-comment-item"${commentId > 0 ? ` data-comment-id="${commentId}"` : ""}><span class="activity-comment-head"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a><span class="activity-comment-meta">${ageLabel ? `<span class="activity-comment-age">${escapeHtml(ageLabel)}</span>` : ""}${isMine ? `<button type="button" class="activity-comment-delete" data-action="delete-comment" data-comment-id="${commentId}" aria-label="Delete comment" title="Delete comment">&times;</button>` : ""}</span></span><span class="activity-comment-body">${escapeHtml(body)}</span></p>`;
+		};
+		const readSeededComments = (wrap) => {
+			if (!(wrap instanceof HTMLElement)) return [];
+			const raw = String(wrap.dataset.seededComments || "[]").trim();
+			try {
+				const parsed = JSON.parse(raw);
+				return Array.isArray(parsed) ? parsed : [];
+			} catch {
+				return [];
+			}
 		};
 
 		document.addEventListener("click", async (event) => {
@@ -1067,7 +1099,10 @@ const bookStructuredDataPayload = bookStructuredData
 				const response = await fetch(`/api/activity/comments?activityId=${encodeURIComponent(String(activityId))}`, { credentials: "same-origin" });
 				const data = await response.json().catch(() => ({}));
 				if (response.status === 401) {
-					if (list instanceof HTMLElement) list.innerHTML = "";
+					if (list instanceof HTMLElement) {
+						const seeded = readSeededComments(wrap);
+						list.innerHTML = seeded.map((comment) => renderCommentHtml(comment)).join("");
+					}
 					if (feedback instanceof HTMLElement) feedback.hidden = true;
 					continue;
 				}
@@ -1077,7 +1112,9 @@ const bookStructuredDataPayload = bookStructuredData
 				}
 				if (list instanceof HTMLElement) {
 					const comments = Array.isArray(data?.comments) ? data.comments : [];
-					list.innerHTML = comments.map((comment) => renderCommentHtml(comment)).join("");
+					const seeded = readSeededComments(wrap);
+					const merged = mergeActivityComments(seeded, comments);
+					list.innerHTML = merged.map((comment) => renderCommentHtml(comment)).join("");
 				}
 				if (feedback instanceof HTMLElement) feedback.hidden = true;
 			} catch {

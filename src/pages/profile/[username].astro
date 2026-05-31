@@ -9,6 +9,7 @@ import { getNeonSql } from "../../lib/neon";
 import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicShelfSummary } from "../../lib/publicProfile";
 import { authorHref } from "../../lib/author";
 import { ensureCustomShelfSchema } from "../../lib/customShelves";
+import { buildReviewComment } from "../../lib/activityComments";
 
 export const prerender = false;
 
@@ -827,6 +828,10 @@ function formatActivityDate(value: string) {
 	});
 }
 
+function safeJsonAttr(value: unknown) {
+	return JSON.stringify(value).replace(/"/g, "&quot;");
+}
+
 function daysSinceDate(value: string) {
 	const parsed = new Date(String(value || "").trim());
 	if (!Number.isFinite(parsed.getTime())) return 999;
@@ -1437,7 +1442,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 											) : (
 												item.rating > 0 && <p class="meta rating-meta">{renderRatingStars(item.rating)} {item.rating}/5</p>
 											)}
-											{String(item.finishedReflection || "").trim() && <p class="meta">“{item.finishedReflection}”</p>}
 										</div>
 										<div slot="actions">
 											<ShelfDropdown attrs={{
@@ -1455,46 +1459,55 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 												"data-isbn13": item.isbn13
 											}} />
 										</div>
-										{!isOwnerViewer && (
-											<div
-												slot="social"
-												class="activity-comments-wrap"
-												data-comments-wrap
-												data-activity-id={String(item.activityId || 0)}
-												data-comments-empty="1"
-												data-loaded="0"
-											>
-												<div class="activity-social-row">
-													<div class="activity-like-wrap">
-														<button
-															type="button"
-															class={`activity-like-button${item.viewerLiked ? " is-liked" : ""}`}
-															data-action="toggle-activity-like"
-															data-activity-id={String(item.activityId || 0)}
-															data-liked={String(!!item.viewerLiked)}
-															disabled={!isAuthenticated}
-															aria-label={item.viewerLiked ? "Unlike this activity" : "Like this activity"}
-															title={!isAuthenticated ? "Log in to like activity" : ""}
-														>
-															<span class="activity-like-label">{item.viewerLiked ? "Liked" : "Like"}</span>
-														</button>
-														<span class="activity-like-count" data-like-count-static>{Math.max(0, Number(item.likeCount || 0))}</span>
-													</div>
-													<form class="activity-comment-form" data-comment-form>
-														<input
-															type="text"
-															name="comment"
-															maxlength="500"
-															placeholder="Leave a comment..."
-															{...(!isAuthenticated ? { disabled: true } : {})}
-														/>
-														<button type="submit" {...(!isAuthenticated ? { disabled: true, title: "Log in to comment" } : {})}>Post</button>
-													</form>
+										<div
+											slot="social"
+											class="activity-comments-wrap"
+											data-comments-wrap
+											data-activity-id={String(item.activityId || 0)}
+											data-comments-empty="1"
+											data-loaded="0"
+											data-seeded-comments={safeJsonAttr(
+												(() => {
+													const seeded = buildReviewComment({
+														body: item.finishedReflection,
+														username: profile.username || requestedUsername,
+														createdAt: item.updatedAt,
+														isMine: isOwnerViewer
+													});
+													return seeded ? [seeded] : [];
+												})()
+											)}
+										>
+											<div class="activity-social-row">
+												<div class="activity-like-wrap">
+													<button
+														type="button"
+														class={`activity-like-button${item.viewerLiked ? " is-liked" : ""}`}
+														data-action="toggle-activity-like"
+														data-activity-id={String(item.activityId || 0)}
+														data-liked={String(!!item.viewerLiked)}
+														disabled={!isAuthenticated}
+														aria-label={item.viewerLiked ? "Unlike this activity" : "Like this activity"}
+														title={!isAuthenticated ? "Log in to like activity" : ""}
+													>
+														<span class="activity-like-label">{item.viewerLiked ? "Liked" : "Like"}</span>
+													</button>
+													<span class="activity-like-count" data-like-count-static>{Math.max(0, Number(item.likeCount || 0))}</span>
 												</div>
-												<div class="activity-comments-list" data-comments-list></div>
-												<p class="activity-comment-feedback" data-comment-feedback hidden></p>
+												<form class="activity-comment-form" data-comment-form>
+													<input
+														type="text"
+														name="comment"
+														maxlength="500"
+														placeholder="Leave a comment..."
+														{...(!isAuthenticated ? { disabled: true } : {})}
+													/>
+													<button type="submit" {...(!isAuthenticated ? { disabled: true, title: "Log in to comment" } : {})}>Post</button>
+												</form>
 											</div>
-										)}
+											<div class="activity-comments-list" data-comments-list></div>
+											<p class="activity-comment-feedback" data-comment-feedback hidden></p>
+										</div>
 									</BookCard>
 								))}
 							</ul>
@@ -4609,6 +4622,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	syncLeftNavShelfOrder(shelfSectionOrder);
 </script>
 <script type="module">
+	import { mergeActivityComments } from "../../lib/activityComments.ts";
 	const page = document.querySelector(".public-profile-page");
 	if (!(page instanceof HTMLElement)) {
 		// no-op
@@ -4643,6 +4657,16 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const isMine = !!comment?.isMine && commentId > 0;
 			const profileHref = `/profile/${encodeURIComponent(username)}`;
 			return `<p class="activity-comment-item"${commentId > 0 ? ` data-comment-id="${commentId}"` : ""}><span class="activity-comment-head"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a><span class="activity-comment-meta">${ageLabel ? `<span class="activity-comment-age">${escapeHtml(ageLabel)}</span>` : ""}${isMine ? `<button type="button" class="activity-comment-delete" data-action="delete-comment" data-comment-id="${commentId}" aria-label="Delete comment" title="Delete comment">&times;</button>` : ""}</span></span><span class="activity-comment-body">${escapeHtml(body)}</span></p>`;
+		};
+		const readSeededComments = (wrap) => {
+			if (!(wrap instanceof HTMLElement)) return [];
+			const raw = String(wrap.dataset.seededComments || "[]").trim();
+			try {
+				const parsed = JSON.parse(raw);
+				return Array.isArray(parsed) ? parsed : [];
+			} catch {
+				return [];
+			}
 		};
 
 		document.addEventListener("click", async (event) => {
@@ -4756,12 +4780,12 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					return;
 				}
 				if (!response.ok) throw new Error(String(data?.error || "Failed to post comment."));
-				if (list instanceof HTMLElement && data?.comment) {
-					const wrapper = document.createElement("div");
-					wrapper.innerHTML = renderCommentHtml(data.comment);
-					const node = wrapper.firstElementChild;
-					if (node) list.append(node);
-					wrap.dataset.commentsEmpty = "0";
+					if (list instanceof HTMLElement && data?.comment) {
+						const wrapper = document.createElement("div");
+						wrapper.innerHTML = renderCommentHtml(data.comment);
+						const node = wrapper.firstElementChild;
+						if (node) list.append(node);
+						wrap.dataset.commentsEmpty = "0";
 				}
 				input.value = "";
 				if (feedback instanceof HTMLElement) {
@@ -4796,7 +4820,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				});
 				const data = await response.json().catch(() => ({}));
 				if (response.status === 401) {
-					if (list instanceof HTMLElement) list.innerHTML = "";
+					if (list instanceof HTMLElement) {
+						const seeded = readSeededComments(wrap);
+						list.innerHTML = seeded.map((comment) => renderCommentHtml(comment)).join("");
+					}
 					wrap.dataset.commentsEmpty = "1";
 					if (feedback instanceof HTMLElement) feedback.hidden = true;
 					continue;
@@ -4807,8 +4834,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				}
 				if (list instanceof HTMLElement) {
 					const comments = Array.isArray(data?.comments) ? data.comments : [];
-					list.innerHTML = comments.map((comment) => renderCommentHtml(comment)).join("");
-					wrap.dataset.commentsEmpty = comments.length > 0 ? "0" : "1";
+					const seeded = readSeededComments(wrap);
+					const merged = mergeActivityComments(seeded, comments);
+					list.innerHTML = merged.map((comment) => renderCommentHtml(comment)).join("");
+					wrap.dataset.commentsEmpty = merged.length > 0 ? "0" : "1";
 				}
 				if (feedback instanceof HTMLElement) feedback.hidden = true;
 			} catch {
