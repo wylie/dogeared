@@ -16,6 +16,7 @@ import {
 import { normalizeGenreList } from "../../../lib/genres";
 import { normalizeTopicTagList } from "../../../lib/genres";
 import { ensureCustomShelfSchema } from "../../../lib/customShelves";
+import { monitorEvent } from "../../../lib/monitoring";
 
 export const prerender = false;
 
@@ -903,11 +904,13 @@ export const POST: APIRoute = async ({ request }) => {
 			updatedAt: Date.parse(persisted.updated_at || "") || Date.now()
 		} : null;
 
+		monitorEvent("shelf.upsert.success", { userId, bookId, status, rating: rating ?? 0, hasProgressDelta: deltaPages > 0 });
 		return new Response(JSON.stringify({ ok: true, bookId, entry: persistedEntry }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" }
 		});
 	} catch (error) {
+		monitorEvent("shelf.upsert.error", { message: error instanceof Error ? error.message : "Unknown error" }, "error");
 		return new Response(JSON.stringify({
 			error: "Failed to save shelf entry.",
 			detail: error instanceof Error ? error.message : "Unknown error"
@@ -942,11 +945,13 @@ export const DELETE: APIRoute = async ({ request }) => {
 				returning book_id
 			`;
 			if (removedDefault.length === 0 && removedCustom.length === 0) {
+				monitorEvent("shelf.remove.noop", { userId, bookId: directBookId }, "warn");
 				return new Response(JSON.stringify({ error: "Book is not on your shelves." }), {
 					status: 404,
 					headers: { "Content-Type": "application/json" }
 				});
 			}
+			monitorEvent("shelf.remove.success", { userId, bookId: directBookId, removedDefault: removedDefault.length, removedCustom: removedCustom.length });
 			return new Response(JSON.stringify({ ok: true }), {
 				status: 200,
 				headers: { "Content-Type": "application/json" }
@@ -961,12 +966,13 @@ export const DELETE: APIRoute = async ({ request }) => {
 
 		const googleBooksId = normalizeCatalogText(entry.googleBooksId);
 		if (!workKey && !googleBooksId) {
+			monitorEvent("shelf.remove.invalid_identity", { userId }, "warn");
 			return new Response(JSON.stringify({ error: "Book identity is required to remove shelf entries." }), {
 				status: 400,
 				headers: { "Content-Type": "application/json" }
 			});
 		}
-		const bookId = await resolveBestCatalogBookId(sql, {
+		let bookId = await resolveBestCatalogBookId(sql, {
 			canonicalWorkKey: workKey,
 			title,
 			author,
@@ -974,30 +980,56 @@ export const DELETE: APIRoute = async ({ request }) => {
 			isbn13,
 			googleBooksId
 		});
+		if (!(bookId > 0) && title) {
+			const fallbackRows = await sql<Array<{ book_id: number }>>`
+				select ub.book_id
+				from user_book ub
+				join book b on b.id = ub.book_id
+				where ub.user_id = ${userId}::uuid
+					and lower(trim(b.title)) = lower(${title})
+					and (
+						${author} = ''
+						or lower(trim(b.primary_author)) = lower(${author})
+					)
+				order by ub.updated_at desc
+				limit 1
+			`;
+			bookId = Math.max(0, Number(fallbackRows[0]?.book_id || 0) || 0);
+		}
+		if (!(bookId > 0)) {
+			monitorEvent("shelf.remove.invalid_identity", { userId, title, author }, "warn");
+			return new Response(JSON.stringify({ error: "Could not find this book on your shelves." }), {
+				status: 404,
+				headers: { "Content-Type": "application/json" }
+			});
+		}
 		const removedDefault = await sql<Array<{ book_id: number }>>`
 			delete from user_book ub
 			where ub.user_id = ${userId}::uuid
-				and ub.book_id = ${bookId || 0}
+				and ub.book_id = ${bookId}
 			returning ub.book_id
 		`;
 		const removedCustom = await sql<Array<{ book_id: number }>>`
 			delete from user_custom_shelf_book
 			where user_id = ${userId}::uuid
-				and book_id = ${bookId || 0}
+				and book_id = ${bookId}
 			returning book_id
 		`;
 		if (removedDefault.length === 0 && removedCustom.length === 0) {
+			monitorEvent("shelf.remove.noop", { userId, bookId }, "warn");
 			return new Response(JSON.stringify({ error: "Book is not on your shelves." }), {
 				status: 404,
 				headers: { "Content-Type": "application/json" }
 			});
 		}
+		monitorEvent("shelf.remove.success", { userId, bookId, removedDefault: removedDefault.length, removedCustom: removedCustom.length });
 
 		return new Response(JSON.stringify({ ok: true }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" }
 		});
 	} catch (error) {
+		monitorEvent("shelf.remove.error", { message: error instanceof Error ? error.message : "Unknown error" }, "error");
 		return new Response(JSON.stringify({
 			error: "Failed to delete shelf entry.",
 			detail: error instanceof Error ? error.message : "Unknown error"

@@ -75,7 +75,7 @@ const sectionLinks = [
 				Follow other Dogeared users to discover books from readers across the community.
 			</p>
 			{peopleToFollow.length === 0 ? (
-				<p class="empty-note">No public profiles are available yet.</p>
+				<p class="empty-note">No reader suggestions yet. Add a few books and ratings to get better people-to-follow matches.</p>
 			) : (
 			<ul class="people-strip" aria-label="People to follow">
 				{peopleToFollow.map((reader) => (
@@ -162,7 +162,7 @@ const sectionLinks = [
 				{activity.length === 0 ? (
 					<div class="empty-following-panel">
 						<h2>No activity yet</h2>
-						<p>The people you follow have not shared recent shelf activity.</p>
+						<p>Your followed readers have not posted recent activity yet. Follow a few more readers or check back after your next reading update.</p>
 					</div>
 				) : (
 					<ul class="activity-grid">

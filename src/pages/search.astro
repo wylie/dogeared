@@ -142,9 +142,9 @@ if (session?.userId) {
 >
 		<div slot="right" class="search-page" id="search-page" data-query={query} data-authenticated={String(isAuthenticated)}>
 		<h1>Search</h1>
-		{!query && <p>Enter a search term to find books.</p>}
+		{!query && <p>Search for a favorite title, then add it to Want to Read, Currently Reading, or Read to build recommendations.</p>}
 		{query && errorMessage && <p>Search failed: {errorMessage}</p>}
-		{query && !errorMessage && results.length === 0 && <p>No results for "{query}".</p>}
+		{query && !errorMessage && results.length === 0 && <p>No results for "{query}". Try a broader title, an author name, or fewer keywords.</p>}
 		{query && !errorMessage && results.length > 0 && <p>Results for "{query}". Use the shelf dropdown to save to <a href="/settings#account-settings">Profile</a>.</p>}
 
 		<ul class="search-results" id="search-results">

@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { resolveUserBySession } from "../../../lib/auth";
 import { getNeonSql } from "../../../lib/neon";
+import { monitorEvent } from "../../../lib/monitoring";
 
 export const prerender = false;
 
@@ -16,6 +17,7 @@ export const PATCH: APIRoute = async ({ request }) => {
 	try {
 		const session = await resolveUserBySession(request);
 		if (!session?.userId) {
+			monitorEvent("rating.save.unauthorized", {}, "warn");
 			return new Response(JSON.stringify({ error: "You must be logged in to rate books." }), {
 				status: 401,
 				headers: { "Content-Type": "application/json" }
@@ -25,6 +27,7 @@ export const PATCH: APIRoute = async ({ request }) => {
 		const body = await request.json().catch(() => ({})) as { bookId?: unknown; rating?: unknown };
 		const bookId = Math.max(0, Number(body.bookId || 0) || 0);
 		if (!bookId) {
+			monitorEvent("rating.save.invalid_book", {}, "warn");
 			return new Response(JSON.stringify({ error: "Missing book." }), {
 				status: 400,
 				headers: { "Content-Type": "application/json" }
@@ -42,6 +45,7 @@ export const PATCH: APIRoute = async ({ request }) => {
 			limit 1
 		`;
 		if (existingRows.length === 0) {
+			monitorEvent("rating.save.missing_shelf_entry", { userId: session.userId, bookId }, "warn");
 			return new Response(JSON.stringify({ error: "Add this book to your shelf before rating it." }), {
 				status: 404,
 				headers: { "Content-Type": "application/json" }
@@ -62,6 +66,7 @@ export const PATCH: APIRoute = async ({ request }) => {
 				values (${session.userId}::uuid, ${bookId}, 'rating', ${rating})
 			`;
 		}
+		monitorEvent("rating.save.success", { userId: session.userId, bookId, rating: rating ?? 0, previousRating: previousRating ?? 0 });
 
 		const aggregateRows = await sql<Array<{ average_rating: number | null; rating_count: number }>>`
 			select
@@ -83,6 +88,7 @@ export const PATCH: APIRoute = async ({ request }) => {
 			headers: { "Content-Type": "application/json" }
 		});
 	} catch (error) {
+		monitorEvent("rating.save.error", { message: error instanceof Error ? error.message : "Unknown error" }, "error");
 		return new Response(JSON.stringify({
 			error: "Failed to save rating.",
 			detail: error instanceof Error ? error.message : "Unknown error"

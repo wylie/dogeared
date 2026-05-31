@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { resolveUserBySession } from "../../../lib/auth";
 import { getNeonSql } from "../../../lib/neon";
+import { monitorEvent } from "../../../lib/monitoring";
 
 export const prerender = false;
 
@@ -97,12 +98,21 @@ export const GET: APIRoute = async ({ request, url }) => {
 export const POST: APIRoute = async ({ request }) => {
 	try {
 		const session = await resolveUserBySession(request);
-		if (!session?.userId) return json(401, { error: "You must be logged in to comment." });
+		if (!session?.userId) {
+			monitorEvent("activity.comment.unauthorized", {}, "warn");
+			return json(401, { error: "You must be logged in to comment." });
+		}
 		const body = await request.json() as { activityId?: unknown; body?: unknown };
 		const activityId = normalizeActivityId(body?.activityId);
 		const message = normalizeText(body?.body).slice(0, 500);
-		if (activityId <= 0) return json(400, { error: "Invalid activity id." });
-		if (!message) return json(400, { error: "Comment cannot be empty." });
+		if (activityId <= 0) {
+			monitorEvent("activity.comment.invalid_activity", { userId: session.userId }, "warn");
+			return json(400, { error: "Invalid activity id." });
+		}
+		if (!message) {
+			monitorEvent("activity.comment.empty", { userId: session.userId, activityId }, "warn");
+			return json(400, { error: "Comment cannot be empty." });
+		}
 		await ensureCommentTable();
 		await ensureNotificationTable();
 		const sql = getNeonSql();
@@ -112,7 +122,10 @@ export const POST: APIRoute = async ({ request }) => {
 			where id = ${activityId}
 			limit 1
 		`;
-		if (activityRows.length === 0) return json(404, { error: "Activity not found." });
+		if (activityRows.length === 0) {
+			monitorEvent("activity.comment.activity_missing", { userId: session.userId, activityId }, "warn");
+			return json(404, { error: "Activity not found." });
+		}
 		const inserted = await sql<Array<{ id: number; created_at: string; username: string | null }>>`
 			with inserted as (
 				insert into user_activity_comment (activity_id, user_id, body)
@@ -135,6 +148,7 @@ export const POST: APIRoute = async ({ request }) => {
 				values (${ownerUserId}::uuid, ${session.userId}::uuid, ${activityId}, 'activity_comment')
 			`;
 		}
+		monitorEvent("activity.comment.success", { userId: session.userId, activityId, commentId: Number(inserted[0]?.id || 0) });
 		return json(200, {
 			ok: true,
 			commentCount: Math.max(0, Number(counts[0]?.comment_count || 0)),
@@ -148,6 +162,7 @@ export const POST: APIRoute = async ({ request }) => {
 			}
 		});
 	} catch (error) {
+		monitorEvent("activity.comment.error", { message: error instanceof Error ? error.message : "Unknown error" }, "error");
 		return json(500, { error: "Failed to post comment.", detail: error instanceof Error ? error.message : "Unknown error" });
 	}
 };

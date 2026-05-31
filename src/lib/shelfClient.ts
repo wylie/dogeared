@@ -373,10 +373,13 @@ export async function removeBookFromAllShelvesOnServer(
 	redirectPath = "/settings#account-settings"
 ) {
 	const normalizedBookId = Math.max(0, Number(bookId || 0) || 0);
+	const payload: Record<string, unknown> = {};
+	if (normalizedBookId > 0) payload.bookId = normalizedBookId;
+	if (entry && typeof entry === "object") payload.entry = entry;
 	const response = await fetch("/api/shelf/entries", {
 		method: "DELETE",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ bookId: normalizedBookId, entry: entry && typeof entry === "object" ? entry : undefined })
+		body: JSON.stringify(payload)
 	});
 	if (response.status === 401) {
 		window.location.href = redirectPath;
@@ -389,6 +392,30 @@ export async function removeBookFromAllShelvesOnServer(
 		data = null;
 	}
 	return { ok: response.ok, unauthorized: false, response, data };
+}
+
+export function resolveShelfRemoveMessage(result: {
+	ok: boolean;
+	unauthorized?: boolean;
+	response?: Response;
+	data?: unknown;
+	error?: unknown;
+}) {
+	if (result.ok) return "";
+	const apiError = (result.data && typeof result.data === "object")
+		? String(
+			(result.data as Record<string, unknown>).detail
+			|| (result.data as Record<string, unknown>).error
+			|| ""
+		).trim()
+		: "";
+	if (apiError) return apiError;
+	if (result.unauthorized || result.response?.status === 401) return "Please log in to manage shelves.";
+	if (result.response?.status === 404) return "This book is already off your shelves.";
+	if (result.response?.status === 400) return "Missing book details. Try removing again from the book page.";
+	if (result.response && result.response.status >= 500) return "Server error while removing. Please retry.";
+	if (result.error) return "Network error while removing. Please retry.";
+	return "Failed to remove from shelves.";
 }
 
 export function resolveShelfSaveMessage(result: {

@@ -137,6 +137,13 @@ let errorMessage = "";
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let viewerRatingByBookId = new Map<number, number>();
 let readerSuggestions: Awaited<ReturnType<typeof resolvePublicReaderSuggestions>> = [];
+let onboardingProgress = {
+	totalBooks: 0,
+	ratedBooks: 0,
+	finishedWithReview: 0,
+	follows: 0,
+	profileComplete: false
+};
 if (session?.userId) {
 	try {
 		readerSuggestions = await resolvePublicReaderSuggestions(session.userId, 6);
@@ -329,10 +336,133 @@ try {
 			);
 		}
 	}
+	if (session?.userId) {
+		try {
+			const [bookRows, followRows, profileRows] = await Promise.all([
+				sql<Array<{ total_books: number; rated_books: number; finished_with_review: number }>>`
+					select
+						count(*)::int as total_books,
+						count(*) filter (where rating is not null)::int as rated_books,
+						count(*) filter (where status = 'finished' and char_length(trim(coalesce(finished_reflection, ''))) > 0)::int as finished_with_review
+					from user_book
+					where user_id = ${session.userId}::uuid
+				`,
+				sql<Array<{ follows: number }>>`
+					select count(*)::int as follows
+					from user_follow
+					where follower_user_id = ${session.userId}::uuid
+				`,
+				sql<Array<{ profile_data: unknown }>>`
+					select profile_data
+					from app_user
+					where id = ${session.userId}::uuid
+					limit 1
+				`
+			]);
+			const profileData = (profileRows[0]?.profile_data && typeof profileRows[0]?.profile_data === "object")
+				? profileRows[0].profile_data as Record<string, unknown>
+				: {};
+			onboardingProgress = {
+				totalBooks: Math.max(0, Number(bookRows[0]?.total_books || 0)),
+				ratedBooks: Math.max(0, Number(bookRows[0]?.rated_books || 0)),
+				finishedWithReview: Math.max(0, Number(bookRows[0]?.finished_with_review || 0)),
+				follows: Math.max(0, Number(followRows[0]?.follows || 0)),
+				profileComplete: !!String(profileData.blurb || "").trim()
+			};
+		} catch (error) {
+			console.error("Home onboarding progress query failed.", error);
+		}
+	}
+	if (!errorMessage && sections.length === 0) {
+		const fallbackRows = await sql<Array<{
+			book_id: number;
+			title: string;
+			primary_author: string;
+			author_id: number | null;
+			shelf_count: number;
+			synopsis: string;
+			cover_url: string;
+			published_year: number | null;
+			language: string;
+			isbn10: string;
+			isbn13: string;
+			google_books_id: string;
+			page_count: number;
+			average_rating: number | null;
+			rating_count: number;
+		}>>`
+			select
+				b.id as book_id,
+				b.title,
+				b.primary_author,
+				b.author_id,
+				coalesce(sc.shelf_count, 0)::int as shelf_count,
+				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+				b.cover_url,
+				b.published_year,
+				b.language,
+				b.isbn10,
+				b.isbn13,
+				b.google_books_id,
+				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
+				coalesce(ra.average_rating, 0) as average_rating,
+				coalesce(ra.rating_count, 0)::int as rating_count
+			from book b
+			left join lateral (
+				select count(*)::int as shelf_count
+				from user_book ub
+				where ub.book_id = b.id
+			) sc on true
+			left join lateral (
+				select
+					round(avg(ub.rating)::numeric, 1) as average_rating,
+					count(*) filter (where ub.rating is not null) as rating_count
+				from user_book ub
+				where ub.book_id = b.id
+			) ra on true
+			where coalesce(sc.shelf_count, 0) > 0
+			order by coalesce(sc.shelf_count, 0) desc, coalesce(ra.average_rating, 0) desc
+			limit 16
+		`;
+		if (fallbackRows.length > 0) {
+			sections = [{
+				id: "popular-now",
+				title: "Popular With Readers",
+				subtitle: "Start here while Dogeared learns your taste. These books are popular with active readers.",
+				books: fallbackRows.map((row) => ({
+					id: `book_${row.book_id}`,
+					title: String(row.title || "").trim(),
+					authors: [String(row.primary_author || "").trim()].filter(Boolean),
+					authorId: Number(row.author_id || 0),
+					shelfCount: Number(row.shelf_count || 0),
+					thumbnail: String(row.cover_url || "").trim(),
+					publishedDate: row.published_year ? String(row.published_year) : "",
+					description: sanitizeDescription(String(row.synopsis || "")),
+					pageCount: Math.max(0, Number(row.page_count || 0) || 0),
+					format: "Book",
+					language: String(row.language || "").trim().toUpperCase(),
+					isbn10: String(row.isbn10 || "").trim(),
+					isbn13: String(row.isbn13 || "").trim(),
+					averageRating: Number(row.average_rating || 0),
+					ratingCount: Number(row.rating_count || 0),
+					source: row.google_books_id ? "google_books" : "open_library",
+					sourceWorkId: String(row.google_books_id || "").trim(),
+					sourceUrl: row.google_books_id ? `https://books.google.com/books?id=${encodeURIComponent(String(row.google_books_id).trim())}` : ""
+				}))
+			}];
+		}
+	}
 } catch (error) {
 	console.error("Home shelves query failed.", error);
 	errorMessage = "Live home shelves are temporarily unavailable.";
 }
+const isOnboardingComplete = (
+	onboardingProgress.totalBooks > 0
+	&& onboardingProgress.ratedBooks > 0
+	&& onboardingProgress.finishedWithReview > 0
+	&& onboardingProgress.follows > 0
+	&& onboardingProgress.profileComplete
+);
 ---
 
 <Layout
@@ -345,6 +475,22 @@ try {
 			<h1>Find your next book.<br/>Keep your reading life your own.</h1>
 			<p class="subhead">Browse popular shelves, save what matters, and build your reading history without the noise.</p>
 		</header>
+		{isAuthenticated && !isOnboardingComplete && (
+			<section class="onboarding-checklist" data-onboarding-checklist>
+				<div class="checklist-head">
+					<h2>Getting Started</h2>
+					<button type="button" class="checklist-dismiss" data-action="dismiss-onboarding-checklist">Dismiss</button>
+				</div>
+				<p class="checklist-copy">These steps help Dogeared learn your taste faster and improve recommendations.</p>
+				<ul>
+					<li class={onboardingProgress.totalBooks > 0 ? "is-done" : ""}>{onboardingProgress.totalBooks > 0 ? "Done" : "Next"}: Add your first book to a shelf.</li>
+					<li class={onboardingProgress.ratedBooks > 0 ? "is-done" : ""}>{onboardingProgress.ratedBooks > 0 ? "Done" : "Next"}: Rate a book you finished.</li>
+					<li class={onboardingProgress.finishedWithReview > 0 ? "is-done" : ""}>{onboardingProgress.finishedWithReview > 0 ? "Done" : "Next"}: Write one short review.</li>
+					<li class={onboardingProgress.follows > 0 ? "is-done" : ""}>{onboardingProgress.follows > 0 ? "Done" : "Next"}: Follow a reader you trust.</li>
+					<li class={onboardingProgress.profileComplete ? "is-done" : ""}>{onboardingProgress.profileComplete ? "Done" : "Next"}: Add a profile blurb so readers can find you.</li>
+				</ul>
+			</section>
+		)}
 		{!errorMessage && sections.length > 0 && (
 			<nav class="home-jump-links" aria-label="Jump to genres">
 				{sections.map((section) => (
@@ -356,7 +502,7 @@ try {
 		{errorMessage && <p class="error">{errorMessage}</p>}
 		{!errorMessage && sections.length === 0 && (
 			<p class="empty">
-				No real genre shelves are ready yet. Right now Dogeared mostly has reading-status shelves rather than subject genres.
+				We do not have enough personalized data yet. Start by searching for a favorite book, add it to a shelf, and rate one finished read.
 			</p>
 		)}
 
@@ -569,6 +715,34 @@ try {
 		border: 1px solid #fecdd3;
 		padding: 0.7rem 0.8rem;
 		border-radius: 10px;
+	}
+	.onboarding-checklist {
+		margin: 0 0 1rem;
+		background: #fffdf6;
+		border: 1px solid #eadcc1;
+		border-radius: 12px;
+		padding: 0.7rem;
+	}
+	.checklist-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+	.checklist-head h2 { margin: 0; font-size: 1rem; }
+	.checklist-copy { margin: 0.35rem 0 0; font-size: 0.9rem; color: #4d4d4d; }
+	.onboarding-checklist ul { margin: 0.5rem 0 0; padding-left: 1rem; display: grid; gap: 0.2rem; }
+	.onboarding-checklist li { font-size: 0.9rem; color: #2f3b52; }
+	.onboarding-checklist li.is-done { color: #1f7a45; }
+	.checklist-dismiss {
+		border: none;
+		background: transparent;
+		color: var(--color-secondary);
+		font: inherit;
+		font-size: 0.82rem;
+		font-weight: 700;
+		cursor: pointer;
+		padding: 0.2rem 0.35rem;
 	}
 
 	.browse-section {
@@ -926,7 +1100,13 @@ try {
 	let isAuthenticated = browsePage?.dataset.authenticated === "true";
 	const feedbackTimers = new WeakMap();
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
+	const onboardingChecklist = document.querySelector("[data-onboarding-checklist]");
+	const onboardingDismissKey = "dogeared:onboarding-checklist:dismissed";
 	initRatingControls();
+	if (onboardingChecklist instanceof HTMLElement) {
+		const dismissed = localStorage.getItem(onboardingDismissKey) === "1";
+		if (dismissed) onboardingChecklist.hidden = true;
+	}
 
 	function normalizeText(value) {
 		return String(value || "").trim().toLowerCase();
@@ -1326,6 +1506,12 @@ try {
 					if (feedback instanceof HTMLElement) feedback.textContent = "Failed to follow.";
 				}
 			})();
+			return;
+		}
+		const dismissChecklistButton = target.closest('[data-action="dismiss-onboarding-checklist"]');
+		if (dismissChecklistButton instanceof HTMLButtonElement && onboardingChecklist instanceof HTMLElement) {
+			onboardingChecklist.hidden = true;
+			localStorage.setItem(onboardingDismissKey, "1");
 			return;
 		}
 		if (target.closest(".shelf-dropdown")) return;
