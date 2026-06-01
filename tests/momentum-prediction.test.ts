@@ -11,7 +11,7 @@ test("suppresses prediction for newly started books", () => {
 		progressUpdateCount: 1
 	});
 	assert.equal(result.eligible, false);
-	assert.equal(result.label, "Too early to estimate");
+	assert.equal(result.label, "Recently started");
 });
 
 test("suppresses low-confidence predictions even with some progress", () => {
@@ -23,7 +23,8 @@ test("suppresses low-confidence predictions even with some progress", () => {
 		progressUpdateCount: 1
 	});
 	assert.equal(result.eligible, false);
-	assert.ok(result.confidence < 0.45);
+	assert.equal(result.label, "Recently started");
+	assert.ok(result.confidence < 0.5);
 });
 
 test("shows supportive prediction once thresholds are met", () => {
@@ -35,7 +36,7 @@ test("shows supportive prediction once thresholds are met", () => {
 		progressUpdateCount: 3
 	});
 	assert.equal(result.eligible, true);
-	assert.equal(result.label, "Reading steadily");
+	assert.equal(result.label, "Strong momentum");
 	assert.ok(result.finishProbability >= 20);
 });
 

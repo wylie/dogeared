@@ -22,7 +22,8 @@ export const MOMENTUM_THRESHOLDS = {
 	minPercentRead: 10,
 	minProgressUpdates: 2,
 	minElapsedDays: 2,
-	minConfidence: 0.45
+	minConfidence: 0.5,
+	highConfidence: 0.72
 } as const;
 
 function clamp01(value: number) {
@@ -39,8 +40,8 @@ export function daysSinceDate(value: string) {
 }
 
 function readingHealthFromDays(daysSinceUpdate: number) {
-	if (daysSinceUpdate <= 2) return { label: "Reading steadily", tone: "good" as const, recencyScore: 1 };
-	if (daysSinceUpdate <= 7) return { label: "On track", tone: "good" as const, recencyScore: 0.72 };
+	if (daysSinceUpdate <= 1) return { label: "Strong momentum", tone: "good" as const, recencyScore: 1 };
+	if (daysSinceUpdate <= 5) return { label: "Reading steadily", tone: "good" as const, recencyScore: 0.76 };
 	return { label: "Reading momentum slowing", tone: "neutral" as const, recencyScore: 0.42 };
 }
 
@@ -66,10 +67,11 @@ export function resolveMomentumPrediction(input: PredictionInput): MomentumPredi
 	const updates = Math.max(0, Number(input.progressUpdateCount || 0) || 0);
 	const elapsedDays = Math.max(0, Number(input.daysSinceStart || 0) || 0);
 	const confidence = resolveConfidence(input);
+	const veryEarly = elapsedDays <= 2 && updates <= 1 && percent < 12;
 	const hasMinimumData = (
 		currentPage >= MOMENTUM_THRESHOLDS.minPagesRead
 		&& percent >= MOMENTUM_THRESHOLDS.minPercentRead
-		&& updates >= MOMENTUM_THRESHOLDS.minProgressUpdates
+		&& (updates >= MOMENTUM_THRESHOLDS.minProgressUpdates || (elapsedDays >= 7 && currentPage >= 60))
 		&& elapsedDays >= MOMENTUM_THRESHOLDS.minElapsedDays
 	);
 	if (!hasMinimumData || confidence < MOMENTUM_THRESHOLDS.minConfidence) {
@@ -77,9 +79,9 @@ export function resolveMomentumPrediction(input: PredictionInput): MomentumPredi
 			eligible: false,
 			confidence,
 			finishProbability: 0,
-			label: "Too early to estimate",
+			label: veryEarly ? "Recently started" : "Building reading history",
 			tone: "neutral",
-			message: "Add a few progress updates and Dogeared will learn your reading habits."
+			message: ""
 		};
 	}
 	const health = readingHealthFromDays(daysSinceUpdate);
@@ -93,9 +95,8 @@ export function resolveMomentumPrediction(input: PredictionInput): MomentumPredi
 		finishProbability,
 		label: health.label,
 		tone: health.tone,
-		message: finishProbability >= 78
-			? "Likely to finish soon."
-			: (finishProbability >= 58 ? "Building steady momentum." : "Keep going to build momentum.")
+		message: finishProbability >= 82 && confidence >= MOMENTUM_THRESHOLDS.highConfidence
+			? `Likely to finish soon (${finishProbability}%).`
+			: (finishProbability >= 60 ? "Likely to finish soon." : "Keep going.")
 	};
 }
-

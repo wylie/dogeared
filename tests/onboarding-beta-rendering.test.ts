@@ -39,10 +39,17 @@ test("shelf removal client surfaces specific API errors", () => {
 });
 
 test("profile momentum messaging is onboarding-friendly and supportive", () => {
+	const profileSource = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const predictionSource = readFileSync("src/lib/momentumPrediction.ts", "utf8");
+	assert.equal(predictionSource.includes("Recently started"), true);
+	assert.equal(predictionSource.includes("Building reading history"), true);
+	assert.equal(profileSource.includes("Add a few progress updates and Dogeared will start estimating reading momentum."), true);
+	assert.equal(predictionSource.includes("At risk"), false);
+	assert.equal(profileSource.includes("get back on track"), false);
+});
+
+test("profile only renders one onboarding prediction hint at a time", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
-	assert.equal(source.includes("Too early to estimate"), true);
-	assert.equal(source.includes("Add a few progress updates and Dogeared will start estimating reading momentum."), true);
-	assert.equal(source.includes("likely to finish"), false);
-	assert.equal(source.includes("At risk"), false);
-	assert.equal(source.includes("get back on track"), false);
+	assert.equal(source.includes("showOnboardingStatus"), true);
+	assert.equal(source.includes("if (!momentum.showOnboardingStatus) return null;"), true);
 });
