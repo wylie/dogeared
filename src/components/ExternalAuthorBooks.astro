@@ -1,0 +1,48 @@
+---
+import type { ExternalAuthorBook } from "../lib/externalAuthorBooks";
+type Props = { books?: ExternalAuthorBook[] };
+const { books = [] } = Astro.props as Props;
+---
+
+<section class="external-books-section" aria-labelledby="external-books-title">
+	<div class="external-books-head">
+		<div>
+			<h2 id="external-books-title">Not Yet In Dogeared</h2>
+			<p>Additional titles from Open Library. Viewing them here does not add them to Dogeared.</p>
+		</div>
+	</div>
+	{books.length === 0 ? (
+		<p class="external-empty">No additional titles were found. Try searching by title to explore other editions.</p>
+	) : (
+		<ul class="external-book-grid">
+			{books.map((book) => (
+				<li class="external-book-card">
+					{book.coverUrl ? <img src={book.coverUrl} alt={`${book.title} cover`} loading="lazy" width="60" height="90" /> : <span class="external-cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></span>}
+					<div>
+						<h3><a href={book.sourceUrl} target="_blank" rel="noopener noreferrer">{book.title}</a></h3>
+						{book.author && <p>by {book.author}</p>}
+						{book.publishedYear > 0 && <p>First published {book.publishedYear}</p>}
+						<a class="external-search-link" href={`/search?q=${encodeURIComponent(`${book.title} ${book.author}`.trim())}`}>Search Dogeared</a>
+					</div>
+				</li>
+			))}
+		</ul>
+	)}
+</section>
+
+<style>
+	.external-books-section { margin-top: 1.3rem; }
+	.external-books-head h2 { margin: 0; }
+	.external-books-head p, .external-empty { margin: 0.3rem 0 0; color: #56616d; line-height: 1.45; }
+	.external-book-grid { list-style: none; margin: 0.7rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; }
+	.external-book-card { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 0.65rem; padding: 0.7rem; border-radius: 12px; background: #fffdf8; border: 1px solid #e4d9c4; min-width: 0; }
+	.external-book-card img, .external-cover-placeholder { width: 60px; height: 90px; border-radius: 5px; object-fit: cover; background: #eef1f3; }
+	.external-cover-placeholder { display: grid; place-items: center; color: #7d8791; }
+	.external-book-card h3 { margin: 0; font-size: 0.96rem; overflow-wrap: anywhere; }
+	.external-book-card h3 a { color: inherit; text-decoration: none; }
+	.external-book-card h3 a:hover, .external-book-card h3 a:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+	.external-book-card p { margin: 0.18rem 0; color: #59636f; font-size: 0.82rem; }
+	.external-search-link { display: inline-block; margin-top: 0.28rem; color: var(--color-secondary); font-size: 0.82rem; font-weight: 700; text-decoration: none; }
+	.external-search-link:hover, .external-search-link:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+	@media (max-width: 760px) { .external-book-grid { grid-template-columns: 1fr; } }
+</style>

@@ -2,7 +2,6 @@
 import Layout from "../layouts/Layout.astro";
 import BookCard from "../components/BookCard.astro";
 import ShelfDropdown from "../components/ShelfDropdown.astro";
-import Chip from "../components/Chip.astro";
 import { resolveUserBySession } from "../lib/auth";
 import { getNeonSql } from "../lib/neon";
 import { formatGenreLabel } from "../lib/genres";
@@ -505,6 +504,7 @@ const relatedStructuredDataPayload = JSON.stringify([
 									publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
 									pageCount={book.pageCount}
 									averageRating={book.averageRating}
+									genres={book.genres}
 								>
 									<div slot="meta">
 									</div>
@@ -545,7 +545,7 @@ const relatedStructuredDataPayload = JSON.stringify([
 					{error ? (
 						<p class="error">{error}</p>
 					) : books.length === 0 ? (
-						<p>No matching books found yet.</p>
+						<p>No books match this collection yet. Search for a favorite title and add it to a shelf to help grow this section.</p>
 					) : (
 						<ul class="book-grid">
 							{books.map((book) => (
@@ -560,17 +560,9 @@ const relatedStructuredDataPayload = JSON.stringify([
 									publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
 									pageCount={book.pageCount}
 									averageRating={book.averageRating}
+									genres={book.genres}
 								>
 									<div slot="meta">
-									</div>
-									<div class="genre-chips">
-										{(book.genres.length > 0 ? book.genres : ["Uncategorized"]).slice(0, 4).map((genre) => (
-											<Chip
-												className="genre-chip"
-												label={formatGenreLabel(genre, "Uncategorized")}
-												href={`/related?kind=genre&value=${encodeURIComponent(genre)}`}
-											/>
-										))}
 									</div>
 									<div slot="actions">
 										<ShelfDropdown attrs={{

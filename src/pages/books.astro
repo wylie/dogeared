@@ -29,6 +29,7 @@ type BookStatsRow = {
 	recent_readers_30d: number;
 	recent_shelves_30d: number;
 	last_activity: string | null;
+	genres: string[];
 };
 
 type CuratedSection = {
@@ -59,13 +60,18 @@ const rows = await sql<BookStatsRow[]>`
 			count(ub.book_id)::int as shelves,
 			round(avg(ub.rating)::numeric, 2) as rating_avg,
 			count(*) filter (where ub.rating is not null)::int as rating_count,
-			count(distinct ub.user_id) filter (
-				where ub.updated_at >= now() - interval '30 day'
-			)::int as recent_readers_30d,
 			count(ub.book_id) filter (
 				where ub.updated_at >= now() - interval '30 day'
+			)::int as recent_readers_30d,
+			count(distinct ub.user_id) filter (
+				where ub.updated_at >= now() - interval '30 day'
 			)::int as recent_shelves_30d,
-			max(coalesce(ub.updated_at, b.updated_at, b.created_at))::text as last_activity
+			max(coalesce(ub.updated_at, b.updated_at, b.created_at))::text as last_activity,
+			(
+				select coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}')
+				from book_genre bg
+				where bg.book_id = b.id
+			) as genres
 		from book b
 		left join user_book ub on ub.book_id = b.id
 		group by
@@ -205,6 +211,7 @@ const booksStructuredData = JSON.stringify([
 									publishedLabel={row.published_year > 0 ? String(row.published_year) : ""}
 									pageCount={row.page_count}
 									averageRating={Number(row.rating_avg || 0)}
+									genres={row.genres}
 								>
 									<div slot="actions">
 										<ShelfDropdown attrs={{

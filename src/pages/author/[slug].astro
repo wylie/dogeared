@@ -2,11 +2,12 @@
 import Layout from "../../layouts/Layout.astro";
 import BookCard from "../../components/BookCard.astro";
 import ShelfDropdown from "../../components/ShelfDropdown.astro";
-import Chip from "../../components/Chip.astro";
 import RatingControl from "../../components/RatingControl.astro";
+import ExternalAuthorBooks from "../../components/ExternalAuthorBooks.astro";
 import { getNeonSql } from "../../lib/neon";
 import { resolveUserBySession } from "../../lib/auth";
 import { authorHref, canonicalizeAuthor, normalizeAuthorName } from "../../lib/author";
+import { fetchExternalAuthorBooks, type ExternalAuthorBook } from "../../lib/externalAuthorBooks";
 
 export const prerender = false;
 
@@ -49,6 +50,7 @@ let bioSourceUrl = "";
 let authorPhotoUrl = "";
 let shelvesCount = 0;
 let readersCount = 0;
+let externalBooks: ExternalAuthorBook[] = [];
 
 function renderAverageStars(value: number) {
 	const rounded = Math.max(0, Math.min(5, Math.round((Number(value || 0) + Number.EPSILON) * 2) / 2));
@@ -180,6 +182,7 @@ try {
 } catch (error) {
 	errorMessage = error instanceof Error ? error.message : "Failed to load author page.";
 }
+if (authorName) externalBooks = await fetchExternalAuthorBooks(authorName, books.map((book) => book.title));
 
 const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 ---
@@ -209,10 +212,10 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 			</div>
 		</section>
 
-		<section class="books-section">
-			<h2>Books</h2>
+			<section class="books-section">
+				<h2>Books In Dogeared</h2>
 			{books.length === 0 ? (
-				<p>No books found for this author yet.</p>
+				<p>No books by this author have been added to Dogeared yet. Browse the external titles below or search for a specific book.</p>
 			) : (
 				<ul class="book-grid">
 					{books.map((book) => (
@@ -228,6 +231,7 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 							publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
 							pageCount={book.pageCount}
 							averageRating={book.averageRating}
+							genres={book.genres}
 						>
 							<div slot="preMeta">
 								<p class="meta">{book.genres[0] || "Uncategorized"}</p>
@@ -241,13 +245,6 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 								{viewerStatusByBookId.get(Number(book.id || 0)) !== "finished" && !(Number(book.ratingCount || 0) > 0) && (
 									<p class="meta">No ratings yet.</p>
 								)}
-							</div>
-							<div slot="footer" class="book-card-footer">
-								<div class="chips">
-									{(book.genres.length > 0 ? book.genres : ["Uncategorized"]).slice(0, 4).map((genre) => (
-										<Chip className="genre-chip" label={genre} />
-									))}
-								</div>
 							</div>
 							<div slot="actions">
 								<ShelfDropdown attrs={{
@@ -269,7 +266,8 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 					))}
 				</ul>
 			)}
-		</section>
+			</section>
+			<ExternalAuthorBooks books={externalBooks} />
 	</div>
 </Layout>
 

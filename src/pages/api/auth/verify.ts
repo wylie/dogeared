@@ -47,6 +47,11 @@ export const GET: APIRoute = async ({ url }) => {
 
 		const headers = new Headers({ Location: redirectPath });
 		headers.append("Set-Cookie", createSessionCookie(sessionToken));
+		headers.append("Set-Cookie", "dogeared_new_visitor=; Path=/; Max-Age=0; SameSite=Lax");
+		headers.append("Set-Cookie", "dogeared_visitor_guidance_dismissed=; Path=/; Max-Age=0; SameSite=Lax");
+		if (!username) {
+			headers.append("Set-Cookie", "dogeared_new_reader=true; Path=/; Max-Age=31536000; SameSite=Lax");
+		}
 		return new Response(null, { status: 302, headers });
 	} catch {
 		return Response.redirect(invalidRedirect, 302);

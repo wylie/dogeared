@@ -217,6 +217,7 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 		created_at: string;
 		rating: number | null;
 		finished_reflection: string | null;
+		genres: string[];
 	}>>`
 		select
 			ua.book_id,
@@ -233,6 +234,11 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 			ua.created_at::text as created_at
 			,ub.rating
 			,coalesce(ub.finished_reflection, '') as finished_reflection
+			,(
+				select coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}')
+				from book_genre bg
+				where bg.book_id = b.id
+			) as genres
 		from user_activity ua
 		join book b on b.id = ua.book_id
 		left join user_book ub on ub.user_id = ua.user_id and ub.book_id = ua.book_id
@@ -258,6 +264,7 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 		updatedAt: string;
 		rating: number;
 		finishedReflection: string;
+		genres: string[];
 	}>();
 
 	for (const row of rows) {
@@ -278,7 +285,8 @@ export async function resolvePublicRecentActivity(targetUserId: string, limit = 
 			description: normalizeText(row.synopsis),
 			updatedAt: row.created_at,
 			rating: Math.max(0, Math.min(5, Number(row.rating || 0) || 0)),
-			finishedReflection: normalizeText(row.finished_reflection)
+			finishedReflection: normalizeText(row.finished_reflection),
+			genres: Array.isArray(row.genres) ? row.genres.map(normalizeText).filter(Boolean) : []
 		});
 		if (byBook.size >= safeLimit) break;
 	}

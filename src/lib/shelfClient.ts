@@ -125,6 +125,11 @@ export function normalizeRatingValue(value: unknown) {
 	return rounded >= 1 && rounded <= 5 ? rounded : null;
 }
 
+function notifyReadingDataChanged() {
+	if (typeof window === "undefined" || typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
+	window.dispatchEvent(new CustomEvent("dogeared:reading-data-changed"));
+}
+
 export async function syncShelfRatingToServer(input: { bookId: unknown; rating: unknown }) {
 	const response = await fetch("/api/shelf/rating", {
 		method: "PATCH",
@@ -144,6 +149,7 @@ export async function syncShelfRatingToServer(input: { bookId: unknown; rating: 
 	} catch {
 		data = null;
 	}
+	if (response.ok) notifyReadingDataChanged();
 	return { ok: response.ok, unauthorized: false, response, data };
 }
 
@@ -345,6 +351,7 @@ export async function syncShelfEntryToServer(entry: unknown, redirectPath = "/se
 	} catch {
 		data = null;
 	}
+	if (response.ok) notifyReadingDataChanged();
 	return { ok: response.ok, unauthorized: false, response, data };
 }
 

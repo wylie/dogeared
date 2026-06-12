@@ -11,6 +11,7 @@ type Props = {
 	publishedLabel?: string;
 	pageCount?: number;
 	averageRating?: number;
+	genres?: string[];
 	attrs?: Record<string, string>;
 };
 
@@ -26,6 +27,7 @@ const {
 	publishedLabel = "",
 	pageCount = 0,
 	averageRating = 0,
+	genres = [],
 	attrs = {}
 } = Astro.props as Props;
 
@@ -37,6 +39,7 @@ const normalizedReaders = Number(readers);
 const normalizedShelves = Number(shelfEntries);
 const normalizedPages = Number(pageCount);
 const normalizedRating = Math.max(0, Math.min(5, Number(averageRating) || 0));
+const normalizedGenres = Array.from(new Set((Array.isArray(genres) ? genres : []).map((genre) => String(genre || "").trim()).filter(Boolean))).slice(0, 4);
 
 function renderAverageStars(value: number) {
 	const rounded = Math.round(value);
@@ -97,6 +100,13 @@ function renderAverageStars(value: number) {
 		)}
 		{normalizedRating > 0 && (
 			<p class="meta">Average rating: {renderAverageStars(normalizedRating)} {normalizedRating.toFixed(2)}</p>
+		)}
+		{normalizedGenres.length > 0 && (
+			<div class="genre-links" aria-label="Genres">
+				{normalizedGenres.map((genre) => (
+					<a href={`/related?kind=genre&value=${encodeURIComponent(genre)}`}>{genre}</a>
+				))}
+			</div>
 		)}
 		<slot name="preMeta" />
 		<slot name="meta" />
@@ -248,6 +258,9 @@ function renderAverageStars(value: number) {
 	:global(.book-card .meta + .meta) {
 		margin-top: 0.1rem;
 	}
+	.genre-links { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.25rem; }
+	.genre-links a { color: #1f4f7a; background: #e7edf3; border: 1px solid #c7d5e1; border-radius: 999px; padding: 0.14rem 0.48rem; font-size: 0.76rem; font-weight: 700; line-height: 1.25; text-decoration: none; }
+	.genre-links a:hover, .genre-links a:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
 	.description-wrap {
 		margin-top: 0.25rem;
 	}

@@ -168,6 +168,7 @@ if (session?.userId) {
 					publishedLabel={publishedYearOnly(result.publishedDate)}
 					pageCount={result.pageCount || 0}
 					averageRating={averageRating}
+					genres={result.categories}
 				>
 						<div slot="meta">
 							{result.publisher && <p class="meta">Publisher: {result.publisher}</p>}

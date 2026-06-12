@@ -1,0 +1,145 @@
+---
+type Props = { isAuthenticated?: boolean };
+const { isAuthenticated = false } = Astro.props as Props;
+---
+
+<aside
+	class="reader-guidance"
+	data-reader-guidance
+	data-authenticated={String(isAuthenticated)}
+	hidden
+	aria-label="Getting started with Dogeared"
+>
+	<div>
+		<p class="reader-guidance-title" data-guidance-title>New to Dogeared?</p>
+		<p class="reader-guidance-copy" data-guidance-copy></p>
+	</div>
+	<div class="reader-guidance-actions">
+		<button type="button" class="reader-guidance-primary" data-guidance-try>Try It</button>
+		<button type="button" class="reader-guidance-dismiss" data-guidance-dismiss aria-label="Dismiss getting started guidance">Dismiss</button>
+	</div>
+</aside>
+
+<script>
+	const guidance = document.querySelector("[data-reader-guidance]");
+
+	function readCookie(name) {
+		const prefix = `${name}=`;
+		return document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(prefix))?.slice(prefix.length) || "";
+	}
+
+	function writeCookie(name, value, maxAge = 60 * 60 * 24 * 365) {
+		document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
+	}
+
+	function clearCookie(name) {
+		writeCookie(name, "", 0);
+	}
+
+	function hideGuidance() {
+		if (guidance instanceof HTMLElement) guidance.hidden = true;
+	}
+
+	async function refreshReaderStatus() {
+		if (!(guidance instanceof HTMLElement) || guidance.dataset.authenticated !== "true") return;
+		try {
+			const response = await fetch("/api/onboarding/status", { credentials: "same-origin" });
+			const data = await response.json().catch(() => ({}));
+			if (response.ok && data?.complete) {
+				clearCookie("dogeared_new_reader");
+				clearCookie("dogeared_reader_guidance_dismissed");
+				hideGuidance();
+			}
+		} catch {
+			// Guidance should never interfere with reading actions.
+		}
+	}
+
+	if (guidance instanceof HTMLElement) {
+		const authenticated = guidance.dataset.authenticated === "true";
+		const title = guidance.querySelector("[data-guidance-title]");
+		const copy = guidance.querySelector("[data-guidance-copy]");
+		const tryButton = guidance.querySelector("[data-guidance-try]");
+		const dismissButton = guidance.querySelector("[data-guidance-dismiss]");
+
+		if (!authenticated && !readCookie("dogeared_new_visitor")) {
+			writeCookie("dogeared_new_visitor", "true");
+		}
+
+		const visitorVisible = !authenticated
+			&& readCookie("dogeared_new_visitor") === "true"
+			&& readCookie("dogeared_visitor_guidance_dismissed") !== "true";
+		const readerVisible = authenticated
+			&& readCookie("dogeared_new_reader") === "true"
+			&& readCookie("dogeared_reader_guidance_dismissed") !== "true";
+
+		if (visitorVisible) {
+			guidance.dataset.mode = "visitor";
+			if (title instanceof HTMLElement) title.textContent = "New to Dogeared?";
+			if (copy instanceof HTMLElement) copy.textContent = "Search for a favorite book, add it to a shelf, and rate it to start getting recommendations.";
+			guidance.hidden = false;
+		} else if (readerVisible) {
+			guidance.dataset.mode = "reader";
+			if (title instanceof HTMLElement) title.textContent = "Build your reading taste";
+			if (copy instanceof HTMLElement) copy.textContent = "Add a few favorite books and ratings to help Dogeared learn what you enjoy.";
+			guidance.hidden = false;
+			void refreshReaderStatus();
+		}
+
+		tryButton?.addEventListener("click", () => {
+			const search = document.getElementById("left-hand-search");
+			if (search instanceof HTMLInputElement) {
+				search.focus({ preventScroll: false });
+				search.scrollIntoView({ behavior: "smooth", block: "center" });
+				return;
+			}
+			window.location.href = "/search";
+		});
+
+		dismissButton?.addEventListener("click", () => {
+			const mode = String(guidance.dataset.mode || "visitor");
+			writeCookie(mode === "reader" ? "dogeared_reader_guidance_dismissed" : "dogeared_visitor_guidance_dismissed", "true");
+			hideGuidance();
+		});
+
+		window.addEventListener("dogeared:reading-data-changed", () => void refreshReaderStatus());
+	}
+</script>
+
+<style>
+	.reader-guidance {
+		position: fixed;
+		left: 50%;
+		bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+		transform: translateX(-50%);
+		z-index: 9998;
+		width: min(680px, calc(100vw - 2rem));
+		box-sizing: border-box;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.85rem;
+		padding: 0.72rem 0.78rem;
+		border: 1px solid #d8c9a8;
+		border-radius: 12px;
+		background: #fffaf0;
+		box-shadow: 0 12px 26px rgba(41, 48, 55, 0.16);
+	}
+	.reader-guidance[hidden] { display: none; }
+	.reader-guidance-title { margin: 0; font-weight: 700; color: #263746; }
+	.reader-guidance-copy { margin: 0.16rem 0 0; color: #4d5660; font-size: 0.9rem; line-height: 1.35; }
+	.reader-guidance-actions { display: flex; align-items: center; gap: 0.35rem; flex: 0 0 auto; }
+	.reader-guidance-actions button { min-height: 44px; border-radius: 9px; padding: 0 0.75rem; font: inherit; font-weight: 700; cursor: pointer; }
+	.reader-guidance-primary { border: none; background: var(--color-primary); color: #fff; }
+	.reader-guidance-primary:hover { background: var(--color-primary-hover); }
+	.reader-guidance-dismiss { border: none; background: transparent; color: var(--color-secondary); }
+	@media (max-width: 680px) {
+		.reader-guidance { bottom: calc(5.4rem + env(safe-area-inset-bottom, 0px)); width: calc(100vw - 1rem); align-items: stretch; }
+		.reader-guidance-copy { font-size: 0.84rem; }
+		.reader-guidance-actions { align-self: center; }
+	}
+	@media (max-width: 480px) {
+		.reader-guidance { display: grid; gap: 0.45rem; }
+		.reader-guidance-actions { justify-content: flex-end; }
+	}
+</style>

@@ -278,6 +278,7 @@ let recentActivity: Array<{
 	likeCount: number;
 	viewerLiked: boolean;
 	updatedAt: string;
+	genres: string[];
 }> = [];
 let currentlyReading: Array<{
 	bookId: number;
@@ -295,6 +296,7 @@ let currentlyReading: Array<{
 	updatedAt: string;
 	firstAddedAt: string;
 	progressUpdates: number;
+	genres: string[];
 }> = [];
 let wantToReadBooks: Array<{
 	bookId: number;
@@ -307,6 +309,7 @@ let wantToReadBooks: Array<{
 	isbn13: string;
 	description: string;
 	updatedAt: string;
+	genres: string[];
 }> = [];
 let finishedBooks: Array<{
 	bookId: number;
@@ -321,6 +324,7 @@ let finishedBooks: Array<{
 	rating: number;
 	finishedDate: string;
 	updatedAt: string;
+	genres: string[];
 }> = [];
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let followState = {
@@ -346,6 +350,7 @@ let customShelfBooksByShelfId = new Map<number, Array<{
 	status: string;
 	rating: number;
 	updatedAt: string;
+	genres: string[];
 }>>();
 type MomentumBook = {
 	bookId: number;
@@ -510,6 +515,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 				updated_at: string;
 				first_added_at: string;
 				progress_updates: number;
+				genres: string[];
 			}>>`
 				select
 						b.id as book_id,
@@ -525,7 +531,11 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 					ub.total_pages,
 					ub.updated_at::text as updated_at,
 					coalesce(ub.first_added_at::text, ub.updated_at::text) as first_added_at,
-					coalesce(pe.progress_updates, 0)::int as progress_updates
+					coalesce(pe.progress_updates, 0)::int as progress_updates,
+					(
+						select coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}')
+						from book_genre bg where bg.book_id = b.id
+					) as genres
 				from user_book ub
 				join book b on b.id = ub.book_id
 				left join lateral (
@@ -551,6 +561,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 				isbn10: string;
 				isbn13: string;
 				updated_at: string;
+				genres: string[];
 			}>>`
 				select
 						b.id as book_id,
@@ -561,7 +572,11 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 					b.language,
 					b.isbn10,
 					b.isbn13,
-					ub.updated_at::text as updated_at
+					ub.updated_at::text as updated_at,
+					(
+						select coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}')
+						from book_genre bg where bg.book_id = b.id
+					) as genres
 				from user_book ub
 				join book b on b.id = ub.book_id
 				where ub.user_id = ${bundle.targetUserId}::uuid
@@ -583,6 +598,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 				rating: number | null;
 				finished_date: string | null;
 				updated_at: string;
+				genres: string[];
 			}>>`
 				select
 						b.id as book_id,
@@ -595,7 +611,11 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 					b.isbn13,
 					ub.rating,
 					ub.finished_date::text as finished_date,
-					ub.updated_at::text as updated_at
+					ub.updated_at::text as updated_at,
+					(
+						select coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}')
+						from book_genre bg where bg.book_id = b.id
+					) as genres
 				from user_book ub
 				join book b on b.id = ub.book_id
 				where ub.user_id = ${bundle.targetUserId}::uuid
@@ -646,6 +666,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 						status: string | null;
 						rating: number | null;
 						updated_at: string | null;
+						genres: string[];
 					}>>`
 						select
 							sb.shelf_id,
@@ -659,7 +680,11 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 							b.isbn13,
 							ub.status,
 							ub.rating,
-							coalesce(ub.updated_at::text, sb.created_at::text) as updated_at
+							coalesce(ub.updated_at::text, sb.created_at::text) as updated_at,
+							(
+								select coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}')
+								from book_genre bg where bg.book_id = b.id
+							) as genres
 						from user_custom_shelf_book sb
 						join book b on b.id = sb.book_id
 						left join user_book ub
@@ -691,7 +716,8 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		totalPages: Math.max(0, Number(row.total_pages || 0) || 0),
 		updatedAt: String(row.updated_at || "").trim(),
 		firstAddedAt: String(row.first_added_at || row.updated_at || "").trim(),
-		progressUpdates: Math.max(0, Number(row.progress_updates || 0) || 0)
+		progressUpdates: Math.max(0, Number(row.progress_updates || 0) || 0),
+		genres: Array.isArray(row.genres) ? row.genres.map((genre) => String(genre || "").trim()).filter(Boolean) : []
 	}));
 	currentlyReading = dedupeByWorkIdentity(currentlyReading);
 	wantToReadBooks = wantToReadRows.map((row) => ({
@@ -704,7 +730,8 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		isbn10: String(row.isbn10 || "").trim(),
 		isbn13: String(row.isbn13 || "").trim(),
 		description: "",
-		updatedAt: String(row.updated_at || "").trim()
+		updatedAt: String(row.updated_at || "").trim(),
+		genres: Array.isArray(row.genres) ? row.genres.map((genre) => String(genre || "").trim()).filter(Boolean) : []
 	}));
 	wantToReadBooks = dedupeByWorkIdentity(wantToReadBooks);
 	// Keep default shelves mutually exclusive in the profile UI when catalog duplicates
@@ -727,7 +754,8 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		description: "",
 		rating: Math.max(0, Math.min(5, Number(row.rating || 0) || 0)),
 		finishedDate: String(row.finished_date || "").trim(),
-		updatedAt: String(row.updated_at || "").trim()
+		updatedAt: String(row.updated_at || "").trim(),
+		genres: Array.isArray(row.genres) ? row.genres.map((genre) => String(genre || "").trim()).filter(Boolean) : []
 	}));
 	finishedBooks = dedupeByWorkIdentity(finishedBooks);
 	customShelves = customShelfRows.map((row) => ({
@@ -777,7 +805,8 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			description: "",
 			status: String(row.status || "").trim(),
 			rating: Math.max(0, Math.min(5, Number(row.rating || 0) || 0)),
-			updatedAt: String(row.updated_at || "").trim()
+			updatedAt: String(row.updated_at || "").trim(),
+			genres: Array.isArray(row.genres) ? row.genres.map((genre) => String(genre || "").trim()).filter(Boolean) : []
 		});
 		map.set(shelfId, list);
 		return map;
@@ -794,6 +823,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		status: string;
 		rating: number;
 		updatedAt: string;
+		genres: string[];
 	}>>());
 	if (viewerUserId && (recentActivity.length > 0 || currentlyReading.length > 0 || wantToReadBooks.length > 0 || finishedBooks.length > 0 || customShelfBookRows.length > 0)) {
 		const bookIds = Array.from(new Set([
@@ -1282,28 +1312,28 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 								<span class="material-icons shelf-summary-icon" aria-hidden="true">menu_book</span>
 								<span>Currently Reading</span>
 							</p>
-							<p class="shelf-summary-value">{shelfStats.reading}</p>
+							<p class="shelf-summary-value" data-shelf-count="reading">{shelfStats.reading}</p>
 						</a>
 						<a class="shelf-summary-item" href={shelfHrefForOwner("want_to_read")}>
 							<p class="shelf-summary-label">
 								<span class="material-icons shelf-summary-icon" aria-hidden="true">add</span>
 								<span>Want to Read</span>
 							</p>
-							<p class="shelf-summary-value">{shelfStats.wantToRead}</p>
+							<p class="shelf-summary-value" data-shelf-count="want_to_read">{shelfStats.wantToRead}</p>
 						</a>
 						<a class="shelf-summary-item" href={shelfHrefForOwner("finished")}>
 							<p class="shelf-summary-label">
 								<span class="material-icons shelf-summary-icon" aria-hidden="true">check</span>
 								<span>Read</span>
 							</p>
-							<p class="shelf-summary-value">{shelfStats.finished}</p>
+							<p class="shelf-summary-value" data-shelf-count="finished">{shelfStats.finished}</p>
 						</a>
 						<div class="shelf-summary-item shelf-summary-item-total" role="group" aria-label="Total books">
 							<p class="shelf-summary-label">
 								<span class="material-icons shelf-summary-icon" aria-hidden="true">library_books</span>
 								<span>Total</span>
 							</p>
-							<p class="shelf-summary-value">{shelfStats.total}</p>
+							<p class="shelf-summary-value" data-shelf-count="total">{shelfStats.total}</p>
 						</div>
 						{isOwnerViewer && customShelves.map((shelf) => (
 							<a class="shelf-summary-item" href={`#custom-shelf-${shelf.slug || shelf.id}`}>
@@ -1390,8 +1420,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 										author={item.author}
 										authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
 										thumbnail={item.thumbnail}
-										readers={1}
-										shelfEntries={1}
+									readers={1}
+									shelfEntries={1}
+									genres={item.genres}
 									>
 										<p slot="preTitle" class="meta activity-headline">
 											<span class="activity-prefix">
@@ -1445,12 +1476,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}`}
 										author={item.author}
 										authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
-										thumbnail={item.thumbnail}
-										readers={1}
-										shelfEntries={1}
-									>
-										<p slot="preTitle" class="meta activity-headline">
-											<span class="activity-prefix">{activityHeading(item.eventType).prefix}</span>
+									thumbnail={item.thumbnail}
+									readers={1}
+									shelfEntries={1}
+									genres={item.genres}
+								>
+									<p slot="preTitle" class="meta activity-headline">
+										<span class="activity-prefix">{activityHeading(item.eventType).prefix}</span>
 											{activityHeading(item.eventType).shelf && <>&nbsp;<em>{activityHeading(item.eventType).shelf}</em></>}
 											{formatActivityDate(item.updatedAt) && (
 												<>
@@ -1598,10 +1630,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}`}
 										author={item.author}
 										authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
-										thumbnail={item.thumbnail}
-										readers={1}
-										shelfEntries={1}
-										attrs={{
+									thumbnail={item.thumbnail}
+									readers={1}
+									shelfEntries={1}
+									genres={item.genres}
+									attrs={{
 											"data-momentum-reading-item": "true",
 											"data-momentum-book-id": String(item.bookId || 0),
 											"data-momentum-title": item.title,
@@ -1761,12 +1794,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}`}
 										author={item.author}
 										authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
-										thumbnail={item.thumbnail}
-										readers={1}
-										shelfEntries={1}
-									>
-										<p slot="preTitle" class="meta activity-headline">
-											<span class="activity-prefix">Want to Read</span>
+									thumbnail={item.thumbnail}
+									readers={1}
+									shelfEntries={1}
+									genres={item.genres}
+								>
+									<p slot="preTitle" class="meta activity-headline">
+										<span class="activity-prefix">Want to Read</span>
 											{formatActivityDate(item.updatedAt) && (
 												<>
 													<br />
@@ -1830,12 +1864,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}`}
 										author={item.author}
 										authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
-										thumbnail={item.thumbnail}
-										readers={1}
-										shelfEntries={1}
-									>
-										<p slot="preTitle" class="meta activity-headline">
-											<span class="activity-prefix">Read</span>
+									thumbnail={item.thumbnail}
+									readers={1}
+									shelfEntries={1}
+									genres={item.genres}
+								>
+									<p slot="preTitle" class="meta activity-headline">
+										<span class="activity-prefix">Read</span>
 											{item.finishedDate && (
 												<>
 													<br />
@@ -3972,13 +4007,62 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		const card = dropdown?.closest?.(".book-card");
 		if (!(card instanceof HTMLElement)) return;
 		if (normalizedStatus === "reading") return;
-		card.remove();
 		const section = dropdown.closest(".activity-card");
 		if (!(section instanceof HTMLElement)) return;
+		const sectionId = String(section.id || "");
 		const grid = section.querySelector(".activity-grid");
+
+		if (normalizedStatus === "finished") {
+			const readSection = document.getElementById("read");
+			if (readSection instanceof HTMLElement) {
+				let readGrid = readSection.querySelector(".activity-grid");
+				if (!(readGrid instanceof HTMLUListElement)) {
+					const empty = Array.from(readSection.children).find((child) => child.tagName === "P");
+					empty?.remove();
+					readGrid = document.createElement("ul");
+					readGrid.className = "activity-grid";
+					readSection.append(readGrid);
+				}
+				const activityClone = card.cloneNode(true);
+				card.querySelector(".reading-progress-block")?.remove();
+				card.querySelector('[data-action="mark-finished-quick"]')?.remove();
+				const prefix = card.querySelector(".activity-prefix");
+				if (prefix instanceof HTMLElement) prefix.textContent = "Read";
+				const date = card.querySelector(".activity-date");
+				if (date instanceof HTMLElement) date.textContent = `Updated ${safeFormatActivityDate(new Date().toISOString())}`;
+				readGrid.prepend(card);
+
+				const recentSection = document.getElementById("recent-activity");
+				if (recentSection instanceof HTMLElement && activityClone instanceof HTMLElement) {
+					activityClone.querySelector(".reading-progress-block")?.remove();
+					activityClone.querySelector(".cover-actions")?.remove();
+					activityClone.querySelector(".card-menu")?.remove();
+					const recentPrefix = activityClone.querySelector(".activity-prefix");
+					if (recentPrefix instanceof HTMLElement) recentPrefix.textContent = "Finished Reading";
+					let recentGrid = recentSection.querySelector(".activity-grid");
+					if (!(recentGrid instanceof HTMLUListElement)) {
+						const empty = Array.from(recentSection.children).find((child) => child.tagName === "P");
+						empty?.remove();
+						recentGrid = document.createElement("ul");
+						recentGrid.className = "activity-grid";
+						recentSection.append(recentGrid);
+					}
+					activityClone.dataset.optimisticActivity = "finished";
+					recentGrid.prepend(activityClone);
+				}
+			}
+			const readingCount = document.querySelector('[data-shelf-count="reading"]');
+			const finishedCount = document.querySelector('[data-shelf-count="finished"]');
+			if (sectionId === "currently-reading" && readingCount instanceof HTMLElement) {
+				readingCount.textContent = String(Math.max(0, Number(readingCount.textContent || 0) - 1));
+			}
+			if (finishedCount instanceof HTMLElement) finishedCount.textContent = String(Math.max(0, Number(finishedCount.textContent || 0)) + 1);
+		} else {
+			card.remove();
+		}
+
 		if (!(grid instanceof HTMLElement)) return;
 		if (grid.querySelector(".book-card")) return;
-		const sectionId = String(section.id || "");
 		const emptyText = sectionId === "currently-reading"
 			? "No books are currently marked as reading. Move a book to Currently Reading to track progress."
 			: (sectionId === "want-to-read" ? "No books in Want to Read yet. Save a few titles to build your reading queue." : "No finished books yet. Mark a completed book as Read and add a rating.");
