@@ -141,7 +141,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     <div class="login-modal-panel" role="dialog" aria-modal="true" aria-labelledby="left-hand-login-title">
       <button type="button" class="login-modal-close" data-action="close-login-modal" aria-label="Close login dialog">×</button>
       <h3 id="left-hand-login-title">Welcome to Dogeared</h3>
-      <p class="login-modal-copy">Enter your email and continue with a magic link.</p>
+      <p id="left-hand-login-copy" class="login-modal-copy">Enter your email and continue with a magic link.</p>
       <form id="left-hand-login-form" class="login-modal-form">
         <label for="left-hand-login-email">Email</label>
         <input id="left-hand-login-email" type="email" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required placeholder="you@example.com" />
@@ -594,6 +594,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
   const leftHandAuthDivider = document.getElementById("left-hand-auth-divider");
   const leftHandLogoutButton = leftHandLogoutItem?.querySelector("button");
   const leftHandLoginModal = document.getElementById("left-hand-login-modal");
+  const leftHandLoginTitle = document.getElementById("left-hand-login-title");
+  const leftHandLoginCopy = document.getElementById("left-hand-login-copy");
   const leftHandLoginForm = document.getElementById("left-hand-login-form");
   const leftHandLoginEmail = document.getElementById("left-hand-login-email");
   const leftHandLoginFeedback = document.getElementById("left-hand-login-feedback");
@@ -636,10 +638,20 @@ const query = Astro.url.searchParams.get("q") ?? "";
     leftHandLoginFeedback.classList.toggle("error", isError);
   }
 
-  function openLoginModal() {
+  function openLoginModal(mode = "login") {
     if (!(leftHandLoginModal instanceof HTMLElement)) return;
+    const creating = mode === "create";
+    if (leftHandLoginTitle instanceof HTMLElement) {
+      leftHandLoginTitle.textContent = creating ? "Create your Dogeared account" : "Welcome back to Dogeared";
+    }
+    if (leftHandLoginCopy instanceof HTMLElement) {
+      leftHandLoginCopy.textContent = creating
+        ? "Enter your email to save books, build shelves, and get personal recommendations."
+        : "Enter your email and continue with a magic link.";
+    }
     leftHandLoginModal.hidden = false;
     showLoginFeedback("");
+    window.setTimeout(() => leftHandLoginEmail?.focus(), 0);
   }
 
   function closeLoginModal() {
@@ -705,7 +717,12 @@ const query = Astro.url.searchParams.get("q") ?? "";
   });
 
   leftHandLoginButton?.addEventListener("click", () => {
-    openLoginModal();
+    openLoginModal("login");
+  });
+
+  window.addEventListener("dogeared:open-auth", (event) => {
+    const mode = event instanceof CustomEvent && event.detail?.mode === "create" ? "create" : "login";
+    openLoginModal(mode);
   });
 
   leftHandLoginModal?.addEventListener("click", (event) => {

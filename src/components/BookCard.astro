@@ -1,4 +1,5 @@
 ---
+import Chip from "./Chip.astro";
 type Props = {
 	title: string;
 	titleHref?: string;
@@ -12,6 +13,8 @@ type Props = {
 	pageCount?: number;
 	averageRating?: number;
 	genres?: string[];
+	topics?: string[];
+	showCommunityStats?: boolean;
 	attrs?: Record<string, string>;
 };
 
@@ -28,6 +31,8 @@ const {
 	pageCount = 0,
 	averageRating = 0,
 	genres = [],
+	topics = [],
+	showCommunityStats = true,
 	attrs = {}
 } = Astro.props as Props;
 
@@ -40,6 +45,7 @@ const normalizedShelves = Number(shelfEntries);
 const normalizedPages = Number(pageCount);
 const normalizedRating = Math.max(0, Math.min(5, Number(averageRating) || 0));
 const normalizedGenres = Array.from(new Set((Array.isArray(genres) ? genres : []).map((genre) => String(genre || "").trim()).filter(Boolean))).slice(0, 4);
+const normalizedTopics = Array.from(new Set((Array.isArray(topics) ? topics : []).map((topic) => String(topic || "").trim()).filter(Boolean))).slice(0, 4);
 
 function renderAverageStars(value: number) {
 	const rounded = Math.round(value);
@@ -91,7 +97,7 @@ function renderAverageStars(value: number) {
 					: author}
 			</p>
 		)}
-		<p class="meta">Readers: {Number.isFinite(normalizedReaders) && normalizedReaders >= 0 ? normalizedReaders.toLocaleString() : "—"} · Shelf entries: {Number.isFinite(normalizedShelves) && normalizedShelves >= 0 ? normalizedShelves.toLocaleString() : "—"}</p>
+		{showCommunityStats && <p class="meta">Readers: {Number.isFinite(normalizedReaders) && normalizedReaders >= 0 ? normalizedReaders.toLocaleString() : "—"} · Shelf entries: {Number.isFinite(normalizedShelves) && normalizedShelves >= 0 ? normalizedShelves.toLocaleString() : "—"}</p>}
 		{String(publishedLabel || "").trim() && (
 			<p class="meta">Published: {String(publishedLabel || "").trim()}</p>
 		)}
@@ -104,7 +110,14 @@ function renderAverageStars(value: number) {
 		{normalizedGenres.length > 0 && (
 			<div class="genre-links" aria-label="Genres">
 				{normalizedGenres.map((genre) => (
-					<a href={`/related?kind=genre&value=${encodeURIComponent(genre)}`}>{genre}</a>
+					<Chip label={genre} href={`/related?kind=genre&value=${encodeURIComponent(genre)}`} kind="genre" />
+				))}
+			</div>
+		)}
+		{normalizedTopics.length > 0 && (
+			<div class="topic-links" aria-label="Topics">
+				{normalizedTopics.map((topic) => (
+					<Chip label={topic} href={`/related?kind=topic&value=${encodeURIComponent(topic)}`} kind="topic" />
 				))}
 			</div>
 		)}
@@ -258,9 +271,8 @@ function renderAverageStars(value: number) {
 	:global(.book-card .meta + .meta) {
 		margin-top: 0.1rem;
 	}
-	.genre-links { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.25rem; }
-	.genre-links a { color: #1f4f7a; background: #e7edf3; border: 1px solid #c7d5e1; border-radius: 999px; padding: 0.14rem 0.48rem; font-size: 0.76rem; font-weight: 700; line-height: 1.25; text-decoration: none; }
-	.genre-links a:hover, .genre-links a:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+	.genre-links, .topic-links { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.25rem; }
+	.genre-links :global(.chip), .topic-links :global(.chip) { padding: 0.14rem 0.48rem; font-size: 0.76rem; font-weight: 700; }
 	.description-wrap {
 		margin-top: 0.25rem;
 	}

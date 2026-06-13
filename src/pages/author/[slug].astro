@@ -182,7 +182,7 @@ try {
 } catch (error) {
 	errorMessage = error instanceof Error ? error.message : "Failed to load author page.";
 }
-if (authorName) externalBooks = await fetchExternalAuthorBooks(authorName, books.map((book) => book.title));
+if (authorName) externalBooks = await fetchExternalAuthorBooks(authorName, books);
 
 const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 ---
@@ -215,7 +215,7 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 			<section class="books-section">
 				<h2>Books In Dogeared</h2>
 			{books.length === 0 ? (
-				<p>No books by this author have been added to Dogeared yet. Browse the external titles below or search for a specific book.</p>
+				<p>No books by this author have been added yet. Choose a book below to start this author's Dogeared shelf.</p>
 			) : (
 				<ul class="book-grid">
 					{books.map((book) => (
@@ -234,7 +234,6 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 							genres={book.genres}
 						>
 							<div slot="preMeta">
-								<p class="meta">{book.genres[0] || "Uncategorized"}</p>
 								{viewerStatusByBookId.get(Number(book.id || 0)) === "finished" && (
 									<RatingControl
 										bookId={String(book.id || 0)}
@@ -276,7 +275,10 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
 		parseCategories,
+		removeBookFromAllShelvesOnServer,
+		resolveShelfRemoveMessage,
 		setDropdownLabel,
+		setShelvedState,
 		showShelfFeedback,
 		statusLabel,
 		saveShelfEntryWithRetry,
@@ -286,6 +288,34 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	const feedbackTimers = new WeakMap();
 	initRatingControls();
+
+	function buildEntry(dropdown, status) {
+		const title = String(dropdown.dataset.title || "").trim();
+		const totalPages = Math.max(0, Number(dropdown.dataset.pages || 0) || 0);
+		return buildShelfEntryFromRecord({
+			bookId: dropdown.dataset.bookId,
+			title,
+			author: String(dropdown.dataset.author || "").trim(),
+			description: String(dropdown.dataset.description || "").trim(),
+			pageCount: totalPages,
+			coverUrl: String(dropdown.dataset.cover || ""),
+			format: "Book",
+			language: String(dropdown.dataset.language || ""),
+			publishedDate: String(dropdown.dataset.publishedDate || ""),
+			isbn10: String(dropdown.dataset.isbn10 || ""),
+			isbn13: String(dropdown.dataset.isbn13 || ""),
+			googleBooksId: String(dropdown.dataset.googleBooksId || ""),
+			categories: parseCategories(dropdown.dataset.categories)
+		}, {
+			status,
+			totalPages,
+			currentPage: status === "finished" ? totalPages : (status === "reading" ? Math.min(1, totalPages || 1) : 0),
+			finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : "",
+			source: String(dropdown.dataset.source || ""),
+			sourceWorkId: String(dropdown.dataset.sourceWorkId || ""),
+			sourceUrl: String(dropdown.dataset.sourceUrl || "")
+		});
+	}
 
 	document.addEventListener("click", async (event) => {
 		const target = event.target;
@@ -306,34 +336,69 @@ const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 			const status = String(option.dataset.status || "want_to_read");
 			const title = String(dropdown.dataset.title || "").trim();
 			if (!title) return;
-			const author = String(dropdown.dataset.author || "").trim();
-			const categories = parseCategories(dropdown.dataset.categories);
-			const totalPages = Math.max(0, Number(dropdown.dataset.pages || 0) || 0);
-			const entry = buildShelfEntryFromRecord({
-				title,
-				author,
-				description: String(dropdown.dataset.description || "").trim(),
-				pageCount: totalPages,
-				coverUrl: String(dropdown.dataset.cover || ""),
-				format: "Book",
-				language: String(dropdown.dataset.language || ""),
-				isbn10: String(dropdown.dataset.isbn10 || ""),
-				isbn13: String(dropdown.dataset.isbn13 || ""),
-				categories
-			}, {
-				status,
-				totalPages,
-				currentPage: status === "finished" ? totalPages : (status === "reading" ? Math.min(1, totalPages || 1) : 0),
-				finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : ""
-			});
+			const entry = buildEntry(dropdown, status);
 			try {
 				const result = await saveShelfEntryWithRetry(entry);
 				if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");
+				const data = (result.data && typeof result.data === "object" ? result.data : {}) as Record<string, unknown>;
+				const bookId = Math.max(0, Number(data.bookId || 0) || 0);
+				if (bookId > 0) dropdown.dataset.bookId = String(bookId);
 				setDropdownLabel(dropdown, status);
+				setShelvedState(dropdown, true);
 				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
 				closeShelfMenus(shelfDropdowns);
 			} catch (err) {
 				showShelfFeedback(dropdown, err instanceof Error ? err.message : "Failed to save.", feedbackTimers);
+			}
+			return;
+		}
+
+		const assignOption = target.closest('[data-action="assign-custom-shelf"]');
+		if (assignOption instanceof HTMLButtonElement) {
+			const dropdown = assignOption.closest(".shelf-dropdown");
+			if (!(dropdown instanceof HTMLElement)) return;
+			const shelfId = Math.max(0, Number(assignOption.dataset.shelfId || 0) || 0);
+			if (!shelfId) return;
+			try {
+				let bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
+				if (!bookId) {
+					const saveResult = await saveShelfEntryWithRetry(buildEntry(dropdown, "want_to_read"));
+					if (!saveResult.ok) throw new Error(saveResult.message || "Failed to add this book to Dogeared.");
+					const data = (saveResult.data && typeof saveResult.data === "object" ? saveResult.data : {}) as Record<string, unknown>;
+					bookId = Math.max(0, Number(data.bookId || 0) || 0);
+					if (bookId) dropdown.dataset.bookId = String(bookId);
+					setDropdownLabel(dropdown, "want_to_read");
+					setShelvedState(dropdown, true);
+				}
+				const response = await fetch("/api/shelf/custom-shelf-books", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ shelfId, bookId })
+				});
+				const data = await response.json().catch(() => ({}));
+				if (!response.ok) throw new Error(String(data?.error || "Failed to assign custom shelf."));
+				showShelfFeedback(dropdown, "Saved to custom shelf.", feedbackTimers);
+				closeShelfMenus(shelfDropdowns);
+			} catch (err) {
+				showShelfFeedback(dropdown, err instanceof Error ? err.message : "Failed to save.", feedbackTimers);
+			}
+			return;
+		}
+
+		const removeOption = target.closest('[data-action="remove-from-shelves"]');
+		if (removeOption instanceof HTMLButtonElement) {
+			const dropdown = removeOption.closest(".shelf-dropdown");
+			if (!(dropdown instanceof HTMLElement)) return;
+			try {
+				const result = await removeBookFromAllShelvesOnServer(dropdown.dataset.bookId, buildEntry(dropdown, "want_to_read"));
+				if (!result.ok) throw new Error(resolveShelfRemoveMessage(result));
+				setDropdownLabel(dropdown, "");
+				setShelvedState(dropdown, false);
+				showShelfFeedback(dropdown, "Removed from shelves.", feedbackTimers);
+				closeShelfMenus(shelfDropdowns);
+				window.dispatchEvent(new CustomEvent("dogeared:reading-data-changed"));
+			} catch (err) {
+				showShelfFeedback(dropdown, err instanceof Error ? err.message : "Failed to remove from shelves.", feedbackTimers);
 			}
 			return;
 		}

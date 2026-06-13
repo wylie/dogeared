@@ -53,6 +53,10 @@ Semantic tokens:
 - Success state: use primary green family (`--color-primary`)
 - Warning state: warm orange family (`--palette-2`, `--palette-4`)
 - Error/destructive state: red family (`#991b1b`, `#8a1d1d`, `--palette-1`)
+- Genre metadata: `--color-chip-genre`; use `Chip` with `kind="genre"` everywhere
+- Topic metadata: `--color-chip-topic`; use `Chip` with `kind="topic"` everywhere
+
+Genres and topics are separate metadata types. Do not render them with page-specific colors, and do not repeat chip metadata as plain text beneath the chip row.
 
 ## Typography
 
