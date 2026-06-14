@@ -6,6 +6,7 @@ import { resolveUserBySession } from "../lib/auth";
 import { getNeonSql } from "../lib/neon";
 import { formatGenreLabel } from "../lib/genres";
 import { authorHref } from "../lib/author";
+import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
 
 export const prerender = false;
 
@@ -380,21 +381,17 @@ const seoTitle = value
 const relatedDescription = value
 	? `${subtitle} Discover books, readers, and shelf activity connected to ${value} on Dogeared.`
 	: "Explore related books, authors, and genres in Dogeared.";
-const breadcrumbStructuredData = JSON.stringify({
-	"@context": "https://schema.org",
-	"@type": "BreadcrumbList",
-	itemListElement: [
-		{ "@type": "ListItem", position: 1, name: "Home", item: "/" },
-		{ "@type": "ListItem", position: 2, name: "Related", item: "/related" },
-		...(value ? [{ "@type": "ListItem", position: 3, name: pageTitle || "Related", item: relatedCanonicalUrl }] : [])
-	]
-});
+const breadcrumbStructuredData = JSON.stringify(buildBreadcrumbList([
+	{ name: "Home", item: "/" },
+	{ name: "Related", item: "/related" },
+	...(value ? [{ name: pageTitle || "Related", item: relatedCanonicalUrl }] : [])
+], { site: Astro.site ?? Astro.url, logErrors: import.meta.env.DEV }));
 const relatedStructuredData = JSON.stringify({
 	"@context": "https://schema.org",
 	"@type": "CollectionPage",
 	name: pageTitle || "Related",
 	description: subtitle || "",
-	url: relatedCanonicalUrl
+	url: toAbsoluteUrl(relatedCanonicalUrl, Astro.site ?? Astro.url)
 });
 const relatedItemListStructuredData = !value
 	? JSON.stringify({
@@ -405,19 +402,19 @@ const relatedItemListStructuredData = !value
 			...landingGenres.slice(0, 8).map((row, index) => ({
 				"@type": "ListItem",
 				position: index + 1,
-				url: `/related?kind=genre&value=${encodeURIComponent(row.genre_name)}`,
+				url: toAbsoluteUrl(`/related?kind=genre&value=${encodeURIComponent(row.genre_name)}`, Astro.site ?? Astro.url),
 				name: formatGenreLabel(row.genre_name, "Uncategorized")
 			})),
 			...landingAuthors.slice(0, 8).map((row, index) => ({
 				"@type": "ListItem",
 				position: landingGenres.slice(0, 8).length + index + 1,
-				url: `/author?authorId=${encodeURIComponent(String(row.authorId || 0))}`,
+				url: toAbsoluteUrl(`/author?authorId=${encodeURIComponent(String(row.authorId || 0))}`, Astro.site ?? Astro.url),
 				name: row.author
 			})),
 			...landingBooks.slice(0, 8).map((row, index) => ({
 				"@type": "ListItem",
 				position: landingGenres.slice(0, 8).length + landingAuthors.slice(0, 8).length + index + 1,
-				url: `/book?bookId=${encodeURIComponent(String(row.id || 0))}`,
+				url: toAbsoluteUrl(`/book?bookId=${encodeURIComponent(String(row.id || 0))}`, Astro.site ?? Astro.url),
 				name: row.title
 			}))
 		]

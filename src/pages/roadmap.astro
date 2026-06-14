@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { buildBreadcrumbList } from "../lib/seo";
 
 const sectionLinks = [
 	{ id: "support", label: "Support" },
@@ -99,6 +100,11 @@ const supportOptions = [
 		share: true
 	}
 ];
+const roadmapStructuredData = JSON.stringify(buildBreadcrumbList([
+	{ name: "Home", item: "/" },
+	{ name: "Support", item: "/roadmap#support" },
+	{ name: "Roadmap", item: "/roadmap" }
+], { site: Astro.site ?? Astro.url, logErrors: import.meta.env.DEV }));
 ---
 
 <Layout
@@ -106,6 +112,7 @@ const supportOptions = [
 	sectionLinks={sectionLinks}
 	metaDescription="See what Dogeared is building next: roadmap priorities, finished releases, and support options."
 	canonicalUrl="/roadmap"
+	structuredData={roadmapStructuredData}
 >
 	<div slot="right" class="roadmap-page">
 		<header class="hero">

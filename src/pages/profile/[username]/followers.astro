@@ -3,6 +3,7 @@ import Layout from "../../../layouts/Layout.astro";
 import { getNeonSql } from "../../../lib/neon";
 import { resolvePublicProfileBundle } from "../../../lib/publicProfile";
 import { resolveUserBySession } from "../../../lib/auth";
+import { buildBreadcrumbList } from "../../../lib/seo";
 
 export const prerender = false;
 
@@ -80,6 +81,12 @@ const makeHref = (nextPage: number) => {
 	if (sort !== "recent") url.searchParams.set("sort", sort);
 	return `${url.pathname}${url.search}`;
 };
+const followersStructuredData = JSON.stringify(buildBreadcrumbList([
+	{ name: "Home", item: "/" },
+	{ name: "Profile", item: "/profile" },
+	{ name: `@${profile.username}`, item: `/profile/${encodeURIComponent(profile.username)}` },
+	{ name: "Followers", item: listCanonical }
+], { site: Astro.site ?? Astro.url, logErrors: import.meta.env.DEV }));
 ---
 
 <Layout
@@ -87,6 +94,7 @@ const makeHref = (nextPage: number) => {
 	sectionLinks={sectionLinks}
 	canonicalUrl={listCanonical}
 	metaDescription={`Followers of @${profile.username} on Dogeared.`}
+	structuredData={followersStructuredData}
 >
 	<div slot="right" class="follow-page">
 		<nav class="breadcrumbs" aria-label="Breadcrumb">

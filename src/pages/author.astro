@@ -8,6 +8,7 @@ import { getNeonSql } from "../lib/neon";
 import { resolveUserBySession } from "../lib/auth";
 import { authorHref } from "../lib/author";
 import { fetchExternalAuthorBooks, type ExternalAuthorBook } from "../lib/externalAuthorBooks";
+import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
 
 export const prerender = false;
 
@@ -171,19 +172,15 @@ const authorStructuredData = author.id > 0
 		"@type": "Person",
 		name: author.name,
 		description: author.bio || `${author.name} author page on Dogeared`,
-		url: authorCanonicalUrl,
+		url: toAbsoluteUrl(authorCanonicalUrl, Astro.site ?? Astro.url),
 		image: author.photoUrl || undefined
 	})
 	: "";
-const authorBreadcrumbStructuredData = JSON.stringify({
-	"@context": "https://schema.org",
-	"@type": "BreadcrumbList",
-	itemListElement: [
-		{ "@type": "ListItem", position: 1, name: "Home", item: "/" },
-		{ "@type": "ListItem", position: 2, name: "Authors", item: "/authors" },
-		...(author.id > 0 ? [{ "@type": "ListItem", position: 3, name: author.name, item: authorCanonicalUrl }] : [{ "@type": "ListItem", position: 3, name: "Author", item: authorCanonicalUrl }])
-	]
-});
+const authorBreadcrumbStructuredData = JSON.stringify(buildBreadcrumbList([
+	{ name: "Home", item: "/" },
+	{ name: "Authors", item: "/authors" },
+	{ name: author.id > 0 ? author.name : "Author", item: authorCanonicalUrl }
+], { site: Astro.site ?? Astro.url, logErrors: import.meta.env.DEV }));
 const authorStructuredDataPayload = authorStructuredData
 	? JSON.stringify([JSON.parse(authorStructuredData), JSON.parse(authorBreadcrumbStructuredData)])
 	: "";

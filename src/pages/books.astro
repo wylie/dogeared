@@ -7,6 +7,7 @@ import { getNeonSql } from "../lib/neon";
 import { authorHref } from "../lib/author";
 import { resolveUserBySession } from "../lib/auth";
 import { resolveViewerStatusByBookId } from "../lib/feed";
+import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
 
 export const prerender = false;
 
@@ -147,16 +148,12 @@ const booksStructuredData = JSON.stringify([
 		"@type": "CollectionPage",
 		name: "Books",
 		description: "Curated books in Dogeared based on shelf activity.",
-		url: "/books"
+		url: toAbsoluteUrl("/books", Astro.site ?? Astro.url)
 	},
-	{
-		"@context": "https://schema.org",
-		"@type": "BreadcrumbList",
-		itemListElement: [
-			{ "@type": "ListItem", position: 1, name: "Home", item: "/" },
-			{ "@type": "ListItem", position: 2, name: "Books", item: "/books" }
-		]
-	},
+	buildBreadcrumbList([
+		{ name: "Home", item: "/" },
+		{ name: "Books", item: "/books" }
+	], { site: Astro.site ?? Astro.url, logErrors: import.meta.env.DEV }),
 	{
 		"@context": "https://schema.org",
 		"@type": "ItemList",
@@ -167,7 +164,7 @@ const booksStructuredData = JSON.stringify([
 			.map((book, index) => ({
 				"@type": "ListItem",
 				position: index + 1,
-				url: `/book?bookId=${encodeURIComponent(String(book.id))}`,
+				url: toAbsoluteUrl(`/book?bookId=${encodeURIComponent(String(book.id))}`, Astro.site ?? Astro.url),
 				name: book.title
 			}))
 	}

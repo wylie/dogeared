@@ -10,6 +10,7 @@ import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicS
 import { authorHref } from "../../lib/author";
 import { ensureCustomShelfSchema } from "../../lib/customShelves";
 import { daysSinceDate, resolveMomentumPrediction } from "../../lib/momentumPrediction";
+import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
 
 export const prerender = false;
 
@@ -990,23 +991,19 @@ const profileStructuredData = (!notFound && !privateProfile && !!profile.usernam
 		name: profile.name || `@${profile.username}`,
 		alternateName: `@${profile.username}`,
 		description: profile.blurb || undefined,
-		url: profileCanonicalUrl,
+		url: toAbsoluteUrl(profileCanonicalUrl, Astro.site ?? Astro.url),
 		image: profile.avatar || undefined
 	})
 	: "";
-const profileBreadcrumbStructuredData = JSON.stringify({
-	"@context": "https://schema.org",
-	"@type": "BreadcrumbList",
-	itemListElement: [
-		{ "@type": "ListItem", position: 1, name: "Home", item: "/" },
-		...(profile.username
-			? [
-				{ "@type": "ListItem", position: 2, name: "Profile", item: "/profile" },
-				{ "@type": "ListItem", position: 3, name: `@${profile.username}`, item: profileCanonicalUrl }
-			]
-			: [{ "@type": "ListItem", position: 2, name: "Profile", item: profileCanonicalUrl }])
-	]
-});
+const profileBreadcrumbStructuredData = JSON.stringify(buildBreadcrumbList([
+	{ name: "Home", item: "/" },
+	...(profile.username
+		? [
+			{ name: "Profile", item: "/profile" },
+			{ name: `@${profile.username}`, item: profileCanonicalUrl }
+		]
+		: [{ name: "Profile", item: profileCanonicalUrl }])
+], { site: Astro.site ?? Astro.url, logErrors: import.meta.env.DEV }));
 const profileStructuredDataPayload = profileStructuredData
 	? JSON.stringify([JSON.parse(profileStructuredData), JSON.parse(profileBreadcrumbStructuredData)])
 	: "";

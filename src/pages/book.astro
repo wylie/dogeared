@@ -10,6 +10,7 @@ import { authorHref } from "../lib/author";
 import { normalizeGenreEntry } from "../lib/genres";
 import { buildBookReviewList, type BookReview } from "../lib/bookReviews";
 import { resolveCustomShelfOptions } from "../lib/customShelves";
+import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
 
 export const prerender = false;
 
@@ -714,18 +715,14 @@ const bookStructuredData = book
 			ratingValue: Number(book.averageRating || 0).toFixed(2),
 			ratingCount: book.ratingCount
 		} : undefined,
-		url: bookCanonicalUrl
+		url: toAbsoluteUrl(bookCanonicalUrl, Astro.site ?? Astro.url)
 	})
 	: "";
-const bookBreadcrumbStructuredData = JSON.stringify({
-	"@context": "https://schema.org",
-	"@type": "BreadcrumbList",
-	itemListElement: [
-		{ "@type": "ListItem", position: 1, name: "Home", item: "/" },
-		{ "@type": "ListItem", position: 2, name: "Books", item: "/books" },
-		...(book ? [{ "@type": "ListItem", position: 3, name: book.title, item: bookCanonicalUrl }] : [{ "@type": "ListItem", position: 3, name: "Book", item: bookCanonicalUrl }])
-	]
-});
+const bookBreadcrumbStructuredData = JSON.stringify(buildBreadcrumbList([
+	{ name: "Home", item: "/" },
+	{ name: "Books", item: "/books" },
+	{ name: book ? book.title : "Book", item: bookCanonicalUrl }
+], { site: Astro.site ?? Astro.url, logErrors: import.meta.env.DEV }));
 const bookStructuredDataPayload = bookStructuredData
 	? JSON.stringify([JSON.parse(bookStructuredData), JSON.parse(bookBreadcrumbStructuredData)])
 	: "";

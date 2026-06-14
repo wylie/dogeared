@@ -2,6 +2,7 @@
 import LeftHand from '../components/LeftHand.astro';
 import ReaderGuidance from '../components/ReaderGuidance.astro';
 import { resolveUserBySession } from '../lib/auth';
+import { resolveSiteUrl, toAbsoluteUrl } from '../lib/seo';
 type SectionLink = { id: string; label: string };
 const {
 	title = "Dogeared",
@@ -22,10 +23,9 @@ const currentPath = Astro.url.pathname;
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
 const pageTitle = `${title} | Dogeared`;
-const canonicalHref = String(canonicalUrl || "").trim()
-	? new URL(String(canonicalUrl || "").trim(), Astro.site ?? Astro.url).toString()
-	: new URL(currentPath, Astro.site ?? Astro.url).toString();
-const ogImageUrl = new URL("/og-image.png", Astro.site ?? Astro.url).toString();
+const siteUrl = resolveSiteUrl(Astro.site ?? Astro.url);
+const canonicalHref = toAbsoluteUrl(String(canonicalUrl || "").trim() || currentPath, siteUrl);
+const ogImageUrl = toAbsoluteUrl("/og-image.png", siteUrl);
 const siteOrigin = new URL(canonicalHref).origin;
 const websiteStructuredData = JSON.stringify({
 	"@context": "https://schema.org",
