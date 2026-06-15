@@ -31,23 +31,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Validate required secrets
-        run: |
-          if [ -z "${DATABASE_URL}" ]; then
-            echo "Missing DATABASE_URL secret."
-            exit 1
-          fi
+        run: node scripts/validate-required-env.mjs DATABASE_URL
 
       - name: Run metadata backfill pipeline
         run: npm run backfill:metadata

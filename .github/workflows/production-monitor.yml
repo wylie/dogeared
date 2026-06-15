@@ -17,12 +17,16 @@ jobs:
       APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
 
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.12.0
+
       - name: Validate base URL
-        run: |
-          if [ -z "${APP_BASE_URL}" ]; then
-            echo "Missing APP_BASE_URL secret."
-            exit 1
-          fi
+        run: node scripts/validate-required-env.mjs APP_BASE_URL
 
       - name: Run production endpoint checks
         id: checks
@@ -43,7 +47,7 @@ jobs:
 
       - name: Upload monitor payloads
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: production-monitor-payloads
           path: tmp/*.json
@@ -51,7 +55,7 @@ jobs:
 
       - name: Create or update monitoring issue on failure
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const title = "Production monitor failure";

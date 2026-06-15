@@ -732,6 +732,9 @@ const bookStructuredDataPayload = bookStructuredData
 	title={book?.title || "Book"}
 	metaDescription={bookDescription}
 	canonicalUrl={bookCanonicalUrl}
+	socialImage={book?.coverUrl || "/og-image.png"}
+	socialImageAlt={book ? `Cover of ${book.title}${book.author ? ` by ${book.author}` : ""}` : "Dogeared book details"}
+	ogType="book"
 	robots={bookRobots}
 	structuredData={bookStructuredDataPayload}
 >

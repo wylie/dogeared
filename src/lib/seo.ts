@@ -1,4 +1,6 @@
 const DEFAULT_SITE_URL = "https://dogeared.app/";
+export const DEFAULT_META_DESCRIPTION = "Track what matters. Find your next great read. Keep your shelves focused. Make reading feel like yours.";
+export const DEFAULT_SOCIAL_IMAGE = "/og-image.png";
 
 export type BreadcrumbInput = {
 	name: string;
@@ -41,6 +43,32 @@ export function toAbsoluteUrl(value: unknown, site?: string | URL | null) {
 	} catch {
 		return "";
 	}
+}
+
+export function buildPageTitle(title: unknown) {
+	const text = String(title || "").trim();
+	if (!text || text === "Home" || text === "Dogeared") return "Dogeared";
+	return text.endsWith("| Dogeared") ? text : `${text} | Dogeared`;
+}
+
+export function buildSeoMetadata(options: {
+	title?: unknown;
+	description?: unknown;
+	canonicalUrl?: unknown;
+	socialImage?: unknown;
+	site?: string | URL | null;
+}) {
+	const site = resolveSiteUrl(options.site);
+	const description = String(options.description || "").trim() || DEFAULT_META_DESCRIPTION;
+	const canonicalUrl = toAbsoluteUrl(options.canonicalUrl || "/", site);
+	const imageUrl = toAbsoluteUrl(options.socialImage || DEFAULT_SOCIAL_IMAGE, site);
+	return {
+		title: buildPageTitle(options.title),
+		description,
+		canonicalUrl,
+		imageUrl,
+		imageIsDefault: imageUrl === toAbsoluteUrl(DEFAULT_SOCIAL_IMAGE, site)
+	};
 }
 
 export function buildBreadcrumbList(

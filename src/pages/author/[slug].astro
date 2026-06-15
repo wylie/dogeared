@@ -187,7 +187,12 @@ if (authorName) externalBooks = await fetchExternalAuthorBooks(authorName, books
 const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 ---
 
-<Layout title={displayName ? `${displayName} · Author` : "Author"}>
+<Layout
+	title={displayName || "Author"}
+	metaDescription={displayName ? `Explore books by ${displayName} and reader shelf activity on Dogeared.` : "Browse authors and their books on Dogeared."}
+	canonicalUrl={displayName ? `/author/${encodeURIComponent(slug)}` : "/authors"}
+	ogType="profile"
+>
 	<div slot="right" class="author-page">
 		{errorMessage && <p class="error">{errorMessage}</p>}
 

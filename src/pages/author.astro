@@ -187,9 +187,12 @@ const authorStructuredDataPayload = authorStructuredData
 ---
 
 <Layout
-	title={author.name ? `${author.name} · Author` : "Author"}
+	title={author.name || "Author"}
 	metaDescription={authorDescription}
 	canonicalUrl={authorCanonicalUrl}
+	socialImage={author.photoUrl || "/og-image.png"}
+	socialImageAlt={author.name ? `${author.name} on Dogeared` : "Authors on Dogeared"}
+	ogType="profile"
 	robots={authorRobots}
 	structuredData={authorStructuredDataPayload}
 >

@@ -1,6 +1,28 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildBreadcrumbList, resolveSiteUrl, toAbsoluteUrl } from "../src/lib/seo.ts";
+import { buildBreadcrumbList, buildPageTitle, buildSeoMetadata, resolveSiteUrl, toAbsoluteUrl } from "../src/lib/seo.ts";
+
+test("buildPageTitle applies consistent Dogeared branding", () => {
+	assert.equal(buildPageTitle("Home"), "Dogeared");
+	assert.equal(buildPageTitle("Project Hail Mary"), "Project Hail Mary | Dogeared");
+	assert.equal(buildPageTitle("Dogeared"), "Dogeared");
+});
+
+test("buildSeoMetadata returns absolute canonical and social URLs", () => {
+	assert.deepEqual(buildSeoMetadata({
+		title: "Ursula K. Le Guin",
+		description: "Author page",
+		canonicalUrl: "/author/ursula-k-le-guin",
+		socialImage: "/og-image.png",
+		site: "https://dogeared.app/"
+	}), {
+		title: "Ursula K. Le Guin | Dogeared",
+		description: "Author page",
+		canonicalUrl: "https://dogeared.app/author/ursula-k-le-guin",
+		imageUrl: "https://dogeared.app/og-image.png",
+		imageIsDefault: true
+	});
+});
 
 test("resolveSiteUrl falls back to the production site", () => {
 	assert.equal(resolveSiteUrl(), "https://dogeared.app/");

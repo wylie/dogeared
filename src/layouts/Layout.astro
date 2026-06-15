@@ -2,14 +2,17 @@
 import LeftHand from '../components/LeftHand.astro';
 import ReaderGuidance from '../components/ReaderGuidance.astro';
 import { resolveUserBySession } from '../lib/auth';
-import { resolveSiteUrl, toAbsoluteUrl } from '../lib/seo';
+import { buildSeoMetadata } from '../lib/seo';
 type SectionLink = { id: string; label: string };
 const {
 	title = "Dogeared",
 	sectionLinks = [],
-	metaDescription = "Track what matters. Find your next great read. Keep your shelves focused. Make reading feel like yours.",
+	metaDescription = "",
 	robots = "index,follow",
 	canonicalUrl = "",
+	socialImage = "/og-image.png",
+	socialImageAlt = "Dogeared, a calm reading community and personal reading journal",
+	ogType = "website",
 	structuredData = ""
 } = Astro.props as {
 	title?: string;
@@ -17,15 +20,24 @@ const {
 	metaDescription?: string;
 	robots?: string;
 	canonicalUrl?: string;
+	socialImage?: string;
+	socialImageAlt?: string;
+	ogType?: "website" | "article" | "book" | "profile";
 	structuredData?: string;
 };
 const currentPath = Astro.url.pathname;
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
-const pageTitle = `${title} | Dogeared`;
-const siteUrl = resolveSiteUrl(Astro.site ?? Astro.url);
-const canonicalHref = toAbsoluteUrl(String(canonicalUrl || "").trim() || currentPath, siteUrl);
-const ogImageUrl = toAbsoluteUrl("/og-image.png", siteUrl);
+const seo = buildSeoMetadata({
+	title,
+	description: metaDescription,
+	canonicalUrl: String(canonicalUrl || "").trim() || currentPath,
+	socialImage,
+	site: Astro.site ?? Astro.url
+});
+const pageTitle = seo.title;
+const canonicalHref = seo.canonicalUrl;
+const ogImageUrl = seo.imageUrl;
 const siteOrigin = new URL(canonicalHref).origin;
 const websiteStructuredData = JSON.stringify({
 	"@context": "https://schema.org",
@@ -65,24 +77,29 @@ import '../assets/global.css';
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
+		<link rel="icon" href="/favicon.ico" sizes="32x32" />
+		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+		<link rel="manifest" href="/manifest.webmanifest" />
+		<meta name="theme-color" content="#C8DEEB" />
 		<meta name="generator" content={Astro.generator} />
 		<title>{pageTitle}</title>
 		<link rel="canonical" href={canonicalHref} />
-		<meta name="description" content={metaDescription} />
+		<meta name="description" content={seo.description} />
 		<meta name="robots" content={robots} />
-		<meta property="og:type" content="website" />
+		<meta property="og:type" content={ogType} />
 		<meta property="og:site_name" content="Dogeared" />
 		<meta property="og:title" content={pageTitle} />
-		<meta property="og:description" content={metaDescription} />
+		<meta property="og:description" content={seo.description} />
 		<meta property="og:url" content={canonicalHref} />
 		<meta property="og:image" content={ogImageUrl} />
-		<meta property="og:image:width" content="1200" />
-		<meta property="og:image:height" content="630" />
+		<meta property="og:image:alt" content={socialImageAlt} />
+		{seo.imageIsDefault ? <meta property="og:image:width" content="1200" /> : null}
+		{seo.imageIsDefault ? <meta property="og:image:height" content="630" /> : null}
 		<meta name="twitter:card" content="summary_large_image" />
 		<meta name="twitter:title" content={pageTitle} />
-		<meta name="twitter:description" content={metaDescription} />
+		<meta name="twitter:description" content={seo.description} />
 		<meta name="twitter:image" content={ogImageUrl} />
+		<meta name="twitter:image:alt" content={socialImageAlt} />
 		<script type="application/ld+json" set:html={websiteStructuredData}></script>
 		{pageStructuredData ? <script type="application/ld+json" set:html={pageStructuredData}></script> : null}
 		<link rel="preconnect" href="https://fonts.googleapis.com">
