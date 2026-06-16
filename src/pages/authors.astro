@@ -2,6 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import { getNeonSql } from "../lib/neon";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
+import { authorHref } from "../lib/author";
 
 export const prerender = false;
 
@@ -95,9 +96,9 @@ const authorsStructuredData = JSON.stringify([
 		"@type": "ItemList",
 		name: "Authors",
 		itemListElement: pageRows.slice(0, 50).map((row, index) => ({
-			"@type": "ListItem",
-			position: index + 1,
-				url: toAbsoluteUrl(`/author?authorId=${encodeURIComponent(String(row.id))}`, Astro.site ?? Astro.url),
+				"@type": "ListItem",
+				position: index + 1,
+				url: toAbsoluteUrl(authorHref(row.name, row.id), Astro.site ?? Astro.url),
 				name: row.name
 			}))
 	}
@@ -140,7 +141,7 @@ const authorsStructuredData = JSON.stringify([
 		<ul class="author-grid">
 			{pageRows.map((row) => (
 				<li>
-					<a class="author-card" href={`/author?authorId=${encodeURIComponent(String(row.id))}`}>
+					<a class="author-card" href={authorHref(row.name, row.id)}>
 						{row.photo_url ? <img src={row.photo_url} alt={`${row.name} portrait`} loading="lazy" decoding="async" width="56" height="56" /> : <span class="avatar-fallback" aria-hidden="true">A</span>}
 						<div>
 							<strong>{row.name}</strong>

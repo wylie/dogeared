@@ -11,10 +11,9 @@ This is the operating checklist for growing organic discovery after the SEO foun
 3. Submit sitemap: `https://<your-domain>/sitemap.xml`.
 4. Inspect and request indexing for:
    - `/`
-   - `/search`
    - 5 book URLs (`/book?bookId=...`)
-   - 5 author URLs (`/author?authorId=...`)
-   - 3 public profiles (`/u/<username>`)
+   - 5 author URLs (`/author/<slug>`)
+   - 3 public profiles (`/profile/<username>`)
 
 ## 2) Weekly KPI Review (Search Console)
 
@@ -38,9 +37,9 @@ Group pages by template and track trend:
 
 - Home: `/`
 - Books: `/book?bookId=*`
-- Authors: `/author?authorId=*`
-- Profiles: `/u/*`
-- Related: `/related?kind=*&value=*`
+- Authors: `/author/*`
+- Profiles: `/profile/*`
+- Related: `/related?kind=genre|topic&value=*`
 
 For each template, monitor:
 
@@ -68,6 +67,5 @@ For each template, monitor:
    - `/book`
    - `/author`
    - `/related`
-   - `/u/<username>`
+   - `/profile/<username>`
 4. Verify `noindex` pages are intentionally blocked (settings/following/metrics/admin/search results).
-

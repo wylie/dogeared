@@ -6,8 +6,10 @@ import RatingControl from "../../components/RatingControl.astro";
 import ExternalAuthorBooks from "../../components/ExternalAuthorBooks.astro";
 import { getNeonSql } from "../../lib/neon";
 import { resolveUserBySession } from "../../lib/auth";
-import { authorHref, canonicalizeAuthor, normalizeAuthorName } from "../../lib/author";
+import { authorHref, canonicalizeAuthor, normalizeAuthorName, slugifyAuthor } from "../../lib/author";
 import { fetchExternalAuthorBooks, type ExternalAuthorBook } from "../../lib/externalAuthorBooks";
+import { authorCanonicalPath } from "../../lib/indexing";
+import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
 
 export const prerender = false;
 
@@ -51,6 +53,7 @@ let authorPhotoUrl = "";
 let shelvesCount = 0;
 let readersCount = 0;
 let externalBooks: ExternalAuthorBook[] = [];
+let authorId = 0;
 
 function renderAverageStars(value: number) {
 	const rounded = Math.max(0, Math.min(5, Math.round((Number(value || 0) + Number.EPSILON) * 2) / 2));
@@ -90,8 +93,15 @@ async function fetchOpenLibraryBio(name: string) {
 
 try {
 	const sql = getNeonSql();
-	const canonicalAuthorRows = await sql<Array<{ id: number; name: string }>>`
-		select id, name
+	const canonicalAuthorRows = await sql<Array<{
+		id: number;
+		name: string;
+		bio: string;
+		photo_url: string;
+		bio_source: string;
+		bio_source_url: string;
+	}>>`
+		select id, name, coalesce(bio, '') as bio, coalesce(photo_url, '') as photo_url, coalesce(bio_source, '') as bio_source, coalesce(bio_source_url, '') as bio_source_url
 		from author
 		where lower(regexp_replace(coalesce(name, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
 		order by id asc
@@ -99,7 +109,12 @@ try {
 	`;
 	const canonicalAuthor = canonicalAuthorRows[0];
 	if (Number(canonicalAuthor?.id || 0) > 0) {
-		return Astro.redirect(`/author?authorId=${encodeURIComponent(String(canonicalAuthor.id))}`, 302);
+		authorId = Number(canonicalAuthor.id || 0);
+		authorName = normalizeAuthorName(canonicalAuthor.name);
+		bio = String(canonicalAuthor.bio || "").trim();
+		authorPhotoUrl = String(canonicalAuthor.photo_url || "").trim();
+		bioSource = String(canonicalAuthor.bio_source || "").trim();
+		bioSourceUrl = String(canonicalAuthor.bio_source_url || "").trim();
 	}
 	const rows = await sql<BookRow[]>`
 		select
@@ -130,7 +145,10 @@ try {
 			from user_book ub2
 			where ub2.book_id = b.id
 		) rt on true
-		where lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+		where (
+			(${authorId} > 0 and b.author_id = ${authorId})
+			or lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+		)
 		group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis, b.published_year, b.page_count, rt.average_rating, rt.rating_count
 		order by shelves desc, readers desc, b.title asc
 	`;
@@ -168,14 +186,14 @@ try {
 		}
 	}
 
-	if (authorName) {
+	if (authorName && (!bio || !authorPhotoUrl)) {
 		const openLibrary = await fetchOpenLibraryBio(authorName);
-		if (openLibrary?.bio) {
+		if (openLibrary?.bio && !bio) {
 			bio = openLibrary.bio;
 			bioSource = "Open Library";
 			bioSourceUrl = openLibrary.sourceUrl;
 		}
-		if (openLibrary?.photoUrl) {
+		if (openLibrary?.photoUrl && !authorPhotoUrl) {
 			authorPhotoUrl = openLibrary.photoUrl;
 		}
 	}
@@ -185,13 +203,45 @@ try {
 if (authorName) externalBooks = await fetchExternalAuthorBooks(authorName, books);
 
 const displayName = authorName || requestedName || slug.replace(/-/g, " ");
+const cleanAuthorPath = displayName ? authorCanonicalPath(displayName) : "/authors";
+if (displayName) {
+	const expectedSlug = slugifyAuthor(displayName);
+	if (slug !== expectedSlug || Astro.url.search) {
+		return Astro.redirect(cleanAuthorPath, 301);
+	}
+}
+const authorRobots = !errorMessage && books.length > 0 ? "index,follow" : "noindex,follow";
+const authorDescription = displayName
+	? `${displayName} on Dogeared: ${books.length.toLocaleString()} books, ${readersCount.toLocaleString()} readers, and shelf activity.`
+	: "Browse authors and their books on Dogeared.";
+const authorStructuredData = displayName
+	? JSON.stringify([
+		{
+			"@context": "https://schema.org",
+			"@type": "Person",
+			name: displayName,
+			description: bio || `${displayName} author page on Dogeared`,
+			url: toAbsoluteUrl(cleanAuthorPath, Astro.site ?? Astro.url),
+			image: authorPhotoUrl || undefined
+		},
+		buildBreadcrumbList([
+			{ name: "Home", item: "/" },
+			{ name: "Authors", item: "/authors" },
+			{ name: displayName, item: cleanAuthorPath }
+		], { site: Astro.site ?? Astro.url, logErrors: import.meta.env.DEV })
+	])
+	: "";
 ---
 
 <Layout
 	title={displayName || "Author"}
-	metaDescription={displayName ? `Explore books by ${displayName} and reader shelf activity on Dogeared.` : "Browse authors and their books on Dogeared."}
-	canonicalUrl={displayName ? `/author/${encodeURIComponent(slug)}` : "/authors"}
+	metaDescription={authorDescription}
+	canonicalUrl={cleanAuthorPath}
 	ogType="profile"
+	robots={authorRobots}
+	socialImage={authorPhotoUrl || "/og-image.png"}
+	socialImageAlt={displayName ? `${displayName} on Dogeared` : "Authors on Dogeared"}
+	structuredData={authorStructuredData}
 >
 	<div slot="right" class="author-page">
 		{errorMessage && <p class="error">{errorMessage}</p>}

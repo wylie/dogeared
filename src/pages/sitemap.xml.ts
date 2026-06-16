@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { getNeonSql } from "../lib/neon";
+import { authorCanonicalPath, decideRelatedIndexing, relatedCanonicalPath } from "../lib/indexing";
 
 export const prerender = false;
 
@@ -39,7 +40,6 @@ export const GET: APIRoute = async ({ request }) => {
 		{ loc: toUrl(base, "/related"), changefreq: "daily", priority: "0.8" },
 		{ loc: toUrl(base, "/books"), changefreq: "daily", priority: "0.85" },
 		{ loc: toUrl(base, "/authors"), changefreq: "daily", priority: "0.85" },
-		{ loc: toUrl(base, "/metrics"), changefreq: "daily", priority: "0.75" },
 		{ loc: toUrl(base, "/roadmap"), changefreq: "monthly", priority: "0.5" },
 		{ loc: toUrl(base, "/mission"), changefreq: "monthly", priority: "0.5" }
 	];
@@ -47,39 +47,74 @@ export const GET: APIRoute = async ({ request }) => {
 	const dynamicEntries: UrlEntry[] = [];
 	try {
 		const sql = getNeonSql();
-		const [profiles, authors, books] = await Promise.all([
+		const [profiles, authors, books, genres, topics] = await Promise.all([
 			sql<Array<{ username: string; lastmod: string | null; shelves_count: number }>>`
 				select
 					au.username,
-					max(coalesce(ub.updated_at, ub.created_at))::text as lastmod,
+					max(coalesce(ub.updated_at, ub.first_added_at))::text as lastmod,
 					count(ub.book_id)::int as shelves_count
-				from app_user
+				from app_user au
 				left join user_book ub on ub.user_id = au.id
-				where nullif(trim(coalesce(username, '')), '') is not null
-					and coalesce(profile_data->'settings'->'privacy'->>'profileVisibility', 'public') <> 'private'
+				where nullif(trim(coalesce(au.username, '')), '') is not null
+					and coalesce(au.profile_data->'settings'->'privacy'->>'profileVisibility', 'public') <> 'private'
 				group by au.id, au.username, au.created_at
 				having count(ub.book_id) > 0
-				order by max(coalesce(ub.updated_at, ub.created_at)) desc nulls last, au.created_at desc
+				order by max(coalesce(ub.updated_at, ub.first_added_at)) desc nulls last, au.created_at desc
 				limit 2000
 			`,
-			sql<Array<{ id: number; lastmod: string | null; shelves_count: number }>>`
+			sql<Array<{ name: string; lastmod: string | null; shelves_count: number }>>`
 				select
-					b.author_id as id,
-					max(coalesce(ub.updated_at, ub.created_at))::text as lastmod,
+					coalesce(nullif(trim(a.name), ''), nullif(trim(b.primary_author), '')) as name,
+					max(coalesce(ub.updated_at, ub.first_added_at))::text as lastmod,
 					count(distinct ub.book_id)::int as shelves_count
 				from book b
+				left join author a on a.id = b.author_id
 				join user_book ub on ub.book_id = b.id
-				where b.author_id is not null and b.author_id > 0
-				group by b.author_id
+				where nullif(trim(coalesce(a.name, b.primary_author, '')), '') is not null
+				group by coalesce(nullif(trim(a.name), ''), nullif(trim(b.primary_author), ''))
 				having count(distinct ub.book_id) > 0
-				order by max(coalesce(ub.updated_at, ub.created_at)) desc nulls last, b.author_id desc
+				order by max(coalesce(ub.updated_at, ub.first_added_at)) desc nulls last, name asc
 				limit 2000
 			`,
 			sql<Array<{ id: number; updated_at: string | null }>>`
-				select id, updated_at::text
-				from book
-				order by updated_at desc nulls last, id desc
+				select b.id, max(coalesce(ub.updated_at, b.updated_at))::text as updated_at
+				from book b
+				join user_book ub on ub.book_id = b.id
+				where nullif(trim(coalesce(b.title, '')), '') is not null
+				group by b.id
+				having count(ub.book_id) > 0
+				order by max(coalesce(ub.updated_at, b.updated_at)) desc nulls last, b.id desc
 				limit 3000
+			`,
+			sql<Array<{ value: string; books: number; authors: number; readers: number; lastmod: string | null }>>`
+				select
+					coalesce(nullif(trim(bg.genre_name), ''), '') as value,
+					count(distinct b.id)::int as books,
+					count(distinct coalesce(nullif(trim(b.primary_author), ''), b.author_id::text))::int as authors,
+					count(distinct ub.user_id)::int as readers,
+					max(coalesce(ub.updated_at, b.updated_at))::text as lastmod
+				from book_genre bg
+				join book b on b.id = bg.book_id
+				left join user_book ub on ub.book_id = b.id
+				group by coalesce(nullif(trim(bg.genre_name), ''), '')
+				having count(distinct ub.user_id) > 0
+				order by count(distinct b.id) desc, count(distinct ub.user_id) desc, value asc
+				limit 1000
+			`,
+			sql<Array<{ value: string; books: number; authors: number; readers: number; lastmod: string | null }>>`
+				select
+					coalesce(nullif(trim(bt.tag_name), ''), '') as value,
+					count(distinct b.id)::int as books,
+					count(distinct coalesce(nullif(trim(b.primary_author), ''), b.author_id::text))::int as authors,
+					count(distinct ub.user_id)::int as readers,
+					max(coalesce(ub.updated_at, b.updated_at))::text as lastmod
+				from book_tag bt
+				join book b on b.id = bt.book_id
+				left join user_book ub on ub.book_id = b.id
+				group by coalesce(nullif(trim(bt.tag_name), ''), '')
+				having count(distinct ub.user_id) > 0
+				order by count(distinct b.id) desc, count(distinct ub.user_id) desc, value asc
+				limit 1000
 			`
 		]);
 
@@ -97,13 +132,13 @@ export const GET: APIRoute = async ({ request }) => {
 			});
 		}
 		for (const row of authors) {
-			const authorId = Math.max(0, Number(row?.id || 0) || 0);
+			const name = String(row?.name || "").trim();
 			const shelvesCount = Math.max(0, Number(row?.shelves_count || 0) || 0);
-			if (!authorId) continue;
+			if (!name) continue;
 			if (shelvesCount <= 0) continue;
 			const lastmod = String(row?.lastmod || "").trim();
 			dynamicEntries.push({
-				loc: toUrl(base, `/author?authorId=${encodeURIComponent(String(authorId))}`),
+				loc: toUrl(base, authorCanonicalPath(name)),
 				changefreq: "weekly",
 				priority: "0.7",
 				lastmod: lastmod ? new Date(lastmod).toISOString() : undefined
@@ -117,6 +152,42 @@ export const GET: APIRoute = async ({ request }) => {
 				loc: toUrl(base, `/book?bookId=${encodeURIComponent(String(bookId))}`),
 				changefreq: "weekly",
 				priority: "0.8",
+				lastmod: lastmod ? new Date(lastmod).toISOString() : undefined
+			});
+		}
+		for (const row of genres) {
+			const value = String(row?.value || "").trim();
+			const decision = decideRelatedIndexing({
+				kind: "genre",
+				value,
+				bookCount: Number(row?.books || 0),
+				uniqueAuthorCount: Number(row?.authors || 0),
+				readerCount: Number(row?.readers || 0)
+			});
+			if (!decision.indexable) continue;
+			const lastmod = String(row?.lastmod || "").trim();
+			dynamicEntries.push({
+				loc: toUrl(base, relatedCanonicalPath("genre", value)),
+				changefreq: "weekly",
+				priority: "0.65",
+				lastmod: lastmod ? new Date(lastmod).toISOString() : undefined
+			});
+		}
+		for (const row of topics) {
+			const value = String(row?.value || "").trim();
+			const decision = decideRelatedIndexing({
+				kind: "topic",
+				value,
+				bookCount: Number(row?.books || 0),
+				uniqueAuthorCount: Number(row?.authors || 0),
+				readerCount: Number(row?.readers || 0)
+			});
+			if (!decision.indexable) continue;
+			const lastmod = String(row?.lastmod || "").trim();
+			dynamicEntries.push({
+				loc: toUrl(base, relatedCanonicalPath("topic", value)),
+				changefreq: "weekly",
+				priority: "0.55",
 				lastmod: lastmod ? new Date(lastmod).toISOString() : undefined
 			});
 		}

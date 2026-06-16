@@ -148,6 +148,7 @@ type BookDetails = {
 	googleBooksId: string;
 	publishedLabel: string;
 	shelves: number;
+	readers: number;
 	averageRating: number;
 	ratingCount: number;
 	pageCount: number;
@@ -264,6 +265,7 @@ try {
 		google_books_id: string;
 		published_year: number | null;
 		shelves: number;
+		readers: number;
 		average_rating: number | null;
 		rating_count: number;
 		page_count: number;
@@ -285,11 +287,12 @@ try {
 				b.published_year,
 				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 				coalesce(sc.shelves, 0)::int as shelves,
+				coalesce(sc.readers, 0)::int as readers,
 				coalesce(rt.average_rating, 0) as average_rating,
 				coalesce(rt.rating_count, 0)::int as rating_count
 			from book b
 			left join lateral (
-				select count(*)::int as shelves
+				select count(*)::int as shelves, count(distinct user_id)::int as readers
 				from user_book ub2
 				where ub2.book_id = b.id
 			) sc on true
@@ -299,7 +302,7 @@ try {
 				where ub3.book_id = b.id
 			) rt on true
 			where b.id = ${queryBookId}
-			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, rt.average_rating, rt.rating_count
+			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
@@ -317,13 +320,14 @@ try {
 				b.published_year,
 				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 				coalesce(sc.shelves, 0)::int as shelves,
+				coalesce(sc.readers, 0)::int as readers,
 				coalesce(rt.average_rating, 0) as average_rating,
 				coalesce(rt.rating_count, 0)::int as rating_count
 			from book b
-			left join lateral (select count(*)::int as shelves from user_book ub where ub.book_id = b.id) sc on true
+			left join lateral (select count(*)::int as shelves, count(distinct ub.user_id)::int as readers from user_book ub where ub.book_id = b.id) sc on true
 			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
 			where b.isbn13 = ${queryIsbn13}
-			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, rt.average_rating, rt.rating_count
+			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
@@ -341,13 +345,14 @@ try {
 				b.published_year,
 				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 				coalesce(sc.shelves, 0)::int as shelves,
+				coalesce(sc.readers, 0)::int as readers,
 				coalesce(rt.average_rating, 0) as average_rating,
 				coalesce(rt.rating_count, 0)::int as rating_count
 			from book b
-			left join lateral (select count(*)::int as shelves from user_book ub where ub.book_id = b.id) sc on true
+			left join lateral (select count(*)::int as shelves, count(distinct ub.user_id)::int as readers from user_book ub where ub.book_id = b.id) sc on true
 			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
 			where b.isbn10 = ${queryIsbn10}
-			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, rt.average_rating, rt.rating_count
+			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
@@ -365,13 +370,14 @@ try {
 				b.published_year,
 				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 				coalesce(sc.shelves, 0)::int as shelves,
+				coalesce(sc.readers, 0)::int as readers,
 				coalesce(rt.average_rating, 0) as average_rating,
 				coalesce(rt.rating_count, 0)::int as rating_count
 			from book b
-			left join lateral (select count(*)::int as shelves from user_book ub where ub.book_id = b.id) sc on true
+			left join lateral (select count(*)::int as shelves, count(distinct ub.user_id)::int as readers from user_book ub where ub.book_id = b.id) sc on true
 			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
 			where b.google_books_id = ${queryGoogleBooksId}
-			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, rt.average_rating, rt.rating_count
+			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
@@ -391,14 +397,15 @@ try {
 				b.published_year,
 				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 				coalesce(sc.shelves, 0)::int as shelves,
+				coalesce(sc.readers, 0)::int as readers,
 				coalesce(rt.average_rating, 0) as average_rating,
 				coalesce(rt.rating_count, 0)::int as rating_count
 			from book b
-			left join lateral (select count(*)::int as shelves from user_book ub where ub.book_id = b.id) sc on true
+			left join lateral (select count(*)::int as shelves, count(distinct ub.user_id)::int as readers from user_book ub where ub.book_id = b.id) sc on true
 			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
 			where lower(regexp_replace(coalesce(b.title, ''), '[^[:alnum:]]+', '', 'g')) = ${ct.replace(/[^a-z0-9]+/g, "")}
 				and (${ca} = '' or lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${ca.replace(/[^a-z0-9]+/g, "")})
-			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, rt.average_rating, rt.rating_count
+			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
@@ -422,6 +429,7 @@ try {
 			googleBooksId: normalizeText(row.google_books_id),
 			publishedLabel: row.published_year ? String(row.published_year) : "",
 			shelves: Number(row.shelves || 0),
+			readers: Number((row as { readers?: number }).readers || 0),
 			averageRating: Number(row.average_rating || 0),
 			ratingCount: Number(row.rating_count || 0)
 			,pageCount: normalizeCatalogPageCount(row.page_count)
@@ -592,6 +600,7 @@ try {
 				googleBooksId: normalizeText(google.id || queryGoogleBooksId),
 				publishedLabel: formatPublishedLabel(normalizeText(info.publishedDate || "")),
 				shelves: 0,
+				readers: 0,
 				averageRating: Number(info.averageRating || 0),
 				ratingCount: Number(info.ratingsCount || 0)
 				,pageCount: normalizeCatalogPageCount(info.pageCount)
@@ -612,6 +621,7 @@ try {
 					googleBooksId: queryGoogleBooksId,
 					publishedLabel: open.publishedLabel,
 					shelves: 0,
+					readers: 0,
 					averageRating: 0,
 					ratingCount: 0
 					,pageCount: 0
@@ -696,7 +706,7 @@ const bookCanonicalUrl = canonicalBookId > 0
 					)
 			)
 	);
-const bookRobots = book && !errorMessage ? "index,follow" : "noindex,nofollow";
+const bookRobots = book && canonicalBookId > 0 && !errorMessage ? "index,follow" : "noindex,follow";
 const bookDescription = book
 	? `${book.title}${book.author ? ` by ${book.author}` : ""}. ${book.pageCount > 0 ? `${book.pageCount.toLocaleString()} pages. ` : ""}${book.shelves.toLocaleString()} shelf entries on Dogeared.`
 	: "Book details and shelf activity on Dogeared.";
@@ -710,6 +720,11 @@ const bookStructuredData = book
 		isbn: book.isbn13 || book.isbn10 || undefined,
 		numberOfPages: book.pageCount > 0 ? book.pageCount : undefined,
 		datePublished: book.publishedLabel || undefined,
+		interactionStatistic: book.readers > 0 ? {
+			"@type": "InteractionCounter",
+			interactionType: "https://schema.org/ReadAction",
+			userInteractionCount: book.readers
+		} : undefined,
 		aggregateRating: book.ratingCount > 0 ? {
 			"@type": "AggregateRating",
 			ratingValue: Number(book.averageRating || 0).toFixed(2),
@@ -802,7 +817,7 @@ const bookStructuredDataPayload = bookStructuredData
 					<h2>Synopsis</h2>
 					{book.author && (
 						<div class="related-links-row related-links-row--author">
-							<a class="related-link author-link-chip" href={`/related?kind=author&value=${encodeURIComponent(book.author)}`}>More by {book.author}</a>
+							<a class="related-link author-link-chip" href={authorHref(book.author, book.authorId)}>More by {book.author}</a>
 						</div>
 					)}
 					{bookGenres.length > 0 && (

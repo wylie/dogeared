@@ -7,6 +7,13 @@ import { getNeonSql } from "../lib/neon";
 import { formatGenreLabel } from "../lib/genres";
 import { authorHref } from "../lib/author";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
+import {
+	authorCanonicalPath,
+	canonicalRelatedValue,
+	decideRelatedIndexing,
+	normalizeRelatedKind,
+	relatedCanonicalPath
+} from "../lib/indexing";
 
 export const prerender = false;
 
@@ -67,11 +74,11 @@ function renderAverageStars(value: number) {
 }
 
 const kind = normalizeText(Astro.url.searchParams.get("kind"), "author");
-const value = normalizeText(Astro.url.searchParams.get("value"));
+const rawValue = normalizeText(Astro.url.searchParams.get("value"));
+const normalizedKind = normalizeRelatedKind(kind);
+const value = canonicalRelatedValue(normalizedKind, rawValue);
 const canonical = canonicalKey(value);
 const genreSlug = slugify(value);
-const allowedKinds = new Set(["author", "genre", "book", "topic"]);
-const normalizedKind = allowedKinds.has(kind) ? kind : "author";
 const canonicalParams = new URLSearchParams();
 if (value) {
 	canonicalParams.set("kind", normalizedKind);
@@ -236,6 +243,42 @@ if (value) {
 				having count(distinct ub.user_id) > 0
 				order by shelves desc, readers desc, b.title asc
 			`;
+		} else if (normalizedKind === "topic") {
+			pageTitle = value;
+			subtitle = `Books connected to ${value} in Dogeared.`;
+			books = await sql<BookRow[]>`
+				select
+					b.id,
+					b.title,
+					coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+					coalesce(b.author_id, 0)::bigint as "authorId",
+					count(distinct ub.user_id)::int as shelves,
+					count(distinct ub.user_id)::int as readers,
+					coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}') as genres,
+					coalesce(nullif(trim(b.cover_url), ''), '') as "coverUrl",
+					coalesce(nullif(trim(b.language), ''), '') as language,
+					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+					coalesce(b.published_year, 0)::int as "publishedYear",
+					coalesce(nullif(b.page_count, 0), 0)::int as "pageCount",
+					coalesce(ra.average_rating, 0) as "averageRating",
+					coalesce(ra.rating_count, 0)::int as "ratingCount"
+				from book b
+				join book_tag t on t.book_id = b.id
+				left join user_book ub on ub.book_id = b.id
+				left join book_genre bg on bg.book_id = b.id
+				left join lateral (
+					select
+						round(avg(ub2.rating)::numeric, 1) as average_rating,
+						count(*) filter (where ub2.rating is not null)::int as rating_count
+					from user_book ub2
+					where ub2.book_id = b.id
+				) ra on true
+				where lower(regexp_replace(coalesce(t.tag_name, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+				group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.published_year, b.page_count, ra.average_rating, ra.rating_count
+				having count(distinct ub.user_id) > 0
+				order by shelves desc, readers desc, b.title asc
+			`;
 		}
 
 		if (normalizedKind === "author") {
@@ -271,6 +314,18 @@ if (value) {
 				from user_book ub
 				join book b on b.id = ub.book_id
 				where lower(regexp_replace(coalesce(b.title, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+			`;
+			activeShelves = Number(totals[0]?.active_shelves || 0);
+			distinctReaders = Number(totals[0]?.readers || 0);
+		} else if (normalizedKind === "topic") {
+			const totals = await sql<Array<{ active_shelves: number; readers: number }>>`
+				select
+					count(distinct ub.status)::int as active_shelves,
+					count(distinct ub.user_id)::int as readers
+				from user_book ub
+				join book b on b.id = ub.book_id
+				join book_tag t on t.book_id = b.id
+				where lower(regexp_replace(coalesce(t.tag_name, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
 			`;
 			activeShelves = Number(totals[0]?.active_shelves || 0);
 			distinctReaders = Number(totals[0]?.readers || 0);
@@ -365,10 +420,26 @@ if (value) {
 
 if (!activeShelves) activeShelves = 0;
 if (!distinctReaders) distinctReaders = Math.max(...books.map((row) => Number(row.readers || 0)), 0);
-const relatedCanonicalUrl = value
-	? `/related?kind=${encodeURIComponent(normalizedKind)}&value=${encodeURIComponent(value)}`
-	: "/related";
-const relatedRobots = !error ? "index,follow" : "noindex,nofollow";
+const uniqueAuthorCount = new Set(
+	books
+		.map((book) => Number(book.authorId || 0) > 0 ? `id:${Number(book.authorId || 0)}` : `name:${normalizeText(book.author).toLowerCase()}`)
+		.filter(Boolean)
+).size;
+const relatedDecision = decideRelatedIndexing({
+	kind: normalizedKind,
+	value,
+	bookCount: books.length,
+	uniqueAuthorCount,
+	readerCount: distinctReaders,
+	hasError: !!error
+});
+const duplicateCanonicalUrl = normalizedKind === "author"
+	? authorCanonicalPath(books[0]?.author || value)
+	: normalizedKind === "book" && books[0]?.id
+		? `/book?bookId=${encodeURIComponent(String(books[0].id))}`
+		: "";
+const relatedCanonicalUrl = duplicateCanonicalUrl || relatedCanonicalPath(normalizedKind, value);
+const relatedRobots = relatedDecision.robots;
 const seoTitle = value
 	? (normalizedKind === "author"
 		? `${value} Books`
@@ -379,8 +450,11 @@ const seoTitle = value
 				: `${value} Related Books`)
 	: "Related Books";
 const relatedDescription = value
-	? `${subtitle} Discover books, readers, and shelf activity connected to ${value} on Dogeared.`
+	? `${subtitle} ${books.length.toLocaleString()} books, ${uniqueAuthorCount.toLocaleString()} authors, and ${distinctReaders.toLocaleString()} readers on Dogeared.`
 	: "Explore related books, authors, and genres in Dogeared.";
+const relatedIntro = value
+	? `${pageTitle} gathers ${books.length.toLocaleString()} ${books.length === 1 ? "book" : "books"} from ${uniqueAuthorCount.toLocaleString()} ${uniqueAuthorCount === 1 ? "author" : "authors"} that Dogeared readers have added to their shelves.`
+	: "";
 const breadcrumbStructuredData = JSON.stringify(buildBreadcrumbList([
 	{ name: "Home", item: "/" },
 	{ name: "Related", item: "/related" },
@@ -408,7 +482,7 @@ const relatedItemListStructuredData = !value
 			...landingAuthors.slice(0, 8).map((row, index) => ({
 				"@type": "ListItem",
 				position: landingGenres.slice(0, 8).length + index + 1,
-				url: toAbsoluteUrl(`/author?authorId=${encodeURIComponent(String(row.authorId || 0))}`, Astro.site ?? Astro.url),
+				url: toAbsoluteUrl(authorHref(row.author, row.authorId), Astro.site ?? Astro.url),
 				name: row.author
 			})),
 			...landingBooks.slice(0, 8).map((row, index) => ({
@@ -419,7 +493,19 @@ const relatedItemListStructuredData = !value
 			}))
 		]
 	})
-	: "";
+	: books.length > 0
+		? JSON.stringify({
+			"@context": "https://schema.org",
+			"@type": "ItemList",
+			name: `${pageTitle} Books`,
+			itemListElement: books.slice(0, 24).map((book, index) => ({
+				"@type": "ListItem",
+				position: index + 1,
+				url: toAbsoluteUrl(`/book?bookId=${encodeURIComponent(String(book.id || 0))}`, Astro.site ?? Astro.url),
+				name: book.title
+			}))
+		})
+		: "";
 const relatedStructuredDataPayload = JSON.stringify([
 	JSON.parse(relatedStructuredData),
 	JSON.parse(breadcrumbStructuredData),
@@ -450,6 +536,7 @@ const relatedStructuredDataPayload = JSON.stringify([
 		<header id="overview" class="hero">
 			<h1>{pageTitle || "Related"}</h1>
 			<p>{subtitle}</p>
+			{relatedIntro && <p class="collection-intro">{relatedIntro}</p>}
 		</header>
 
 		{!value && (
@@ -580,7 +667,7 @@ const relatedStructuredDataPayload = JSON.stringify([
 					)}
 				</section>
 
-				{kind === "genre" && relatedAuthors.length > 0 && (
+				{normalizedKind === "genre" && relatedAuthors.length > 0 && (
 					<section id="related" class="panel panel-plain">
 						<div class="panel-head">
 							<h2>Top Authors In This Genre</h2>
@@ -692,6 +779,7 @@ const relatedStructuredDataPayload = JSON.stringify([
 	.eyebrow { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6a5c3d; }
 	h1 { margin: 0; line-height: 1.05; font-size: clamp(2rem, 3.8vw, 3.3rem); }
 	.hero p { margin: 0.45rem 0 0; color: #4f4f4f; }
+	.collection-intro { max-width: 68ch; }
 	.stats-grid { display: grid; gap: 0.65rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 0.85rem; }
 	.stat { border: none; border-radius: 12px; background: #fff; padding: 0.75rem; }
 	.stat p { margin: 0; text-transform: uppercase; letter-spacing: 0.06em; color: #6d5d46; font-size: 0.74rem; font-weight: 700; }

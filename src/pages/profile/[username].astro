@@ -980,7 +980,8 @@ const shelfSectionOrderJson = JSON.stringify(
 		: ["default:reading", "default:want_to_read", "default:finished", ...customShelves.map((shelf) => `custom:${shelf.id}`)]
 );
 const profileCanonicalUrl = profile.username ? `/profile/${encodeURIComponent(profile.username)}` : `/profile/${encodeURIComponent(requestedUsername)}`;
-const profileRobots = (!notFound && !privateProfile && !!profile.username) ? "index,follow" : "noindex,nofollow";
+const hasIndexableProfileContent = shelfStats.total > 0 || recentActivity.length > 0 || currentlyReading.length > 0 || wantToReadBooks.length > 0 || finishedBooks.length > 0;
+const profileRobots = (!notFound && !privateProfile && !!profile.username && hasIndexableProfileContent) ? "index,follow" : "noindex,follow";
 const profileDescription = !notFound && !privateProfile
 	? `${profile.name || `@${profile.username}`}'s reading profile on Dogeared. ${shelfStats.total.toLocaleString()} books across shelves.`
 	: "Reader profile on Dogeared.";

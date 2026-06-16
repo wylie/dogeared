@@ -60,7 +60,7 @@ test("external author cards use Dogeared shelf conversion without outbound title
 });
 
 test("author pages separate local and external books", () => {
-	const source = readFileSync("src/pages/author.astro", "utf8");
+	const source = readFileSync("src/pages/author/[slug].astro", "utf8");
 	assert.equal(source.includes("Books In Dogeared"), true);
 	assert.equal(source.includes("<ExternalAuthorBooks books={externalBooks}"), true);
 	assert.equal(source.includes("books.map((book) => book.title)"), false);

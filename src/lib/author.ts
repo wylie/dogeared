@@ -18,7 +18,5 @@ export function canonicalizeAuthor(value: unknown) {
 export function authorHref(value: unknown, authorId: unknown = 0) {
 	const name = normalizeAuthorName(value);
 	if (!name) return "";
-	const id = Number(authorId || 0);
-	if (id > 0) return `/author?authorId=${encodeURIComponent(String(id))}`;
-	return `/author/${encodeURIComponent(slugifyAuthor(name))}?name=${encodeURIComponent(name)}`;
+	return `/author/${encodeURIComponent(slugifyAuthor(name))}`;
 }
