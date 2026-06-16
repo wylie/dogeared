@@ -1,5 +1,6 @@
 ---
 import LeftHand from '../components/LeftHand.astro';
+import FeedbackWidget from '../components/FeedbackWidget.astro';
 import ReaderGuidance from '../components/ReaderGuidance.astro';
 import { resolveUserBySession } from '../lib/auth';
 import { buildSeoMetadata } from '../lib/seo';
@@ -122,6 +123,7 @@ import '../assets/global.css';
 				</main>
 			</div>
 			<ReaderGuidance isAuthenticated={isAuthenticated} />
+			<FeedbackWidget isAuthenticated={isAuthenticated} />
 			<a class="global-support-float" href="https://buymeacoffee.com/wylie" target="_blank" rel="noopener noreferrer">Support Dogeared</a>
 		</body>
 	</html>

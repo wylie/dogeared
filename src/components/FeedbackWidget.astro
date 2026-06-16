@@ -1,0 +1,466 @@
+---
+type Props = { isAuthenticated?: boolean };
+const { isAuthenticated = false } = Astro.props as Props;
+---
+
+<div class="feedback-widget" data-feedback-widget data-authenticated={String(isAuthenticated)}>
+	<button
+		type="button"
+		class="feedback-float"
+		data-feedback-open
+		aria-haspopup="dialog"
+		aria-controls="feedback-modal"
+	>
+		<span class="material-icons feedback-float-icon" aria-hidden="true">chat_bubble</span>
+		<span>Feedback</span>
+	</button>
+
+	<div class="feedback-modal-shell" data-feedback-modal id="feedback-modal" hidden>
+		<div class="feedback-backdrop" data-feedback-close></div>
+		<section
+			class="feedback-panel"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="feedback-title"
+			aria-describedby="feedback-intro"
+			tabindex="-1"
+		>
+			<div class="feedback-panel-head">
+				<div>
+					<h2 id="feedback-title">Send Feedback</h2>
+					<p id="feedback-intro">Tell us what is broken, confusing, useful, or missing.</p>
+				</div>
+				<button type="button" class="feedback-close" data-feedback-close aria-label="Close feedback">
+					<span class="material-icons" aria-hidden="true">close</span>
+				</button>
+			</div>
+
+			<form class="feedback-form" data-feedback-form novalidate>
+				<p class="feedback-account" data-feedback-account hidden></p>
+				<fieldset>
+					<legend>What kind of feedback is this?</legend>
+					<label><input type="radio" name="type" value="bug" checked /> Bug Report</label>
+					<label><input type="radio" name="type" value="feature" /> Feature Request</label>
+					<label><input type="radio" name="type" value="general" /> General Feedback</label>
+					<label><input type="radio" name="type" value="question" /> Question</label>
+				</fieldset>
+
+				<label class="feedback-label" for="feedback-message">Message</label>
+				<textarea id="feedback-message" name="message" rows="6" minlength="10" maxlength="4000" required></textarea>
+
+				<label class="feedback-label" for="feedback-email">Email <span>(optional)</span></label>
+				<input id="feedback-email" name="email" type="email" autocomplete="email" />
+
+				<label class="feedback-honeypot" aria-hidden="true">
+					Website
+					<input type="text" name="website" tabindex="-1" autocomplete="off" />
+				</label>
+
+				<p class="feedback-status" data-feedback-status role="status" aria-live="polite"></p>
+
+				<div class="feedback-actions">
+					<button type="button" class="feedback-secondary" data-feedback-close>Cancel</button>
+					<button type="submit" class="feedback-primary" data-feedback-submit>Send Feedback</button>
+				</div>
+			</form>
+
+			<div class="feedback-success" data-feedback-success hidden>
+				<p>Thanks for helping improve Dogeared.</p>
+				<p>Every piece of feedback is reviewed.</p>
+				<button type="button" class="feedback-primary" data-feedback-close>Done</button>
+			</div>
+		</section>
+	</div>
+</div>
+
+<script>
+	const widget = document.querySelector("[data-feedback-widget]");
+	if (widget instanceof HTMLElement) {
+		const openButton = widget.querySelector("[data-feedback-open]");
+		const modal = widget.querySelector("[data-feedback-modal]");
+		const panel = widget.querySelector(".feedback-panel");
+		const form = widget.querySelector("[data-feedback-form]");
+		const success = widget.querySelector("[data-feedback-success]");
+		const messageInput = widget.querySelector("#feedback-message");
+		const emailInput = widget.querySelector("#feedback-email");
+		const accountCopy = widget.querySelector("[data-feedback-account]");
+		const status = widget.querySelector("[data-feedback-status]");
+		const submitButton = widget.querySelector("[data-feedback-submit]");
+		let previousFocus = null;
+		let accountLoaded = false;
+		let authenticated = widget.dataset.authenticated === "true";
+
+		function setStatus(message, isError = false) {
+			if (!(status instanceof HTMLElement)) return;
+			status.textContent = message;
+			status.dataset.state = isError ? "error" : message ? "info" : "";
+		}
+
+		async function loadAccountContext() {
+			if (accountLoaded) return;
+			accountLoaded = true;
+			try {
+				const response = await fetch("/api/auth/me", { credentials: "same-origin" });
+				const data = await response.json().catch(() => ({}));
+				const user = data?.user || {};
+				authenticated = Boolean(data?.authenticated);
+				if (authenticated && emailInput instanceof HTMLInputElement && !emailInput.value && typeof user.email === "string") {
+					emailInput.value = user.email;
+				}
+				if (authenticated && accountCopy instanceof HTMLElement) {
+					const username = typeof user.username === "string" && user.username ? `@${user.username}` : "your Dogeared account";
+					accountCopy.textContent = `Submitting as: ${username}`;
+					accountCopy.hidden = false;
+				}
+			} catch {
+				// Feedback should stay available even if account context cannot load.
+			}
+		}
+
+		function openFeedbackModal() {
+			if (!(modal instanceof HTMLElement) || !(panel instanceof HTMLElement)) return;
+			previousFocus = document.activeElement;
+			if (form instanceof HTMLFormElement) form.hidden = false;
+			if (success instanceof HTMLElement) success.hidden = true;
+			setStatus("");
+			modal.hidden = false;
+			document.body.classList.add("feedback-modal-open");
+			void loadAccountContext();
+			window.setTimeout(() => {
+				if (messageInput instanceof HTMLTextAreaElement) messageInput.focus();
+				else panel.focus();
+			}, 0);
+		}
+
+		function closeFeedbackModal() {
+			if (!(modal instanceof HTMLElement)) return;
+			modal.hidden = true;
+			document.body.classList.remove("feedback-modal-open");
+			if (previousFocus instanceof HTMLElement) previousFocus.focus();
+		}
+
+		function collectViewport() {
+			return `${window.innerWidth}x${window.innerHeight}`;
+		}
+
+		function trackFeedbackSubmitted(type) {
+			const detail = {
+				feedback_type: type,
+				authenticated
+			};
+			if (typeof window.gtag === "function") {
+				window.gtag("event", "Feedback Submitted", detail);
+			} else {
+				window.dataLayer = window.dataLayer || [];
+				window.dataLayer.push({
+					event: "Feedback Submitted",
+					...detail
+				});
+			}
+		}
+
+		openButton?.addEventListener("click", openFeedbackModal);
+		widget.querySelectorAll("[data-feedback-close]").forEach((button) => {
+			button.addEventListener("click", closeFeedbackModal);
+		});
+		document.addEventListener("keydown", (event) => {
+			if (event.key === "Escape" && modal instanceof HTMLElement && !modal.hidden) closeFeedbackModal();
+		});
+
+		form?.addEventListener("submit", async (event) => {
+			event.preventDefault();
+			if (!(form instanceof HTMLFormElement)) return;
+			const formData = new FormData(form);
+			const type = String(formData.get("type") || "general");
+			const message = String(formData.get("message") || "").trim();
+			const email = String(formData.get("email") || "").trim();
+			const website = String(formData.get("website") || "").trim();
+
+			if (message.length < 10) {
+				setStatus("Please add a little more detail before sending feedback.", true);
+				if (messageInput instanceof HTMLTextAreaElement) messageInput.focus();
+				return;
+			}
+			if (email && emailInput instanceof HTMLInputElement && !emailInput.checkValidity()) {
+				setStatus("Use a valid email address, or leave the email field blank.", true);
+				emailInput.focus();
+				return;
+			}
+
+			if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
+			setStatus("Sending feedback...");
+			try {
+				const response = await fetch("/api/feedback", {
+					method: "POST",
+					credentials: "same-origin",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						type,
+						message,
+						email,
+						website,
+						metadata: {
+							pageUrl: window.location.href,
+							timestamp: new Date().toISOString(),
+							userAgent: navigator.userAgent,
+							viewport: collectViewport()
+						}
+					})
+				});
+				const data = await response.json().catch(() => ({}));
+				if (!response.ok || data?.ok === false) {
+					setStatus(String(data?.error || "Feedback could not be sent. Try again in a moment."), true);
+					return;
+				}
+				trackFeedbackSubmitted(type);
+				form.reset();
+				form.hidden = true;
+				if (success instanceof HTMLElement) success.hidden = false;
+				setStatus("");
+			} catch {
+				setStatus("Feedback could not be sent. Try again in a moment.", true);
+			} finally {
+				if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
+			}
+		});
+	}
+</script>
+
+<style>
+	.feedback-float {
+		position: fixed;
+		right: 1rem;
+		bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+		z-index: 9999;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.35rem;
+		min-height: 44px;
+		border: none;
+		border-radius: 999px;
+		padding: 0.58rem 0.9rem;
+		background: var(--color-primary);
+		color: #fff;
+		box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+		font: inherit;
+		font-size: 0.9rem;
+		font-weight: 750;
+		cursor: pointer;
+	}
+	.feedback-float:hover {
+		background: var(--color-primary-hover);
+	}
+	.feedback-float:focus-visible,
+	.feedback-close:focus-visible,
+	.feedback-primary:focus-visible,
+	.feedback-secondary:focus-visible,
+	.feedback-form input:focus-visible,
+	.feedback-form textarea:focus-visible {
+		outline: 3px solid #111;
+		outline-offset: 2px;
+	}
+	.feedback-float-icon {
+		font-size: 1.1rem;
+	}
+	.feedback-modal-shell {
+		position: fixed;
+		inset: 0;
+		z-index: 13000;
+		display: grid;
+		place-items: center;
+		padding: 1rem;
+		box-sizing: border-box;
+	}
+	.feedback-modal-shell[hidden] {
+		display: none;
+	}
+	.feedback-backdrop {
+		position: absolute;
+		inset: 0;
+		background: rgba(16, 22, 28, 0.52);
+	}
+	.feedback-panel {
+		position: relative;
+		z-index: 1;
+		width: min(560px, 100%);
+		max-height: calc(100dvh - 2rem);
+		overflow: auto;
+		box-sizing: border-box;
+		border: 1px solid rgba(87, 117, 144, 0.35);
+		border-radius: 12px;
+		background: var(--color-surface);
+		box-shadow: 0 22px 60px rgba(15, 23, 30, 0.28);
+		padding: 1rem;
+		color: var(--color-text);
+	}
+	.feedback-panel-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+	.feedback-panel h2 {
+		margin: 0;
+		font-size: 1.35rem;
+		font-weight: 650;
+	}
+	.feedback-panel p {
+		margin: 0.25rem 0 0;
+		line-height: 1.45;
+	}
+	.feedback-panel-head p,
+	.feedback-account,
+	.feedback-status {
+		color: #536273;
+		font-size: 0.92rem;
+	}
+	.feedback-close {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 38px;
+		height: 38px;
+		border: 1px solid #d7e0e8;
+		border-radius: 9px;
+		background: #fff;
+		color: var(--color-secondary);
+		cursor: pointer;
+	}
+	.feedback-form {
+		display: grid;
+		gap: 0.7rem;
+		margin-top: 0.9rem;
+	}
+	.feedback-form[hidden],
+	.feedback-success[hidden],
+	.feedback-account[hidden] {
+		display: none;
+	}
+	.feedback-form fieldset {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.45rem 0.7rem;
+		margin: 0;
+		padding: 0.7rem;
+		border: 1px solid #d7e0e8;
+		border-radius: 10px;
+	}
+	.feedback-form legend {
+		padding: 0 0.25rem;
+		font-weight: 700;
+	}
+	.feedback-form label {
+		line-height: 1.35;
+	}
+	.feedback-form fieldset label {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		min-height: 32px;
+	}
+	.feedback-label {
+		font-weight: 700;
+	}
+	.feedback-label span {
+		font-weight: 500;
+		color: #677586;
+	}
+	.feedback-form textarea,
+	.feedback-form input[type="email"] {
+		width: 100%;
+		box-sizing: border-box;
+		border: 1px solid #bccbd8;
+		border-radius: 9px;
+		padding: 0.65rem 0.7rem;
+		font: inherit;
+		color: var(--color-text);
+		background: #fff;
+	}
+	.feedback-form textarea {
+		min-height: 9rem;
+		resize: vertical;
+	}
+	.feedback-honeypot {
+		position: absolute;
+		left: -10000px;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+	}
+	.feedback-status {
+		min-height: 1.25rem;
+	}
+	.feedback-status[data-state="error"] {
+		color: #991b1b;
+	}
+	.feedback-actions,
+	.feedback-success {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+	}
+	.feedback-success {
+		flex-direction: column;
+		align-items: flex-start;
+		margin-top: 1rem;
+	}
+	.feedback-primary,
+	.feedback-secondary {
+		min-height: 44px;
+		border-radius: 9px;
+		padding: 0 0.85rem;
+		font: inherit;
+		font-weight: 750;
+		cursor: pointer;
+	}
+	.feedback-primary {
+		border: none;
+		background: var(--color-primary);
+		color: #fff;
+	}
+	.feedback-primary:hover {
+		background: var(--color-primary-hover);
+	}
+	.feedback-primary:disabled {
+		opacity: 0.68;
+		cursor: wait;
+	}
+	.feedback-secondary {
+		border: 1px solid #bccbd8;
+		background: #fff;
+		color: var(--color-secondary);
+	}
+	.feedback-secondary:hover {
+		background: #f2f6f9;
+	}
+	:global(body.feedback-modal-open) {
+		overflow: hidden;
+	}
+	@media (max-width: 900px) {
+		.feedback-float {
+			right: 0.6rem;
+			bottom: calc(5.8rem + env(safe-area-inset-bottom, 0px));
+			padding: 0.52rem 0.74rem;
+			font-size: 0.84rem;
+		}
+	}
+	@media (max-width: 560px) {
+		.feedback-modal-shell {
+			align-items: end;
+			padding: 0.5rem;
+		}
+		.feedback-panel {
+			max-height: calc(100dvh - 1rem);
+			border-radius: 12px 12px 8px 8px;
+			padding: 0.85rem;
+		}
+		.feedback-form fieldset {
+			grid-template-columns: 1fr;
+		}
+		.feedback-actions {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+</style>
