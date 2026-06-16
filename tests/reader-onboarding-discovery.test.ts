@@ -89,6 +89,38 @@ test("profile finish workflow updates shelves and activity optimistically", () =
 	assert.equal(source.includes('data-shelf-count="finished"'), true);
 	assert.equal(source.includes('activityClone.dataset.optimisticActivity = "finished"'), true);
 	assert.equal(source.includes("readGrid.prepend(card)"), true);
+	assert.equal(source.includes("rememberReadingActivityToday()"), true);
+	assert.equal(source.includes("refreshProfileReadingUiAfterMutation()"), true);
+	assert.equal(source.includes("clearMomentumTracking(card)"), true);
+	assert.equal(source.includes('document.querySelectorAll(\'#currently-reading [data-momentum-reading-item="true"]\')'), true);
+});
+
+test("profile prioritizes active shelf sections before recent activity", () => {
+	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const currentIdx = source.indexOf('{ id: "currently-reading", label: "Currently Reading", key: "default:reading" }');
+	const wantIdx = source.indexOf('{ id: "want-to-read", label: "Want to Read", key: "default:want_to_read" }');
+	const readIdx = source.indexOf('{ id: "read", label: "Read", key: "default:finished" }');
+	const recentIdx = source.indexOf('{ id: "recent-activity", label: "Recent Activity" }');
+	assert.ok(currentIdx > -1);
+	assert.ok(wantIdx > -1);
+	assert.ok(readIdx > -1);
+	assert.ok(recentIdx > -1);
+	assert.ok(currentIdx < wantIdx);
+	assert.ok(wantIdx < readIdx);
+	assert.ok(readIdx < recentIdx);
+	assert.equal(source.includes('style="order:900"'), true);
+	assert.equal(source.includes("profilePageRoot.insertBefore(node, recentSection)"), true);
+});
+
+test("profile section reorder controls disable invalid moves", () => {
+	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
+	assert.equal(source.includes("shelfSectionMoveAttrs"), true);
+	assert.equal(source.includes('"aria-disabled": "true"'), true);
+	assert.equal(source.includes("updateShelfSectionMoveControls"), true);
+	assert.equal(source.includes("upButton.disabled = !canMoveUp"), true);
+	assert.equal(source.includes("downButton.disabled = !canMoveDown"), true);
+	assert.equal(source.includes("moveUpButton.disabled || moveUpButton.getAttribute(\"aria-disabled\") === \"true\""), true);
+	assert.equal(source.includes(".custom-shelf-menu-item:disabled"), true);
 });
 
 test("Argon Collective attribution stays on company-facing surfaces, not the global footer", () => {

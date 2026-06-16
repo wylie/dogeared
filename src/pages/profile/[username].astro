@@ -375,6 +375,7 @@ let momentumBooks: MomentumBook[] = [];
 let momentumScore = 0;
 let momentumStreakDays = 0;
 let momentumNextAction = "";
+let readingStreakDateKeys: string[] = [];
 let favoriteBookHref = "";
 let favoriteAuthorHref = "";
 let ownerProfileData: Record<string, unknown> = {};
@@ -759,6 +760,22 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		genres: Array.isArray(row.genres) ? row.genres.map((genre) => String(genre || "").trim()).filter(Boolean) : []
 	}));
 	finishedBooks = dedupeByWorkIdentity(finishedBooks);
+	if (isOwnerViewer) {
+		try {
+			const progressDateRows = await sql<Array<{ activity_day: string }>>`
+				select distinct recorded_at::date::text as activity_day
+				from user_reading_progress_event
+				where user_id = ${bundle.targetUserId}::uuid
+				order by activity_day desc
+				limit 120
+			`;
+			readingStreakDateKeys = progressDateRows
+				.map((row) => String(row.activity_day || "").trim())
+				.filter(Boolean);
+		} catch {
+			readingStreakDateKeys = [];
+		}
+	}
 	customShelves = customShelfRows.map((row) => ({
 		id: Math.max(0, Number(row.id || 0) || 0),
 		name: String(row.name || "").trim(),
@@ -900,6 +917,22 @@ function computeReadingStreakDays(items: Array<{ updatedAt: string }>) {
 	return streak;
 }
 
+function computeReadingStreakFromDateKeys(dateKeys: string[]) {
+	const seenDays = new Set(
+		dateKeys.map((key) => String(key || "").trim().slice(0, 10)).filter(Boolean)
+	);
+	if (seenDays.size === 0) return 0;
+	let streak = 0;
+	const cursor = new Date();
+	while (true) {
+		const key = cursor.toISOString().slice(0, 10);
+		if (!seenDays.has(key)) break;
+		streak += 1;
+		cursor.setUTCDate(cursor.getUTCDate() - 1);
+	}
+	return streak;
+}
+
 function shelfHrefForOwner(sectionId: string) {
 	const map: Record<string, string> = {
 		want_to_read: "want-to-read",
@@ -939,11 +972,21 @@ function shelfSectionOrderStyle(key: string) {
 	return `order:${300 + shelfSectionOrderValue(key)}`;
 }
 
+function shelfSectionMoveAttrs(key: string, direction: "up" | "down") {
+	const order = shelfSectionOrderKeys.length > 0
+		? shelfSectionOrderKeys
+		: ["default:reading", "default:want_to_read", "default:finished", ...customShelves.map((shelf) => `custom:${shelf.id}`)];
+	const index = order.indexOf(key);
+	const canMove = direction === "up"
+		? index > 0
+		: index >= 0 && index < order.length - 1;
+	return canMove ? {} : { disabled: true, "aria-disabled": "true" };
+}
+
 const baseSectionLinks = [
 	...(isOwnerViewer ? [{ id: "notifications", label: "Notifications" }] : []),
 	{ id: "about", label: "About" },
-	{ id: "shelf-summary", label: "Shelf Summary" },
-	{ id: "recent-activity", label: "Recent Activity" }
+	{ id: "shelf-summary", label: "Shelf Summary" }
 ];
 const orderedShelfSectionLinks = isOwnerViewer
 	? [
@@ -963,7 +1006,7 @@ const orderedShelfSectionLinks = isOwnerViewer
 		{ id: "want-to-read", label: "Want to Read" },
 		{ id: "read", label: "Read" }
 	];
-const sectionLinks = [...baseSectionLinks, ...orderedShelfSectionLinks];
+const sectionLinks = [...baseSectionLinks, ...orderedShelfSectionLinks, { id: "recent-activity", label: "Recent Activity" }];
 const customShelfOptionsJson = JSON.stringify(customShelves.map((shelf) => ({
 	id: shelf.id,
 	name: shelf.name,
@@ -1047,7 +1090,9 @@ if (firstOnboardingBook) {
 	const target = momentumBooks.find((item) => item.bookId === firstOnboardingBook.bookId);
 	if (target) target.showOnboardingStatus = true;
 }
-momentumStreakDays = computeReadingStreakDays(currentlyReading);
+momentumStreakDays = readingStreakDateKeys.length > 0
+	? computeReadingStreakFromDateKeys(readingStreakDateKeys)
+	: computeReadingStreakDays(currentlyReading);
 const eligibleMomentumBooks = momentumBooks.filter((item) => item.predictionEligible);
 momentumScore = eligibleMomentumBooks.length > 0
 	? Math.round(eligibleMomentumBooks.reduce((sum, item) => sum + item.finishProbability, 0) / eligibleMomentumBooks.length)
@@ -1083,7 +1128,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	robots={profileRobots}
 	structuredData={profileStructuredDataPayload}
 >
-	<div slot="right" class="public-profile-page" data-authenticated={String(isAuthenticated)} data-shelf-section-order={shelfSectionOrderJson}>
+	<div
+		slot="right"
+		class="public-profile-page"
+		data-authenticated={String(isAuthenticated)}
+		data-shelf-section-order={shelfSectionOrderJson}
+		data-reading-streak-days={JSON.stringify(readingStreakDateKeys)}
+	>
 		<nav class="breadcrumbs" aria-label="Breadcrumb">
 			<a href="/">Home</a>
 			<span aria-hidden="true">/</span>
@@ -1399,8 +1450,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 									<span class="material-icons" aria-hidden="true">more_vert</span>
 								</button>
 								<div class="custom-shelf-menu" hidden>
-									<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up">Move up</button>
-									<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down">Move down</button>
+									<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up" {...shelfSectionMoveAttrs(`custom:${shelf.id}`, "up")}>Move up</button>
+									<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down" {...shelfSectionMoveAttrs(`custom:${shelf.id}`, "down")}>Move down</button>
 									<button type="button" class="custom-shelf-menu-item" data-action="change-custom-shelf-icon" data-current-icon={shelf.icon}>Change icon</button>
 									<button type="button" class="custom-shelf-menu-item" data-action="rename-custom-shelf">Rename</button>
 									<button type="button" class="custom-shelf-menu-item danger" data-action="delete-custom-shelf">Delete</button>
@@ -1462,7 +1513,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				))}
 
 				{(canViewActivity || isOwnerViewer) && (
-					<section id="recent-activity" class="activity-card activity-card-plain">
+					<section id="recent-activity" class="activity-card activity-card-plain" style="order:900">
 						<h2><span class="material-icons custom-shelf-heading-icon default-shelf-heading-icon" aria-hidden="true">schedule</span>Recent Activity</h2>
 						{pagedRecent.items.length === 0 ? (
 							<p>No recent activity yet. Add a book, rate a finished read, or update progress to get started.</p>
@@ -1579,8 +1630,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 										<span class="material-icons" aria-hidden="true">more_vert</span>
 									</button>
 									<div class="custom-shelf-menu" hidden>
-										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up">Move up</button>
-										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down">Move down</button>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up" {...shelfSectionMoveAttrs("default:reading", "up")}>Move up</button>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down" {...shelfSectionMoveAttrs("default:reading", "down")}>Move down</button>
 									</div>
 								</div>
 							)}
@@ -1776,8 +1827,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 										<span class="material-icons" aria-hidden="true">more_vert</span>
 									</button>
 									<div class="custom-shelf-menu" hidden>
-										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up">Move up</button>
-										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down">Move down</button>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up" {...shelfSectionMoveAttrs("default:want_to_read", "up")}>Move up</button>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down" {...shelfSectionMoveAttrs("default:want_to_read", "down")}>Move down</button>
 									</div>
 								</div>
 							)}
@@ -1846,8 +1897,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 										<span class="material-icons" aria-hidden="true">more_vert</span>
 									</button>
 									<div class="custom-shelf-menu" hidden>
-										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up">Move up</button>
-										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down">Move down</button>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up" {...shelfSectionMoveAttrs("default:finished", "up")}>Move up</button>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down" {...shelfSectionMoveAttrs("default:finished", "down")}>Move down</button>
 									</div>
 								</div>
 							)}
@@ -2414,6 +2465,12 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.custom-shelf-menu-item:hover {
 		background: #f3f4f6;
+	}
+	.custom-shelf-menu-item:disabled,
+	.custom-shelf-menu-item[aria-disabled="true"] {
+		color: #9ca3af;
+		cursor: default;
+		background: transparent;
 	}
 	.custom-shelf-menu-item.danger {
 		color: #7f1d1d;
@@ -3206,6 +3263,15 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	const momentumStreakNode = document.querySelector("[data-momentum-streak]");
 	const momentumNextActionNode = document.querySelector("[data-momentum-next-action]");
 	const shelfSectionNodes = Array.from(document.querySelectorAll("[data-shelf-section-key]"));
+	let readingStreakDayKeys = (() => {
+		try {
+			const raw = String(profilePageRoot?.getAttribute("data-reading-streak-days") || "[]");
+			const parsed = JSON.parse(raw);
+			return new Set(Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim().slice(0, 10)).filter(Boolean) : []);
+		} catch {
+			return new Set();
+		}
+	})();
 	let shelfSectionOrder = (() => {
 		try {
 			const raw = String(profilePageRoot?.getAttribute("data-shelf-section-order") || "[]");
@@ -3239,14 +3305,62 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 	}
 
+	function orderedShelfSectionKeys(orderKeys) {
+		const liveKeys = shelfSectionNodes
+			.map((node) => String(node.getAttribute("data-shelf-section-key") || "").trim())
+			.filter(Boolean);
+		const deduped = Array.from(new Set(
+			(Array.isArray(orderKeys) ? orderKeys : [])
+				.map((key) => String(key || "").trim())
+				.filter((key) => liveKeys.includes(key))
+		));
+		return [
+			...deduped,
+			...liveKeys.filter((key) => !deduped.includes(key))
+		];
+	}
+
+	function updateShelfSectionMoveControls(orderKeys = shelfSectionOrder) {
+		const orderedKeys = orderedShelfSectionKeys(orderKeys);
+		for (const node of shelfSectionNodes) {
+			if (!(node instanceof HTMLElement)) continue;
+			const key = String(node.getAttribute("data-shelf-section-key") || "").trim();
+			const index = orderedKeys.indexOf(key);
+			const upButton = node.querySelector('[data-action="move-shelf-section-up"]');
+			const downButton = node.querySelector('[data-action="move-shelf-section-down"]');
+			const canMoveUp = index > 0;
+			const canMoveDown = index >= 0 && index < orderedKeys.length - 1;
+			if (upButton instanceof HTMLButtonElement) {
+				upButton.disabled = !canMoveUp;
+				upButton.setAttribute("aria-disabled", canMoveUp ? "false" : "true");
+			}
+			if (downButton instanceof HTMLButtonElement) {
+				downButton.disabled = !canMoveDown;
+				downButton.setAttribute("aria-disabled", canMoveDown ? "false" : "true");
+			}
+		}
+	}
+
 	function applyShelfSectionOrderToDom(orderKeys) {
-		const lookup = new Map(orderKeys.map((key, index) => [String(key || "").trim(), index]));
+		const normalizedOrder = orderedShelfSectionKeys(orderKeys);
+		const lookup = new Map(normalizedOrder.map((key, index) => [String(key || "").trim(), index]));
 		for (const node of shelfSectionNodes) {
 			if (!(node instanceof HTMLElement)) continue;
 			const key = String(node.getAttribute("data-shelf-section-key") || "").trim();
 			const position = lookup.has(key) ? Number(lookup.get(key)) : 999;
 			node.style.order = String(300 + position);
 		}
+		if (profilePageRoot instanceof HTMLElement) {
+			const recentSection = document.getElementById("recent-activity");
+			const orderedNodes = normalizedOrder
+				.map((key) => shelfSectionNodes.find((node) => String(node.getAttribute("data-shelf-section-key") || "").trim() === key))
+				.filter((node) => node instanceof HTMLElement);
+			for (const node of orderedNodes) {
+				if (recentSection instanceof HTMLElement) profilePageRoot.insertBefore(node, recentSection);
+				else profilePageRoot.append(node);
+			}
+		}
+		updateShelfSectionMoveControls(normalizedOrder);
 	}
 
 	function syncLeftNavShelfOrder(orderKeys) {
@@ -3396,6 +3510,26 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				setDropdownLabel(dropdown, "");
 				setShelvedState(dropdown, false);
 			}
+		}
+	}
+
+	function rememberReadingActivityToday() {
+		const today = new Date().toISOString().slice(0, 10);
+		readingStreakDayKeys.add(today);
+		if (profilePageRoot instanceof HTMLElement) {
+			profilePageRoot.setAttribute("data-reading-streak-days", JSON.stringify(Array.from(readingStreakDayKeys)));
+		}
+	}
+
+	async function refreshProfileReadingUiAfterMutation(options = {}) {
+		const shouldHydrate = options?.hydrate !== false;
+		recalcMomentumFromDom();
+		if (shouldHydrate) {
+			await hydrateShelfEntriesFromServer();
+			syncExistingState();
+		}
+		if (typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
+			window.dispatchEvent(new CustomEvent("dogeared:reading-data-changed"));
 		}
 	}
 
@@ -3666,7 +3800,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 
 	function recalcMomentumFromDom() {
 		if (!momentumPanel) return;
-		const cards = Array.from(document.querySelectorAll('[data-momentum-reading-item="true"]'));
+		const cards = Array.from(document.querySelectorAll('#currently-reading [data-momentum-reading-item="true"]'));
 		const items = cards.map((card) => {
 			if (!(card instanceof HTMLElement)) return null;
 			const title = String(card.dataset.momentumTitle || "").trim();
@@ -3687,7 +3821,17 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			});
 			return { card, title, currentPage, totalPages, percent, daysSinceUpdate, ...prediction };
 		}).filter(Boolean);
-		if (items.length === 0) return;
+		if (items.length === 0) {
+			if (momentumScoreNode instanceof HTMLElement) momentumScoreNode.textContent = "0";
+			if (momentumStreakNode instanceof HTMLElement) {
+				const streak = computeClientReadingStreak(Array.from(readingStreakDayKeys));
+				momentumStreakNode.textContent = String(streak);
+			}
+			if (momentumNextActionNode instanceof HTMLElement) {
+				momentumNextActionNode.textContent = "Add a few progress updates and Dogeared will start estimating reading momentum.";
+			}
+			return;
+		}
 		const eligibleItems = items.filter((item) => item.eligible);
 		const firstOnboardingItem = items
 			.filter((item) => !item.eligible)
@@ -3715,20 +3859,14 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			: 0;
 		if (momentumScoreNode instanceof HTMLElement) momentumScoreNode.textContent = String(avgScore);
 
-		const seenDays = new Set(
-			items.map((item) => {
+		const seenDays = new Set([
+			...Array.from(readingStreakDayKeys),
+			...items.map((item) => {
 				const d = new Date(String(item.card.dataset.momentumUpdatedAt || "").trim());
 				return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : "";
 			}).filter(Boolean)
-		);
-		let streak = 0;
-		const cursor = new Date();
-		while (true) {
-			const key = cursor.toISOString().slice(0, 10);
-			if (!seenDays.has(key)) break;
-			streak += 1;
-			cursor.setUTCDate(cursor.getUTCDate() - 1);
-		}
+		]);
+		let streak = computeClientReadingStreak(Array.from(seenDays));
 		if (momentumStreakNode instanceof HTMLElement) momentumStreakNode.textContent = String(streak);
 
 		const atRisk = eligibleItems
@@ -3749,6 +3887,37 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				momentumNextActionNode.textContent = "Add a few progress updates and Dogeared will start estimating reading momentum.";
 			}
 		}
+	}
+
+	function computeClientReadingStreak(dateKeys) {
+		const seenDays = new Set(
+			(Array.isArray(dateKeys) ? dateKeys : [])
+				.map((key) => String(key || "").trim().slice(0, 10))
+				.filter(Boolean)
+		);
+		if (seenDays.size === 0) return 0;
+		let streak = 0;
+		const cursor = new Date();
+		while (true) {
+			const key = cursor.toISOString().slice(0, 10);
+			if (!seenDays.has(key)) break;
+			streak += 1;
+			cursor.setUTCDate(cursor.getUTCDate() - 1);
+		}
+		return streak;
+	}
+
+	function clearMomentumTracking(card) {
+		if (!(card instanceof HTMLElement)) return;
+		card.removeAttribute("data-momentum-reading-item");
+		delete card.dataset.momentumReadingItem;
+		delete card.dataset.momentumBookId;
+		delete card.dataset.momentumTitle;
+		delete card.dataset.momentumCurrentPage;
+		delete card.dataset.momentumTotalPages;
+		delete card.dataset.momentumUpdatedAt;
+		delete card.dataset.momentumFirstAddedAt;
+		delete card.dataset.momentumProgressUpdates;
 	}
 
 	function positionMomentumTooltip() {
@@ -4022,6 +4191,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					readSection.append(readGrid);
 				}
 				const activityClone = card.cloneNode(true);
+				clearMomentumTracking(card);
+				if (activityClone instanceof HTMLElement) clearMomentumTracking(activityClone);
 				card.querySelector(".reading-progress-block")?.remove();
 				card.querySelector('[data-action="mark-finished-quick"]')?.remove();
 				const prefix = card.querySelector(".activity-prefix");
@@ -4146,8 +4317,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 						showShelfFeedback(dropdown, "Removed from shelves.", feedbackTimers);
 						removeCardFromShelfSection(dropdown, "remove");
 						closeShelfMenus(shelfDropdowns);
-						await hydrateShelfEntriesFromServer();
-						syncExistingState();
+						await refreshProfileReadingUiAfterMutation();
 					} catch (error) {
 						showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to remove.", feedbackTimers);
 					}
@@ -4158,6 +4328,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				if (status === "finished") {
 					const finishResult = await promptAndSaveFinishedEntry(entry);
 					if (!finishResult.ok) return;
+					rememberReadingActivityToday();
 				}
 				if (!entry.title) return;
 				try {
@@ -4170,6 +4341,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
 					removeCardFromShelfSection(dropdown, status);
 					closeShelfMenus(shelfDropdowns);
+					await refreshProfileReadingUiAfterMutation();
 				} catch (error) {
 					showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
 				}
@@ -4215,14 +4387,14 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			try {
 				const finishResult = await promptAndSaveFinishedEntry(entry);
 				if (!finishResult.ok) return;
+				rememberReadingActivityToday();
 				if (dropdown) {
 					setDropdownLabel(dropdown, "finished");
 					setShelvedState(dropdown, true);
 					showShelfFeedback(dropdown, "Saved to Read.", feedbackTimers);
 					removeCardFromShelfSection(dropdown, "finished");
 				}
-				await hydrateShelfEntriesFromServer();
-				syncExistingState();
+				await refreshProfileReadingUiAfterMutation();
 			} catch (error) {
 				if (dropdown) {
 					showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
@@ -4282,14 +4454,14 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				try {
 					const finishResult = await promptAndSaveFinishedEntry(finishEntry);
 					if (!finishResult.ok) return;
+					rememberReadingActivityToday();
 					if (dropdown) {
 						setDropdownLabel(dropdown, "finished");
 						setShelvedState(dropdown, true);
 						showShelfFeedback(dropdown, "Saved to Read.", feedbackTimers);
 						removeCardFromShelfSection(dropdown, "finished");
 					}
-					await hydrateShelfEntriesFromServer();
-					syncExistingState();
+					await refreshProfileReadingUiAfterMutation();
 				} catch (error) {
 					if (dropdown) {
 						showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
@@ -4363,8 +4535,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 						card.dataset.momentumUpdatedAt = updatedAtValue || new Date().toISOString();
 						const priorUpdates = Math.max(0, Number(card.dataset.momentumProgressUpdates || 0) || 0);
 						card.dataset.momentumProgressUpdates = String(priorUpdates + 1);
-						recalcMomentumFromDom();
 					}
+					rememberReadingActivityToday();
+					await refreshProfileReadingUiAfterMutation();
 					const updatedLabel = safeFormatActivityDate(updatedAtValue) || safeFormatActivityDate(new Date().toISOString());
 					if (card instanceof HTMLElement) {
 						card.dataset.updatedAt = updatedAtValue || new Date().toISOString();
@@ -4373,8 +4546,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					if (dateNode instanceof HTMLElement) {
 						dateNode.textContent = `Updated ${updatedLabel}`;
 					}
-					await hydrateShelfEntriesFromServer();
-					syncExistingState();
 				} catch (uiError) {
 					console.warn("Progress saved but local UI sync failed.", uiError);
 				}
@@ -4413,6 +4584,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			if (status === "finished") {
 				const finishResult = await promptAndSaveFinishedEntry(entry);
 				if (!finishResult.ok) return;
+				rememberReadingActivityToday();
 			}
 			if (!entry.title) return;
 			try {
@@ -4425,8 +4597,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
 				removeCardFromShelfSection(dropdown, status);
 				closeShelfMenus(shelfDropdowns);
-				await hydrateShelfEntriesFromServer();
-				syncExistingState();
+				await refreshProfileReadingUiAfterMutation();
 			} catch (error) {
 				showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
 			}
@@ -4467,8 +4638,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				showShelfFeedback(dropdown, "Removed from shelves.", feedbackTimers);
 				removeCardFromShelfSection(dropdown, "remove");
 				closeShelfMenus(shelfDropdowns);
-				await hydrateShelfEntriesFromServer();
-				syncExistingState();
+				await refreshProfileReadingUiAfterMutation();
 			} catch (error) {
 				showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to remove.", feedbackTimers);
 			}
@@ -4656,6 +4826,12 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		const moveUpButton = target.closest('[data-action="move-shelf-section-up"]');
 		const moveDownButton = target.closest('[data-action="move-shelf-section-down"]');
 		if (moveUpButton || moveDownButton) {
+			if ((moveUpButton instanceof HTMLButtonElement && (moveUpButton.disabled || moveUpButton.getAttribute("aria-disabled") === "true"))
+				|| (moveDownButton instanceof HTMLButtonElement && (moveDownButton.disabled || moveDownButton.getAttribute("aria-disabled") === "true"))) {
+				event.preventDefault();
+				event.stopPropagation();
+				return;
+			}
 			if (!sectionKey) return;
 			const workingOrder = shelfSectionOrder.length > 0
 				? [...shelfSectionOrder]
