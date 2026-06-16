@@ -10,7 +10,9 @@ if (!session?.userId) {
 }
 
 const sectionLinks = [
-	{ id: "auth-settings", label: "Authentication" },
+	{ id: "profile-settings", label: "Profile" },
+	{ id: "account-settings", label: "Account" },
+	{ id: "notifications-settings", label: "Notifications" },
 	{ id: "privacy-settings", label: "Privacy" },
 	{ id: "reading-defaults", label: "Reading Defaults" },
 	{ id: "personalization-settings", label: "Personalization" },
@@ -27,6 +29,51 @@ const sectionLinks = [
 	<div slot="right" class="settings-page">
 		<h1>Settings</h1>
 		<p class="subhead">Manage imports and account preferences.</p>
+
+		<section class="settings-section" id="profile-settings" aria-labelledby="profile-settings-title">
+			<h2 id="profile-settings-title">Profile</h2>
+			<p class="section-copy">
+				Profile details live on your public reader page. Update your name, avatar, location, and favorites there.
+			</p>
+			<div class="account-actions">
+				<a class="button-link secondary" href="/profile">Open Profile</a>
+			</div>
+		</section>
+
+		<section class="settings-section" id="account-settings" aria-labelledby="account-settings-title">
+			<h2 id="account-settings-title">Account</h2>
+			<p class="section-copy">
+				Your reading history, shelves, ratings, and reviews stay with your account even if your email changes.
+			</p>
+			<div class="account-blocks">
+				<div class="account-panel">
+					<h3>Email Address</h3>
+					<p class="account-meta"><strong id="account-current-email">Loading...</strong></p>
+					<div id="pending-email-panel" class="pending-panel" hidden>
+						<p class="account-meta">Pending Email Change: <strong id="pending-email-address"></strong></p>
+						<p class="meta">Check that inbox for a verification link before the change is applied.</p>
+						<div class="account-actions">
+							<button type="button" id="resend-email-verification-button" class="secondary">Resend Verification</button>
+						</div>
+					</div>
+					<div class="account-actions">
+						<button type="button" id="open-email-change-button">Change Email</button>
+					</div>
+				</div>
+				<div class="account-panel">
+					<h3>Password</h3>
+					<p class="account-meta">Dogeared uses secure magic links for sign-in. There is no password to manage right now.</p>
+				</div>
+				<div class="account-panel">
+					<h3>Future Account Management</h3>
+					<div class="account-actions account-actions-wrap">
+						<button type="button" class="secondary" disabled>Export My Data</button>
+						<button type="button" class="secondary" disabled>Delete Account</button>
+					</div>
+				</div>
+			</div>
+			<p id="email-change-feedback" class="feedback" hidden></p>
+		</section>
 
 		<section class="settings-section" id="goodreads-import" aria-labelledby="goodreads-import-title">
 			<h2 id="goodreads-import-title">Import Goodreads Data</h2>
@@ -94,17 +141,32 @@ const sectionLinks = [
 			<p id="account-feedback" class="feedback" hidden></p>
 		</section>
 
+		<section class="settings-section" id="notifications-settings" aria-labelledby="notifications-settings-title">
+			<h2 id="notifications-settings-title">Notifications</h2>
+			<p class="section-copy">Choose how Dogeared keeps in touch. Account security emails are always sent when your login email changes.</p>
+			<div class="danger-form">
+				<label class="checkbox-row">
+					<input type="checkbox" id="browser-notifications-enabled" />
+					<span>Enable browser notifications when available</span>
+				</label>
+				<label class="checkbox-row">
+					<input type="checkbox" id="release-email-enabled" />
+					<span>Email me occasional Dogeared release notes</span>
+				</label>
+				<label class="checkbox-row">
+					<input type="checkbox" id="weekly-summary-enabled" />
+					<span>Email me a weekly reading summary</span>
+				</label>
+			</div>
+		</section>
+
 		<section class="settings-section" id="danger-zone-settings" aria-labelledby="danger-zone-settings-title">
 			<h2 id="danger-zone-settings-title">Danger Zone</h2>
 			<p class="section-copy danger-copy">
-				Delete account permanently removes your account and synced shelf data.
+				Delete Account is planned for a future account management update. It is not available from Settings yet.
 			</p>
 			<div id="account-danger-zone" class="account-panel account-panel-danger" hidden>
-				<form id="delete-account-form" class="danger-form">
-					<label for="delete-confirm">Type <code>DELETE</code> to confirm</label>
-					<input id="delete-confirm" type="text" autocomplete="off" />
-					<button type="submit" class="danger">Delete Account</button>
-				</form>
+				<button type="button" class="danger" disabled>Delete Account</button>
 			</div>
 		</section>
 
@@ -250,6 +312,20 @@ const sectionLinks = [
 			<button type="button" id="save-preferences-button">Save Preferences</button>
 		</div>
 		<p id="preferences-feedback" class="feedback" hidden></p>
+		<div id="email-change-modal" class="modal-backdrop" hidden>
+			<div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="email-change-title">
+				<h2 id="email-change-title">Change Email</h2>
+				<p class="section-copy">Enter the new email address you want to use for Dogeared. We will send a verification link before anything changes.</p>
+				<form id="email-change-form" class="import-form">
+					<label for="new-email-address">New Email Address</label>
+					<input id="new-email-address" type="email" autocomplete="email" required placeholder="you@example.com" />
+					<div class="account-actions">
+						<button type="button" id="cancel-email-change-button" class="secondary">Cancel</button>
+						<button type="submit">Continue</button>
+					</div>
+				</form>
+			</div>
+		</div>
 	</div>
 </Layout>
 
@@ -274,16 +350,19 @@ const sectionLinks = [
 		order: 0;
 	}
 
-	#auth-settings { order: 2; }
-	#privacy-settings { order: 3; }
-	#reading-defaults { order: 4; }
-	#personalization-settings { order: 5; }
-	#goodreads-import { order: 6; }
-	#import-controls { order: 7; }
-	#data-export { order: 8; }
-	#api-settings { order: 9; }
-	#security-settings { order: 10; }
-	#danger-zone-settings { order: 11; }
+	#profile-settings { order: 2; }
+	#account-settings { order: 3; }
+	#notifications-settings { order: 4; }
+	#auth-settings { order: 5; }
+	#privacy-settings { order: 6; }
+	#reading-defaults { order: 7; }
+	#personalization-settings { order: 8; }
+	#goodreads-import { order: 9; }
+	#import-controls { order: 10; }
+	#data-export { order: 11; }
+	#api-settings { order: 12; }
+	#security-settings { order: 13; }
+	#danger-zone-settings { order: 14; }
 
 	.settings-section {
 		border: 1px solid #d8d8d8;
@@ -358,6 +437,22 @@ const sectionLinks = [
 		justify-self: start;
 	}
 
+	button:disabled {
+		cursor: not-allowed;
+		opacity: 0.55;
+	}
+
+	.button-link {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 8px;
+		padding: 0.6rem 0.9rem;
+		font-size: 0.95rem;
+		text-decoration: none;
+		justify-self: start;
+	}
+
 	.feedback {
 		margin: 0.85rem 0 0;
 		padding: 0.7rem 0.8rem;
@@ -386,6 +481,14 @@ const sectionLinks = [
 	.secondary {
 		background: #efefef;
 		color: #222;
+	}
+
+	.pending-panel {
+		margin: 0.7rem 0;
+		padding: 0.7rem;
+		border: 1px dashed #c8c8c8;
+		border-radius: 10px;
+		background: #fff;
 	}
 
 	.danger {
@@ -422,6 +525,10 @@ const sectionLinks = [
 		display: flex;
 		gap: 0.5rem;
 		margin-bottom: 0.8rem;
+	}
+
+	.account-actions-wrap {
+		flex-wrap: wrap;
 	}
 
 	.danger-copy {
@@ -484,6 +591,32 @@ const sectionLinks = [
 		font-size: 0.92rem;
 	}
 
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 10000;
+		display: grid;
+		place-items: center;
+		padding: 1rem;
+		background: rgba(17, 24, 39, 0.45);
+	}
+
+	.modal-backdrop[hidden] {
+		display: none;
+	}
+
+	.modal-panel {
+		width: min(100%, 460px);
+		border-radius: 12px;
+		background: #fff;
+		padding: 1rem;
+		box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+	}
+
+	.modal-panel h2 {
+		margin: 0;
+	}
+
 	@media (max-width: 640px) {
 		.api-url-row {
 			grid-template-columns: 1fr;
@@ -509,11 +642,19 @@ const sectionLinks = [
 	const accountSignedInState = document.getElementById("account-signed-in-state");
 	const accountDangerZone = document.getElementById("account-danger-zone");
 	const accountEmail = document.getElementById("account-email");
+	const accountCurrentEmail = document.getElementById("account-current-email");
+	const pendingEmailPanel = document.getElementById("pending-email-panel");
+	const pendingEmailAddress = document.getElementById("pending-email-address");
+	const openEmailChangeButton = document.getElementById("open-email-change-button");
+	const emailChangeModal = document.getElementById("email-change-modal");
+	const emailChangeForm = document.getElementById("email-change-form");
+	const newEmailAddress = document.getElementById("new-email-address");
+	const cancelEmailChangeButton = document.getElementById("cancel-email-change-button");
+	const resendEmailVerificationButton = document.getElementById("resend-email-verification-button");
+	const emailChangeFeedback = document.getElementById("email-change-feedback");
 	const magicLinkForm = document.getElementById("magic-link-form");
 	const magicEmail = document.getElementById("magic-email");
 	const logoutButton = document.getElementById("logout-button");
-	const deleteAccountForm = document.getElementById("delete-account-form");
-	const deleteConfirm = document.getElementById("delete-confirm");
 	const apiFeedback = document.getElementById("api-feedback");
 	const shelfApiInput = document.getElementById("api-shelf-url");
 	const searchApiInput = document.getElementById("api-search-url");
@@ -533,6 +674,9 @@ const sectionLinks = [
 	const shareActivityCheckbox = document.getElementById("share-activity");
 	const allowDiscoveryCheckbox = document.getElementById("allow-discovery");
 	const allowFollowRequestsCheckbox = document.getElementById("allow-follow-requests");
+	const browserNotificationsEnabled = document.getElementById("browser-notifications-enabled");
+	const releaseEmailEnabled = document.getElementById("release-email-enabled");
+	const weeklySummaryEnabled = document.getElementById("weekly-summary-enabled");
 	const defaultShelfSelect = document.getElementById("default-shelf");
 	const homeSortSelect = document.getElementById("home-sort");
 	const favoriteGenresInput = document.getElementById("favorite-genres-input");
@@ -567,6 +711,13 @@ const sectionLinks = [
 		accountFeedback.textContent = message;
 		accountFeedback.hidden = !message;
 		accountFeedback.classList.toggle("error", isError);
+	}
+
+	function showEmailChangeFeedback(message, isError = false) {
+		if (!(emailChangeFeedback instanceof HTMLElement)) return;
+		emailChangeFeedback.textContent = message;
+		emailChangeFeedback.hidden = !message;
+		emailChangeFeedback.classList.toggle("error", isError);
 	}
 
 	function showApiFeedback(message, isError = false) {
@@ -915,9 +1066,9 @@ const sectionLinks = [
 				homeSort: String(homeSortSelect instanceof HTMLSelectElement ? homeSortSelect.value : "relevance")
 			},
 			notifications: {
-				browserEnabled: false,
-				releaseEmail: false,
-				weeklySummary: false
+				browserEnabled: !!(browserNotificationsEnabled instanceof HTMLInputElement && browserNotificationsEnabled.checked),
+				releaseEmail: !!(releaseEmailEnabled instanceof HTMLInputElement && releaseEmailEnabled.checked),
+				weeklySummary: !!(weeklySummaryEnabled instanceof HTMLInputElement && weeklySummaryEnabled.checked)
 			},
 			dataControls: {
 				preferredExportFormat: String(preferredExportFormat instanceof HTMLSelectElement ? preferredExportFormat.value : "json")
@@ -948,6 +1099,11 @@ const sectionLinks = [
 
 		const dataControls = preferences?.dataControls || {};
 		if (preferredExportFormat instanceof HTMLSelectElement) preferredExportFormat.value = String(dataControls.preferredExportFormat || "json");
+
+		const notifications = preferences?.notifications || {};
+		if (browserNotificationsEnabled instanceof HTMLInputElement) browserNotificationsEnabled.checked = !!notifications.browserEnabled;
+		if (releaseEmailEnabled instanceof HTMLInputElement) releaseEmailEnabled.checked = !!notifications.releaseEmail;
+		if (weeklySummaryEnabled instanceof HTMLInputElement) weeklySummaryEnabled.checked = !!notifications.weeklySummary;
 
 		const importControls = preferences?.importControls || {};
 		if (importModeSelect instanceof HTMLSelectElement) importModeSelect.value = String(importControls.defaultMode || "merge");
@@ -1173,6 +1329,61 @@ const sectionLinks = [
 		return { ...summary, localCache, syncFailed, previewOnly: false };
 	}
 
+	function setEmailChangeModal(open) {
+		if (!(emailChangeModal instanceof HTMLElement)) return;
+		emailChangeModal.hidden = !open;
+		if (open && newEmailAddress instanceof HTMLInputElement) {
+			newEmailAddress.value = "";
+			window.setTimeout(() => newEmailAddress.focus(), 0);
+		}
+	}
+
+	function applyAccountEmailState(data) {
+		const currentEmail = String(data?.currentEmail || data?.user?.email || "").trim();
+		const pendingEmail = String(data?.pendingEmail || "").trim();
+		if (accountCurrentEmail instanceof HTMLElement) {
+			accountCurrentEmail.textContent = currentEmail || "No email address found";
+		}
+		if (pendingEmailPanel instanceof HTMLElement) pendingEmailPanel.hidden = !pendingEmail;
+		if (pendingEmailAddress instanceof HTMLElement) pendingEmailAddress.textContent = pendingEmail;
+		if (openEmailChangeButton instanceof HTMLButtonElement) openEmailChangeButton.disabled = !currentEmail;
+		if (resendEmailVerificationButton instanceof HTMLButtonElement) resendEmailVerificationButton.disabled = !pendingEmail;
+	}
+
+	async function loadEmailChangeState() {
+		try {
+			const response = await fetch("/api/account/email-change");
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				showEmailChangeFeedback(String(data?.error || "Failed to load email settings."), true);
+				return;
+			}
+			applyAccountEmailState(data);
+			showEmailChangeFeedback("");
+		} catch {
+			showEmailChangeFeedback("Failed to load email settings.", true);
+		}
+	}
+
+	async function submitEmailChange(email, action = "request") {
+		const response = await fetch("/api/account/email-change", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ email, action })
+		});
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok && response.status !== 202) {
+			throw new Error(String(data?.error || "Failed to start email change."));
+		}
+		applyAccountEmailState(data);
+		const preview = String(data?.previewUrl || "").trim();
+		if (preview) {
+			showEmailChangeFeedback(`Verification link generated. Open: ${preview}`);
+			return;
+		}
+		showEmailChangeFeedback(String(data?.message || "Check your new email for a verification link."), !data?.sent);
+	}
+
 	importForm?.addEventListener("submit", async (event) => {
 		event.preventDefault();
 		summary.hidden = true;
@@ -1253,6 +1464,57 @@ const sectionLinks = [
 		}
 	});
 
+	openEmailChangeButton?.addEventListener("click", () => {
+		setEmailChangeModal(true);
+	});
+
+	cancelEmailChangeButton?.addEventListener("click", () => {
+		setEmailChangeModal(false);
+	});
+
+	emailChangeModal?.addEventListener("click", (event) => {
+		if (event.target === emailChangeModal) setEmailChangeModal(false);
+	});
+
+	document.addEventListener("keydown", (event) => {
+		if (event.key === "Escape" && emailChangeModal instanceof HTMLElement && !emailChangeModal.hidden) {
+			setEmailChangeModal(false);
+		}
+	});
+
+	emailChangeForm?.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		const email = String(newEmailAddress instanceof HTMLInputElement ? newEmailAddress.value : "").trim();
+		if (!email) {
+			showEmailChangeFeedback("Enter the new email address.", true);
+			return;
+		}
+		const button = emailChangeForm.querySelector('button[type="submit"]');
+		if (button instanceof HTMLButtonElement) button.disabled = true;
+		showEmailChangeFeedback("Sending verification email...");
+		try {
+			await submitEmailChange(email, "request");
+			setEmailChangeModal(false);
+		} catch (error) {
+			showEmailChangeFeedback(error instanceof Error ? error.message : "Failed to start email change.", true);
+		} finally {
+			if (button instanceof HTMLButtonElement) button.disabled = false;
+		}
+	});
+
+	resendEmailVerificationButton?.addEventListener("click", async () => {
+		const button = resendEmailVerificationButton instanceof HTMLButtonElement ? resendEmailVerificationButton : null;
+		if (button) button.disabled = true;
+		showEmailChangeFeedback("Sending a fresh verification link...");
+		try {
+			await submitEmailChange("", "resend");
+		} catch (error) {
+			showEmailChangeFeedback(error instanceof Error ? error.message : "Failed to resend verification.", true);
+		} finally {
+			if (button) button.disabled = false;
+		}
+	});
+
 	async function loadAuthState() {
 		try {
 			const response = await fetch("/api/auth/me");
@@ -1264,6 +1526,12 @@ const sectionLinks = [
 			if (authenticated && accountEmail instanceof HTMLElement) {
 				accountEmail.textContent = String(data?.user?.email || "");
 			}
+			if (authenticated) {
+				applyAccountEmailState(data);
+				await loadEmailChangeState();
+			} else {
+				applyAccountEmailState({ currentEmail: "" });
+			}
 			if (downloadDataButton instanceof HTMLButtonElement) {
 				downloadDataButton.disabled = !authenticated;
 			}
@@ -1271,10 +1539,13 @@ const sectionLinks = [
 			if (savePreferencesButton instanceof HTMLButtonElement) savePreferencesButton.disabled = !authenticated;
 			if (revokeSessionsButton instanceof HTMLButtonElement) revokeSessionsButton.disabled = !authenticated;
 			if (refreshSecurityButton instanceof HTMLButtonElement) refreshSecurityButton.disabled = !authenticated;
+			if (openEmailChangeButton instanceof HTMLButtonElement) openEmailChangeButton.disabled = !authenticated;
+			if (resendEmailVerificationButton instanceof HTMLButtonElement) resendEmailVerificationButton.disabled = !authenticated;
 			if (!authenticated) {
 				showExportFeedback("Sign in to download your account data.", true);
 				showPreferencesFeedback("Sign in to save settings.", true);
 				showSecurityFeedback("Sign in to view security details.", true);
+				showEmailChangeFeedback("Sign in to change your email address.", true);
 			} else {
 				showExportFeedback("");
 				showPreferencesFeedback("");
@@ -1289,9 +1560,12 @@ const sectionLinks = [
 			if (savePreferencesButton instanceof HTMLButtonElement) savePreferencesButton.disabled = true;
 			if (revokeSessionsButton instanceof HTMLButtonElement) revokeSessionsButton.disabled = true;
 			if (refreshSecurityButton instanceof HTMLButtonElement) refreshSecurityButton.disabled = true;
+			if (openEmailChangeButton instanceof HTMLButtonElement) openEmailChangeButton.disabled = true;
+			if (resendEmailVerificationButton instanceof HTMLButtonElement) resendEmailVerificationButton.disabled = true;
 			showExportFeedback("Sign in to download your account data.", true);
 			showPreferencesFeedback("Sign in to save settings.", true);
 			showSecurityFeedback("Sign in to view security details.", true);
+			showEmailChangeFeedback("Sign in to change your email address.", true);
 		}
 	}
 
@@ -1333,31 +1607,6 @@ const sectionLinks = [
 			await loadAuthState();
 		} catch {
 			showAccountFeedback("Failed to sign out.", true);
-		}
-	});
-
-	deleteAccountForm?.addEventListener("submit", async (event) => {
-		event.preventDefault();
-		const confirmation = String(deleteConfirm?.value || "").trim();
-		if (confirmation !== "DELETE") {
-			showAccountFeedback('Type "DELETE" to confirm account deletion.', true);
-			return;
-		}
-		showAccountFeedback("Deleting account...");
-		try {
-			const response = await fetch("/api/account/delete", { method: "POST" });
-			const data = await response.json().catch(() => ({}));
-			if (!response.ok) {
-				showAccountFeedback(String(data?.error || "Failed to delete account."), true);
-				return;
-			}
-			localStorage.removeItem("dogeared:myreads");
-			localStorage.removeItem("dogeared:profile-info");
-			localStorage.removeItem("dogeared:updates");
-			showAccountFeedback("Account deleted.");
-			await loadAuthState();
-		} catch {
-			showAccountFeedback("Failed to delete account.", true);
 		}
 	});
 

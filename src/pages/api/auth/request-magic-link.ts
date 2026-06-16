@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { getNeonSql } from "../../../lib/neon";
 import { normalizeEmail, randomToken, sha256Hex, upsertUserByEmail } from "../../../lib/auth";
 import { normalizeRequestedIp, resolveMagicLinkRateLimit } from "../../../lib/authHardening";
+import { escapeEmailHtml, sendDogearedEmail } from "../../../lib/email";
 
 export const prerender = false;
 
@@ -12,52 +13,13 @@ function json(status: number, body: unknown) {
 	});
 }
 
-function escapeHtml(value: string) {
-	return String(value || "")
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&#39;");
-}
-
 async function sendMagicLinkEmail(email: string, magicUrl: string) {
-	const brevoApiKey = String(import.meta.env.BREVO_API_KEY || "").trim();
-	const fromEmail = String(import.meta.env.BREVO_FROM_EMAIL || "").trim();
-	const fromName = String(import.meta.env.BREVO_FROM_NAME || "Dogeared").trim();
-	if (!brevoApiKey || !fromEmail) {
-		return {
-			sent: false,
-			error: "Missing BREVO_API_KEY or BREVO_FROM_EMAIL."
-		};
-	}
-
-	const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-		method: "POST",
-		headers: {
-			"api-key": brevoApiKey,
-			accept: "application/json",
-			"Content-Type": "application/json"
-		},
-		body: JSON.stringify({
-			sender: {
-				name: fromName,
-				email: fromEmail
-			},
-			to: [{ email }],
-			subject: "Your Dogeared sign-in link",
-			htmlContent: `<p>Click to sign in to Dogeared:</p><p><a href="${escapeHtml(magicUrl)}">${escapeHtml(magicUrl)}</a></p><p>This link expires in 20 minutes.</p>`,
-			textContent: `Sign in to Dogeared: ${magicUrl}\n\nThis link expires in 20 minutes.`
-		})
+	return sendDogearedEmail({
+		to: email,
+		subject: "Your Dogeared sign-in link",
+		htmlContent: `<p>Click to sign in to Dogeared:</p><p><a href="${escapeEmailHtml(magicUrl)}">${escapeEmailHtml(magicUrl)}</a></p><p>This link expires in 20 minutes.</p>`,
+		textContent: `Sign in to Dogeared: ${magicUrl}\n\nThis link expires in 20 minutes.`
 	});
-	if (response.ok) {
-		return { sent: true };
-	}
-	const payload = await response.json().catch(() => ({}));
-	return {
-		sent: false,
-		error: String(payload?.message || payload?.code || payload?.error || "Brevo rejected the email request.")
-	};
 }
 
 export const POST: APIRoute = async ({ request, url }) => {

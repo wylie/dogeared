@@ -1,0 +1,238 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import { getEncryptionKey, sha256Hex } from "../../../lib/auth";
+import { escapeEmailHtml, sendDogearedEmail } from "../../../lib/email";
+import { resolvePendingEmailChangeState } from "../../../lib/emailChange";
+import { getNeonSql } from "../../../lib/neon";
+
+export const prerender = false;
+
+type VerifyState = "success" | "invalid" | "expired" | "used" | "duplicate" | "error";
+
+const token = String(Astro.url.searchParams.get("token") || "").trim();
+let state: VerifyState = "invalid";
+let title = "Email Verification";
+let message = "This email verification link is not valid.";
+let detail = "Request a new email change from Settings.";
+let notificationWarning = "";
+let newEmail = "";
+
+function formatTimestamp(date = new Date()) {
+	return date.toLocaleString("en-US", {
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+		timeZoneName: "short"
+	});
+}
+
+async function ensureEmailChangeSchema() {
+	const sql = getNeonSql();
+	await sql`
+		create table if not exists account_email_change (
+			id uuid primary key default gen_random_uuid(),
+			user_id uuid not null references app_user(id) on delete cascade,
+			new_email_hash text not null,
+			new_email_enc bytea not null,
+			token_hash text not null unique,
+			requested_ip text not null default '',
+			user_agent text not null default '',
+			expires_at timestamptz not null,
+			used_at timestamptz,
+			created_at timestamptz not null default now(),
+			verified_at timestamptz
+		)
+	`;
+	await sql`create index if not exists idx_account_email_change_user on account_email_change(user_id, created_at desc)`;
+	await sql`create index if not exists idx_account_email_change_token on account_email_change(token_hash)`;
+	await sql`create index if not exists idx_account_email_change_expires on account_email_change(expires_at)`;
+}
+
+async function sendOldAddressNotice(oldEmail: string, nextEmail: string, changedAt: string) {
+	if (!oldEmail) return { sent: true };
+	return sendDogearedEmail({
+		to: oldEmail,
+		subject: "Your Dogeared email was changed",
+		htmlContent: `
+			<p>Your Dogeared login email was changed.</p>
+			<p><strong>New email:</strong> ${escapeEmailHtml(nextEmail)}</p>
+			<p><strong>Changed:</strong> ${escapeEmailHtml(changedAt)}</p>
+			<p>If you did not make this change, contact Dogeared support right away.</p>
+		`,
+		textContent: `Your Dogeared login email was changed.\n\nNew email: ${nextEmail}\nChanged: ${changedAt}\n\nIf you did not make this change, contact Dogeared support right away.`
+	});
+}
+
+async function sendNewAddressNotice(nextEmail: string) {
+	return sendDogearedEmail({
+		to: nextEmail,
+		subject: "Your Dogeared email has been verified",
+		htmlContent: `<p>Your new Dogeared email has been verified.</p><p>Your reading history, shelves, ratings, and reviews stayed with your account.</p>`,
+		textContent: "Your new Dogeared email has been verified.\n\nYour reading history, shelves, ratings, and reviews stayed with your account."
+	});
+}
+
+if (token) {
+	try {
+		await ensureEmailChangeSchema();
+		const sql = getNeonSql();
+		const encryptionKey = getEncryptionKey();
+		const tokenHash = sha256Hex(token);
+		const rows = await sql<Array<{
+			id: string;
+			user_id: string;
+			new_email_hash: string;
+			new_email: string;
+			old_email: string;
+			expires_at: string;
+			used_at: string | null;
+		}>>`
+			select
+				c.id::text as id,
+				c.user_id::text as user_id,
+				c.new_email_hash,
+				coalesce(pgp_sym_decrypt(c.new_email_enc, ${encryptionKey}), '') as new_email,
+				coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), '') as old_email,
+				c.expires_at::text as expires_at,
+				c.used_at::text as used_at
+			from account_email_change c
+			join app_user au on au.id = c.user_id
+			where c.token_hash = ${tokenHash}
+			limit 1
+		`;
+		const pending = rows[0];
+		const pendingState = resolvePendingEmailChangeState({
+			found: !!pending,
+			usedAt: pending?.used_at,
+			expiresAt: pending?.expires_at
+		});
+		if (pendingState === "missing") {
+			state = "invalid";
+			message = "This email verification link is not valid.";
+		} else if (pendingState === "used") {
+			state = "used";
+			message = "This email verification link has already been used.";
+		} else if (pendingState === "expired") {
+			state = "expired";
+			message = "This email verification link has expired.";
+		} else if (pending) {
+			newEmail = String(pending.new_email || "").trim();
+			const duplicateRows = await sql<Array<{ id: string }>>`
+				select id::text as id
+				from app_user
+				where email_hash = ${pending.new_email_hash}
+					and id <> ${pending.user_id}::uuid
+				limit 1
+			`;
+			if (duplicateRows.length > 0) {
+				state = "duplicate";
+				message = "That email address is already used by another Dogeared account.";
+				detail = "Choose a different email address in Settings.";
+			} else {
+				await sql`
+					update app_user
+					set
+						email_hash = ${pending.new_email_hash},
+						email_enc = pgp_sym_encrypt(${newEmail}, ${encryptionKey})
+					where id = ${pending.user_id}::uuid
+				`;
+				await sql`
+					update account_email_change
+					set used_at = now(), verified_at = now()
+					where id = ${pending.id}::uuid
+						and used_at is null
+				`;
+
+				const changedAt = formatTimestamp();
+				const [oldNotice, newNotice] = await Promise.all([
+					sendOldAddressNotice(String(pending.old_email || ""), newEmail, changedAt),
+					sendNewAddressNotice(newEmail)
+				]);
+				if (!oldNotice.sent || !newNotice.sent) {
+					notificationWarning = "Your email was changed, but one of the confirmation emails could not be delivered.";
+				}
+				state = "success";
+				title = "Email Verified";
+				message = "Your Dogeared email has been updated.";
+				detail = "Your reading history, shelves, ratings, reviews, follows, and notifications stayed with your account.";
+			}
+		}
+	} catch {
+		state = "error";
+		message = "We could not verify this email change.";
+		detail = "Try the link again or request a fresh verification email from Settings.";
+	}
+}
+---
+
+<Layout
+	title={title}
+	metaDescription="Verify a Dogeared account email change."
+	canonicalUrl="/account/email/verify"
+	robots="noindex,nofollow"
+>
+	<div slot="right" class="verify-page">
+		<section class="verify-panel">
+			<h1>{title}</h1>
+			<p class={state === "success" ? "message" : "message message-error"}>{message}</p>
+			<p>{detail}</p>
+			{newEmail && state === "success" ? <p class="meta">New email: <strong>{newEmail}</strong></p> : null}
+			{notificationWarning ? <p class="warning">{notificationWarning}</p> : null}
+			<a class="settings-link" href="/settings#account-settings">Return to Settings</a>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.verify-page {
+		max-width: 720px;
+	}
+
+	.verify-panel {
+		background: #fff;
+		border: 1px solid #d8d8d8;
+		border-radius: 12px;
+		padding: 1rem;
+	}
+
+	h1 {
+		margin: 0;
+	}
+
+	.message {
+		margin: 0.55rem 0 0;
+		color: var(--color-primary);
+		font-weight: 700;
+	}
+
+	.message-error {
+		color: #991b1b;
+	}
+
+	.meta {
+		color: #4b5563;
+	}
+
+	.warning {
+		padding: 0.7rem 0.8rem;
+		border-radius: 9px;
+		background: #fff7ed;
+		color: #8a3b12;
+	}
+
+	.settings-link {
+		display: inline-flex;
+		margin-top: 0.65rem;
+		color: var(--color-secondary);
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.settings-link:hover,
+	.settings-link:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+</style>
