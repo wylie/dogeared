@@ -1,6 +1,6 @@
 ---
 import LeftHand from '../components/LeftHand.astro';
-import FeedbackWidget from '../components/FeedbackWidget.astro';
+import FloatingActions from '../components/FloatingActions.astro';
 import ReaderGuidance from '../components/ReaderGuidance.astro';
 import { resolveAdminSession } from '../lib/admin';
 import { resolveUserBySession } from '../lib/auth';
@@ -126,30 +126,7 @@ import '../assets/global.css';
 				</main>
 			</div>
 			<ReaderGuidance isAuthenticated={isAuthenticated} />
-			<div class="global-floating-actions" aria-label="Reader actions">
-				<FeedbackWidget isAuthenticated={isAuthenticated} />
-				<a class="global-support-float" href="https://buymeacoffee.com/wylie" target="_blank" rel="noopener noreferrer" aria-label="Support Dogeared">
-					<span class="material-icons" aria-hidden="true">favorite</span>
-					<span class="global-float-label">Support Dogeared</span>
-				</a>
-			</div>
-			<script>
-				const floatingActions = document.querySelector(".global-floating-actions");
-				if (floatingActions instanceof HTMLElement) {
-					const enablePointerExpansion = () => {
-						floatingActions.classList.add("is-pointer-active");
-					};
-					const enableKeyboardExpansion = (event) => {
-						if (event.key === "Tab") floatingActions.classList.add("is-keyboard-active");
-					};
-					const disableKeyboardExpansion = () => {
-						floatingActions.classList.remove("is-keyboard-active");
-					};
-					floatingActions.addEventListener("pointermove", enablePointerExpansion, { once: true });
-					window.addEventListener("keydown", enableKeyboardExpansion);
-					window.addEventListener("pointerdown", disableKeyboardExpansion);
-				}
-			</script>
+			<FloatingActions isAuthenticated={isAuthenticated} />
 		</body>
 	</html>
 
@@ -207,69 +184,6 @@ import '../assets/global.css';
 		opacity: 1;
 		pointer-events: auto;
 	}
-	.global-floating-actions {
-		position: fixed;
-		right: 1rem;
-		bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
-		z-index: 9999;
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 0.55rem;
-	}
-	.global-support-float {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.35rem;
-		width: 48px;
-		height: 48px;
-		box-sizing: border-box;
-		overflow: hidden;
-		text-decoration: none;
-		background: #151515;
-		color: #fff;
-		border-radius: 999px;
-		padding: 0;
-		font-size: 0.9rem;
-		font-weight: 700;
-		box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-		white-space: nowrap;
-		transition:
-			width 180ms ease,
-			background-color 160ms ease,
-			box-shadow 160ms ease;
-	}
-	.global-floating-actions.is-pointer-active .global-support-float:hover,
-	.global-floating-actions.is-keyboard-active .global-support-float:focus {
-		width: 174px;
-		padding: 0 0.9rem;
-		background: #151515;
-		box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
-	}
-	.global-support-float:focus-visible {
-		outline: 3px solid #111;
-		outline-offset: 3px;
-	}
-	.global-support-float .material-icons {
-		flex: 0 0 auto;
-		font-size: 1.25rem;
-		line-height: 1;
-	}
-	.global-float-label {
-		display: inline-block;
-		max-width: 0;
-		opacity: 0;
-		overflow: hidden;
-		transition:
-			max-width 180ms ease,
-			opacity 140ms ease;
-	}
-	.global-floating-actions.is-pointer-active .global-support-float:hover .global-float-label,
-	.global-floating-actions.is-keyboard-active .global-support-float:focus .global-float-label {
-		max-width: 130px;
-		opacity: 1;
-	}
 	@media (max-width: 900px) {
 		html,
 		body {
@@ -295,26 +209,6 @@ import '../assets/global.css';
 			height: auto;
 			overflow: visible;
 			padding-top: 0;
-		}
-		.global-floating-actions {
-			right: 0.6rem;
-			bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
-			gap: 0.45rem;
-		}
-		.global-support-float {
-			width: 46px;
-			height: 46px;
-			font-size: 0.84rem;
-		}
-		.global-floating-actions.is-pointer-active .global-support-float:hover,
-		.global-floating-actions.is-keyboard-active .global-support-float:focus {
-			width: 46px;
-			padding: 0;
-		}
-		.global-floating-actions.is-pointer-active .global-support-float:hover .global-float-label,
-		.global-floating-actions.is-keyboard-active .global-support-float:focus .global-float-label {
-			max-width: 0;
-			opacity: 0;
 		}
 	}
 </style>

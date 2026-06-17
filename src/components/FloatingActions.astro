@@ -1,0 +1,161 @@
+---
+import FeedbackWidget from "./FeedbackWidget.astro";
+
+type Props = { isAuthenticated?: boolean };
+const { isAuthenticated = false } = Astro.props as Props;
+
+const supportActions = [
+	{
+		href: "https://buymeacoffee.com/wylie",
+		icon: "favorite",
+		label: "Support Dogeared",
+		kind: "support",
+		expandedWidth: "174px",
+		labelWidth: "130px",
+		background: "#151515",
+		hoverBackground: "#151515"
+	}
+];
+---
+
+<div class="floating-actions" aria-label="Reader actions">
+	<FeedbackWidget isAuthenticated={isAuthenticated} />
+	{supportActions.map((action) => (
+		<a
+			class={`floating-action floating-action-${action.kind}`}
+			href={action.href}
+			target="_blank"
+			rel="noopener noreferrer"
+			aria-label={action.label}
+			style={`--floating-action-bg: ${action.background}; --floating-action-hover-bg: ${action.hoverBackground}; --floating-action-expanded-width: ${action.expandedWidth}; --floating-action-label-width: ${action.labelWidth};`}
+		>
+			<span class="material-icons floating-action-icon" aria-hidden="true">{action.icon}</span>
+			<span class="floating-action-label">{action.label}</span>
+		</a>
+	))}
+</div>
+
+<script>
+	const floatingActions = document.querySelector(".floating-actions");
+	if (floatingActions instanceof HTMLElement) {
+		const enablePointerExpansion = () => {
+			floatingActions.classList.add("is-pointer-active");
+		};
+		const enableKeyboardExpansion = (event) => {
+			if (event.key === "Tab") floatingActions.classList.add("is-keyboard-active");
+		};
+		const disableKeyboardExpansion = () => {
+			floatingActions.classList.remove("is-keyboard-active");
+		};
+		floatingActions.addEventListener("pointermove", enablePointerExpansion, { once: true });
+		window.addEventListener("keydown", enableKeyboardExpansion);
+		window.addEventListener("pointerdown", disableKeyboardExpansion);
+	}
+</script>
+
+<style>
+	.floating-actions {
+		position: fixed;
+		right: 1rem;
+		bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+		z-index: 9999;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.55rem;
+	}
+	:global(.floating-action-slot) {
+		display: contents;
+	}
+	:global(.floating-action) {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.35rem;
+		width: 48px;
+		height: 48px;
+		box-sizing: border-box;
+		overflow: hidden;
+		border: none;
+		border-radius: 999px;
+		padding: 0;
+		background: var(--floating-action-bg);
+		color: #fff;
+		box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+		font: inherit;
+		font-size: 0.9rem;
+		font-weight: 750;
+		text-decoration: none;
+		white-space: nowrap;
+		cursor: pointer;
+		transition:
+			width 180ms ease,
+			background-color 160ms ease,
+			box-shadow 160ms ease;
+	}
+	.floating-actions.is-pointer-active :global(.floating-action:hover),
+	.floating-actions.is-keyboard-active :global(.floating-action:focus) {
+		width: var(--floating-action-expanded-width);
+		padding: 0 0.9rem;
+		background: var(--floating-action-hover-bg);
+		box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+	}
+	:global(.floating-action:focus-visible) {
+		outline: 3px solid #111;
+		outline-offset: 3px;
+	}
+	:global(.floating-action-icon) {
+		flex: 0 0 48px;
+		width: 48px;
+		height: 48px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 1.2rem;
+		line-height: 1;
+	}
+	:global(.floating-action-support .floating-action-icon) {
+		font-size: 1.25rem;
+	}
+	:global(.floating-action-label) {
+		display: inline-block;
+		max-width: 0;
+		opacity: 0;
+		overflow: hidden;
+		transition:
+			max-width 180ms ease,
+			opacity 140ms ease;
+	}
+	.floating-actions.is-pointer-active :global(.floating-action:hover .floating-action-label),
+	.floating-actions.is-keyboard-active :global(.floating-action:focus .floating-action-label) {
+		max-width: var(--floating-action-label-width);
+		opacity: 1;
+	}
+	@media (max-width: 900px) {
+		.floating-actions {
+			right: 0.6rem;
+			bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+			gap: 0.45rem;
+		}
+		:global(.floating-action) {
+			width: 46px;
+			height: 46px;
+			font-size: 0.84rem;
+		}
+		:global(.floating-action-icon) {
+			flex-basis: 46px;
+			width: 46px;
+			height: 46px;
+		}
+		.floating-actions.is-pointer-active :global(.floating-action:hover),
+		.floating-actions.is-keyboard-active :global(.floating-action:focus) {
+			width: 46px;
+			padding: 0;
+		}
+		.floating-actions.is-pointer-active :global(.floating-action:hover .floating-action-label),
+		.floating-actions.is-keyboard-active :global(.floating-action:focus .floating-action-label) {
+			max-width: 0;
+			opacity: 0;
+		}
+	}
+</style>

@@ -108,28 +108,30 @@ test("feedback widget opens an accessible modal and attaches hidden metadata", (
 
 test("feedback and support actions render as compact floating action buttons", () => {
 	const widgetSource = readFileSync("src/components/FeedbackWidget.astro", "utf8");
+	const floatingActionsSource = readFileSync("src/components/FloatingActions.astro", "utf8");
 	const layoutSource = readFileSync("src/layouts/Layout.astro", "utf8");
-	assert.equal(layoutSource.includes("global-floating-actions"), true);
-	assert.equal(layoutSource.includes('aria-label="Reader actions"'), true);
-	assert.equal(layoutSource.includes('aria-label="Support Dogeared"'), true);
-	assert.equal(layoutSource.includes(">favorite<"), true);
-	assert.equal(layoutSource.includes("width: 48px"), true);
-	assert.equal(layoutSource.includes("height: 48px"), true);
-	assert.equal(layoutSource.includes("is-pointer-active"), true);
-	assert.equal(layoutSource.includes("is-keyboard-active"), true);
-	assert.equal(layoutSource.includes('event.key === "Tab"'), true);
-	assert.equal(layoutSource.includes(".global-floating-actions.is-pointer-active .global-support-float:hover"), true);
-	assert.equal(layoutSource.includes(".global-floating-actions.is-keyboard-active .global-support-float:focus"), true);
-	assert.equal(layoutSource.includes(".global-float-label"), true);
-	assert.equal(widgetSource.includes(".feedback-widget"), true);
-	assert.equal(widgetSource.includes("display: contents"), true);
-	assert.equal(widgetSource.includes("width: 48px"), true);
-	assert.equal(widgetSource.includes("height: 48px"), true);
-	assert.equal(widgetSource.includes(":global(.global-floating-actions.is-pointer-active) .feedback-float:hover"), true);
-	assert.equal(widgetSource.includes(":global(.global-floating-actions.is-keyboard-active) .feedback-float:focus"), true);
-	assert.equal(widgetSource.includes(".feedback-float-label"), true);
-	assert.equal(widgetSource.includes("width: 46px"), true);
-	assert.equal(widgetSource.includes("max-width: 0"), true);
+	assert.equal(layoutSource.includes("<FloatingActions"), true);
+	assert.equal(layoutSource.includes("global-floating-actions"), false);
+	assert.equal(floatingActionsSource.includes('aria-label="Reader actions"'), true);
+	assert.equal(floatingActionsSource.includes('label: "Support Dogeared"'), true);
+	assert.equal(floatingActionsSource.includes('icon: "favorite"'), true);
+	assert.equal(floatingActionsSource.includes("supportActions"), true);
+	assert.equal(floatingActionsSource.includes("width: 48px"), true);
+	assert.equal(floatingActionsSource.includes("height: 48px"), true);
+	assert.equal(floatingActionsSource.includes("align-items: center"), true);
+	assert.equal(floatingActionsSource.includes("justify-content: center"), true);
+	assert.equal(floatingActionsSource.includes("is-pointer-active"), true);
+	assert.equal(floatingActionsSource.includes("is-keyboard-active"), true);
+	assert.equal(floatingActionsSource.includes('event.key === "Tab"'), true);
+	assert.equal(floatingActionsSource.includes(".floating-actions.is-pointer-active :global(.floating-action:hover)"), true);
+	assert.equal(floatingActionsSource.includes(".floating-actions.is-keyboard-active :global(.floating-action:focus)"), true);
+	assert.equal(floatingActionsSource.includes("width: 46px"), true);
+	assert.equal(floatingActionsSource.includes("max-width: 0"), true);
+	assert.equal(widgetSource.includes("floating-action-slot"), true);
+	assert.equal(widgetSource.includes("floating-action floating-action-feedback"), true);
+	assert.equal(widgetSource.includes("floating-action-icon"), true);
+	assert.equal(widgetSource.includes("floating-action-label"), true);
+	assert.equal(widgetSource.includes("feedback-float"), false);
 });
 
 test("feedback submission uses env-configured delivery, honeypot, rate limiting, and safe analytics", () => {
@@ -143,5 +145,5 @@ test("feedback submission uses env-configured delivery, honeypot, rate limiting,
 	assert.equal(widgetSource.includes("Feedback Submitted"), true);
 	assert.equal(widgetSource.includes("feedback_type"), true);
 	assert.equal(widgetSource.includes("message_content"), false);
-	assert.equal(layoutSource.includes("<FeedbackWidget"), true);
+	assert.equal(layoutSource.includes("<FloatingActions"), true);
 });
