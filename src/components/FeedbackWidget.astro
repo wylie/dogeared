@@ -256,8 +256,8 @@ const { isAuthenticated = false } = Astro.props as Props;
 			background-color 160ms ease,
 			box-shadow 160ms ease;
 	}
-	.feedback-float:hover,
-	.feedback-float:focus-visible {
+	:global(.global-floating-actions.is-pointer-active) .feedback-float:hover,
+	:global(.global-floating-actions.is-keyboard-active) .feedback-float:focus {
 		width: 132px;
 		padding: 0 0.9rem;
 		background: var(--color-primary-hover);
@@ -286,8 +286,8 @@ const { isAuthenticated = false } = Astro.props as Props;
 			max-width 180ms ease,
 			opacity 140ms ease;
 	}
-	.feedback-float:hover .feedback-float-label,
-	.feedback-float:focus-visible .feedback-float-label {
+	:global(.global-floating-actions.is-pointer-active) .feedback-float:hover .feedback-float-label,
+	:global(.global-floating-actions.is-keyboard-active) .feedback-float:focus .feedback-float-label {
 		max-width: 80px;
 		opacity: 1;
 	}
@@ -472,13 +472,13 @@ const { isAuthenticated = false } = Astro.props as Props;
 			padding: 0;
 			font-size: 0.84rem;
 		}
-		.feedback-float:hover,
-		.feedback-float:focus-visible {
+		:global(.global-floating-actions.is-pointer-active) .feedback-float:hover,
+		:global(.global-floating-actions.is-keyboard-active) .feedback-float:focus {
 			width: 46px;
 			padding: 0;
 		}
-		.feedback-float:hover .feedback-float-label,
-		.feedback-float:focus-visible .feedback-float-label {
+		:global(.global-floating-actions.is-pointer-active) .feedback-float:hover .feedback-float-label,
+		:global(.global-floating-actions.is-keyboard-active) .feedback-float:focus .feedback-float-label {
 			max-width: 0;
 			opacity: 0;
 		}

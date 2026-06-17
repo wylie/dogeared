@@ -133,6 +133,23 @@ import '../assets/global.css';
 					<span class="global-float-label">Support Dogeared</span>
 				</a>
 			</div>
+			<script>
+				const floatingActions = document.querySelector(".global-floating-actions");
+				if (floatingActions instanceof HTMLElement) {
+					const enablePointerExpansion = () => {
+						floatingActions.classList.add("is-pointer-active");
+					};
+					const enableKeyboardExpansion = (event) => {
+						if (event.key === "Tab") floatingActions.classList.add("is-keyboard-active");
+					};
+					const disableKeyboardExpansion = () => {
+						floatingActions.classList.remove("is-keyboard-active");
+					};
+					floatingActions.addEventListener("pointermove", enablePointerExpansion, { once: true });
+					window.addEventListener("keydown", enableKeyboardExpansion);
+					window.addEventListener("pointerdown", disableKeyboardExpansion);
+				}
+			</script>
 		</body>
 	</html>
 
@@ -223,8 +240,8 @@ import '../assets/global.css';
 			background-color 160ms ease,
 			box-shadow 160ms ease;
 	}
-	.global-support-float:hover,
-	.global-support-float:focus-visible {
+	.global-floating-actions.is-pointer-active .global-support-float:hover,
+	.global-floating-actions.is-keyboard-active .global-support-float:focus {
 		width: 174px;
 		padding: 0 0.9rem;
 		background: #151515;
@@ -248,8 +265,8 @@ import '../assets/global.css';
 			max-width 180ms ease,
 			opacity 140ms ease;
 	}
-	.global-support-float:hover .global-float-label,
-	.global-support-float:focus-visible .global-float-label {
+	.global-floating-actions.is-pointer-active .global-support-float:hover .global-float-label,
+	.global-floating-actions.is-keyboard-active .global-support-float:focus .global-float-label {
 		max-width: 130px;
 		opacity: 1;
 	}
@@ -289,13 +306,13 @@ import '../assets/global.css';
 			height: 46px;
 			font-size: 0.84rem;
 		}
-		.global-support-float:hover,
-		.global-support-float:focus-visible {
+		.global-floating-actions.is-pointer-active .global-support-float:hover,
+		.global-floating-actions.is-keyboard-active .global-support-float:focus {
 			width: 46px;
 			padding: 0;
 		}
-		.global-support-float:hover .global-float-label,
-		.global-support-float:focus-visible .global-float-label {
+		.global-floating-actions.is-pointer-active .global-support-float:hover .global-float-label,
+		.global-floating-actions.is-keyboard-active .global-support-float:focus .global-float-label {
 			max-width: 0;
 			opacity: 0;
 		}
