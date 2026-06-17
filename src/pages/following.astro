@@ -110,7 +110,7 @@ const sectionLinks = [
 								<a href={authorHref(reader.favoriteAuthor, 0)}>{reader.favoriteAuthor}</a>
 							</p>}
 						</div>
-						<p class="reader-feedback" data-reader-feedback hidden></p>
+						<p class="reader-feedback" data-reader-feedback role="status" aria-live="polite" hidden></p>
 					</li>
 				))}
 			</ul>
@@ -149,7 +149,7 @@ const sectionLinks = [
 									<a href={authorHref(reader.favoriteAuthor, 0)}>{reader.favoriteAuthor}</a>
 								</p>}
 							</div>
-							<p class="reader-feedback" data-reader-feedback hidden></p>
+							<p class="reader-feedback" data-reader-feedback role="status" aria-live="polite" hidden></p>
 						</li>
 					))}
 				</ul>
@@ -243,7 +243,7 @@ const sectionLinks = [
 										<p class="meta finished-reflection">“{item.finishedReflection}”</p>
 									)}
 									<div class="activity-comments-list" data-comments-list></div>
-									<p class="activity-comment-feedback" data-comment-feedback hidden></p>
+									<p class="activity-comment-feedback" data-comment-feedback role="status" aria-live="polite" hidden></p>
 								</div>
 							</BookCard>
 						))}
@@ -629,8 +629,13 @@ const sectionLinks = [
 	}
 	.activity-comment-feedback {
 		margin: 0;
+		min-height: 1rem;
 		font-size: 0.78rem;
 		color: #64748b;
+	}
+	.activity-comment-feedback[hidden] {
+		display: block;
+		visibility: hidden;
 	}
 	@media (max-width: 600px) {
 		.activity-social-row {
@@ -754,6 +759,11 @@ const sectionLinks = [
 	.reader-feedback {
 		color: var(--color-secondary);
 		font-weight: 700;
+		min-height: 1.1rem;
+	}
+	.reader-feedback[hidden] {
+		display: block;
+		visibility: hidden;
 	}
 	@media (max-width: 740px) {
 		.activity-grid,

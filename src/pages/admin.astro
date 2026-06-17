@@ -1,0 +1,133 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { resolveAdminSession } from "../lib/admin";
+import { getNeonSql } from "../lib/neon";
+import { loadAdminOverviewStats } from "../lib/adminData";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const sql = getNeonSql();
+const stats = await loadAdminOverviewStats(sql);
+
+const sectionLinks = [
+	{ id: "overview", label: "Overview" },
+	{ id: "site-statistics", label: "Site Statistics" },
+	{ id: "quick-links", label: "Quick Links" },
+	{ id: "recent-activity", label: "Recent Activity" }
+];
+
+const statCards = [
+	{ label: "Total books", value: stats.totalBooks },
+	{ label: "Total authors", value: stats.totalAuthors },
+	{ label: "Total users", value: stats.totalUsers },
+	{ label: "Total shelf entries", value: stats.totalShelfEntries },
+	{ label: "Total reviews", value: stats.totalReviews },
+	{ label: "Total comments", value: stats.totalComments },
+	{ label: "Currently Reading", value: stats.totalCurrentlyReading },
+	{ label: "Completed books", value: stats.totalCompleted }
+];
+
+const quickLinks = [
+	{ href: "/admin", label: "Admin Overview", copy: "Site health and administration summary." },
+	{ href: "/admin/data-health", label: "Data Health", copy: "Metadata coverage, duplicate risk, and import quality." },
+	{ href: "/admin/users", label: "Users", copy: "Search readers, view account counts, and manage accounts." },
+	{ href: "/metrics", label: "Metrics", copy: "Community reading and catalog metrics." },
+	{ href: "/roadmap", label: "Roadmap", copy: "Public product priorities and completed work." }
+];
+---
+
+<Layout title="Admin Overview" sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="admin-page">
+		<header id="overview" class="hero">
+			<h1>Admin Overview</h1>
+			<p>A calm control surface for Dogeared operations.</p>
+		</header>
+
+		<section class="panel" id="site-statistics">
+			<div class="panel-head">
+				<h2>Site Statistics</h2>
+			</div>
+			<div class="grid stats-grid">
+				{statCards.map((card) => (
+					<article class="stat">
+						<p>{card.label}</p>
+						<strong>{card.value.toLocaleString()}</strong>
+					</article>
+				))}
+			</div>
+		</section>
+
+		<section class="panel" id="quick-links">
+			<div class="panel-head">
+				<h2>Quick Links</h2>
+			</div>
+			<div class="quick-link-grid">
+				{quickLinks.map((link) => (
+					<a class="quick-link" href={link.href}>
+						<strong>{link.label}</strong>
+						<span>{link.copy}</span>
+					</a>
+				))}
+			</div>
+		</section>
+
+		<section class="panel" id="recent-activity">
+			<div class="panel-head">
+				<h2>Recent Activity</h2>
+				<p>New activity from the past 7 days.</p>
+			</div>
+			<div class="grid recent-grid">
+				<article class="stat">
+					<p>New users this week</p>
+					<strong>{stats.newUsersThisWeek.toLocaleString()}</strong>
+				</article>
+				<article class="stat">
+					<p>New books added this week</p>
+					<strong>{stats.newBooksThisWeek.toLocaleString()}</strong>
+				</article>
+				<article class="stat">
+					<p>Reviews added this week</p>
+					<strong>{stats.reviewsThisWeek.toLocaleString()}</strong>
+				</article>
+			</div>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.admin-page { max-width: 980px; }
+	.hero h1 { margin: 0; }
+	.hero p { margin: 0.35rem 0 0; color: #4d4d4d; }
+	.panel { margin-top: 1rem; border: 0; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.panel-head h2 { margin: 0; }
+	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }
+	.grid { display: grid; gap: 0.55rem; margin-top: 0.7rem; }
+	.stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+	.recent-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.stat { border-radius: 10px; background: #f3f7fb; padding: 0.6rem; }
+	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }
+	.stat strong { display: block; margin-top: 0.2rem; font-size: 1.2rem; }
+	.quick-link-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin-top: 0.7rem; }
+	.quick-link {
+		display: grid;
+		gap: 0.2rem;
+		padding: 0.7rem;
+		border-radius: 10px;
+		background: #f7fafc;
+		color: inherit;
+		text-decoration: none;
+		border: 1px solid #e5edf3;
+	}
+	.quick-link:hover { border-color: var(--color-secondary); }
+	.quick-link strong { color: var(--color-secondary); }
+	.quick-link span { color: #575757; font-size: 0.88rem; line-height: 1.35; }
+
+	@media (max-width: 900px) {
+		.stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.recent-grid,
+		.quick-link-grid { grid-template-columns: 1fr; }
+	}
+</style>

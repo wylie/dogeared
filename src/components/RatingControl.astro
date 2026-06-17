@@ -24,7 +24,7 @@ const stars = Array.from({ length: 5 }, (_, index) => (index < normalizedRating 
 			</button>
 		</div>
 	)}
-	<p class="rating-feedback" data-rating-feedback hidden></p>
+	<p class="rating-feedback" data-rating-feedback role="status" aria-live="polite" hidden></p>
 </div>
 
 <style>
@@ -94,10 +94,15 @@ const stars = Array.from({ length: 5 }, (_, index) => (index < normalizedRating 
 	}
 	.rating-feedback {
 		margin: 0;
+		min-height: 1rem;
 		font-size: 0.8rem;
 		color: #1f7a45;
 		opacity: 1;
 		transition: opacity 180ms ease;
+	}
+	.rating-feedback[hidden] {
+		display: block;
+		visibility: hidden;
 	}
 	.rating-feedback.is-hiding {
 		opacity: 0;

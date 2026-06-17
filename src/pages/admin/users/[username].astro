@@ -1,0 +1,189 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import { resolveAdminSession } from "../../../lib/admin";
+import { getNeonSql } from "../../../lib/neon";
+import { deleteAdminUser, loadAdminUserDetail } from "../../../lib/adminData";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const username = String(Astro.params.username || "").trim();
+const sql = getNeonSql();
+let user = await loadAdminUserDetail(sql, username);
+let deleteMessage = "";
+let deleteError = false;
+
+if (Astro.request.method === "POST") {
+	const form = await Astro.request.formData();
+	const intent = String(form.get("intent") || "").trim();
+	const confirmUsername = String(form.get("confirmUsername") || "").trim().replace(/^@+/, "");
+	if (!user?.id) {
+		deleteMessage = "User not found.";
+		deleteError = true;
+	} else if (intent !== "delete-user") {
+		deleteMessage = "Invalid admin action.";
+		deleteError = true;
+	} else if (confirmUsername.toLowerCase() !== user.username.toLowerCase()) {
+		deleteMessage = "Type the username exactly to confirm deletion.";
+		deleteError = true;
+	} else {
+		const result = await deleteAdminUser(sql, user.id, admin.userId);
+		if (result.ok) return Astro.redirect("/admin/users?deleted=1");
+		deleteMessage = result.message;
+		deleteError = true;
+		user = await loadAdminUserDetail(sql, username);
+	}
+}
+
+const sectionLinks = [
+	{ id: "overview", label: "Overview" },
+	{ id: "account", label: "Account" },
+	{ id: "counts", label: "Counts" },
+	{ id: "delete-user", label: "Delete User" }
+];
+
+function formatDate(value: string) {
+	const parsed = new Date(value);
+	if (!Number.isFinite(parsed.getTime())) return "Unknown";
+	return parsed.toLocaleString();
+}
+
+const isSelf = !!user?.id && user.id === admin.userId;
+---
+
+<Layout title={user?.username ? `Admin User: @${user.username}` : "Admin User"} sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="admin-user-detail-page">
+		<header id="overview" class="hero">
+			<p><a class="back-link" href="/admin/users">Back to users</a></p>
+			<h1>{user?.username ? `@${user.username}` : "User not found"}</h1>
+			<p>Basic user management without exposing authentication secrets.</p>
+		</header>
+
+		{!user ? (
+			<section class="panel">
+				<h2>User not found</h2>
+				<p>No account exists for that username.</p>
+			</section>
+		) : (
+			<>
+				<section class="panel" id="account">
+					<div class="panel-head">
+						<h2>Account</h2>
+					</div>
+					<div class="detail-grid">
+						<p><strong>Username</strong><span>@{user.username}</span></p>
+						<p><strong>Email</strong><span>{user.email || "Unknown"}</span></p>
+						<p><strong>Joined</strong><span>{formatDate(user.joinedAt)}</span></p>
+						<p><strong>Last activity</strong><span>{user.lastActivityAt ? formatDate(user.lastActivityAt) : "No activity"}</span></p>
+					</div>
+				</section>
+
+				<section class="panel" id="counts">
+					<div class="panel-head">
+						<h2>Counts</h2>
+					</div>
+					<div class="grid stats-grid">
+						<article class="stat"><p>Total shelves</p><strong>{user.shelfCount.toLocaleString()}</strong></article>
+						<article class="stat"><p>Want to Read</p><strong>{user.wantToReadCount.toLocaleString()}</strong></article>
+						<article class="stat"><p>Currently Reading</p><strong>{user.currentlyReadingCount.toLocaleString()}</strong></article>
+						<article class="stat"><p>Read</p><strong>{user.completedCount.toLocaleString()}</strong></article>
+						<article class="stat"><p>Reviews</p><strong>{user.reviewCount.toLocaleString()}</strong></article>
+						<article class="stat"><p>Comments</p><strong>{user.commentCount.toLocaleString()}</strong></article>
+						<article class="stat"><p>Followers</p><strong>{user.followerCount.toLocaleString()}</strong></article>
+						<article class="stat"><p>Following</p><strong>{user.followingCount.toLocaleString()}</strong></article>
+					</div>
+				</section>
+
+				<section class="panel danger-panel" id="delete-user">
+					<div class="panel-head">
+						<h2>Delete User</h2>
+						<p>This deletes the account and reader-owned data: shelves, ratings, reviews, progress events, activity, comments, follows, notifications, sessions, magic links, custom shelves, and pending email changes.</p>
+					</div>
+					{deleteMessage && <p class={`admin-message${deleteError ? " error" : ""}`} role="status">{deleteMessage}</p>}
+					{isSelf ? (
+						<p class="admin-message error" role="status">Admins cannot delete their own account from this page.</p>
+					) : (
+						<form method="post" class="delete-form" data-delete-user-form>
+							<input type="hidden" name="intent" value="delete-user" />
+							<label for="confirmUsername">Type <strong>{user.username}</strong> to confirm deletion</label>
+							<input id="confirmUsername" name="confirmUsername" autocomplete="off" />
+							<button type="submit" class="danger-button">Delete User</button>
+						</form>
+					)}
+				</section>
+			</>
+		)}
+	</div>
+</Layout>
+
+<script>
+	const deleteForm = document.querySelector("[data-delete-user-form]");
+	deleteForm?.addEventListener("submit", (event) => {
+		if (!window.confirm("Delete this user and their reader-owned data? This cannot be undone.")) {
+			event.preventDefault();
+		}
+	});
+</script>
+
+<style>
+	.admin-user-detail-page { max-width: 980px; }
+	.hero h1 { margin: 0.2rem 0 0; }
+	.hero p { margin: 0.35rem 0 0; color: #4d4d4d; }
+	.back-link { color: var(--color-secondary); font-weight: 700; text-decoration: none; }
+	.back-link:hover { text-decoration: underline; }
+	.panel { margin-top: 1rem; border: 0; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.panel-head h2,
+	.panel h2 { margin: 0; }
+	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; line-height: 1.4; }
+	.grid { display: grid; gap: 0.55rem; margin-top: 0.7rem; }
+	.stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+	.stat { border-radius: 10px; background: #f3f7fb; padding: 0.6rem; }
+	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }
+	.stat strong { display: block; margin-top: 0.2rem; font-size: 1.2rem; }
+	.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin-top: 0.7rem; }
+	.detail-grid p { margin: 0; display: grid; gap: 0.15rem; }
+	.detail-grid strong { color: #4b5563; font-size: 0.82rem; }
+	.detail-grid span { overflow-wrap: anywhere; }
+	.danger-panel { border: 1px solid #f0c7c7; }
+	.admin-message {
+		margin: 0.7rem 0 0;
+		min-height: 1.2rem;
+		color: var(--color-primary);
+		font-weight: 700;
+	}
+	.admin-message.error { color: #991b1b; }
+	.delete-form { display: grid; gap: 0.45rem; margin-top: 0.7rem; max-width: 360px; }
+	.delete-form label { font-weight: 700; color: #3f3f3f; }
+	.delete-form input {
+		height: 38px;
+		border: 1px solid #cad1db;
+		border-radius: 8px;
+		padding: 0 0.65rem;
+		font: inherit;
+	}
+	.danger-button {
+		justify-self: start;
+		border: none;
+		border-radius: 8px;
+		min-height: 38px;
+		padding: 0 0.85rem;
+		background: #991b1b;
+		color: #fff;
+		font: inherit;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.danger-button:hover { background: #7f1d1d; }
+
+	@media (max-width: 760px) {
+		.stats-grid,
+		.detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	}
+
+	@media (max-width: 520px) {
+		.stats-grid,
+		.detail-grid { grid-template-columns: 1fr; }
+	}
+</style>

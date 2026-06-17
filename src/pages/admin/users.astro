@@ -1,0 +1,138 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { resolveAdminSession } from "../../lib/admin";
+import { getNeonSql } from "../../lib/neon";
+import { searchAdminUsers } from "../../lib/adminData";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const query = String(Astro.url.searchParams.get("q") || "").trim();
+const sql = getNeonSql();
+const users = await searchAdminUsers(sql, query);
+
+const sectionLinks = [
+	{ id: "overview", label: "Overview" },
+	{ id: "user-search", label: "Search" },
+	{ id: "user-list", label: "Users" }
+];
+
+function formatDate(value: string) {
+	const parsed = new Date(value);
+	if (!Number.isFinite(parsed.getTime())) return "Unknown";
+	return parsed.toLocaleString();
+}
+---
+
+<Layout title="Admin Users" sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="admin-users-page">
+		<header id="overview" class="hero">
+			<h1>Admin Users</h1>
+			<p>Find readers by username or email and review basic account health.</p>
+		</header>
+
+		<section class="panel" id="user-search">
+			<div class="panel-head">
+				<h2>Search</h2>
+			</div>
+			<form class="search-form" method="get" action="/admin/users">
+				<label for="user-search-input">Username or email</label>
+				<div class="search-row">
+					<input id="user-search-input" name="q" type="search" value={query} placeholder="wylie or reader@example.com" />
+					<button type="submit">Search</button>
+					{query && <a class="secondary-link" href="/admin/users">Clear</a>}
+				</div>
+			</form>
+		</section>
+
+		<section class="panel" id="user-list">
+			<div class="panel-head">
+				<h2>Users</h2>
+				<p>{users.length.toLocaleString()} {users.length === 1 ? "user" : "users"} shown.</p>
+			</div>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>Username</th>
+							<th>Email</th>
+							<th>Joined</th>
+							<th>Last activity</th>
+							<th>Shelves</th>
+							<th>Reviews</th>
+						</tr>
+					</thead>
+					<tbody>
+						{users.length === 0 ? (
+							<tr><td colspan="6">No users matched that search.</td></tr>
+						) : users.map((user) => (
+							<tr>
+								<td>
+									{user.username ? (
+										<a class="table-link" href={`/admin/users/${encodeURIComponent(user.username)}`}>@{user.username}</a>
+									) : (
+										<span class="muted">No username</span>
+									)}
+								</td>
+								<td>{user.email || "Unknown"}</td>
+								<td>{formatDate(user.joinedAt)}</td>
+								<td>{user.lastActivityAt ? formatDate(user.lastActivityAt) : "No activity"}</td>
+								<td>{user.shelfCount.toLocaleString()}</td>
+								<td>{user.reviewCount.toLocaleString()}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.admin-users-page { max-width: 980px; }
+	.hero h1 { margin: 0; }
+	.hero p { margin: 0.35rem 0 0; color: #4d4d4d; }
+	.panel { margin-top: 1rem; border: 0; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.panel-head h2 { margin: 0; }
+	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }
+	.search-form { display: grid; gap: 0.4rem; margin-top: 0.65rem; }
+	.search-form label { font-weight: 700; font-size: 0.9rem; color: #3f3f3f; }
+	.search-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+	.search-row input {
+		flex: 1 1 260px;
+		min-width: 0;
+		height: 38px;
+		border: 1px solid #cad1db;
+		border-radius: 8px;
+		padding: 0 0.65rem;
+		font: inherit;
+	}
+	.search-row button {
+		height: 38px;
+		border: none;
+		border-radius: 8px;
+		padding: 0 0.85rem;
+		background: var(--color-primary);
+		color: #fff;
+		font: inherit;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.secondary-link,
+	.table-link { color: var(--color-secondary); font-weight: 700; text-decoration: none; }
+	.secondary-link:hover,
+	.table-link:hover { text-decoration: underline; }
+	.table-wrap { margin-top: 0.7rem; overflow-x: auto; }
+	table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+	th, td { text-align: left; padding: 0.45rem; border-bottom: 1px solid #e8e8e8; vertical-align: top; }
+	th { font-weight: 700; color: #444; }
+	.muted { color: #6b7280; }
+
+	@media (max-width: 720px) {
+		.search-row { display: grid; grid-template-columns: 1fr; align-items: stretch; }
+		.search-row input,
+		.search-row button { width: 100%; }
+	}
+</style>

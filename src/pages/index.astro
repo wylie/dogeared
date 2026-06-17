@@ -596,7 +596,7 @@ const isOnboardingComplete = (
 												{reader.location && <Chip className="shelf-count-badge" label={reader.location} />}
 											</div>
 											<button type="button" class="reader-follow-button" data-action="follow-reader" data-username={reader.username}>Follow</button>
-											<p class="reader-feedback" data-reader-feedback hidden></p>
+											<p class="reader-feedback" data-reader-feedback role="status" aria-live="polite" hidden></p>
 										</li>
 									))}
 								</ul>
@@ -842,9 +842,14 @@ const isOnboardingComplete = (
 	}
 	.reader-feedback {
 		margin: 0.35rem 0 0;
+		min-height: 1.05rem;
 		color: #2f8f57;
 		font-size: 0.82rem;
 		font-weight: 700;
+	}
+	.reader-feedback[hidden] {
+		display: block;
+		visibility: hidden;
 	}
 	.mock-shelf-add-button {
 		margin-top: 0.65rem;

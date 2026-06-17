@@ -1653,7 +1653,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 												</form>
 											</div>
 											<div class="activity-comments-list" data-comments-list></div>
-											<p class="activity-comment-feedback" data-comment-feedback hidden></p>
+											<p class="activity-comment-feedback" data-comment-feedback role="status" aria-live="polite" hidden></p>
 										</div>
 									</BookCard>
 								))}
@@ -2799,8 +2799,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.activity-comment-feedback {
 		margin: 0;
+		min-height: 1rem;
 		font-size: 0.76rem;
 		color: #8b1d1d;
+	}
+	.activity-comment-feedback[hidden] {
+		display: block;
+		visibility: hidden;
 	}
 	.progress-inline {
 		margin-top: 0.35rem;
