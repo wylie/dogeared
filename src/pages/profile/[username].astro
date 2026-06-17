@@ -338,6 +338,7 @@ let isOwnerViewer = false;
 let customShelves: Array<{ id: number; name: string; slug: string; icon: string; position: number; bookCount: number }> = [];
 let shelfSectionOrderKeys: string[] = [];
 let shelfSectionOrderByKey = new Map<string, number>();
+const RECENT_ACTIVITY_SECTION_KEY = "recent:activity";
 let customShelfBooksByShelfId = new Map<number, Array<{
 	bookId: number;
 	title: string;
@@ -785,26 +786,27 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		bookCount: Math.max(0, Number(row.book_count || 0) || 0)
 	})).filter((row) => row.id > 0 && row.name);
 	if (isOwnerViewer) {
-		const defaultKeys = ["default:reading", "default:want_to_read", "default:finished"];
+		const defaultKeys = ["default:reading", RECENT_ACTIVITY_SECTION_KEY, "default:want_to_read", "default:finished"];
 		const customKeys = customShelves.map((shelf) => `custom:${shelf.id}`);
 		const allKeys = [...defaultKeys, ...customKeys];
+		const defaultOrder = defaultProfileSectionOrder(customKeys);
 		const settings = ownerProfileData.settings && typeof ownerProfileData.settings === "object"
 			? ownerProfileData.settings as Record<string, unknown>
 			: {};
 		const storedOrder = Array.isArray(settings.shelfSectionOrder)
 			? settings.shelfSectionOrder.map((item) => String(item || "").trim()).filter(Boolean)
 			: [];
-		const dedupedStored = Array.from(new Set(storedOrder));
-		shelfSectionOrderKeys = [
-			...dedupedStored.filter((key) => allKeys.includes(key)),
-			...allKeys.filter((key) => !dedupedStored.includes(key))
-		];
+		shelfSectionOrderKeys = mergeProfileSectionOrder(storedOrder, allKeys, defaultOrder);
 		shelfSectionOrderByKey = new Map(shelfSectionOrderKeys.map((key, index) => [key, index]));
 		customShelves = [...customShelves].sort((a, b) => {
 			const aOrder = shelfSectionOrderByKey.get(`custom:${a.id}`) ?? Number.MAX_SAFE_INTEGER;
 			const bOrder = shelfSectionOrderByKey.get(`custom:${b.id}`) ?? Number.MAX_SAFE_INTEGER;
 			return aOrder - bOrder || a.position - b.position || a.id - b.id;
 		});
+	} else {
+		const customKeys = customShelves.map((shelf) => `custom:${shelf.id}`);
+		shelfSectionOrderKeys = defaultProfileSectionOrder(customKeys);
+		shelfSectionOrderByKey = new Map(shelfSectionOrderKeys.map((key, index) => [key, index]));
 	}
 	customShelfBooksByShelfId = customShelfBookRows.reduce((map, row) => {
 		const shelfId = Math.max(0, Number(row.shelf_id || 0) || 0);
@@ -963,6 +965,38 @@ function paginationHref(param: string, value: number, anchor: string) {
 	return `${Astro.url.pathname}${query ? `?${query}` : ""}#${anchor}`;
 }
 
+function defaultProfileSectionOrder(customKeys: string[]) {
+	return [
+		"default:reading",
+		RECENT_ACTIVITY_SECTION_KEY,
+		"default:want_to_read",
+		"default:finished",
+		...customKeys
+	];
+}
+
+function mergeProfileSectionOrder(storedOrder: string[], allKeys: string[], defaultOrder: string[]) {
+	const knownKeys = new Set(allKeys);
+	const dedupedStored = Array.from(new Set(
+		storedOrder
+			.map((key) => String(key || "").trim())
+			.filter((key) => knownKeys.has(key))
+	));
+	if (dedupedStored.length === 0) return defaultOrder.filter((key) => knownKeys.has(key));
+	const merged = [...dedupedStored];
+	for (const key of defaultOrder) {
+		if (!knownKeys.has(key) || merged.includes(key)) continue;
+		if (key === RECENT_ACTIVITY_SECTION_KEY) {
+			const readingIndex = merged.indexOf("default:reading");
+			if (readingIndex >= 0) merged.splice(readingIndex + 1, 0, key);
+			else merged.unshift(key);
+			continue;
+		}
+		merged.push(key);
+	}
+	return merged;
+}
+
 function shelfSectionOrderValue(key: string) {
 	const value = shelfSectionOrderByKey.get(String(key || "").trim());
 	return Number.isFinite(value as number) ? Number(value) : 999;
@@ -975,7 +1009,7 @@ function shelfSectionOrderStyle(key: string) {
 function shelfSectionMoveAttrs(key: string, direction: "up" | "down") {
 	const order = shelfSectionOrderKeys.length > 0
 		? shelfSectionOrderKeys
-		: ["default:reading", "default:want_to_read", "default:finished", ...customShelves.map((shelf) => `custom:${shelf.id}`)];
+		: defaultProfileSectionOrder(customShelves.map((shelf) => `custom:${shelf.id}`));
 	const index = order.indexOf(key);
 	const canMove = direction === "up"
 		? index > 0
@@ -991,6 +1025,7 @@ const baseSectionLinks = [
 const orderedShelfSectionLinks = isOwnerViewer
 	? [
 		{ id: "currently-reading", label: "Currently Reading", key: "default:reading" },
+		{ id: "recent-activity", label: "Recent Activity", key: RECENT_ACTIVITY_SECTION_KEY },
 		{ id: "want-to-read", label: "Want to Read", key: "default:want_to_read" },
 		{ id: "read", label: "Read", key: "default:finished" },
 		...customShelves.map((shelf) => ({
@@ -1003,10 +1038,11 @@ const orderedShelfSectionLinks = isOwnerViewer
 		.map(({ id, label }) => ({ id, label }))
 	: [
 		{ id: "currently-reading", label: "Currently Reading" },
+		{ id: "recent-activity", label: "Recent Activity" },
 		{ id: "want-to-read", label: "Want to Read" },
 		{ id: "read", label: "Read" }
 	];
-const sectionLinks = [...baseSectionLinks, ...orderedShelfSectionLinks, { id: "recent-activity", label: "Recent Activity" }];
+const sectionLinks = [...baseSectionLinks, ...orderedShelfSectionLinks];
 const customShelfOptionsJson = JSON.stringify(customShelves.map((shelf) => ({
 	id: shelf.id,
 	name: shelf.name,
@@ -1020,7 +1056,7 @@ const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 const shelfSectionOrderJson = JSON.stringify(
 	shelfSectionOrderKeys.length > 0
 		? shelfSectionOrderKeys
-		: ["default:reading", "default:want_to_read", "default:finished", ...customShelves.map((shelf) => `custom:${shelf.id}`)]
+		: defaultProfileSectionOrder(customShelves.map((shelf) => `custom:${shelf.id}`))
 );
 const profileCanonicalUrl = profile.username ? `/profile/${encodeURIComponent(profile.username)}` : `/profile/${encodeURIComponent(requestedUsername)}`;
 const hasIndexableProfileContent = shelfStats.total > 0 || recentActivity.length > 0 || currentlyReading.length > 0 || wantToReadBooks.length > 0 || finishedBooks.length > 0;
@@ -1513,8 +1549,26 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				))}
 
 				{(canViewActivity || isOwnerViewer) && (
-					<section id="recent-activity" class="activity-card activity-card-plain" style="order:900">
-						<h2><span class="material-icons custom-shelf-heading-icon default-shelf-heading-icon" aria-hidden="true">schedule</span>Recent Activity</h2>
+					<section
+						id="recent-activity"
+						class="activity-card activity-card-plain"
+						data-shelf-section-key={RECENT_ACTIVITY_SECTION_KEY}
+						style={shelfSectionOrderStyle(RECENT_ACTIVITY_SECTION_KEY)}
+					>
+						<div class="custom-shelf-heading-row">
+							<h2><span class="material-icons custom-shelf-heading-icon default-shelf-heading-icon" aria-hidden="true">schedule</span>Recent Activity</h2>
+							{isOwnerViewer && (
+								<div class="custom-shelf-menu-wrap">
+									<button type="button" class="custom-shelf-menu-trigger" data-action="toggle-custom-shelf-menu" aria-expanded="false" aria-label="Actions for Recent Activity">
+										<span class="material-icons" aria-hidden="true">more_vert</span>
+									</button>
+									<div class="custom-shelf-menu" hidden>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up" {...shelfSectionMoveAttrs(RECENT_ACTIVITY_SECTION_KEY, "up")}>Move up</button>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down" {...shelfSectionMoveAttrs(RECENT_ACTIVITY_SECTION_KEY, "down")}>Move down</button>
+									</div>
+								</div>
+							)}
+						</div>
 						{pagedRecent.items.length === 0 ? (
 							<p>No recent activity yet. Add a book, rate a finished read, or update progress to get started.</p>
 						) : (
@@ -3262,6 +3316,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	const momentumScoreNode = document.querySelector("[data-momentum-score]");
 	const momentumStreakNode = document.querySelector("[data-momentum-streak]");
 	const momentumNextActionNode = document.querySelector("[data-momentum-next-action]");
+	const RECENT_ACTIVITY_SECTION_KEY = "recent:activity";
 	const shelfSectionNodes = Array.from(document.querySelectorAll("[data-shelf-section-key]"));
 	let readingStreakDayKeys = (() => {
 		try {
@@ -3303,6 +3358,22 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		} catch {
 			// Ignore storage errors.
 		}
+	}
+
+	function mergeStoredProfileSectionOrder(storedOrder, liveKeys) {
+		const knownKeys = new Set(liveKeys);
+		const deduped = Array.from(new Set(
+			(Array.isArray(storedOrder) ? storedOrder : [])
+				.map((key) => String(key || "").trim())
+				.filter((key) => knownKeys.has(key))
+		));
+		if (!knownKeys.has(RECENT_ACTIVITY_SECTION_KEY) || deduped.includes(RECENT_ACTIVITY_SECTION_KEY)) {
+			return deduped;
+		}
+		const readingIndex = deduped.indexOf("default:reading");
+		if (readingIndex >= 0) deduped.splice(readingIndex + 1, 0, RECENT_ACTIVITY_SECTION_KEY);
+		else deduped.unshift(RECENT_ACTIVITY_SECTION_KEY);
+		return deduped;
 	}
 
 	function orderedShelfSectionKeys(orderKeys) {
@@ -3351,13 +3422,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			node.style.order = String(300 + position);
 		}
 		if (profilePageRoot instanceof HTMLElement) {
-			const recentSection = document.getElementById("recent-activity");
 			const orderedNodes = normalizedOrder
 				.map((key) => shelfSectionNodes.find((node) => String(node.getAttribute("data-shelf-section-key") || "").trim() === key))
 				.filter((node) => node instanceof HTMLElement);
 			for (const node of orderedNodes) {
-				if (recentSection instanceof HTMLElement) profilePageRoot.insertBefore(node, recentSection);
-				else profilePageRoot.append(node);
+				profilePageRoot.append(node);
 			}
 		}
 		updateShelfSectionMoveControls(normalizedOrder);
@@ -4848,14 +4917,14 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			setCustomShelfFeedback("Updating order...");
 			const result = await saveShelfSectionOrder(swapped);
 			if (!result.ok) {
-				setCustomShelfFeedback(String(result.data?.error || "Failed to update shelf order."), true);
+				setCustomShelfFeedback(String(result.data?.error || "Failed to update profile section order."), true);
 				return;
 			}
 			shelfSectionOrder = swapped;
 			applyShelfSectionOrderToDom(shelfSectionOrder);
 			syncLeftNavShelfOrder(shelfSectionOrder);
 			saveStoredShelfSectionOrder(shelfSectionOrder);
-			setCustomShelfFeedback("Shelf order updated.");
+			setCustomShelfFeedback("Profile section order updated.");
 			closeAllShelfSectionMenus();
 			return;
 		}
@@ -4924,9 +4993,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	const localOrder = loadStoredShelfSectionOrder();
 	if (localOrder.length > 0) {
 		const liveKeys = new Set(shelfSectionNodes.map((node) => String(node.getAttribute("data-shelf-section-key") || "").trim()).filter(Boolean));
+		const localWithRecent = mergeStoredProfileSectionOrder(localOrder, Array.from(liveKeys));
 		const mergedOrder = [
-			...localOrder.filter((key) => liveKeys.has(key)),
-			...Array.from(liveKeys).filter((key) => !localOrder.includes(key))
+			...localWithRecent,
+			...Array.from(liveKeys).filter((key) => !localWithRecent.includes(key))
 		];
 		if (mergedOrder.length > 0) shelfSectionOrder = mergedOrder;
 	}

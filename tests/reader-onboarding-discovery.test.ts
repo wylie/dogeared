@@ -95,32 +95,45 @@ test("profile finish workflow updates shelves and activity optimistically", () =
 	assert.equal(source.includes('document.querySelectorAll(\'#currently-reading [data-momentum-reading-item="true"]\')'), true);
 });
 
-test("profile prioritizes active shelf sections before recent activity", () => {
+test("profile defaults to currently reading, recent activity, then other shelves", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	const currentIdx = source.indexOf('{ id: "currently-reading", label: "Currently Reading", key: "default:reading" }');
+	const recentIdx = source.indexOf('{ id: "recent-activity", label: "Recent Activity", key: RECENT_ACTIVITY_SECTION_KEY }');
 	const wantIdx = source.indexOf('{ id: "want-to-read", label: "Want to Read", key: "default:want_to_read" }');
 	const readIdx = source.indexOf('{ id: "read", label: "Read", key: "default:finished" }');
-	const recentIdx = source.indexOf('{ id: "recent-activity", label: "Recent Activity" }');
 	assert.ok(currentIdx > -1);
+	assert.ok(recentIdx > -1);
 	assert.ok(wantIdx > -1);
 	assert.ok(readIdx > -1);
-	assert.ok(recentIdx > -1);
-	assert.ok(currentIdx < wantIdx);
+	assert.ok(currentIdx < recentIdx);
+	assert.ok(recentIdx < wantIdx);
 	assert.ok(wantIdx < readIdx);
-	assert.ok(readIdx < recentIdx);
-	assert.equal(source.includes('style="order:900"'), true);
-	assert.equal(source.includes("profilePageRoot.insertBefore(node, recentSection)"), true);
+	assert.equal(source.includes('const RECENT_ACTIVITY_SECTION_KEY = "recent:activity"'), true);
+	assert.equal(source.includes('data-shelf-section-key={RECENT_ACTIVITY_SECTION_KEY}'), true);
+	assert.equal(source.includes('style="order:900"'), false);
+	assert.equal(source.includes("profilePageRoot.insertBefore(node, recentSection)"), false);
 });
 
 test("profile section reorder controls disable invalid moves", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	assert.equal(source.includes("shelfSectionMoveAttrs"), true);
+	assert.equal(source.includes('shelfSectionMoveAttrs(RECENT_ACTIVITY_SECTION_KEY, "up")'), true);
+	assert.equal(source.includes('shelfSectionMoveAttrs(RECENT_ACTIVITY_SECTION_KEY, "down")'), true);
 	assert.equal(source.includes('"aria-disabled": "true"'), true);
 	assert.equal(source.includes("updateShelfSectionMoveControls"), true);
 	assert.equal(source.includes("upButton.disabled = !canMoveUp"), true);
 	assert.equal(source.includes("downButton.disabled = !canMoveDown"), true);
 	assert.equal(source.includes("moveUpButton.disabled || moveUpButton.getAttribute(\"aria-disabled\") === \"true\""), true);
 	assert.equal(source.includes(".custom-shelf-menu-item:disabled"), true);
+});
+
+test("profile merges recent activity into older saved shelf-only section orders", () => {
+	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
+	assert.equal(source.includes("function mergeProfileSectionOrder"), true);
+	assert.equal(source.includes("if (key === RECENT_ACTIVITY_SECTION_KEY)"), true);
+	assert.equal(source.includes('merged.splice(readingIndex + 1, 0, key)'), true);
+	assert.equal(source.includes("function mergeStoredProfileSectionOrder"), true);
+	assert.equal(source.includes("deduped.splice(readingIndex + 1, 0, RECENT_ACTIVITY_SECTION_KEY)"), true);
 });
 
 test("Argon Collective attribution stays on company-facing surfaces, not the global footer", () => {
