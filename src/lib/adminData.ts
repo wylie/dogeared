@@ -21,7 +21,7 @@ export type AdminUserSummary = {
 	email: string;
 	joinedAt: string;
 	lastActivityAt: string;
-	shelfCount: number;
+	shelfEntryCount: number;
 	reviewCount: number;
 };
 
@@ -174,7 +174,7 @@ export async function searchAdminUsers(sql: NeonQueryFunction<false, false>, que
 		email: string | null;
 		created_at: string | null;
 		last_activity_at: string | null;
-		shelf_count: number;
+		shelf_entry_count: number;
 		review_count: number;
 	}>>`
 		with users as (
@@ -195,7 +195,7 @@ export async function searchAdminUsers(sql: NeonQueryFunction<false, false>, que
 				coalesce(max(ua.created_at), 'epoch'::timestamptz),
 				coalesce(max(uac.created_at), 'epoch'::timestamptz)
 			)::text as last_activity_at,
-			count(distinct ub.book_id)::int as shelf_count,
+			count(distinct ub.book_id)::int as shelf_entry_count,
 			count(distinct ub.book_id) filter (where char_length(trim(coalesce(ub.finished_reflection, ''))) > 0)::int as review_count
 		from users u
 		left join user_book ub on ub.user_id = u.id
@@ -214,7 +214,7 @@ export async function searchAdminUsers(sql: NeonQueryFunction<false, false>, que
 		email: normalizeText(row.email),
 		joinedAt: normalizeText(row.created_at),
 		lastActivityAt: normalizeText(row.last_activity_at).startsWith("1970-") ? "" : normalizeText(row.last_activity_at),
-		shelfCount: toCount(row.shelf_count),
+		shelfEntryCount: toCount(row.shelf_entry_count),
 		reviewCount: toCount(row.review_count)
 	}));
 }
@@ -230,7 +230,7 @@ export async function loadAdminUserDetail(sql: NeonQueryFunction<false, false>, 
 		email: string | null;
 		created_at: string | null;
 		last_activity_at: string | null;
-		shelf_count: number;
+		shelf_entry_count: number;
 		review_count: number;
 		want_to_read_count: number;
 		currently_reading_count: number;
@@ -259,7 +259,7 @@ export async function loadAdminUserDetail(sql: NeonQueryFunction<false, false>, 
 				coalesce((select max(created_at) from user_activity where user_id = t.id), 'epoch'::timestamptz),
 				coalesce((select max(created_at) from user_activity_comment where user_id = t.id), 'epoch'::timestamptz)
 			)::text as last_activity_at,
-			(select count(*)::int from user_book where user_id = t.id) as shelf_count,
+			(select count(*)::int from user_book where user_id = t.id) as shelf_entry_count,
 			(select count(*)::int from user_book where user_id = t.id and char_length(trim(coalesce(finished_reflection, ''))) > 0) as review_count,
 			(select count(*)::int from user_book where user_id = t.id and status = 'want_to_read') as want_to_read_count,
 			(select count(*)::int from user_book where user_id = t.id and status = 'reading') as currently_reading_count,
@@ -277,7 +277,7 @@ export async function loadAdminUserDetail(sql: NeonQueryFunction<false, false>, 
 		email: normalizeText(row.email),
 		joinedAt: normalizeText(row.created_at),
 		lastActivityAt: normalizeText(row.last_activity_at).startsWith("1970-") ? "" : normalizeText(row.last_activity_at),
-		shelfCount: toCount(row.shelf_count),
+		shelfEntryCount: toCount(row.shelf_entry_count),
 		reviewCount: toCount(row.review_count),
 		wantToReadCount: toCount(row.want_to_read_count),
 		currentlyReadingCount: toCount(row.currently_reading_count),

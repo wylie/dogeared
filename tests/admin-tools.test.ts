@@ -11,6 +11,19 @@ test("admin dashboard and users pages require admin session", () => {
 	}
 });
 
+test("admin navigation is rendered only for admin sessions", () => {
+	const layout = readFileSync("src/layouts/Layout.astro", "utf8");
+	const nav = readFileSync("src/components/LeftHand.astro", "utf8");
+	assert.equal(layout.includes("resolveAdminSession"), true);
+	assert.equal(layout.includes("isAdmin={isAdmin}"), true);
+	assert.equal(nav.includes("isAdmin = false"), true);
+	assert.equal(nav.includes("{isAdmin && ("), true);
+	assert.equal(nav.includes("<h3 class=\"nav-group-title\">Admin</h3>"), true);
+	assert.equal(nav.includes("Dashboard"), true);
+	assert.equal(nav.includes("/admin/data-health"), true);
+	assert.equal(nav.includes("/admin/users"), true);
+});
+
 test("admin overview displays real site statistics and quick links", () => {
 	const page = readFileSync("src/pages/admin.astro", "utf8");
 	const data = readFileSync("src/lib/adminData.ts", "utf8");
@@ -39,9 +52,22 @@ test("admin users support search, detail counts, and safe deletion", () => {
 	const detail = readFileSync("src/pages/admin/users/[username].astro", "utf8");
 	const data = readFileSync("src/lib/adminData.ts", "utf8");
 	assert.equal(list.includes('name="q"'), true);
+	assert.equal(list.includes("Books on shelves"), true);
+	assert.equal(list.includes("Shelf entries"), false);
+	assert.equal(list.includes(">Shelves<"), false);
+	assert.equal(list.includes("data-delete-user-list-form"), true);
+	assert.equal(list.includes('name="userId"'), true);
+	assert.equal(list.includes("Current admin"), true);
+	assert.equal(list.includes("Catalog books and authors are preserved"), true);
 	assert.equal(data.includes("searchAdminUsers"), true);
 	assert.equal(data.includes("lower(coalesce(u.email, '')) like"), true);
+	assert.equal(data.includes("shelfEntryCount"), true);
+	assert.equal(data.includes("as shelf_entry_count"), true);
+	assert.equal(data.includes("shelfCount"), false);
 	assert.equal(detail.includes('name="confirmUsername"'), true);
+	assert.equal(detail.includes("Shelf entries"), true);
+	assert.equal(detail.includes("Total shelves"), false);
+	assert.equal(detail.includes("Catalog books and authors are preserved"), true);
 	assert.equal(detail.includes("Admins cannot delete their own account"), true);
 	assert.equal(detail.includes("window.confirm"), true);
 	assert.equal(data.includes("targetId === actorId"), true);

@@ -2,6 +2,7 @@
 import LeftHand from '../components/LeftHand.astro';
 import FeedbackWidget from '../components/FeedbackWidget.astro';
 import ReaderGuidance from '../components/ReaderGuidance.astro';
+import { resolveAdminSession } from '../lib/admin';
 import { resolveUserBySession } from '../lib/auth';
 import { buildSeoMetadata } from '../lib/seo';
 type SectionLink = { id: string; label: string };
@@ -29,6 +30,8 @@ const {
 const currentPath = Astro.url.pathname;
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
+const adminSession = isAuthenticated ? await resolveAdminSession(Astro.request) : { isAdmin: false };
+const isAdmin = !!adminSession.isAdmin;
 const seo = buildSeoMetadata({
 	title,
 	description: metaDescription,
@@ -113,7 +116,7 @@ import '../assets/global.css';
 			<div class="container">
 				<div class="column" style="padding-bottom: 0;">
 					<slot name="left">
-						<LeftHand current={currentPath} sectionLinks={sectionLinks} isAuthenticated={isAuthenticated} />
+						<LeftHand current={currentPath} sectionLinks={sectionLinks} isAuthenticated={isAuthenticated} isAdmin={isAdmin} />
 					</slot>
 				</div>
 				<main id="main-content" class="column content-column" tabindex="-1">

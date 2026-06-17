@@ -2,7 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import { resolveAdminSession } from "../../lib/admin";
 import { getNeonSql } from "../../lib/neon";
-import { searchAdminUsers } from "../../lib/adminData";
+import { deleteAdminUser, searchAdminUsers } from "../../lib/adminData";
 
 export const prerender = false;
 
@@ -11,6 +11,23 @@ if (!admin.isAdmin) return Astro.redirect("/");
 
 const query = String(Astro.url.searchParams.get("q") || "").trim();
 const sql = getNeonSql();
+let actionMessage = Astro.url.searchParams.get("deleted") === "1" ? "User deleted." : "";
+let actionError = false;
+
+if (Astro.request.method === "POST") {
+	const form = await Astro.request.formData();
+	const intent = String(form.get("intent") || "").trim();
+	const userId = String(form.get("userId") || "").trim();
+	if (intent !== "delete-user") {
+		actionMessage = "Invalid admin action.";
+		actionError = true;
+	} else {
+		const result = await deleteAdminUser(sql, userId, admin.userId);
+		actionMessage = result.message;
+		actionError = !result.ok;
+	}
+}
+
 const users = await searchAdminUsers(sql, query);
 
 const sectionLinks = [
@@ -52,6 +69,8 @@ function formatDate(value: string) {
 				<h2>Users</h2>
 				<p>{users.length.toLocaleString()} {users.length === 1 ? "user" : "users"} shown.</p>
 			</div>
+			<p class="danger-note">Books on shelves are shelf entries from reader accounts, not distinct shelf names. Deleting a user removes reader-owned data including shelves, ratings, reviews, progress, activity, comments, follows, notifications, sessions, magic links, custom shelves, and pending email changes. Catalog books and authors are preserved.</p>
+			{actionMessage && <p class={`admin-message${actionError ? " error" : ""}`} role="status">{actionMessage}</p>}
 			<div class="table-wrap">
 				<table>
 					<thead>
@@ -60,13 +79,14 @@ function formatDate(value: string) {
 							<th>Email</th>
 							<th>Joined</th>
 							<th>Last activity</th>
-							<th>Shelves</th>
+							<th>Books on shelves</th>
 							<th>Reviews</th>
+							<th>Actions</th>
 						</tr>
 					</thead>
 					<tbody>
 						{users.length === 0 ? (
-							<tr><td colspan="6">No users matched that search.</td></tr>
+							<tr><td colspan="7">No users matched that search.</td></tr>
 						) : users.map((user) => (
 							<tr>
 								<td>
@@ -79,8 +99,19 @@ function formatDate(value: string) {
 								<td>{user.email || "Unknown"}</td>
 								<td>{formatDate(user.joinedAt)}</td>
 								<td>{user.lastActivityAt ? formatDate(user.lastActivityAt) : "No activity"}</td>
-								<td>{user.shelfCount.toLocaleString()}</td>
+								<td>{user.shelfEntryCount.toLocaleString()}</td>
 								<td>{user.reviewCount.toLocaleString()}</td>
+								<td>
+									{user.id === admin.userId ? (
+										<span class="muted">Current admin</span>
+									) : (
+										<form method="post" class="inline-delete-form" data-delete-user-list-form data-username={user.username ? `@${user.username}` : user.email || "this user"}>
+											<input type="hidden" name="intent" value="delete-user" />
+											<input type="hidden" name="userId" value={user.id} />
+											<button type="submit" class="danger-button">Delete</button>
+										</form>
+									)}
+								</td>
 							</tr>
 						))}
 					</tbody>
@@ -89,6 +120,17 @@ function formatDate(value: string) {
 		</section>
 	</div>
 </Layout>
+
+<script>
+	document.querySelectorAll("[data-delete-user-list-form]").forEach((form) => {
+		form.addEventListener("submit", (event) => {
+			const username = form instanceof HTMLElement ? form.dataset.username || "this user" : "this user";
+			if (!window.confirm(`Delete ${username} and their reader-owned data? This cannot be undone.`)) {
+				event.preventDefault();
+			}
+		});
+	});
+</script>
 
 <style>
 	.admin-users-page { max-width: 980px; }
@@ -124,11 +166,32 @@ function formatDate(value: string) {
 	.table-link { color: var(--color-secondary); font-weight: 700; text-decoration: none; }
 	.secondary-link:hover,
 	.table-link:hover { text-decoration: underline; }
+	.danger-note { margin: 0.55rem 0 0; color: #575757; font-size: 0.86rem; line-height: 1.4; }
+	.admin-message {
+		margin: 0.65rem 0 0;
+		min-height: 1.2rem;
+		color: var(--color-primary);
+		font-weight: 700;
+	}
+	.admin-message.error { color: #991b1b; }
 	.table-wrap { margin-top: 0.7rem; overflow-x: auto; }
 	table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 	th, td { text-align: left; padding: 0.45rem; border-bottom: 1px solid #e8e8e8; vertical-align: top; }
 	th { font-weight: 700; color: #444; }
 	.muted { color: #6b7280; }
+	.inline-delete-form { margin: 0; }
+	.danger-button {
+		border: none;
+		border-radius: 8px;
+		min-height: 32px;
+		padding: 0 0.7rem;
+		background: #991b1b;
+		color: #fff;
+		font: inherit;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.danger-button:hover { background: #7f1d1d; }
 
 	@media (max-width: 720px) {
 		.search-row { display: grid; grid-template-columns: 1fr; align-items: stretch; }

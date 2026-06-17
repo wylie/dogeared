@@ -83,9 +83,10 @@ const isSelf = !!user?.id && user.id === admin.userId;
 				<section class="panel" id="counts">
 					<div class="panel-head">
 						<h2>Counts</h2>
+						<p>Shelf entries are books saved to Dogeared shelves. The status cards break those entries down by reading state.</p>
 					</div>
 					<div class="grid stats-grid">
-						<article class="stat"><p>Total shelves</p><strong>{user.shelfCount.toLocaleString()}</strong></article>
+						<article class="stat"><p>Shelf entries</p><strong>{user.shelfEntryCount.toLocaleString()}</strong></article>
 						<article class="stat"><p>Want to Read</p><strong>{user.wantToReadCount.toLocaleString()}</strong></article>
 						<article class="stat"><p>Currently Reading</p><strong>{user.currentlyReadingCount.toLocaleString()}</strong></article>
 						<article class="stat"><p>Read</p><strong>{user.completedCount.toLocaleString()}</strong></article>
@@ -99,7 +100,7 @@ const isSelf = !!user?.id && user.id === admin.userId;
 				<section class="panel danger-panel" id="delete-user">
 					<div class="panel-head">
 						<h2>Delete User</h2>
-						<p>This deletes the account and reader-owned data: shelves, ratings, reviews, progress events, activity, comments, follows, notifications, sessions, magic links, custom shelves, and pending email changes.</p>
+						<p>This deletes the account and reader-owned data: shelves, ratings, reviews, progress events, activity, comments, follows, notifications, sessions, magic links, custom shelves, and pending email changes. Catalog books and authors are preserved.</p>
 					</div>
 					{deleteMessage && <p class={`admin-message${deleteError ? " error" : ""}`} role="status">{deleteMessage}</p>}
 					{isSelf ? (

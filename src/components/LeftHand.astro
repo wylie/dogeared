@@ -1,12 +1,14 @@
 ---
 import Widget from "./Widget.astro"
 type SectionLink = { id: string; label: string };
-const { current = "/", sectionLinks = [], isAuthenticated = false } = Astro.props as { current?: string; sectionLinks?: SectionLink[]; isAuthenticated?: boolean };
+const { current = "/", sectionLinks = [], isAuthenticated = false, isAdmin = false } = Astro.props as { current?: string; sectionLinks?: SectionLink[]; isAuthenticated?: boolean; isAdmin?: boolean };
 const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
 const isActive = (href: string) => normalize(current) === normalize(href);
 const currentNormalized = normalize(current);
 const isProfilePage = currentNormalized === "/profile" || currentNormalized.startsWith("/profile/");
 const isHomePage = currentNormalized === "/";
+const isAdminDashboardPage = currentNormalized === "/admin";
+const isAdminUsersPage = currentNormalized === "/admin/users" || currentNormalized.startsWith("/admin/users/");
 const query = Astro.url.searchParams.get("q") ?? "";
 ---
 
@@ -124,6 +126,44 @@ const query = Astro.url.searchParams.get("q") ?? "";
           </li>
         </ul>
       </section>
+
+      {isAdmin && (
+        <section class="nav-group nav-group-admin">
+          <h3 class="nav-group-title">Admin</h3>
+          <ul>
+            <li>
+              <a href={isAdminDashboardPage ? undefined : '/admin'} class={isAdminDashboardPage ? 'active' : 'hover'} aria-current={isAdminDashboardPage ? 'page' : undefined}>Dashboard</a>
+              {isAdminDashboardPage && sectionLinks.length > 0 && (
+                <ul class="section-links-nested">
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+            <li>
+              <a href={isActive('/admin/data-health') ? undefined : '/admin/data-health'} class={isActive('/admin/data-health') ? 'active' : 'hover'} aria-current={isActive('/admin/data-health') ? 'page' : undefined}>Data Health</a>
+              {isActive('/admin/data-health') && sectionLinks.length > 0 && (
+                <ul class="section-links-nested">
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+            <li>
+              <a href={isAdminUsersPage ? undefined : '/admin/users'} class={isAdminUsersPage ? 'active' : 'hover'} aria-current={isAdminUsersPage ? 'page' : undefined}>Users</a>
+              {isAdminUsersPage && sectionLinks.length > 0 && (
+                <ul class="section-links-nested">
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          </ul>
+        </section>
+      )}
     </nav>
     {sectionLinks.length > 0 && (
       <ul id="left-hand-secondary-links" class="secondary-links-mobile" aria-label="Section navigation">
