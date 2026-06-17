@@ -96,6 +96,7 @@ test("feedback rate limiting blocks after the configured window count", () => {
 test("feedback widget opens an accessible modal and attaches hidden metadata", () => {
 	const source = readFileSync("src/components/FeedbackWidget.astro", "utf8");
 	assert.equal(source.includes('aria-controls="feedback-modal"'), true);
+	assert.equal(source.includes('aria-label="Send feedback"'), true);
 	assert.equal(source.includes('role="dialog"'), true);
 	assert.equal(source.includes("openFeedbackModal"), true);
 	assert.equal(source.includes("pageUrl: window.location.href"), true);
@@ -103,6 +104,27 @@ test("feedback widget opens an accessible modal and attaches hidden metadata", (
 	assert.equal(source.includes("userAgent: navigator.userAgent"), true);
 	assert.equal(source.includes("viewport: collectViewport()"), true);
 	assert.equal(source.includes("Submitting as:"), true);
+});
+
+test("feedback and support actions render as compact floating action buttons", () => {
+	const widgetSource = readFileSync("src/components/FeedbackWidget.astro", "utf8");
+	const layoutSource = readFileSync("src/layouts/Layout.astro", "utf8");
+	assert.equal(layoutSource.includes("global-floating-actions"), true);
+	assert.equal(layoutSource.includes('aria-label="Reader actions"'), true);
+	assert.equal(layoutSource.includes('aria-label="Support Dogeared"'), true);
+	assert.equal(layoutSource.includes(">favorite<"), true);
+	assert.equal(layoutSource.includes("width: 48px"), true);
+	assert.equal(layoutSource.includes("height: 48px"), true);
+	assert.equal(layoutSource.includes(".global-support-float:hover"), true);
+	assert.equal(layoutSource.includes(".global-float-label"), true);
+	assert.equal(widgetSource.includes(".feedback-widget"), true);
+	assert.equal(widgetSource.includes("display: contents"), true);
+	assert.equal(widgetSource.includes("width: 48px"), true);
+	assert.equal(widgetSource.includes("height: 48px"), true);
+	assert.equal(widgetSource.includes(".feedback-float:hover"), true);
+	assert.equal(widgetSource.includes(".feedback-float-label"), true);
+	assert.equal(widgetSource.includes("width: 46px"), true);
+	assert.equal(widgetSource.includes("max-width: 0"), true);
 });
 
 test("feedback submission uses env-configured delivery, honeypot, rate limiting, and safe analytics", () => {

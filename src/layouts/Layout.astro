@@ -126,8 +126,13 @@ import '../assets/global.css';
 				</main>
 			</div>
 			<ReaderGuidance isAuthenticated={isAuthenticated} />
-			<FeedbackWidget isAuthenticated={isAuthenticated} />
-			<a class="global-support-float" href="https://buymeacoffee.com/wylie" target="_blank" rel="noopener noreferrer">Support Dogeared</a>
+			<div class="global-floating-actions" aria-label="Reader actions">
+				<FeedbackWidget isAuthenticated={isAuthenticated} />
+				<a class="global-support-float" href="https://buymeacoffee.com/wylie" target="_blank" rel="noopener noreferrer" aria-label="Support Dogeared">
+					<span class="material-icons" aria-hidden="true">favorite</span>
+					<span class="global-float-label">Support Dogeared</span>
+				</a>
+			</div>
 		</body>
 	</html>
 
@@ -185,25 +190,68 @@ import '../assets/global.css';
 		opacity: 1;
 		pointer-events: auto;
 	}
-	.global-support-float {
+	.global-floating-actions {
 		position: fixed;
 		right: 1rem;
 		bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
 		z-index: 9999;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.55rem;
+	}
+	.global-support-float {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		gap: 0.35rem;
+		width: 48px;
+		height: 48px;
+		box-sizing: border-box;
+		overflow: hidden;
 		text-decoration: none;
 		background: #151515;
 		color: #fff;
 		border-radius: 999px;
-		padding: 0.6rem 0.9rem;
+		padding: 0;
 		font-size: 0.9rem;
 		font-weight: 700;
 		box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+		white-space: nowrap;
+		transition:
+			width 180ms ease,
+			background-color 160ms ease,
+			box-shadow 160ms ease;
 	}
-	.global-support-float:hover {
-		background: var(--color-primary);
+	.global-support-float:hover,
+	.global-support-float:focus-visible {
+		width: 174px;
+		padding: 0 0.9rem;
+		background: #151515;
+		box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+	}
+	.global-support-float:focus-visible {
+		outline: 3px solid #111;
+		outline-offset: 3px;
+	}
+	.global-support-float .material-icons {
+		flex: 0 0 auto;
+		font-size: 1.25rem;
+		line-height: 1;
+	}
+	.global-float-label {
+		display: inline-block;
+		max-width: 0;
+		opacity: 0;
+		overflow: hidden;
+		transition:
+			max-width 180ms ease,
+			opacity 140ms ease;
+	}
+	.global-support-float:hover .global-float-label,
+	.global-support-float:focus-visible .global-float-label {
+		max-width: 130px;
+		opacity: 1;
 	}
 	@media (max-width: 900px) {
 		html,
@@ -231,11 +279,25 @@ import '../assets/global.css';
 			overflow: visible;
 			padding-top: 0;
 		}
-		.global-support-float {
+		.global-floating-actions {
 			right: 0.6rem;
-			bottom: calc(2.35rem + env(safe-area-inset-bottom, 0px));
-			padding: 0.52rem 0.76rem;
+			bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+			gap: 0.45rem;
+		}
+		.global-support-float {
+			width: 46px;
+			height: 46px;
 			font-size: 0.84rem;
+		}
+		.global-support-float:hover,
+		.global-support-float:focus-visible {
+			width: 46px;
+			padding: 0;
+		}
+		.global-support-float:hover .global-float-label,
+		.global-support-float:focus-visible .global-float-label {
+			max-width: 0;
+			opacity: 0;
 		}
 	}
 </style>

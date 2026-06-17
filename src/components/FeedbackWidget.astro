@@ -10,9 +10,10 @@ const { isAuthenticated = false } = Astro.props as Props;
 		data-feedback-open
 		aria-haspopup="dialog"
 		aria-controls="feedback-modal"
+		aria-label="Send feedback"
 	>
 		<span class="material-icons feedback-float-icon" aria-hidden="true">chat_bubble</span>
-		<span>Feedback</span>
+		<span class="feedback-float-label">Feedback</span>
 	</button>
 
 	<div class="feedback-modal-shell" data-feedback-modal id="feedback-modal" hidden>
@@ -227,29 +228,40 @@ const { isAuthenticated = false } = Astro.props as Props;
 </script>
 
 <style>
+	.feedback-widget {
+		display: contents;
+	}
 	.feedback-float {
-		position: fixed;
-		right: 1rem;
-		bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
-		z-index: 9999;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.35rem;
-		min-height: 44px;
+		width: 48px;
+		height: 48px;
+		box-sizing: border-box;
+		overflow: hidden;
 		border: none;
 		border-radius: 999px;
-		padding: 0.58rem 0.9rem;
+		padding: 0;
 		background: var(--color-primary);
 		color: #fff;
 		box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
 		font: inherit;
 		font-size: 0.9rem;
 		font-weight: 750;
+		white-space: nowrap;
 		cursor: pointer;
+		transition:
+			width 180ms ease,
+			background-color 160ms ease,
+			box-shadow 160ms ease;
 	}
-	.feedback-float:hover {
+	.feedback-float:hover,
+	.feedback-float:focus-visible {
+		width: 132px;
+		padding: 0 0.9rem;
 		background: var(--color-primary-hover);
+		box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
 	}
 	.feedback-float:focus-visible,
 	.feedback-close:focus-visible,
@@ -261,7 +273,23 @@ const { isAuthenticated = false } = Astro.props as Props;
 		outline-offset: 2px;
 	}
 	.feedback-float-icon {
-		font-size: 1.1rem;
+		flex: 0 0 auto;
+		font-size: 1.2rem;
+		line-height: 1;
+	}
+	.feedback-float-label {
+		display: inline-block;
+		max-width: 0;
+		opacity: 0;
+		overflow: hidden;
+		transition:
+			max-width 180ms ease,
+			opacity 140ms ease;
+	}
+	.feedback-float:hover .feedback-float-label,
+	.feedback-float:focus-visible .feedback-float-label {
+		max-width: 80px;
+		opacity: 1;
 	}
 	.feedback-modal-shell {
 		position: fixed;
@@ -439,10 +467,20 @@ const { isAuthenticated = false } = Astro.props as Props;
 	}
 	@media (max-width: 900px) {
 		.feedback-float {
-			right: 0.6rem;
-			bottom: calc(5.8rem + env(safe-area-inset-bottom, 0px));
-			padding: 0.52rem 0.74rem;
+			width: 46px;
+			height: 46px;
+			padding: 0;
 			font-size: 0.84rem;
+		}
+		.feedback-float:hover,
+		.feedback-float:focus-visible {
+			width: 46px;
+			padding: 0;
+		}
+		.feedback-float:hover .feedback-float-label,
+		.feedback-float:focus-visible .feedback-float-label {
+			max-width: 0;
+			opacity: 0;
 		}
 	}
 	@media (max-width: 560px) {
