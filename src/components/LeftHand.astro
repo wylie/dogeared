@@ -172,9 +172,13 @@ const query = Astro.url.searchParams.get("q") ?? "";
         ))}
       </ul>
     )}
-    <div class="left-hand-footer-logo" aria-hidden="true">
-      <img src="/logo.png" alt="DogEared logo" loading="lazy" />
-    </div>
+    <footer class="sidebar-footer" aria-label="Site information">
+      <p>Built by Argon Collective LLC</p>
+      <nav aria-label="Site links">
+        <a href="/privacy" class={isActive('/privacy') ? 'active' : 'hover'} aria-current={isActive('/privacy') ? 'page' : undefined}>Privacy</a>
+        <a href="/support" class={isActive('/support') ? 'active' : 'hover'} aria-current={isActive('/support') ? 'page' : undefined}>Support DogEared</a>
+      </nav>
+    </footer>
   </div>
     <div id="left-hand-login-modal" class="login-modal" hidden>
     <div class="login-modal-backdrop" data-action="close-login-modal"></div>
@@ -243,21 +247,33 @@ const query = Astro.url.searchParams.get("q") ?? "";
     font-size: 0.94em;
     color: #2b2b2b;
   }
-  .left-hand-footer-logo {
-    position: absolute;
-    left: 50%;
-    bottom: 0;
-    transform: translateX(-50%);
-    width: min(90%, 260px);
-    display: flex;
-    justify-content: center;
-    pointer-events: none;
+  .sidebar-footer {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-divider);
+    color: #5a6470;
+    font-size: 0.78rem;
+    line-height: 1.35;
   }
-  .left-hand-footer-logo img {
-    width: 100%;
-    height: auto;
-    display: block;
-    opacity: 0.95;
+  .sidebar-footer p {
+    margin: 0;
+  }
+  .sidebar-footer nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.65rem;
+    margin-top: 0.45rem;
+  }
+  .sidebar-footer a {
+    color: #334155;
+    text-decoration: none;
+    border-radius: 6px;
+  }
+  .sidebar-footer a:hover,
+  .sidebar-footer a:focus-visible,
+  .sidebar-footer a.active {
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
   li {
     text-align: left;
@@ -341,14 +357,14 @@ const query = Astro.url.searchParams.get("q") ?? "";
     align-items: center;
     gap: 0.45rem;
     width: 100%;
-    font-size: clamp(0rem, 22cqw, 4rem);
+    font-size: clamp(2rem, 15cqw, 3rem);
     line-height: 1;
     white-space: nowrap;
   }
   .title-logo {
-    display: none;
-    width: clamp(24px, 3.3cqw, 34px);
-    height: clamp(24px, 3.3cqw, 34px);
+    display: inline-block;
+    width: clamp(34px, 4.8cqw, 44px);
+    height: clamp(34px, 4.8cqw, 44px);
     object-fit: contain;
     flex: 0 0 auto;
   }
@@ -445,7 +461,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
         "top"
         "links"
         "secondary"
-        "search";
+        "search"
+        "footer";
       background: #fff;
       border-bottom: 1px solid #ddd6c8;
       border-bottom-left-radius: 18px;
@@ -475,9 +492,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
       gap: 0.4rem;
     }
     #left-hand-nav h2 a.special-font .title-logo {
-      display: inline-block;
-      width: clamp(54px, 7vw, 30px);
-      height: clamp(54px, 7vw, 30px);
+      width: clamp(34px, 7vw, 46px);
+      height: clamp(34px, 7vw, 46px);
     }
     #left-hand-nav form {
       grid-area: search;
@@ -602,8 +618,14 @@ const query = Astro.url.searchParams.get("q") ?? "";
       text-decoration: underline;
       text-underline-offset: 2px;
     }
-    .left-hand-footer-logo {
-      display: none;
+    #left-hand-nav .sidebar-footer {
+      grid-area: footer;
+      margin-top: 0.35rem;
+      padding-top: 0.5rem;
+      font-size: 0.76rem;
+    }
+    #left-hand-nav .sidebar-footer nav {
+      gap: 0.35rem 0.6rem;
     }
   }
   @media (max-width: 680px) {

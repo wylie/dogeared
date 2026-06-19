@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { resolvePrivacySettings, resolveViewerProfileAccess } from "../src/lib/privacy.ts";
 
 test("resolvePrivacySettings returns defaults", () => {
@@ -50,4 +51,13 @@ test("non-owner obeys location/activity visibility for public profile", () => {
 	assert.equal(access.canViewProfile, true);
 	assert.equal(access.canViewLocation, false);
 	assert.equal(access.canViewActivity, true);
+});
+
+test("public privacy and support pages explain reader data and support", () => {
+	const privacy = readFileSync("src/pages/privacy.astro", "utf8");
+	const support = readFileSync("src/pages/support.astro", "utf8");
+	assert.equal(privacy.includes("DogEared does not sell personal data"), true);
+	assert.equal(privacy.includes("shelves, reading progress, ratings, reviews"), true);
+	assert.equal(support.includes("Argon Collective LLC"), true);
+	assert.equal(support.includes("https://buymeacoffee.com/wylie"), true);
 });

@@ -136,13 +136,15 @@ test("profile merges recent activity into older saved shelf-only section orders"
 	assert.equal(source.includes("deduped.splice(readingIndex + 1, 0, RECENT_ACTIVITY_SECTION_KEY)"), true);
 });
 
-test("Argon Collective attribution stays on company-facing surfaces, not the global footer", () => {
+test("sidebar footer carries ownership and support metadata", () => {
 	const layout = readFileSync("src/layouts/Layout.astro", "utf8");
+	const nav = readFileSync("src/components/LeftHand.astro", "utf8");
 	const mission = readFileSync("src/pages/mission.astro", "utf8");
-	const roadmap = readFileSync("src/pages/roadmap.astro", "utf8");
-	const settings = readFileSync("src/pages/settings.astro", "utf8");
+	const support = readFileSync("src/pages/support.astro", "utf8");
 	assert.equal(layout.includes("Argon Collective LLC"), false);
-	for (const source of [mission, roadmap, settings]) {
-		assert.equal(source.includes("Argon Collective LLC"), true);
-	}
+	assert.equal(nav.includes("Built by Argon Collective LLC"), true);
+	assert.equal(nav.includes('href="/privacy"'), true);
+	assert.equal(nav.includes('href="/support"'), true);
+	assert.equal(mission.includes("Argon Collective LLC"), false);
+	assert.equal(support.includes("Argon Collective LLC"), true);
 });

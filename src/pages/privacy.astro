@@ -1,0 +1,95 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+const sectionLinks = [
+	{ id: "stored", label: "What We Store" },
+	{ id: "use", label: "How It Is Used" },
+	{ id: "control", label: "Your Control" }
+];
+---
+
+<Layout
+	title="Privacy"
+	sectionLinks={sectionLinks}
+	metaDescription="Read the DogEared privacy overview: what reader information is stored, how it is used, and how reader data stays reader-first."
+	canonicalUrl="/privacy"
+>
+	<div slot="right" class="privacy-page">
+		<header class="privacy-hero">
+			<h1>Privacy at DogEared</h1>
+			<p class="lede">
+				DogEared stores the information needed to run a useful reading shelf, not to sell reader attention.
+			</p>
+		</header>
+
+		<section id="stored" class="privacy-section">
+			<h2>What DogEared Stores</h2>
+			<p>
+				DogEared stores account information such as your login email, profile details you choose to add, and
+				settings needed to keep your account working.
+			</p>
+			<p>
+				It also stores the reading information you save here: shelves, reading progress, ratings, reviews,
+				finished-book notes, follows, and related activity needed to show your profile and recommendations.
+			</p>
+		</section>
+
+		<section id="use" class="privacy-section">
+			<h2>How That Information Is Used</h2>
+			<p>
+				Reading data is used to power your shelves, profile, activity, discovery, and recommendations. Public
+				profile and activity visibility follow the privacy settings in your account.
+			</p>
+			<p>
+				DogEared does not sell personal data. The product is built around reader trust, focused collection, and
+				a calmer reading experience.
+			</p>
+		</section>
+
+		<section id="control" class="privacy-section">
+			<h2>Your Control</h2>
+			<p>
+				You can change profile visibility, activity sharing, and location sharing from Settings. You can also
+				edit or remove books, ratings, reviews, and progress updates from your account.
+			</p>
+			<p>
+				The guiding principle is simple: your reading history should help you read better, not become ad inventory.
+			</p>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.privacy-page {
+		max-width: 820px;
+	}
+	.privacy-hero {
+		margin-bottom: 1.2rem;
+	}
+	.privacy-page h1 {
+		margin: 0;
+		line-height: 1.05;
+		font-size: clamp(2.1rem, 4vw, 3.5rem);
+	}
+	.lede {
+		max-width: 42rem;
+		margin: 0.8rem 0 0;
+		font-size: 1.05rem;
+		line-height: 1.55;
+		color: #4d4d4d;
+	}
+	.privacy-section {
+		margin-top: 0.85rem;
+		background: var(--color-surface);
+		border-radius: 12px;
+		padding: 0.95rem 1rem;
+	}
+	.privacy-section h2 {
+		margin: 0;
+	}
+	.privacy-section p {
+		margin: 0.55rem 0 0;
+		line-height: 1.6;
+		color: #353535;
+	}
+</style>
