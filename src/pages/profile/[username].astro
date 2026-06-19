@@ -10,6 +10,7 @@ import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicS
 import { authorHref } from "../../lib/author";
 import { ensureCustomShelfSchema } from "../../lib/customShelves";
 import { daysSinceDate, resolveMomentumPrediction } from "../../lib/momentumPrediction";
+import { resolveReadingGoalProgress } from "../../lib/readingGoal";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
 
 export const prerender = false;
@@ -899,6 +900,12 @@ function formatActivityDate(value: string) {
 	});
 }
 
+function finishedDateTimestamp(value: string) {
+	const parsed = new Date(String(value || "").trim());
+	const time = parsed.getTime();
+	return Number.isFinite(time) ? time : 0;
+}
+
 function computeReadingStreakDays(items: Array<{ updatedAt: string }>) {
 	if (items.length === 0) return 0;
 	const seenDays = new Set<string>();
@@ -1020,6 +1027,7 @@ function shelfSectionMoveAttrs(key: string, direction: "up" | "down") {
 const baseSectionLinks = [
 	...(isOwnerViewer ? [{ id: "notifications", label: "Notifications" }] : []),
 	{ id: "about", label: "About" },
+	{ id: "reading-goal", label: "Reading Goal" },
 	{ id: "shelf-summary", label: "Shelf Summary" }
 ];
 const orderedShelfSectionLinks = isOwnerViewer
@@ -1053,6 +1061,17 @@ const pagedRecent = paginate(recentActivity, recentPage, PAGE_SIZE);
 const pagedReading = paginate(currentlyReading, readingPage, PAGE_SIZE);
 const pagedWantToRead = paginate(wantToReadBooks, wantToReadPage, PAGE_SIZE);
 const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
+const currentGoalYear = new Date().getFullYear();
+const booksCompletedThisYear = finishedBooks
+	.filter((book) => {
+		const parsed = new Date(String(book.finishedDate || "").trim());
+		return Number.isFinite(parsed.getTime()) && parsed.getUTCFullYear() === currentGoalYear;
+	})
+	.sort((a, b) => finishedDateTimestamp(b.finishedDate) - finishedDateTimestamp(a.finishedDate));
+const readingGoal = resolveReadingGoalProgress({
+	goal: profile.readingGoal,
+	completed: booksCompletedThisYear.length
+});
 const shelfSectionOrderJson = JSON.stringify(
 	shelfSectionOrderKeys.length > 0
 		? shelfSectionOrderKeys
@@ -1339,7 +1358,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 							{profile.blurb && <p class="blurb">{profile.blurb}</p>}
 							<div class="meta-grid">
 								{profile.location && <p><strong>Location:</strong> {profile.location}</p>}
-								{profile.readingGoal && <p><strong>Reading goal:</strong> {profile.readingGoal}</p>}
 								{profile.favoriteBook && (
 									<p>
 										<strong>Favorite book:</strong>{" "}
@@ -1370,6 +1388,82 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 							)}
 						</>
 					)}
+				</section>
+				<section id="reading-goal" class="reading-goal-card">
+					<div class="reading-goal-head">
+						<div>
+							<h2>Reading Goal</h2>
+							<p class="meta">{currentGoalYear} progress</p>
+						</div>
+						<p class={`pace-pill pace-${readingGoal.paceTone}`}>{readingGoal.paceLabel}</p>
+					</div>
+					<div class="reading-goal-progress">
+						<div>
+							<p class="reading-goal-count">
+								<strong>{readingGoal.completed.toLocaleString()}</strong>
+								{readingGoal.goal > 0 ? (
+									<>
+										<span aria-hidden="true">/</span>
+										<span>{readingGoal.goal.toLocaleString()}</span>
+										<span>{readingGoal.goal === 1 ? "book" : "books"}</span>
+									</>
+								) : (
+									<span>{readingGoal.completed === 1 ? "book completed" : "books completed"}</span>
+								)}
+							</p>
+							<p class="reading-goal-percent">
+								{readingGoal.goal > 0 ? `${readingGoal.percent.toLocaleString()}% complete` : "Add a yearly goal to track progress."}
+							</p>
+						</div>
+						<p class="reading-goal-detail">{readingGoal.detailLabel}</p>
+					</div>
+					<div
+						class="reading-goal-bar"
+						role="progressbar"
+						aria-label="Reading goal progress"
+						aria-valuemin="0"
+						aria-valuemax="100"
+						aria-valuenow={String(readingGoal.barPercent)}
+					>
+						<span style={`width:${readingGoal.barPercent}%`}></span>
+					</div>
+					<div class="reading-goal-books">
+						<div class="reading-goal-books-head">
+							<h3>Finished this year</h3>
+							<p>{booksCompletedThisYear.length.toLocaleString()} {booksCompletedThisYear.length === 1 ? "book" : "books"}</p>
+						</div>
+						{booksCompletedThisYear.length > 0 ? (
+							<ul class="reading-goal-cover-grid" aria-label={`Books finished in ${currentGoalYear}`}>
+								{booksCompletedThisYear.map((book) => (
+									<li>
+										<a
+											href={`/book?bookId=${encodeURIComponent(String(book.bookId))}`}
+											aria-label={`View ${book.title}${book.author ? ` by ${book.author}` : ""}, finished ${formatActivityDate(book.finishedDate) || "this year"}`}
+										>
+											{book.thumbnail ? (
+												<img
+													src={book.thumbnail}
+													alt={`${book.title}${book.author ? ` by ${book.author}` : ""} cover`}
+													loading="lazy"
+													decoding="async"
+													width="54"
+													height="81"
+												/>
+											) : (
+												<span class="reading-goal-cover-placeholder" aria-hidden="true">
+													<span class="material-icons" aria-hidden="true">menu_book</span>
+												</span>
+											)}
+										</a>
+									</li>
+								))}
+							</ul>
+						) : (
+							<p class="reading-goal-empty">
+								No books finished this year yet. When books are marked Read with a finish date, they will appear here.
+							</p>
+						)}
+					</div>
 				</section>
 				<section id="shelf-summary" class="shelf-card">
 					<div class="shelf-summary-head">
@@ -2331,6 +2425,162 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.genre-list { list-style: none; margin: 0.7rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
 	.genre-list li { list-style: none; }
+	.reading-goal-card {
+		border: none;
+		border-radius: 12px;
+		background: var(--color-surface);
+		padding: 0.9rem;
+	}
+	.reading-goal-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+	.reading-goal-head h2 {
+		margin: 0;
+	}
+	.reading-goal-head .meta {
+		margin: 0.22rem 0 0;
+	}
+	.pace-pill {
+		flex: 0 0 auto;
+		margin: 0;
+		border-radius: 999px;
+		padding: 0.22rem 0.56rem;
+		background: #eef7ec;
+		color: #1f5138;
+		font-size: 0.8rem;
+		font-weight: 700;
+		line-height: 1.2;
+	}
+	.pace-behind {
+		background: #f7f0de;
+		color: #6d541d;
+	}
+	.pace-none {
+		background: #eef2f6;
+		color: #4b5563;
+	}
+	.reading-goal-progress {
+		margin-top: 0.75rem;
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+	.reading-goal-count,
+	.reading-goal-percent,
+	.reading-goal-detail {
+		margin: 0;
+	}
+	.reading-goal-count {
+		display: flex;
+		align-items: baseline;
+		flex-wrap: wrap;
+		gap: 0.28rem;
+		color: #374151;
+	}
+	.reading-goal-count strong {
+		color: #1f2937;
+		font-size: 1.85rem;
+		line-height: 1;
+	}
+	.reading-goal-percent,
+	.reading-goal-detail {
+		color: #52606d;
+		font-size: 0.9rem;
+	}
+	.reading-goal-percent {
+		margin-top: 0.2rem;
+	}
+	.reading-goal-detail {
+		font-weight: 700;
+		text-align: right;
+	}
+	.reading-goal-bar {
+		margin-top: 0.7rem;
+		height: 0.55rem;
+		border-radius: 999px;
+		background: #e8eef2;
+		overflow: hidden;
+	}
+	.reading-goal-bar span {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--color-primary);
+	}
+	.reading-goal-books {
+		margin-top: 0.85rem;
+		padding-top: 0.75rem;
+		border-top: 1px solid #edf1f4;
+	}
+	.reading-goal-books-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.6rem;
+	}
+	.reading-goal-books-head h3,
+	.reading-goal-books-head p {
+		margin: 0;
+	}
+	.reading-goal-books-head h3 {
+		font-size: 1rem;
+	}
+	.reading-goal-books-head p {
+		color: #64748b;
+		font-size: 0.86rem;
+		font-weight: 700;
+	}
+	.reading-goal-cover-grid {
+		list-style: none;
+		margin: 0.6rem 0 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(54px, 1fr));
+		gap: 0.5rem;
+	}
+	.reading-goal-cover-grid li {
+		list-style: none;
+	}
+	.reading-goal-cover-grid a {
+		display: block;
+		width: 54px;
+		max-width: 100%;
+		border-radius: 6px;
+		text-decoration: none;
+	}
+	.reading-goal-cover-grid a:hover,
+	.reading-goal-cover-grid a:focus-visible {
+		outline: 3px solid rgba(31, 122, 69, 0.32);
+		outline-offset: 2px;
+	}
+	.reading-goal-cover-grid img,
+	.reading-goal-cover-placeholder {
+		display: block;
+		width: 54px;
+		height: 81px;
+		max-width: 100%;
+		border-radius: 6px;
+		object-fit: cover;
+		background: #f1f1f1;
+	}
+	.reading-goal-cover-placeholder {
+		display: grid;
+		place-items: center;
+		border: 1px solid #d7d7d7;
+		color: #8a8a8a;
+	}
+	.reading-goal-cover-placeholder .material-icons {
+		font-size: 1.35rem;
+	}
+	.reading-goal-empty {
+		margin: 0.55rem 0 0;
+		color: #52606d;
+		line-height: 1.5;
+	}
 	.shelf-summary-grid {
 		margin-top: 0.7rem;
 		display: grid;
@@ -3255,6 +3505,31 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	@media (max-width: 740px) {
 		.meta-grid { grid-template-columns: 1fr; }
 		.inline-profile-form { grid-template-columns: 1fr; }
+		.reading-goal-head,
+		.reading-goal-progress,
+		.reading-goal-books-head {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+		.reading-goal-detail {
+			text-align: left;
+		}
+		.pace-pill {
+			white-space: normal;
+		}
+		.reading-goal-cover-grid {
+			grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+			gap: 0.45rem;
+		}
+		.reading-goal-cover-grid a,
+		.reading-goal-cover-grid img,
+		.reading-goal-cover-placeholder {
+			width: 48px;
+		}
+		.reading-goal-cover-grid img,
+		.reading-goal-cover-placeholder {
+			height: 72px;
+		}
 		.shelf-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 		.shelf-summary-item-total { grid-column: auto; }
 		.activity-grid { grid-template-columns: 1fr; }

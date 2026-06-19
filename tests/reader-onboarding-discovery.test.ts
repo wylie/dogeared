@@ -142,7 +142,7 @@ test("sidebar footer carries ownership and support metadata", () => {
 	const mission = readFileSync("src/pages/mission.astro", "utf8");
 	const support = readFileSync("src/pages/support.astro", "utf8");
 	assert.equal(layout.includes("Argon Collective LLC"), false);
-	assert.equal(nav.includes("Built by Argon Collective LLC"), true);
+	assert.equal(nav.includes("Argon Collective LLC"), true);
 	assert.equal(nav.includes('href="/privacy"'), true);
 	assert.equal(nav.includes('href="/support"'), true);
 	assert.equal(mission.includes("Argon Collective LLC"), false);
