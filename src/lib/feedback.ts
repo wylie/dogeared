@@ -115,7 +115,7 @@ export function buildFeedbackEmail(input: {
 	const from = input.user.username
 		? `@${input.user.username}`
 		: input.user.authenticated
-			? `Dogeared user ${input.user.userId}`
+			? `DogEared user ${input.user.userId}`
 			: "Anonymous reader";
 	const replyEmail = input.email || input.user.email || "Not provided";
 	const authenticated = input.user.authenticated ? "yes" : "no";
@@ -138,7 +138,7 @@ export function buildFeedbackEmail(input: {
 	].join("\n\n");
 
 	const htmlContent = `
-		<h2>Dogeared Feedback</h2>
+		<h2>DogEared Feedback</h2>
 		<p><strong>Type:</strong><br>${escapeEmailHtml(typeLabel)}</p>
 		<p><strong>From:</strong><br>${escapeEmailHtml(from)}</p>
 		<p><strong>Email:</strong><br>${escapeEmailHtml(replyEmail)}</p>
@@ -155,7 +155,7 @@ export function buildFeedbackEmail(input: {
 	`;
 
 	return {
-		subject: `[Dogeared Feedback] ${typeLabel}`,
+		subject: `[DogEared Feedback] ${typeLabel}`,
 		textContent,
 		htmlContent
 	};

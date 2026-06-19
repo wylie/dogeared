@@ -708,8 +708,8 @@ const bookCanonicalUrl = canonicalBookId > 0
 	);
 const bookRobots = book && canonicalBookId > 0 && !errorMessage ? "index,follow" : "noindex,follow";
 const bookDescription = book
-	? `${book.title}${book.author ? ` by ${book.author}` : ""}. ${book.pageCount > 0 ? `${book.pageCount.toLocaleString()} pages. ` : ""}${book.shelves.toLocaleString()} shelf entries on Dogeared.`
-	: "Book details and shelf activity on Dogeared.";
+	? `${book.title}${book.author ? ` by ${book.author}` : ""}. ${book.pageCount > 0 ? `${book.pageCount.toLocaleString()} pages. ` : ""}${book.shelves.toLocaleString()} shelf entries on DogEared.`
+	: "Book details and shelf activity on DogEared.";
 const bookStructuredData = book
 	? JSON.stringify({
 		"@context": "https://schema.org",
@@ -748,7 +748,7 @@ const bookStructuredDataPayload = bookStructuredData
 	metaDescription={bookDescription}
 	canonicalUrl={bookCanonicalUrl}
 	socialImage={book?.coverUrl || "/og-image.png"}
-	socialImageAlt={book ? `Cover of ${book.title}${book.author ? ` by ${book.author}` : ""}` : "Dogeared book details"}
+	socialImageAlt={book ? `Cover of ${book.title}${book.author ? ` by ${book.author}` : ""}` : "DogEared book details"}
 	ogType="book"
 	robots={bookRobots}
 	structuredData={bookStructuredDataPayload}

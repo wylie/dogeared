@@ -41,7 +41,7 @@ export function validateRequestedEmailChange(input: {
 	const duplicateUserId = String(input.duplicateUserId || "").trim();
 	const currentUserId = String(input.currentUserId || "").trim();
 	if (duplicateUserId && duplicateUserId !== currentUserId) {
-		return { ok: false, code: "duplicate", error: "That email address is already used by another Dogeared account." };
+		return { ok: false, code: "duplicate", error: "That email address is already used by another DogEared account." };
 	}
 	return { ok: true, email: newEmail };
 }

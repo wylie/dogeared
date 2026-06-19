@@ -16,9 +16,9 @@ function json(status: number, body: unknown) {
 async function sendMagicLinkEmail(email: string, magicUrl: string) {
 	return sendDogearedEmail({
 		to: email,
-		subject: "Your Dogeared sign-in link",
-		htmlContent: `<p>Click to sign in to Dogeared:</p><p><a href="${escapeEmailHtml(magicUrl)}">${escapeEmailHtml(magicUrl)}</a></p><p>This link expires in 20 minutes.</p>`,
-		textContent: `Sign in to Dogeared: ${magicUrl}\n\nThis link expires in 20 minutes.`
+		subject: "Your DogEared sign-in link",
+		htmlContent: `<p>Click to sign in to DogEared:</p><p><a href="${escapeEmailHtml(magicUrl)}">${escapeEmailHtml(magicUrl)}</a></p><p>This link expires in 20 minutes.</p>`,
+		textContent: `Sign in to DogEared: ${magicUrl}\n\nThis link expires in 20 minutes.`
 	});
 }
 

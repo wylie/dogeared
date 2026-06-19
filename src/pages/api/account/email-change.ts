@@ -39,14 +39,14 @@ async function ensureEmailChangeSchema() {
 async function sendVerificationEmail(email: string, verifyUrl: string) {
 	return sendDogearedEmail({
 		to: email,
-		subject: "Verify your new Dogeared email",
+		subject: "Verify your new DogEared email",
 		htmlContent: `
-			<p>Confirm this email address for your Dogeared account:</p>
+			<p>Confirm this email address for your DogEared account:</p>
 			<p><a href="${escapeEmailHtml(verifyUrl)}">${escapeEmailHtml(verifyUrl)}</a></p>
 			<p>This link expires in ${EMAIL_CHANGE_TOKEN_TTL_MINUTES} minutes.</p>
 			<p>Your reading history, shelves, ratings, and reviews stay with your account.</p>
 		`,
-		textContent: `Confirm this email address for your Dogeared account: ${verifyUrl}\n\nThis link expires in ${EMAIL_CHANGE_TOKEN_TTL_MINUTES} minutes.\n\nYour reading history, shelves, ratings, and reviews stay with your account.`
+		textContent: `Confirm this email address for your DogEared account: ${verifyUrl}\n\nThis link expires in ${EMAIL_CHANGE_TOKEN_TTL_MINUTES} minutes.\n\nYour reading history, shelves, ratings, and reviews stay with your account.`
 	});
 }
 

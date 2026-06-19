@@ -34,7 +34,7 @@ test("email change validation rejects current and duplicate emails", () => {
 	}), {
 		ok: false,
 		code: "duplicate",
-		error: "That email address is already used by another Dogeared account."
+		error: "That email address is already used by another DogEared account."
 	});
 });
 
@@ -103,8 +103,8 @@ test("email verification sends notifications to old and new addresses", () => {
 	const source = readFileSync("src/pages/account/email/verify.astro", "utf8");
 	assert.equal(source.includes("sendOldAddressNotice"), true);
 	assert.equal(source.includes("sendNewAddressNotice"), true);
-	assert.equal(source.includes("Your Dogeared email was changed"), true);
-	assert.equal(source.includes("Your Dogeared email has been verified"), true);
+	assert.equal(source.includes("Your DogEared email was changed"), true);
+	assert.equal(source.includes("Your DogEared email has been verified"), true);
 });
 
 test("settings exposes account email change and pending verification controls", () => {

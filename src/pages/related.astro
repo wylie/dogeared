@@ -103,7 +103,7 @@ let landingGenres: LandingGenreRow[] = [];
 let landingAuthors: AuthorRow[] = [];
 let landingBooks: BookRow[] = [];
 let pageTitle = "Related";
-let subtitle = "Explore related books in Dogeared.";
+let subtitle = "Explore related books in DogEared.";
 let error = "";
 let activeShelves = 0;
 let distinctReaders = 0;
@@ -118,7 +118,7 @@ if (value) {
 
 		if (normalizedKind === "author") {
 			pageTitle = value;
-			subtitle = "All books by this author in Dogeared.";
+			subtitle = "All books by this author in DogEared.";
 			books = await sql<BookRow[]>`
 				select
 					b.id,
@@ -153,7 +153,7 @@ if (value) {
 			`;
 		} else if (normalizedKind === "genre") {
 			pageTitle = formatGenreLabel(value, value);
-			subtitle = "Books in this genre in Dogeared.";
+			subtitle = "Books in this genre in DogEared.";
 			books = await sql<BookRow[]>`
 				select
 					b.id,
@@ -210,7 +210,7 @@ if (value) {
 			`;
 		} else if (normalizedKind === "book") {
 			pageTitle = value;
-			subtitle = "Book details and shelf activity in Dogeared.";
+			subtitle = "Book details and shelf activity in DogEared.";
 			books = await sql<BookRow[]>`
 				select
 					b.id,
@@ -245,7 +245,7 @@ if (value) {
 			`;
 		} else if (normalizedKind === "topic") {
 			pageTitle = value;
-			subtitle = `Books connected to ${value} in Dogeared.`;
+			subtitle = `Books connected to ${value} in DogEared.`;
 			books = await sql<BookRow[]>`
 				select
 					b.id,
@@ -349,7 +349,7 @@ if (value) {
 } else {
 	try {
 		const sql = getNeonSql();
-		subtitle = "Explore popular genres, authors, and books in Dogeared.";
+		subtitle = "Explore popular genres, authors, and books in DogEared.";
 
 		landingGenres = await sql<LandingGenreRow[]>`
 			select
@@ -450,10 +450,10 @@ const seoTitle = value
 				: `${value} Related Books`)
 	: "Related Books";
 const relatedDescription = value
-	? `${subtitle} ${books.length.toLocaleString()} books, ${uniqueAuthorCount.toLocaleString()} authors, and ${distinctReaders.toLocaleString()} readers on Dogeared.`
-	: "Explore related books, authors, and genres in Dogeared.";
+	? `${subtitle} ${books.length.toLocaleString()} books, ${uniqueAuthorCount.toLocaleString()} authors, and ${distinctReaders.toLocaleString()} readers on DogEared.`
+	: "Explore related books, authors, and genres in DogEared.";
 const relatedIntro = value
-	? `${pageTitle} gathers ${books.length.toLocaleString()} ${books.length === 1 ? "book" : "books"} from ${uniqueAuthorCount.toLocaleString()} ${uniqueAuthorCount === 1 ? "author" : "authors"} that Dogeared readers have added to their shelves.`
+	? `${pageTitle} gathers ${books.length.toLocaleString()} ${books.length === 1 ? "book" : "books"} from ${uniqueAuthorCount.toLocaleString()} ${uniqueAuthorCount === 1 ? "author" : "authors"} that DogEared readers have added to their shelves.`
 	: "";
 const breadcrumbStructuredData = JSON.stringify(buildBreadcrumbList([
 	{ name: "Home", item: "/" },
@@ -624,7 +624,7 @@ const relatedStructuredDataPayload = JSON.stringify([
 
 				<section id="books" class="panel panel-plain">
 					<div class="panel-head">
-						<h2>Books In Dogeared</h2>
+						<h2>Books In DogEared</h2>
 					</div>
 					{error ? (
 						<p class="error">{error}</p>

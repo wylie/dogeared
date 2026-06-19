@@ -15,8 +15,8 @@ test("layout includes sharing, icon, and manifest metadata", () => {
 
 test("manifest has installable icon definitions and brand colors", () => {
 	const manifest = JSON.parse(readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
-	assert.equal(manifest.name, "Dogeared Reading Community");
-	assert.equal(manifest.short_name, "Dogeared");
+	assert.equal(manifest.name, "DogEared Reading Community");
+	assert.equal(manifest.short_name, "DogEared");
 	assert.equal(manifest.theme_color, "#C8DEEB");
 	assert.deepEqual(manifest.icons.map((icon: { sizes: string }) => icon.sizes), ["192x192", "512x512"]);
 });

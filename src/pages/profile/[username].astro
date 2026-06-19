@@ -1062,8 +1062,8 @@ const profileCanonicalUrl = profile.username ? `/profile/${encodeURIComponent(pr
 const hasIndexableProfileContent = shelfStats.total > 0 || recentActivity.length > 0 || currentlyReading.length > 0 || wantToReadBooks.length > 0 || finishedBooks.length > 0;
 const profileRobots = (!notFound && !privateProfile && !!profile.username && hasIndexableProfileContent) ? "index,follow" : "noindex,follow";
 const profileDescription = !notFound && !privateProfile
-	? `${profile.name || `@${profile.username}`}'s reading profile on Dogeared. ${shelfStats.total.toLocaleString()} books across shelves.`
-	: "Reader profile on Dogeared.";
+	? `${profile.name || `@${profile.username}`}'s reading profile on DogEared. ${shelfStats.total.toLocaleString()} books across shelves.`
+	: "Reader profile on DogEared.";
 const profileStructuredData = (!notFound && !privateProfile && !!profile.username)
 	? JSON.stringify({
 		"@context": "https://schema.org",
@@ -1151,7 +1151,7 @@ if (mostAtRiskBook) {
 		? `Push ${bestOnTrackBook.title} to ${nextMilestone}% today.`
 		: `Keep pace in ${bestOnTrackBook.title} today.`;
 } else {
-	momentumNextAction = "Add a few progress updates and Dogeared will start estimating reading momentum.";
+	momentumNextAction = "Add a few progress updates and DogEared will start estimating reading momentum.";
 }
 const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]));
 ---
@@ -1198,7 +1198,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			<>
 				{showWelcomeBanner && (
 					<section class="welcome-banner" role="status" aria-live="polite">
-						<p><strong>Welcome to Dogeared.</strong> Your account setup is complete and your profile is live.</p>
+						<p><strong>Welcome to DogEared.</strong> Your account setup is complete and your profile is live.</p>
 						<a id="dismiss-welcome-banner" class="welcome-banner-dismiss" href={dismissWelcomeUrl}>Dismiss</a>
 					</section>
 				)}
@@ -3902,7 +3902,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				momentumStreakNode.textContent = String(streak);
 			}
 			if (momentumNextActionNode instanceof HTMLElement) {
-				momentumNextActionNode.textContent = "Add a few progress updates and Dogeared will start estimating reading momentum.";
+				momentumNextActionNode.textContent = "Add a few progress updates and DogEared will start estimating reading momentum.";
 			}
 			return;
 		}
@@ -3958,7 +3958,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					? `Push ${best.title} to ${nextMilestone}% today.`
 					: `Keep pace in ${best.title} today.`;
 			} else {
-				momentumNextActionNode.textContent = "Add a few progress updates and Dogeared will start estimating reading momentum.";
+				momentumNextActionNode.textContent = "Add a few progress updates and DogEared will start estimating reading momentum.";
 			}
 		}
 	}

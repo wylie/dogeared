@@ -70,7 +70,7 @@ test("feedback email formatting includes user, page, message, and environment de
 			email: "account@example.com"
 		}
 	});
-	assert.equal(email.subject, "[Dogeared Feedback] Bug Report");
+	assert.equal(email.subject, "[DogEared Feedback] Bug Report");
 	assert.match(email.textContent, /Type:\nBug Report/);
 	assert.match(email.textContent, /From:\n@wylie/);
 	assert.match(email.textContent, /Email:\nreader@example.com/);
@@ -113,7 +113,7 @@ test("feedback and support actions render as compact floating action buttons", (
 	assert.equal(layoutSource.includes("<FloatingActions"), true);
 	assert.equal(layoutSource.includes("global-floating-actions"), false);
 	assert.equal(floatingActionsSource.includes('aria-label="Reader actions"'), true);
-	assert.equal(floatingActionsSource.includes('label: "Support Dogeared"'), true);
+	assert.equal(floatingActionsSource.includes('label: "Support DogEared"'), true);
 	assert.equal(floatingActionsSource.includes('icon: "favorite"'), true);
 	assert.equal(floatingActionsSource.includes("supportActions"), true);
 	assert.equal(floatingActionsSource.includes("width: 48px"), true);

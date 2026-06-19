@@ -1,8 +1,8 @@
 # Changelog
 
-All notable changes to Dogeared are tracked here.
+All notable changes to DogEared are tracked here.
 
-This project follows semantic versioning for product releases. While Dogeared is pre-1.0, minor releases can include meaningful product changes and patch releases should stay focused on fixes and polish.
+This project follows semantic versioning for product releases. While DogEared is pre-1.0, minor releases can include meaningful product changes and patch releases should stay focused on fixes and polish.
 
 ## [Unreleased]
 

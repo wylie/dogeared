@@ -8,10 +8,10 @@ const { isAuthenticated = false } = Astro.props as Props;
 	data-reader-guidance
 	data-authenticated={String(isAuthenticated)}
 	hidden
-	aria-label="Getting started with Dogeared"
+	aria-label="Getting started with DogEared"
 >
 	<div>
-		<p class="reader-guidance-title" data-guidance-title>New to Dogeared?</p>
+		<p class="reader-guidance-title" data-guidance-title>New to DogEared?</p>
 		<p class="reader-guidance-copy" data-guidance-copy></p>
 		<p class="reader-guidance-detail" data-guidance-detail></p>
 	</div>
@@ -81,14 +81,14 @@ const { isAuthenticated = false } = Astro.props as Props;
 
 		if (visitorVisible) {
 			guidance.dataset.mode = "visitor";
-			if (title instanceof HTMLElement) title.textContent = "New to Dogeared?";
+			if (title instanceof HTMLElement) title.textContent = "New to DogEared?";
 			if (copy instanceof HTMLElement) copy.textContent = "Track what you're reading, rate books you love, discover new favorites, and follow other readers.";
-			if (detail instanceof HTMLElement) detail.textContent = "Create an account to save books, build shelves, and get personalized recommendations. Every shelf addition and rating helps Dogeared learn your reading taste.";
+			if (detail instanceof HTMLElement) detail.textContent = "Create an account to save books, build shelves, and get personalized recommendations. Every shelf addition and rating helps DogEared learn your reading taste.";
 			guidance.hidden = false;
 		} else if (readerVisible) {
 			guidance.dataset.mode = "reader";
-			if (title instanceof HTMLElement) title.textContent = "Make Dogeared yours";
-			if (copy instanceof HTMLElement) copy.textContent = "Add a few favorite books and ratings to help Dogeared learn what you enjoy.";
+			if (title instanceof HTMLElement) title.textContent = "Make DogEared yours";
+			if (copy instanceof HTMLElement) copy.textContent = "Add a few favorite books and ratings to help DogEared learn what you enjoy.";
 			if (detail instanceof HTMLElement) detail.textContent = "Your shelves, ratings, and reviews make recommendations more personal.";
 			if (createButton instanceof HTMLElement) createButton.hidden = true;
 			if (loginButton instanceof HTMLElement) loginButton.hidden = true;

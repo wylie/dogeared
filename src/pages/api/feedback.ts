@@ -95,7 +95,7 @@ export const POST: APIRoute = async ({ request }) => {
 			metadata?: unknown;
 		};
 		if (String(body?.website || "").trim()) {
-			return json(200, { ok: true, message: "Thanks for helping improve Dogeared." });
+			return json(200, { ok: true, message: "Thanks for helping improve DogEared." });
 		}
 
 		const validation = validateFeedbackPayload(body);
@@ -135,7 +135,7 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 
 		await recordFeedbackEvent({ userId: user.userId, ipHash, type: validation.type });
-		return json(200, { ok: true, message: "Thanks for helping improve Dogeared." });
+		return json(200, { ok: true, message: "Thanks for helping improve DogEared." });
 	} catch {
 		return json(500, { ok: false, error: "Feedback could not be sent. Try again in a moment." });
 	}

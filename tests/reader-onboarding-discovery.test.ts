@@ -22,7 +22,7 @@ test("visitor and reader guidance use distinct account and search actions", () =
 	const navigation = readFileSync("src/components/LeftHand.astro", "utf8");
 	assert.equal(guidance.includes('detail: { mode: "create" }'), true);
 	assert.equal(guidance.includes('detail: { mode: "login" }'), true);
-	assert.equal(guidance.includes("Every shelf addition and rating helps Dogeared"), true);
+	assert.equal(guidance.includes("Every shelf addition and rating helps DogEared"), true);
 	assert.equal(navigation.includes('window.addEventListener("dogeared:open-auth"'), true);
 });
 
@@ -49,19 +49,19 @@ test("external author books exclude local titles and duplicates", () => {
 	assert.equal(result[0]?.sourceUrl, "https://openlibrary.org/works/OL2W");
 });
 
-test("external author cards use Dogeared shelf conversion without outbound title links", () => {
+test("external author cards use DogEared shelf conversion without outbound title links", () => {
 	const source = readFileSync("src/components/ExternalAuthorBooks.astro", "utf8");
 	assert.equal(source.includes("<BookCard"), true);
 	assert.equal(source.includes("<ShelfDropdown"), true);
 	assert.equal(source.includes('"data-source": "open_library"'), true);
-	assert.equal(source.includes("Search Dogeared"), false);
+	assert.equal(source.includes("Search DogEared"), false);
 	assert.equal(source.includes('target="_blank"'), false);
 	assert.equal(source.includes("Additional titles from Open Library"), false);
 });
 
 test("author pages separate local and external books", () => {
 	const source = readFileSync("src/pages/author/[slug].astro", "utf8");
-	assert.equal(source.includes("Books In Dogeared"), true);
+	assert.equal(source.includes("Books In DogEared"), true);
 	assert.equal(source.includes("<ExternalAuthorBooks books={externalBooks}"), true);
 	assert.equal(source.includes("books.map((book) => book.title)"), false);
 	assert.equal(source.includes("dropdown.dataset.bookId = String(bookId)"), true);

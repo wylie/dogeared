@@ -67,7 +67,7 @@ const { isAuthenticated = false } = Astro.props as Props;
 			</form>
 
 			<div class="feedback-success" data-feedback-success hidden>
-				<p>Thanks for helping improve Dogeared.</p>
+				<p>Thanks for helping improve DogEared.</p>
 				<p>Every piece of feedback is reviewed.</p>
 				<button type="button" class="feedback-primary" data-feedback-close>Done</button>
 			</div>
@@ -110,7 +110,7 @@ const { isAuthenticated = false } = Astro.props as Props;
 					emailInput.value = user.email;
 				}
 				if (authenticated && accountCopy instanceof HTMLElement) {
-					const username = typeof user.username === "string" && user.username ? `@${user.username}` : "your Dogeared account";
+					const username = typeof user.username === "string" && user.username ? `@${user.username}` : "your DogEared account";
 					accountCopy.textContent = `Submitting as: ${username}`;
 					accountCopy.hidden = false;
 				}

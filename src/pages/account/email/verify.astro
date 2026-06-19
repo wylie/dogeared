@@ -54,23 +54,23 @@ async function sendOldAddressNotice(oldEmail: string, nextEmail: string, changed
 	if (!oldEmail) return { sent: true };
 	return sendDogearedEmail({
 		to: oldEmail,
-		subject: "Your Dogeared email was changed",
+		subject: "Your DogEared email was changed",
 		htmlContent: `
-			<p>Your Dogeared login email was changed.</p>
+			<p>Your DogEared login email was changed.</p>
 			<p><strong>New email:</strong> ${escapeEmailHtml(nextEmail)}</p>
 			<p><strong>Changed:</strong> ${escapeEmailHtml(changedAt)}</p>
-			<p>If you did not make this change, contact Dogeared support right away.</p>
+			<p>If you did not make this change, contact DogEared support right away.</p>
 		`,
-		textContent: `Your Dogeared login email was changed.\n\nNew email: ${nextEmail}\nChanged: ${changedAt}\n\nIf you did not make this change, contact Dogeared support right away.`
+		textContent: `Your DogEared login email was changed.\n\nNew email: ${nextEmail}\nChanged: ${changedAt}\n\nIf you did not make this change, contact DogEared support right away.`
 	});
 }
 
 async function sendNewAddressNotice(nextEmail: string) {
 	return sendDogearedEmail({
 		to: nextEmail,
-		subject: "Your Dogeared email has been verified",
-		htmlContent: `<p>Your new Dogeared email has been verified.</p><p>Your reading history, shelves, ratings, and reviews stayed with your account.</p>`,
-		textContent: "Your new Dogeared email has been verified.\n\nYour reading history, shelves, ratings, and reviews stayed with your account."
+		subject: "Your DogEared email has been verified",
+		htmlContent: `<p>Your new DogEared email has been verified.</p><p>Your reading history, shelves, ratings, and reviews stayed with your account.</p>`,
+		textContent: "Your new DogEared email has been verified.\n\nYour reading history, shelves, ratings, and reviews stayed with your account."
 	});
 }
 
@@ -128,7 +128,7 @@ if (token) {
 			`;
 			if (duplicateRows.length > 0) {
 				state = "duplicate";
-				message = "That email address is already used by another Dogeared account.";
+				message = "That email address is already used by another DogEared account.";
 				detail = "Choose a different email address in Settings.";
 			} else {
 				await sql`
@@ -155,7 +155,7 @@ if (token) {
 				}
 				state = "success";
 				title = "Email Verified";
-				message = "Your Dogeared email has been updated.";
+				message = "Your DogEared email has been updated.";
 				detail = "Your reading history, shelves, ratings, reviews, follows, and notifications stayed with your account.";
 			}
 		}
@@ -169,7 +169,7 @@ if (token) {
 
 <Layout
 	title={title}
-	metaDescription="Verify a Dogeared account email change."
+	metaDescription="Verify a DogEared account email change."
 	canonicalUrl="/account/email/verify"
 	robots="noindex,nofollow"
 >

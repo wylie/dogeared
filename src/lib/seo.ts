@@ -47,8 +47,8 @@ export function toAbsoluteUrl(value: unknown, site?: string | URL | null) {
 
 export function buildPageTitle(title: unknown) {
 	const text = String(title || "").trim();
-	if (!text || text === "Home" || text === "Dogeared") return "Dogeared";
-	return text.endsWith("| Dogeared") ? text : `${text} | Dogeared`;
+	if (!text || text === "Home" || text === "DogEared") return "DogEared";
+	return text.endsWith("| DogEared") ? text : `${text} | DogEared`;
 }
 
 export function buildSeoMetadata(options: {

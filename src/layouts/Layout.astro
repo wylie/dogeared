@@ -7,13 +7,13 @@ import { resolveUserBySession } from '../lib/auth';
 import { buildSeoMetadata } from '../lib/seo';
 type SectionLink = { id: string; label: string };
 const {
-	title = "Dogeared",
+	title = "DogEared",
 	sectionLinks = [],
 	metaDescription = "",
 	robots = "index,follow",
 	canonicalUrl = "",
 	socialImage = "/og-image.png",
-	socialImageAlt = "Dogeared, a calm reading community and personal reading journal",
+	socialImageAlt = "DogEared, a calm reading community and personal reading journal",
 	ogType = "website",
 	structuredData = ""
 } = Astro.props as {
@@ -46,7 +46,7 @@ const siteOrigin = new URL(canonicalHref).origin;
 const websiteStructuredData = JSON.stringify({
 	"@context": "https://schema.org",
 	"@type": "WebSite",
-	name: "Dogeared",
+	name: "DogEared",
 	url: siteOrigin,
 	potentialAction: {
 		"@type": "SearchAction",
@@ -91,7 +91,7 @@ import '../assets/global.css';
 		<meta name="description" content={seo.description} />
 		<meta name="robots" content={robots} />
 		<meta property="og:type" content={ogType} />
-		<meta property="og:site_name" content="Dogeared" />
+		<meta property="og:site_name" content="DogEared" />
 		<meta property="og:title" content={pageTitle} />
 		<meta property="og:description" content={seo.description} />
 		<meta property="og:url" content={canonicalHref} />

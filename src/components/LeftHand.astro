@@ -18,7 +18,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       <h2>
         <a href="/" class="special-font">
           <img src="/logo.png" alt="" class="title-logo" aria-hidden="true" />
-          <span>Dogeared</span>
+          <span>DogEared</span>
         </a>
       </h2>
     </div>
@@ -173,14 +173,14 @@ const query = Astro.url.searchParams.get("q") ?? "";
       </ul>
     )}
     <div class="left-hand-footer-logo" aria-hidden="true">
-      <img src="/logo.png" alt="Dogeared logo" loading="lazy" />
+      <img src="/logo.png" alt="DogEared logo" loading="lazy" />
     </div>
   </div>
     <div id="left-hand-login-modal" class="login-modal" hidden>
     <div class="login-modal-backdrop" data-action="close-login-modal"></div>
     <div class="login-modal-panel" role="dialog" aria-modal="true" aria-labelledby="left-hand-login-title">
       <button type="button" class="login-modal-close" data-action="close-login-modal" aria-label="Close login dialog">×</button>
-      <h3 id="left-hand-login-title">Welcome to Dogeared</h3>
+      <h3 id="left-hand-login-title">Welcome to DogEared</h3>
       <p id="left-hand-login-copy" class="login-modal-copy">Enter your email and continue with a magic link.</p>
       <form id="left-hand-login-form" class="login-modal-form">
         <label for="left-hand-login-email">Email</label>
@@ -343,6 +343,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     width: 100%;
     font-size: clamp(0rem, 22cqw, 4rem);
     line-height: 1;
+    white-space: nowrap;
   }
   .title-logo {
     display: none;
@@ -682,7 +683,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     if (!(leftHandLoginModal instanceof HTMLElement)) return;
     const creating = mode === "create";
     if (leftHandLoginTitle instanceof HTMLElement) {
-      leftHandLoginTitle.textContent = creating ? "Create your Dogeared account" : "Welcome back to Dogeared";
+      leftHandLoginTitle.textContent = creating ? "Create your DogEared account" : "Welcome back to DogEared";
     }
     if (leftHandLoginCopy instanceof HTMLElement) {
       leftHandLoginCopy.textContent = creating

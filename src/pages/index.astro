@@ -199,7 +199,7 @@ try {
 			return {
 				id,
 				title,
-				subtitle: `Books readers on Dogeared are shelving in ${title.toLowerCase()}.`
+				subtitle: `Books readers on DogEared are shelving in ${title.toLowerCase()}.`
 			};
 		});
 
@@ -428,7 +428,7 @@ try {
 			sections = [{
 				id: "popular-now",
 				title: "Popular With Readers",
-				subtitle: "Start here while Dogeared learns your taste. These books are popular with active readers.",
+				subtitle: "Start here while DogEared learns your taste. These books are popular with active readers.",
 				books: fallbackRows.map((row) => ({
 					id: `book_${row.book_id}`,
 					title: String(row.title || "").trim(),
@@ -467,7 +467,7 @@ const isOnboardingComplete = (
 
 <Layout
 	title="Home"
-	metaDescription="Discover books readers are shelving right now on Dogeared. Track your reading, save books, and find your next favorite."
+	metaDescription="Discover books readers are shelving right now on DogEared. Track your reading, save books, and find your next favorite."
 	canonicalUrl="/"
 >
 	<div slot="right" class="browse-page" id="browse-page" data-authenticated={String(isAuthenticated)}>
@@ -481,7 +481,7 @@ const isOnboardingComplete = (
 					<h2>Getting Started</h2>
 					<button type="button" class="checklist-dismiss" data-action="dismiss-onboarding-checklist">Dismiss</button>
 				</div>
-				<p class="checklist-copy">These steps help Dogeared learn your taste faster and improve recommendations.</p>
+				<p class="checklist-copy">These steps help DogEared learn your taste faster and improve recommendations.</p>
 				<ul>
 					<li class={onboardingProgress.totalBooks > 0 ? "is-done" : ""}>{onboardingProgress.totalBooks > 0 ? "Done" : "Next"}: Add your first book to a shelf.</li>
 					<li class={onboardingProgress.ratedBooks > 0 ? "is-done" : ""}>{onboardingProgress.ratedBooks > 0 ? "Done" : "Next"}: Rate a book you finished.</li>

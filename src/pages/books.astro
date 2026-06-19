@@ -124,7 +124,7 @@ const sections: CuratedSection[] = [
 	{
 		id: "most-shelved",
 		title: "Most Shelved",
-		subtitle: "Books that appear on the most shelves across Dogeared.",
+		subtitle: "Books that appear on the most shelves across DogEared.",
 		books: uniqueBooks(byShelves, used)
 	},
 	{
@@ -147,7 +147,7 @@ const booksStructuredData = JSON.stringify([
 		"@context": "https://schema.org",
 		"@type": "CollectionPage",
 		name: "Books",
-		description: "Curated books in Dogeared based on shelf activity.",
+		description: "Curated books in DogEared based on shelf activity.",
 		url: toAbsoluteUrl("/books", Astro.site ?? Astro.url)
 	},
 	buildBreadcrumbList([
@@ -173,7 +173,7 @@ const booksStructuredData = JSON.stringify([
 
 <Layout
 	title="Books"
-	metaDescription="Explore curated books in Dogeared: trending now, most shelved, top rated, and recently active picks."
+	metaDescription="Explore curated books in DogEared: trending now, most shelved, top rated, and recently active picks."
 	canonicalUrl="/books"
 	structuredData={booksStructuredData}
 >
@@ -183,7 +183,7 @@ const booksStructuredData = JSON.stringify([
 		</nav>
 		<header class="header">
 			<h1>Books</h1>
-			<p>Curated picks from Dogeared shelf activity. {totalCuratedBooks.toLocaleString()} books featured right now.</p>
+			<p>Curated picks from DogEared shelf activity. {totalCuratedBooks.toLocaleString()} books featured right now.</p>
 		</header>
 		{
 			sections.length === 0

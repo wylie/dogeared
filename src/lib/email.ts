@@ -20,7 +20,7 @@ export async function sendDogearedEmail(input: {
 }): Promise<EmailSendResult> {
 	const brevoApiKey = String(import.meta.env.BREVO_API_KEY || "").trim();
 	const fromEmail = String(import.meta.env.BREVO_FROM_EMAIL || "").trim();
-	const fromName = String(import.meta.env.BREVO_FROM_NAME || "Dogeared").trim();
+	const fromName = String(import.meta.env.BREVO_FROM_NAME || "DogEared").trim();
 	if (!brevoApiKey || !fromEmail) {
 		return {
 			sent: false,

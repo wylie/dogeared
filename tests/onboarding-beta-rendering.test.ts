@@ -12,7 +12,7 @@ test("home page includes onboarding checklist guidance", () => {
 test("home page includes recommendation fallback section", () => {
 	const source = readFileSync("src/pages/index.astro", "utf8");
 	assert.equal(source.includes("Popular With Readers"), true);
-	assert.equal(source.includes("Start here while Dogeared learns your taste"), true);
+	assert.equal(source.includes("Start here while DogEared learns your taste"), true);
 });
 
 test("home empty state is actionable", () => {
@@ -43,7 +43,7 @@ test("profile momentum messaging is onboarding-friendly and supportive", () => {
 	const predictionSource = readFileSync("src/lib/momentumPrediction.ts", "utf8");
 	assert.equal(predictionSource.includes("Recently started"), true);
 	assert.equal(predictionSource.includes("Building reading history"), true);
-	assert.equal(profileSource.includes("Add a few progress updates and Dogeared will start estimating reading momentum."), true);
+	assert.equal(profileSource.includes("Add a few progress updates and DogEared will start estimating reading momentum."), true);
 	assert.equal(predictionSource.includes("At risk"), false);
 	assert.equal(profileSource.includes("get back on track"), false);
 });

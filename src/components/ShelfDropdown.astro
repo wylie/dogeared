@@ -157,7 +157,7 @@ try {
 	}
 	.shelf-menu {
 		position: absolute;
-		top: calc(100% + 4px);
+		top: var(--shelf-menu-top, calc(var(--shelf-trigger-height, 44px) + 4px));
 		right: 0 !important;
 		left: auto !important;
 		min-width: 180px;
@@ -215,24 +215,25 @@ try {
 		background: #ececec;
 	}
 	.shelf-feedback {
-		position: absolute;
-		top: calc(100% + 0.32rem);
-		right: 0;
-		margin: 0;
-		width: max-content;
-		max-width: min(220px, 70vw);
+		margin: 0.28rem 0 0;
+		width: 100%;
+		min-height: 2.1rem;
 		font-size: 0.82rem;
 		color: var(--color-secondary);
 		line-height: 1.25;
 		white-space: normal;
 		overflow-wrap: anywhere;
+		text-align: left;
 		background: transparent !important;
 		border: none !important;
 		border-radius: 0 !important;
 		box-shadow: none !important;
 		outline: none !important;
 		padding: 0 !important;
-		z-index: 40;
+	}
+	.shelf-feedback[hidden] {
+		display: block;
+		visibility: hidden;
 	}
 	.shelf-option-danger {
 		color: #8a1d1d;

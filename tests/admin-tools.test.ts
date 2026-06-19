@@ -98,7 +98,9 @@ test("temporary feedback messages avoid layout shifts and announce status", () =
 	assert.equal(rating.includes(".rating-feedback[hidden]"), true);
 	assert.equal(rating.includes("min-height: 1rem"), true);
 	assert.equal(shelf.includes('role="status" aria-live="polite"'), true);
-	assert.equal(shelf.includes("position: absolute"), true);
+	assert.equal(shelf.includes(".shelf-feedback[hidden]"), true);
+	assert.equal(shelf.includes("min-height: 2.1rem"), true);
+	assert.equal(shelf.includes("width: 100%"), true);
 	for (const source of [index, book, following, profile]) {
 		assert.equal(source.includes('role="status" aria-live="polite"'), true);
 		assert.equal(source.includes("[hidden]"), true);

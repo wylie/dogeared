@@ -212,15 +212,15 @@ if (displayName) {
 }
 const authorRobots = !errorMessage && books.length > 0 ? "index,follow" : "noindex,follow";
 const authorDescription = displayName
-	? `${displayName} on Dogeared: ${books.length.toLocaleString()} books, ${readersCount.toLocaleString()} readers, and shelf activity.`
-	: "Browse authors and their books on Dogeared.";
+	? `${displayName} on DogEared: ${books.length.toLocaleString()} books, ${readersCount.toLocaleString()} readers, and shelf activity.`
+	: "Browse authors and their books on DogEared.";
 const authorStructuredData = displayName
 	? JSON.stringify([
 		{
 			"@context": "https://schema.org",
 			"@type": "Person",
 			name: displayName,
-			description: bio || `${displayName} author page on Dogeared`,
+			description: bio || `${displayName} author page on DogEared`,
 			url: toAbsoluteUrl(cleanAuthorPath, Astro.site ?? Astro.url),
 			image: authorPhotoUrl || undefined
 		},
@@ -240,7 +240,7 @@ const authorStructuredData = displayName
 	ogType="profile"
 	robots={authorRobots}
 	socialImage={authorPhotoUrl || "/og-image.png"}
-	socialImageAlt={displayName ? `${displayName} on Dogeared` : "Authors on Dogeared"}
+	socialImageAlt={displayName ? `${displayName} on DogEared` : "Authors on DogEared"}
 	structuredData={authorStructuredData}
 >
 	<div slot="right" class="author-page">
@@ -254,7 +254,7 @@ const authorStructuredData = displayName
 			</div>
 			<div class="author-meta">
 				<h1>{displayName || "Author"}</h1>
-				<p class="meta">Books on Dogeared: {books.length.toLocaleString()}</p>
+				<p class="meta">Books on DogEared: {books.length.toLocaleString()}</p>
 				<p class="meta">Readers: {readersCount.toLocaleString()} · Shelf entries: {shelvesCount.toLocaleString()}</p>
 				{bio ? (
 					<p class="bio">
@@ -268,9 +268,9 @@ const authorStructuredData = displayName
 		</section>
 
 			<section class="books-section">
-				<h2>Books In Dogeared</h2>
+				<h2>Books In DogEared</h2>
 			{books.length === 0 ? (
-				<p>No books by this author have been added yet. Choose a book below to start this author's Dogeared shelf.</p>
+				<p>No books by this author have been added yet. Choose a book below to start this author's DogEared shelf.</p>
 			) : (
 				<ul class="book-grid">
 					{books.map((book) => (
@@ -418,7 +418,7 @@ const authorStructuredData = displayName
 				let bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
 				if (!bookId) {
 					const saveResult = await saveShelfEntryWithRetry(buildEntry(dropdown, "want_to_read"));
-					if (!saveResult.ok) throw new Error(saveResult.message || "Failed to add this book to Dogeared.");
+					if (!saveResult.ok) throw new Error(saveResult.message || "Failed to add this book to DogEared.");
 					const data = (saveResult.data && typeof saveResult.data === "object" ? saveResult.data : {}) as Record<string, unknown>;
 					bookId = Math.max(0, Number(data.bookId || 0) || 0);
 					if (bookId) dropdown.dataset.bookId = String(bookId);

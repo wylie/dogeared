@@ -95,7 +95,7 @@ const supportOptions = [
 	{
 		title: "Share With Readers",
 		description: "Sharing the project is one of the fastest ways to help it grow.",
-		cta: "Share Dogeared",
+		cta: "Share DogEared",
 		href: "",
 		share: true
 	}
@@ -110,27 +110,27 @@ const roadmapStructuredData = JSON.stringify(buildBreadcrumbList([
 <Layout
 	title="Roadmap"
 	sectionLinks={sectionLinks}
-	metaDescription="See what Dogeared is building next: roadmap priorities, finished releases, and support options."
+	metaDescription="See what DogEared is building next: roadmap priorities, finished releases, and support options."
 	canonicalUrl="/roadmap"
 	structuredData={roadmapStructuredData}
 >
 	<div slot="right" class="roadmap-page">
 		<header class="hero">
-			<h1>What’s coming next for Dogeared, and how readers can help.</h1>
+			<h1>What’s coming next for DogEared, and how readers can help.</h1>
 		</header>
 
 		<section id="support" class="panel panel-plain support-panel">
-			<p class="support-operator">Dogeared is owned and operated by Argon Collective LLC.</p>
+			<p class="support-operator">DogEared is owned and operated by Argon Collective LLC.</p>
 			<div class="support-feature">
 				<div>
-					<p class="feature-eyebrow">Support Dogeared</p>
-					<h2>Help keep Dogeared independent and improving.</h2>
+					<p class="feature-eyebrow">Support DogEared</p>
+					<h2>Help keep DogEared independent and improving.</h2>
 					<p>Your support helps cover hosting and gives me more time to ship the roadmap faster.</p>
 				</div>
 				<a class="support-feature-cta" href={SUPPORT_LINKS.buyMeACoffee} target="_blank" rel="noopener noreferrer">Buy Me a Coffee</a>
 			</div>
 			<div class="panel-head">
-				<h2>Support Dogeared</h2>
+				<h2>Support DogEared</h2>
 				<p>More ways readers can support the site and help fund new features.</p>
 			</div>
 			<div class="support-grid">
@@ -151,7 +151,7 @@ const roadmapStructuredData = JSON.stringify(buildBreadcrumbList([
 		<section id="roadmap" class="panel panel-plain">
 			<div class="panel-head">
 				<h2>Roadmap</h2>
-				<p>Upcoming additions planned for Dogeared.</p>
+				<p>Upcoming additions planned for DogEared.</p>
 			</div>
 			<div class="roadmap-grid">
 				{activeRoadmapItems.map((item, index) => (
@@ -177,7 +177,7 @@ const roadmapStructuredData = JSON.stringify(buildBreadcrumbList([
 			const url = window.location.origin;
 			try {
 				if (navigator.share) {
-					await navigator.share({ title: "Dogeared", text: "Check out Dogeared", url });
+					await navigator.share({ title: "DogEared", text: "Check out DogEared", url });
 					return;
 				}
 			} catch {
@@ -187,7 +187,7 @@ const roadmapStructuredData = JSON.stringify(buildBreadcrumbList([
 				await navigator.clipboard.writeText(url);
 				if (button instanceof HTMLButtonElement) button.textContent = "Link Copied";
 				window.setTimeout(() => {
-					if (button instanceof HTMLButtonElement) button.textContent = "Share Dogeared";
+					if (button instanceof HTMLButtonElement) button.textContent = "Share DogEared";
 				}, 1600);
 			} catch {
 				window.open(url, "_blank", "noopener,noreferrer");
