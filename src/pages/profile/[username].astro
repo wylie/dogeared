@@ -1446,8 +1446,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 													alt={`${book.title}${book.author ? ` by ${book.author}` : ""} cover`}
 													loading="lazy"
 													decoding="async"
-													width="54"
-													height="81"
+													width="46"
+													height="69"
 												/>
 											) : (
 												<span class="reading-goal-cover-placeholder" aria-hidden="true">
@@ -2547,7 +2547,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.reading-goal-cover-grid a {
 		display: block;
-		width: 54px;
+		width: 46px;
 		max-width: 100%;
 		border-radius: 6px;
 		text-decoration: none;
@@ -2560,8 +2560,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.reading-goal-cover-grid img,
 	.reading-goal-cover-placeholder {
 		display: block;
-		width: 54px;
-		height: 81px;
+		width: 46px;
+		height: 69px;
 		max-width: 100%;
 		border-radius: 6px;
 		object-fit: cover;
@@ -3524,11 +3524,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		.reading-goal-cover-grid a,
 		.reading-goal-cover-grid img,
 		.reading-goal-cover-placeholder {
-			width: 48px;
+			width: 41px;
 		}
 		.reading-goal-cover-grid img,
 		.reading-goal-cover-placeholder {
-			height: 72px;
+			height: 61px;
 		}
 		.shelf-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 		.shelf-summary-item-total { grid-column: auto; }
