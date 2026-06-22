@@ -29,7 +29,7 @@
     "backfill:cleanup-genres-topics": "node scripts/cleanup-book-genres-topics-once.mjs"
   },
   "dependencies": {
-    "@astrojs/vercel": "^10.0.8",
+    "@astrojs/vercel": "^11.0.0",
     "@neondatabase/serverless": "^1.1.0",
     "astro": "^6.4.7",
     "echarts": "^6.0.0"
