@@ -4,6 +4,7 @@ import FloatingActions from '../components/FloatingActions.astro';
 import ReaderGuidance from '../components/ReaderGuidance.astro';
 import { resolveAdminSession } from '../lib/admin';
 import { resolveUserBySession } from '../lib/auth';
+import { DEFAULT_SOCIAL_IMAGE, METADATA_ICON_LINKS, SITE_THEME_COLOR } from '../lib/metadataAssets';
 import { buildSeoMetadata } from '../lib/seo';
 type SectionLink = { id: string; label: string };
 const {
@@ -12,7 +13,7 @@ const {
 	metaDescription = "",
 	robots = "index,follow",
 	canonicalUrl = "",
-	socialImage = "/og-image.png",
+	socialImage = DEFAULT_SOCIAL_IMAGE,
 	socialImageAlt = "DogEared, a calm reading community and personal reading journal",
 	ogType = "website",
 	structuredData = ""
@@ -80,11 +81,10 @@ import '../assets/global.css';
 		</script>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" sizes="32x32" />
-		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-		<link rel="manifest" href="/manifest.webmanifest" />
-		<meta name="theme-color" content="#C8DEEB" />
+		{METADATA_ICON_LINKS.map((link) => (
+			<link rel={link.rel} type={link.type} sizes={link.sizes} href={link.href} />
+		))}
+		<meta name="theme-color" content={SITE_THEME_COLOR} />
 		<meta name="generator" content={Astro.generator} />
 		<title>{pageTitle}</title>
 		<link rel="canonical" href={canonicalHref} />

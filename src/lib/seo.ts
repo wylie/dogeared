@@ -1,6 +1,8 @@
+import { DEFAULT_SOCIAL_IMAGE } from "./metadataAssets.ts";
+
 const DEFAULT_SITE_URL = "https://dogeared.app/";
 export const DEFAULT_META_DESCRIPTION = "Track what matters. Find your next great read. Keep your shelves focused. Make reading feel like yours.";
-export const DEFAULT_SOCIAL_IMAGE = "/og-image.png";
+export { DEFAULT_SOCIAL_IMAGE };
 
 export type BreadcrumbInput = {
 	name: string;

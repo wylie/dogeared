@@ -16,8 +16,10 @@ This document describes Dogeared's metadata, social preview, and installable ico
 - Apple touch icon: `/public/apple-touch-icon.png` at 180x180.
 - SVG favicon: `/public/favicon.svg`.
 - ICO favicon: `/public/favicon.ico` at 32x32.
+- PNG favicons: `/public/favicon-16x16.png` and `/public/favicon-32x32.png`.
 - Android/manifest icons: `/public/icons/icon-192.png` and `/public/icons/icon-512.png`.
 - Web app manifest: `/public/manifest.webmanifest`.
+- Metadata asset paths are centralized in `src/lib/metadataAssets.ts`; update that file and the public assets together when branding changes.
 
 ## Replacing Artwork
 
