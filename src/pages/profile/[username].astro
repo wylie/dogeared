@@ -1810,7 +1810,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 								</div>
 								<div class="momentum-stat">
 									<p class="momentum-stat-label">Reading Streak</p>
-									<p class="momentum-stat-value"><span data-momentum-streak>{momentumStreakDays}</span> day{momentumStreakDays === 1 ? "" : "s"}</p>
+									<p class="momentum-stat-value"><span data-momentum-streak>{momentumStreakDays}</span> <span data-momentum-streak-unit>day{momentumStreakDays === 1 ? "" : "s"}</span></p>
 								</div>
 								<div class="momentum-next" data-momentum-next-action>
 									{momentumNextAction || "Add progress to keep momentum moving."}
@@ -1867,11 +1867,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 											)}
 											{(() => {
 												const momentum = momentumByBookId.get(item.bookId);
-												if (!momentum) return null;
+												if (!momentum) return <p class="momentum-health momentum-health-neutral" hidden></p>;
 												if (!momentum.predictionEligible) {
-													if (!momentum.showOnboardingStatus) return null;
 													return (
-														<p class="momentum-health momentum-health-neutral">
+														<p class="momentum-health momentum-health-neutral" hidden={!momentum.showOnboardingStatus}>
 															{momentum.onboardingMessage}
 														</p>
 													);
@@ -3096,6 +3095,16 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		color: #4b617a;
 		margin-left: 0.15rem;
 	}
+	[data-momentum-score],
+	[data-momentum-streak] {
+		display: inline-block;
+		transition: transform 180ms ease, color 180ms ease;
+	}
+	[data-momentum-score].is-updating,
+	[data-momentum-streak].is-updating {
+		transform: translateY(-1px);
+		color: #0f4f72;
+	}
 	.momentum-next {
 		grid-column: 1 / -1;
 		margin: 0;
@@ -3595,6 +3604,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	const momentumHelpTooltip = document.querySelector(".momentum-help-tooltip");
 	const momentumScoreNode = document.querySelector("[data-momentum-score]");
 	const momentumStreakNode = document.querySelector("[data-momentum-streak]");
+	const momentumStreakUnitNode = document.querySelector("[data-momentum-streak-unit]");
 	const momentumNextActionNode = document.querySelector("[data-momentum-next-action]");
 	const RECENT_ACTIVITY_SECTION_KEY = "recent:activity";
 	const shelfSectionNodes = Array.from(document.querySelectorAll("[data-shelf-section-key]"));
@@ -3870,6 +3880,32 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 	}
 
+	function pulseMetricNode(node) {
+		if (!(node instanceof HTMLElement)) return;
+		if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
+		node.classList.remove("is-updating");
+		window.requestAnimationFrame(() => {
+			node.classList.add("is-updating");
+			window.setTimeout(() => {
+				node.classList.remove("is-updating");
+			}, 260);
+		});
+	}
+
+	function setNodeText(node, value, options = {}) {
+		if (!(node instanceof HTMLElement)) return;
+		const nextValue = String(value);
+		if (node.textContent === nextValue) return;
+		node.textContent = nextValue;
+		if (options?.animate) pulseMetricNode(node);
+	}
+
+	function updateMomentumStreakDisplay(streak) {
+		const nextStreak = Math.max(0, Number(streak || 0) || 0);
+		setNodeText(momentumStreakNode, String(nextStreak), { animate: true });
+		setNodeText(momentumStreakUnitNode, nextStreak === 1 ? "day" : "days");
+	}
+
 	async function refreshProfileReadingUiAfterMutation(options = {}) {
 		const shouldHydrate = options?.hydrate !== false;
 		recalcMomentumFromDom();
@@ -4143,6 +4179,19 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		});
 	}
 
+	function normalizePersistedDateValue(value) {
+		if (value instanceof Date && Number.isFinite(value.getTime())) return value.toISOString();
+		if (typeof value === "number" && Number.isFinite(value)) return new Date(value).toISOString();
+		const raw = String(value || "").trim();
+		if (!raw) return "";
+		if (/^\d+$/.test(raw)) {
+			const numeric = Number(raw);
+			if (Number.isFinite(numeric)) return new Date(numeric).toISOString();
+		}
+		const parsed = new Date(raw);
+		return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : "";
+	}
+
 	async function removeBookFromAllShelves(bookId, entry) {
 		return removeBookFromAllShelvesOnServer(bookId, entry);
 	}
@@ -4171,14 +4220,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			return { card, title, currentPage, totalPages, percent, daysSinceUpdate, ...prediction };
 		}).filter(Boolean);
 		if (items.length === 0) {
-			if (momentumScoreNode instanceof HTMLElement) momentumScoreNode.textContent = "0";
-			if (momentumStreakNode instanceof HTMLElement) {
-				const streak = computeClientReadingStreak(Array.from(readingStreakDayKeys));
-				momentumStreakNode.textContent = String(streak);
-			}
-			if (momentumNextActionNode instanceof HTMLElement) {
-				momentumNextActionNode.textContent = "Add a few progress updates and DogEared will start estimating reading momentum.";
-			}
+			setNodeText(momentumScoreNode, "0", { animate: true });
+			updateMomentumStreakDisplay(computeClientReadingStreak(Array.from(readingStreakDayKeys)));
+			setNodeText(momentumNextActionNode, "Add a few progress updates and DogEared will start estimating reading momentum.");
 			return;
 		}
 		const eligibleItems = items.filter((item) => item.eligible);
@@ -4206,7 +4250,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		const avgScore = eligibleItems.length > 0
 			? Math.round(eligibleItems.reduce((sum, item) => sum + item.finishProbability, 0) / eligibleItems.length)
 			: 0;
-		if (momentumScoreNode instanceof HTMLElement) momentumScoreNode.textContent = String(avgScore);
+		setNodeText(momentumScoreNode, String(avgScore), { animate: true });
 
 		const seenDays = new Set([
 			...Array.from(readingStreakDayKeys),
@@ -4216,7 +4260,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			}).filter(Boolean)
 		]);
 		let streak = computeClientReadingStreak(Array.from(seenDays));
-		if (momentumStreakNode instanceof HTMLElement) momentumStreakNode.textContent = String(streak);
+		updateMomentumStreakDisplay(streak);
 
 		const atRisk = eligibleItems
 			.slice()
@@ -4226,14 +4270,17 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		if (momentumNextActionNode instanceof HTMLElement) {
 			if (atRisk) {
 				const catchupPages = Math.max(6, Math.min(24, Math.round((atRisk.totalPages || 180) * 0.06)));
-				momentumNextActionNode.textContent = `A short session of about ${catchupPages} pages in ${atRisk.title} will rebuild momentum.`;
+				setNodeText(momentumNextActionNode, `A short session of about ${catchupPages} pages in ${atRisk.title} will rebuild momentum.`);
 			} else if (best) {
 				const nextMilestone = Math.min(100, Math.ceil(best.percent / 10) * 10);
-				momentumNextActionNode.textContent = nextMilestone > best.percent
-					? `Push ${best.title} to ${nextMilestone}% today.`
-					: `Keep pace in ${best.title} today.`;
+				setNodeText(
+					momentumNextActionNode,
+					nextMilestone > best.percent
+						? `Push ${best.title} to ${nextMilestone}% today.`
+						: `Keep pace in ${best.title} today.`
+				);
 			} else {
-				momentumNextActionNode.textContent = "Add a few progress updates and DogEared will start estimating reading momentum.";
+				setNodeText(momentumNextActionNode, "Add a few progress updates and DogEared will start estimating reading momentum.");
 			}
 		}
 	}
@@ -4860,7 +4907,12 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 						: null;
 					const nextTotalPages = Math.max(0, Number((persistedEntry && persistedEntry.totalPages) || totalPages || 0) || 0);
 					const nextCurrentPage = Math.max(0, Number((persistedEntry && persistedEntry.currentPage) || currentPage || 0) || 0);
-					const updatedAtValue = String((persistedEntry && persistedEntry.updatedAt) || "").trim();
+					const previousCurrentPage = card instanceof HTMLElement
+						? Math.max(0, Number(card.dataset.momentumCurrentPage || 0) || 0)
+						: 0;
+					const hasForwardProgress = nextCurrentPage > previousCurrentPage;
+					const updatedAtValue = normalizePersistedDateValue(persistedEntry && persistedEntry.updatedAt) || new Date().toISOString();
+					const persistedProgressUpdates = Math.max(0, Number(persistedEntry && persistedEntry.progressUpdates) || 0);
 					const progressNode = card?.querySelector(".progress-current-value");
 					if (progressNode instanceof HTMLElement) {
 						const percent = nextTotalPages > 0 ? Math.max(0, Math.min(100, Math.round((nextCurrentPage / nextTotalPages) * 100))) : 0;
@@ -4881,15 +4933,17 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					if (card instanceof HTMLElement) {
 						card.dataset.momentumCurrentPage = String(nextCurrentPage);
 						card.dataset.momentumTotalPages = String(nextTotalPages);
-						card.dataset.momentumUpdatedAt = updatedAtValue || new Date().toISOString();
+						card.dataset.momentumUpdatedAt = updatedAtValue;
 						const priorUpdates = Math.max(0, Number(card.dataset.momentumProgressUpdates || 0) || 0);
-						card.dataset.momentumProgressUpdates = String(priorUpdates + 1);
+						card.dataset.momentumProgressUpdates = String(persistedProgressUpdates > 0
+							? persistedProgressUpdates
+							: (hasForwardProgress ? priorUpdates + 1 : priorUpdates));
 					}
-					rememberReadingActivityToday();
+					if (hasForwardProgress) rememberReadingActivityToday();
 					await refreshProfileReadingUiAfterMutation();
-					const updatedLabel = safeFormatActivityDate(updatedAtValue) || safeFormatActivityDate(new Date().toISOString());
+					const updatedLabel = safeFormatActivityDate(updatedAtValue);
 					if (card instanceof HTMLElement) {
-						card.dataset.updatedAt = updatedAtValue || new Date().toISOString();
+						card.dataset.updatedAt = updatedAtValue;
 					}
 					const dateNode = card?.querySelector(".activity-date");
 					if (dateNode instanceof HTMLElement) {

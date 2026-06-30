@@ -95,6 +95,21 @@ test("profile finish workflow updates shelves and activity optimistically", () =
 	assert.equal(source.includes('document.querySelectorAll(\'#currently-reading [data-momentum-reading-item="true"]\')'), true);
 });
 
+test("profile progress saves refresh all derived reading UI without reload", () => {
+	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const apiSource = readFileSync("src/pages/api/shelf/entries.ts", "utf8");
+	assert.equal(source.includes("normalizePersistedDateValue"), true);
+	assert.equal(source.includes("const hasForwardProgress = nextCurrentPage > previousCurrentPage"), true);
+	assert.equal(source.includes("if (hasForwardProgress) rememberReadingActivityToday()"), true);
+	assert.equal(source.includes("updateMomentumStreakDisplay"), true);
+	assert.equal(source.includes("data-momentum-streak-unit"), true);
+	assert.equal(source.includes("setNodeText(momentumScoreNode"), true);
+	assert.equal(source.includes("setNodeText(momentumNextActionNode"), true);
+	assert.equal(source.includes('card.dataset.momentumProgressUpdates = String(persistedProgressUpdates > 0'), true);
+	assert.equal(apiSource.includes("progress_updates"), true);
+	assert.equal(apiSource.includes("progressUpdates"), true);
+});
+
 test("profile defaults to currently reading, recent activity, then other shelves", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	const currentIdx = source.indexOf('{ id: "currently-reading", label: "Currently Reading", key: "default:reading" }');

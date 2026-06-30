@@ -395,6 +395,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			finished_reflection: string;
 			first_added_at: string;
 			updated_at: string;
+			progress_updates: number;
 			genres: string[] | null;
 			isbn10: string;
 			isbn13: string;
@@ -413,6 +414,12 @@ export const GET: APIRoute = async ({ request, url }) => {
 				coalesce(ub.finished_reflection, '') as finished_reflection,
 				ub.first_added_at::text as first_added_at,
 				ub.updated_at::text as updated_at,
+				coalesce((
+					select count(*)::int
+					from user_reading_progress_event pe
+					where pe.user_id = ub.user_id
+						and pe.book_id = ub.book_id
+				), 0)::int as progress_updates,
 				array_agg(bg.genre_name order by bg.genre_name asc) filter (where bg.genre_name is not null) as genres,
 				b.isbn10,
 				b.isbn13
@@ -420,7 +427,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			join book b on b.id = ub.book_id
 			left join book_genre bg on bg.book_id = b.id
 			where ub.user_id = ${userId}::uuid
-			group by b.id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection
+			group by b.id, ub.user_id, ub.book_id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection
 			order by ub.updated_at desc
 		`;
 
@@ -441,6 +448,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			isbn10: row.isbn10 || "",
 			isbn13: row.isbn13 || "",
 			categories: Array.isArray(row.genres) ? row.genres : [],
+			progressUpdates: Math.max(0, Number(row.progress_updates || 0) || 0),
 			updatedAt: Date.parse(row.updated_at || "") || Date.now()
 		}));
 
@@ -850,6 +858,7 @@ export const POST: APIRoute = async ({ request }) => {
 			publisher: string | null;
 			synopsis: string;
 			finished_reflection: string;
+			progress_updates: number;
 		}>>`
 			select
 				b.id as book_id,
@@ -870,13 +879,19 @@ export const POST: APIRoute = async ({ request }) => {
 				b.google_books_id,
 				coalesce(b.publisher, '') as publisher,
 				coalesce(b.synopsis, '') as synopsis,
-				coalesce(ub.finished_reflection, '') as finished_reflection
+				coalesce(ub.finished_reflection, '') as finished_reflection,
+				coalesce((
+					select count(*)::int
+					from user_reading_progress_event pe
+					where pe.user_id = ub.user_id
+						and pe.book_id = ub.book_id
+				), 0)::int as progress_updates
 			from user_book ub
 			join book b on b.id = ub.book_id
 			left join book_genre bg on bg.book_id = b.id
 			where ub.user_id = ${userId}::uuid
 				and ub.book_id = ${bookId}
-			group by b.id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection
+			group by b.id, ub.user_id, ub.book_id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection
 			limit 1
 		`;
 		const persisted = persistedRows[0];
@@ -901,6 +916,7 @@ export const POST: APIRoute = async ({ request }) => {
 			description: persisted.synopsis || "",
 			finishedReflection: persisted.finished_reflection || "",
 			categories: Array.isArray(persisted.genres) ? persisted.genres : [],
+			progressUpdates: Math.max(0, Number(persisted.progress_updates || 0) || 0),
 			updatedAt: Date.parse(persisted.updated_at || "") || Date.now()
 		} : null;
 

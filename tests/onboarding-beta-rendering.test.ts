@@ -51,5 +51,6 @@ test("profile momentum messaging is onboarding-friendly and supportive", () => {
 test("profile only renders one onboarding prediction hint at a time", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	assert.equal(source.includes("showOnboardingStatus"), true);
-	assert.equal(source.includes("if (!momentum.showOnboardingStatus) return null;"), true);
+	assert.equal(source.includes('hidden={!momentum.showOnboardingStatus}'), true);
+	assert.equal(source.includes('<p class="momentum-health momentum-health-neutral" hidden>'), true);
 });
