@@ -272,39 +272,17 @@ const query = Astro.url.searchParams.get("q") ?? "";
     text-decoration: none;
   }
   .sidebar-footer nav a {
-    position: relative;
-    isolation: isolate;
-    display: inline-flex;
-    align-items: center;
-    border-radius: var(--radius-pill);
-    padding: 0.16rem 0.42rem;
-  }
-  .sidebar-footer nav a::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    border-radius: inherit;
-    background: var(--color-nav-surface-hover);
-    opacity: 0;
-    transition: opacity var(--transition-fast);
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
   }
   .sidebar-footer nav a:hover,
   .sidebar-footer nav a:focus-visible {
     color: var(--color-nav-hover);
-    text-decoration: none;
-  }
-  .sidebar-footer nav a:hover::before,
-  .sidebar-footer nav a:focus-visible::before {
-    opacity: 1;
+    text-decoration: underline;
   }
   .sidebar-footer nav a.active {
     color: var(--color-nav-active);
-    text-decoration: none;
-  }
-  .sidebar-footer nav a.active::before {
-    background: var(--color-nav-surface);
-    opacity: 1;
+    text-decoration: underline;
   }
   li {
     text-align: left;
