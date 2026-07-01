@@ -270,19 +270,41 @@ const query = Astro.url.searchParams.get("q") ?? "";
   .sidebar-footer a {
     color: var(--color-nav);
     text-decoration: none;
+  }
+  .sidebar-footer nav a {
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
     border-radius: var(--radius-pill);
     padding: 0.16rem 0.42rem;
   }
-  .sidebar-footer a:hover,
-  .sidebar-footer a:focus-visible {
+  .sidebar-footer nav a::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
     background: var(--color-nav-surface-hover);
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+  }
+  .sidebar-footer nav a:hover,
+  .sidebar-footer nav a:focus-visible {
     color: var(--color-nav-hover);
     text-decoration: none;
   }
-  .sidebar-footer a.active {
-    background: var(--color-nav-surface);
+  .sidebar-footer nav a:hover::before,
+  .sidebar-footer nav a:focus-visible::before {
+    opacity: 1;
+  }
+  .sidebar-footer nav a.active {
     color: var(--color-nav-active);
     text-decoration: none;
+  }
+  .sidebar-footer nav a.active::before {
+    background: var(--color-nav-surface);
+    opacity: 1;
   }
   li {
     text-align: left;
