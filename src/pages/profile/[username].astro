@@ -2124,7 +2124,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		flex-wrap: wrap;
 		margin: 0;
 		font-size: 0.84rem;
-		color: #546374;
+		color: var(--color-text-subtle);
 	}
 	.breadcrumbs a {
 		color: var(--color-secondary);
@@ -2140,9 +2140,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.75rem;
-		border: 1px solid #d8e8d6;
-		border-radius: 12px;
-		background: #f6fbf4;
+		border: 1px solid var(--color-border-soft);
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.56);
 		padding: 0.75rem 0.85rem;
 	}
 	.welcome-banner p {
@@ -2160,13 +2160,15 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		padding: 0.35rem 0.7rem;
 		cursor: pointer;
 	}
-	.state-card, .profile-card, .shelf-card, .activity-card { border: none; border-radius: 12px; background: var(--color-surface); padding: 0.9rem; }
+	.state-card, .profile-card, .shelf-card, .activity-card { border: 1px solid var(--color-border-soft); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; box-shadow: var(--shadow-card); }
 	.activity-card-plain { border: none; background: transparent; border-radius: 0; padding: 0; }
 	.notifications-card {
 		border: none;
-		border-radius: 12px;
-		background: var(--color-surface);
-		padding: 0.9rem;
+		border: 1px solid var(--color-border-soft);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		padding: 1rem;
+		box-shadow: var(--shadow-card);
 	}
 	.notifications-card-empty {
 		padding: 0.6rem 0.8rem;
@@ -2605,17 +2607,17 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		padding: 0;
 	}
 	.shelf-summary-item {
-		border: none;
-		border-radius: 12px;
-		background: #fff;
+		border: 1px solid var(--color-border-soft);
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.58);
 		padding: 0.8rem 0.9rem;
 		text-decoration: none;
 		display: block;
-		transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+		transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
 	}
 	.shelf-summary-item:hover {
 		transform: translateY(-1px);
-		box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+		box-shadow: var(--shadow-card-hover);
 	}
 	.shelf-summary-item-total:hover {
 		transform: none;
@@ -3063,9 +3065,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		margin-top: 0.55rem;
 		margin-bottom: 0.25rem;
 		padding: 0.75rem;
-		border: 1px solid #d6e3f4;
-		border-radius: 12px;
-		background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+		border: 1px solid var(--color-border-soft);
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.54);
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.55rem 0.75rem;
@@ -3143,9 +3145,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		width: min(560px, calc(100vw - 1.5rem));
 		max-width: calc(100vw - 1.5rem);
 		background: #ffffff;
-		border: 1px solid #cfdaea;
-		border-radius: 10px;
-		box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-popover);
 		padding: 0.6rem 0.7rem;
 		opacity: 0;
 		pointer-events: none;

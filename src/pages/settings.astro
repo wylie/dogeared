@@ -330,7 +330,7 @@ const sectionLinks = [
 
 <style>
 	.settings-page {
-		max-width: 860px;
+		max-width: 920px;
 		display: flex;
 		flex-direction: column;
 	}
@@ -341,7 +341,7 @@ const sectionLinks = [
 
 	.subhead {
 		margin: 0.5rem 0 1.25rem;
-		color: #444;
+		color: var(--color-text-muted);
 		order: 1;
 	}
 
@@ -364,11 +364,12 @@ const sectionLinks = [
 	#danger-zone-settings { order: 14; }
 
 	.settings-section {
-		border: 1px solid #d8d8d8;
-		border-radius: 12px;
-		padding: 1rem;
-		background: #fff;
-		margin-top: 1rem;
+		border: 1px solid var(--color-border-soft);
+		border-radius: var(--radius-lg);
+		padding: 1.05rem;
+		background: var(--color-surface-raised);
+		margin-top: 1.05rem;
+		box-shadow: var(--shadow-card);
 	}
 
 	.settings-section h2 {
@@ -377,7 +378,8 @@ const sectionLinks = [
 
 	.section-copy {
 		margin: 0.5rem 0 0.8rem;
-		color: #333;
+		color: var(--color-text-muted);
+		line-height: 1.5;
 	}
 
 	.steps {
@@ -406,11 +408,11 @@ const sectionLinks = [
 		width: 100%;
 		max-width: 100%;
 		box-sizing: border-box;
-		border: 1px solid #d1d5db;
-		border-radius: 8px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
 		padding: 0.6rem 0.7rem;
 		font: inherit;
-		background: #fff;
+		background: rgba(255, 255, 255, 0.82);
 	}
 
 	.checkbox-row {
@@ -427,13 +429,16 @@ const sectionLinks = [
 
 	button {
 		border: none;
-		border-radius: 8px;
-		padding: 0.6rem 0.9rem;
+		border-radius: var(--radius-sm);
+		padding: 0.62rem 0.92rem;
 		font-size: 0.95rem;
-		background: #111;
+		background: #151515;
 		color: #fff;
 		cursor: pointer;
 		justify-self: start;
+	}
+	button:hover:not(:disabled) {
+		background: #2a2a2a;
 	}
 
 	button:disabled {
@@ -445,7 +450,7 @@ const sectionLinks = [
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: 8px;
+		border-radius: var(--radius-sm);
 		padding: 0.6rem 0.9rem;
 		font-size: 0.95rem;
 		text-decoration: none;
@@ -455,8 +460,8 @@ const sectionLinks = [
 	.feedback {
 		margin: 0.85rem 0 0;
 		padding: 0.7rem 0.8rem;
-		border-radius: 9px;
-		background: #f3f4f6;
+		border-radius: var(--radius-md);
+		background: #f3f6f8;
 		color: #1f2937;
 	}
 
@@ -468,9 +473,9 @@ const sectionLinks = [
 	.summary {
 		margin-top: 0.8rem;
 		padding: 0.85rem;
-		border: 1px dashed #c8c8c8;
-		border-radius: 10px;
-		background: #fafafa;
+		border: 1px dashed var(--color-border);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.54);
 	}
 
 	.summary p {
@@ -478,20 +483,27 @@ const sectionLinks = [
 	}
 
 	.secondary {
-		background: #efefef;
-		color: #222;
+		background: rgba(255, 255, 255, 0.68);
+		color: var(--color-text);
+		border: 1px solid var(--color-border-soft);
+	}
+	.secondary:hover:not(:disabled) {
+		background: #fff;
 	}
 
 	.pending-panel {
 		margin: 0.7rem 0;
 		padding: 0.7rem;
-		border: 1px dashed #c8c8c8;
-		border-radius: 10px;
+		border: 1px dashed var(--color-border);
+		border-radius: var(--radius-md);
 		background: #fff;
 	}
 
 	.danger {
 		background: #991b1b;
+	}
+	.danger:hover:not(:disabled) {
+		background: #7f1d1d;
 	}
 
 	.account-meta {
@@ -504,9 +516,9 @@ const sectionLinks = [
 	}
 
 	.account-panel {
-		border: 1px solid #e5e7eb;
-		border-radius: 10px;
-		background: #fafafa;
+		border: 1px solid var(--color-border-soft);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.5);
 		padding: 0.85rem;
 	}
 
@@ -547,10 +559,10 @@ const sectionLinks = [
 	}
 
 	.api-card {
-		border: 1px solid #e5e7eb;
-		border-radius: 10px;
+		border: 1px solid var(--color-border-soft);
+		border-radius: var(--radius-md);
 		padding: 0.85rem;
-		background: #fafafa;
+		background: rgba(255, 255, 255, 0.5);
 	}
 
 	.api-card h3 {
@@ -573,8 +585,8 @@ const sectionLinks = [
 	.api-url {
 		width: 100%;
 		padding: 0.65rem 0.75rem;
-		border: 1px solid #d1d5db;
-		border-radius: 8px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
 		background: #fff;
 		font-size: 0.92rem;
 		color: #111827;
@@ -606,10 +618,10 @@ const sectionLinks = [
 
 	.modal-panel {
 		width: min(100%, 460px);
-		border-radius: 12px;
+		border-radius: var(--radius-lg);
 		background: #fff;
 		padding: 1rem;
-		box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+		box-shadow: var(--shadow-popover);
 	}
 
 	.modal-panel h2 {

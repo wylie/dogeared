@@ -633,11 +633,11 @@ const isOnboardingComplete = (
 
 <style>
 	.browse-page {
-		max-width: 920px;
+		max-width: 1020px;
 	}
 
 	.intro {
-		margin-bottom: 1.5rem;
+		margin-bottom: 1.8rem;
 		min-width: 0;
 	}
 	.home-jump-links {
@@ -654,8 +654,8 @@ const isOnboardingComplete = (
 		position: sticky;
 		top: var(--mobile-sticky-offset, 0px);
 		z-index: 25;
-		background: var(--color-bg);
-		padding: 0.45rem 0.25rem 0.5rem;
+		background: color-mix(in srgb, var(--color-bg) 88%, white);
+		padding: 0.5rem 0.25rem 0.55rem;
 		width: 100%;
 		max-width: 100%;
 		min-width: 0;
@@ -670,19 +670,20 @@ const isOnboardingComplete = (
 		flex: 0 0 auto;
 		align-items: center;
 		text-decoration: none;
-		color: #1f4f7a;
-		background: #e7edf3;
-		border: 1px solid #c7d5e1;
+		color: #244d6b;
+		background: rgba(255, 255, 255, 0.42);
+		border: 1px solid var(--color-border-soft);
 		border-radius: 999px;
-		padding: 0.22rem 0.62rem;
-		font-size: 0.86rem;
-		font-weight: 700;
+		padding: 0.26rem 0.66rem;
+		font-size: 0.82rem;
+		font-weight: 680;
 		line-height: 1.2;
 	}
 	.home-jump-links a:hover,
 	.home-jump-links a:focus-visible {
-		text-decoration: underline;
-		text-underline-offset: 2px;
+		text-decoration: none;
+		background: rgba(255, 255, 255, 0.68);
+		border-color: rgba(31, 93, 135, 0.25);
 	}
 
 	.eyebrow {
@@ -691,7 +692,7 @@ const isOnboardingComplete = (
 		font-weight: 700;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
-		color: #6a5c3d;
+		color: var(--color-text-subtle);
 	}
 
 	.browse-page h1 {
@@ -703,7 +704,7 @@ const isOnboardingComplete = (
 
 	.subhead {
 		margin: 0.75rem 0 0;
-		color: #4d4d4d;
+		color: var(--color-text-muted);
 		max-width: 44rem;
 		font-size: 1.06rem;
 		line-height: 1.55;
@@ -714,14 +715,14 @@ const isOnboardingComplete = (
 		color: #9f1239;
 		border: 1px solid #fecdd3;
 		padding: 0.7rem 0.8rem;
-		border-radius: 10px;
+		border-radius: var(--radius-md);
 	}
 	.onboarding-checklist {
 		margin: 0 0 1rem;
-		background: #fffdf6;
-		border: 1px solid #eadcc1;
-		border-radius: 12px;
-		padding: 0.7rem;
+		background: rgba(255, 255, 255, 0.56);
+		border: 1px solid var(--color-border-soft);
+		border-radius: var(--radius-lg);
+		padding: 0.82rem;
 	}
 	.checklist-head {
 		display: flex;
@@ -730,7 +731,7 @@ const isOnboardingComplete = (
 		gap: 0.5rem;
 	}
 	.checklist-head h2 { margin: 0; font-size: 1rem; }
-	.checklist-copy { margin: 0.35rem 0 0; font-size: 0.9rem; color: #4d4d4d; }
+	.checklist-copy { margin: 0.35rem 0 0; font-size: 0.9rem; color: var(--color-text-muted); }
 	.onboarding-checklist ul { margin: 0.5rem 0 0; padding-left: 1rem; display: grid; gap: 0.2rem; }
 	.onboarding-checklist li { font-size: 0.9rem; color: #2f3b52; }
 	.onboarding-checklist li.is-done { color: #1f7a45; }
@@ -746,14 +747,14 @@ const isOnboardingComplete = (
 	}
 
 	.browse-section {
-		margin-top: 1.35rem;
+		margin-top: 1.7rem;
 	}
 
 	.section-head {
 		position: sticky;
 		top: calc(var(--mobile-sticky-offset, 0px) + var(--home-jump-links-offset, 44px) - 12px);
-		padding: 0.75rem 0;
-		background-color: var(--color-bg);
+		padding: 0.85rem 0;
+		background-color: color-mix(in srgb, var(--color-bg) 88%, white);
 		z-index: 24;
 		display: flex;
 		align-items: center;
@@ -762,10 +763,12 @@ const isOnboardingComplete = (
 	}
 	.section-head h2 {
 		margin: 0;
+		font-size: clamp(1.25rem, 2vw, 1.65rem);
+		line-height: 1.16;
 	}
 	.section-head-link {
 		font-size: 0.84rem;
-		font-weight: 700;
+		font-weight: 680;
 		color: var(--color-secondary);
 		text-decoration: none;
 		white-space: nowrap;
@@ -778,7 +781,7 @@ const isOnboardingComplete = (
 
 	.list-date {
 		margin-top: -0.35rem;
-		color: #5f5f5f;
+		color: var(--color-text-muted);
 		font-size: 0.84rem;
 	}
 
@@ -788,7 +791,7 @@ const isOnboardingComplete = (
 		margin: 0;
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.75rem;
+		gap: 0.95rem;
 	}
 
 	.community-discovery-section {
@@ -800,13 +803,14 @@ const isOnboardingComplete = (
 		padding: 0;
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 0.75rem;
+		gap: 0.9rem;
 	}
 	.community-suggestion-card {
-		background: #fff;
-		border-radius: 12px;
-		padding: 0.85rem;
-		border: 1px solid #e2e8f0;
+		background: var(--color-surface-raised);
+		border-radius: var(--radius-lg);
+		padding: 0.95rem;
+		border: 1px solid var(--color-border-soft);
+		box-shadow: var(--shadow-card);
 	}
 	.community-suggestion-card h3 {
 		margin: 0;
@@ -814,7 +818,7 @@ const isOnboardingComplete = (
 	}
 	.community-suggestion-card p {
 		margin: 0.35rem 0 0;
-		color: #4d4d4d;
+		color: var(--color-text-muted);
 		font-size: 0.9rem;
 		line-height: 1.45;
 	}
@@ -827,9 +831,9 @@ const isOnboardingComplete = (
 	.reader-follow-button {
 		margin-top: 0.65rem;
 		border: none;
-		border-radius: 999px;
-		padding: 0.4rem 0.72rem;
-		background: #111;
+		border-radius: var(--radius-pill);
+		padding: 0.46rem 0.78rem;
+		background: #151515;
 		color: #fff;
 		font: inherit;
 		font-size: 0.84rem;
@@ -856,7 +860,7 @@ const isOnboardingComplete = (
 		border: none;
 		border-radius: 999px;
 		padding: 0.4rem 0.72rem;
-		background: #2f8f57;
+		background: var(--color-primary);
 		color: #fff;
 		font: inherit;
 		font-size: 0.84rem;
@@ -950,10 +954,10 @@ const isOnboardingComplete = (
 		left: auto;
 		min-width: 180px;
 		background: #fff;
-		border: 1px solid #c9c9c9;
-		border-radius: 8px;
-		box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
-		padding: 0.25rem 0;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-popover);
+		padding: 0.28rem;
 		z-index: 25;
 	}
 
@@ -968,11 +972,12 @@ const isOnboardingComplete = (
 		padding: 0.5rem 0.75rem;
 		font-size: 0.9rem;
 		cursor: pointer;
-		color: #222;
+		color: var(--color-text);
+		border-radius: var(--radius-sm);
 	}
 
 	.shelf-option:hover {
-		background: #f2f2f2;
+		background: rgba(87, 117, 144, 0.09);
 	}
 
 	.shelf-feedback {

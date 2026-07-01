@@ -198,7 +198,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
 
 <style>
   #left-hand-nav {
-    padding: 1rem;
+    padding: 1.05rem 0.95rem 1rem;
     min-height: 100%;
     box-sizing: border-box;
     display: flex;
@@ -209,49 +209,52 @@ const query = Astro.url.searchParams.get("q") ?? "";
     display: block;
   }
   .primary-links {
-    margin: 1rem 0 0;
-    padding: 1rem 0 0;
-    border-top: 1px solid var(--color-divider);
+    margin: 1.05rem 0 0;
+    padding: 1.05rem 0 0;
+    border-top: 1px solid var(--color-border-soft);
     display: grid;
-    gap: 0.9rem;
+    gap: 1rem;
   }
   .nav-group {
     display: grid;
-    gap: 0.3rem;
+    gap: 0.34rem;
   }
   .nav-group-title {
     margin: 0;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: #546374;
+    color: var(--color-text-subtle);
+    font-weight: 760;
   }
   .nav-group > ul {
     list-style-type: none;
     margin: 0;
     padding: 0;
+    display: grid;
+    gap: 0.08rem;
   }
   .secondary-links-mobile {
     display: none;
   }
   .section-links-nested {
     list-style: none;
-    margin: 0.2rem 0 0.1rem;
+    margin: 0.24rem 0 0.14rem;
     padding: 0 0 0 0.9rem;
-    border-top: none;
+    border-left: 1px solid var(--color-border-soft);
   }
   .section-links-nested li + li {
     margin-top: 0.08rem;
   }
   .section-links-nested a {
-    font-size: 0.94em;
-    color: #2b2b2b;
+    font-size: 0.9em;
+    color: var(--color-text-muted);
   }
   .sidebar-footer {
     margin-top: auto;
     padding-top: 1rem;
-    border-top: 1px solid var(--color-divider);
-    color: #5a6470;
+    border-top: 1px solid var(--color-border-soft);
+    color: var(--color-text-subtle);
     font-size: 0.78rem;
     line-height: 1.35;
   }
@@ -265,9 +268,9 @@ const query = Astro.url.searchParams.get("q") ?? "";
     margin-top: 0.45rem;
   }
   .sidebar-footer a {
-    color: #334155;
+    color: var(--color-text-muted);
     text-decoration: none;
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
   }
   .sidebar-footer a:hover,
   .sidebar-footer a:focus-visible,
@@ -282,23 +285,34 @@ const query = Astro.url.searchParams.get("q") ?? "";
   }
   a {
     text-decoration: none;
-    color: black;
-    border-radius: 5px;
+    color: var(--color-text);
+    border-radius: var(--radius-sm);
+  }
+  .primary-links .nav-group > ul > li > a,
+  .primary-links .nav-group > ul > li > .nav-text-button {
+    display: flex;
+    align-items: center;
+    min-height: 2rem;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.32rem 0.48rem;
+    line-height: 1.2;
   }
   a.active {
-    background: transparent;
-    color: var(--color-link);
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    text-decoration-thickness: 2px;
+    background: rgba(255, 255, 255, 0.46);
+    color: var(--color-secondary-hover);
+    text-decoration: none;
     cursor: default;
+    box-shadow: inset 2px 0 0 var(--color-secondary);
   }
   .section-links-nested a.section-active {
     text-decoration: underline;
     text-underline-offset: 3px;
   }
   .hover:hover {
-    text-decoration: underline;
+    color: var(--color-secondary-hover);
+    text-decoration: none;
+    background: rgba(255, 255, 255, 0.3);
   }
   .nav-text-button {
     appearance: none;
@@ -306,10 +320,10 @@ const query = Astro.url.searchParams.get("q") ?? "";
     background: transparent;
     padding: 0;
     margin: 0;
-    color: black;
+    color: var(--color-text);
     font: inherit;
     cursor: pointer;
-    border-radius: 5px;
+    border-radius: var(--radius-sm);
   }
   .mobile-menu-toggle {
     display: none;
@@ -328,10 +342,20 @@ const query = Astro.url.searchParams.get("q") ?? "";
   input[type="search"] {
     font-size: 16px;
     width: 100%;
-    border: none;
-    border-radius: 50px;
-    padding: .5rem 1rem;
+    border: 1px solid rgba(87, 117, 144, 0.18);
+    border-radius: var(--radius-pill);
+    padding: 0.58rem 0.95rem;
     margin-top: 1rem;
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--color-text);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
+  }
+  input[type="search"]::placeholder {
+    color: var(--color-text-subtle);
+  }
+  input[type="search"]:focus {
+    background: #fff;
+    border-color: rgba(31, 93, 135, 0.42);
   }
   .visually-hidden {
     position: absolute;
@@ -387,9 +411,9 @@ const query = Astro.url.searchParams.get("q") ?? "";
     width: min(420px, calc(100vw - 2rem));
     margin: 12vh auto 0;
     background: #fff;
-    border-radius: 14px;
+    border-radius: var(--radius-lg);
     padding: 1rem;
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-popover);
   }
   .login-modal-panel h3 {
     margin: 0;
@@ -411,8 +435,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    border: 1px solid #999;
-    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     padding: 0.7rem 0.85rem;
     font-size: 16px;
     margin-top: 0;
@@ -420,9 +444,9 @@ const query = Astro.url.searchParams.get("q") ?? "";
   .login-submit {
     appearance: none;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     padding: 0.65rem 0.9rem;
-    background: #111;
+    background: #151515;
     color: #fff;
     font: inherit;
     cursor: pointer;
@@ -438,13 +462,13 @@ const query = Astro.url.searchParams.get("q") ?? "";
     font-size: 1.4rem;
     line-height: 1;
     cursor: pointer;
-    color: #444;
+    color: var(--color-text-muted);
   }
   .login-feedback {
     margin: 0.8rem 0 0;
     padding: 0.7rem 0.8rem;
-    border-radius: 9px;
-    background: #f3f4f6;
+    border-radius: var(--radius-md);
+    background: #f3f6f8;
     color: #1f2937;
   }
   .login-feedback.error {
@@ -463,8 +487,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
         "secondary"
         "search"
         "footer";
-      background: #fff;
-      border-bottom: 1px solid #ddd6c8;
+      background: rgba(255, 255, 255, 0.92);
+      border-bottom: 1px solid var(--color-border-soft);
       border-bottom-left-radius: 18px;
       border-bottom-right-radius: 18px;
       padding: 0.6rem 0.5rem 0.55rem;
@@ -503,7 +527,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     #left-hand-nav input[type="search"] {
       margin-top: 0;
       padding: 0.4rem 0.8rem;
-      border: 2px solid #d1d5db;
+      border: 1px solid var(--color-border);
     }
     #left-hand-nav .primary-links {
       display: flex;
@@ -558,19 +582,19 @@ const query = Astro.url.searchParams.get("q") ?? "";
       padding: 0.38rem 0.2rem;
       line-height: 1.25;
       text-decoration: none;
-      color: #202020;
+      color: var(--color-text);
     }
     #left-hand-nav .primary-links a.active {
-      background: transparent;
-      text-decoration: underline;
-      text-underline-offset: 2px;
+      background: rgba(31, 93, 135, 0.08);
+      text-decoration: none;
+      box-shadow: none;
     }
     #left-hand-nav .primary-links a.hover:hover,
     #left-hand-nav .primary-links .nav-text-button.hover:hover,
     #left-hand-nav .primary-links a:focus-visible,
     #left-hand-nav .primary-links .nav-text-button:focus-visible {
-      text-decoration: underline;
-      text-underline-offset: 2px;
+      text-decoration: none;
+      background: rgba(87, 117, 144, 0.08);
     }
     #left-hand-nav .section-links-nested {
       display: none;
@@ -584,7 +608,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       list-style: none;
       margin: 0.15rem 0 0;
       padding: 0.6rem 0 0.35rem;
-      border-top: 1px solid #d7dde4;
+      border-top: 1px solid var(--color-border-soft);
       align-items: center;
       min-width: 0;
       width: 100%;
@@ -609,7 +633,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       display: inline-flex;
       align-items: center;
       text-decoration: none;
-      color: #202020;
+      color: var(--color-text);
       line-height: 1.25;
       padding: 0.34rem 0.2rem;
       border-radius: 8px;

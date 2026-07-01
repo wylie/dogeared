@@ -235,16 +235,19 @@ const booksStructuredData = JSON.stringify([
 </Layout>
 
 <style>
-	.books-page { max-width: 980px; display: grid; gap: 1rem; }
-	.breadcrumbs { display: flex; gap: 0.35rem; font-size: 0.84rem; color: #546374; }
+	.books-page { max-width: 1040px; display: grid; gap: 1.2rem; }
+	.breadcrumbs { display: flex; gap: 0.35rem; font-size: 0.84rem; color: var(--color-text-subtle); }
 	.breadcrumbs a { color: var(--color-secondary); text-decoration: none; }
 	.header h1, .header p { margin: 0; }
-	.curated-section { display: grid; gap: 0.55rem; }
+	.header h1 { line-height: 1.08; }
+	.header p { margin-top: 0.45rem; color: var(--color-text-muted); font-size: 1.02rem; line-height: 1.5; }
+	.curated-section { display: grid; gap: 0.72rem; }
 	.section-header h2, .section-header p { margin: 0; }
-	.section-header p { color: #4f5d6c; font-size: 0.92rem; }
-	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.section-header h2 { font-size: clamp(1.25rem, 2vw, 1.62rem); line-height: 1.16; }
+	.section-header p { margin-top: 0.24rem; color: var(--color-text-muted); font-size: 0.94rem; }
+	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.95rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.books-page :global(.book-card .card-body h3) { padding-right: 4.5rem; }
-	.empty { margin: 0; color: #4f5d6c; }
+	.empty { margin: 0; color: var(--color-text-muted); }
 	@media (max-width: 900px) {
 		.book-grid { grid-template-columns: 1fr; }
 	}

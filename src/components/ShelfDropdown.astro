@@ -140,9 +140,11 @@ try {
 		display: grid !important;
 		place-items: center !important;
 		line-height: 1 !important;
+		box-shadow: 0 8px 18px rgba(31, 122, 69, 0.18) !important;
 	}
 	.shelf-dropdown .shelf-trigger.shelf-fab:hover {
 		background: var(--color-primary-hover) !important;
+		box-shadow: 0 10px 20px rgba(31, 122, 69, 0.22) !important;
 	}
 	.shelf-plus {
 		font-size: var(--shelf-trigger-icon-size, 1.4rem);
@@ -162,10 +164,10 @@ try {
 		left: auto !important;
 		min-width: 180px;
 		background: #fff;
-		border: 1px solid #c9c9c9;
-		border-radius: 8px;
-		box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
-		padding: 0.25rem 0;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-popover);
+		padding: 0.28rem;
 		z-index: 25;
 	}
 	.shelf-menu [data-custom-shelf-options] {
@@ -183,13 +185,14 @@ try {
 		text-align: left;
 		border: none;
 		background: transparent;
-		padding: 0.5rem 0.75rem;
+		padding: 0.5rem 0.62rem;
 		font-size: 0.92rem;
 		cursor: pointer;
-		color: #222;
+		color: var(--color-text);
 		font: inherit;
 		line-height: 1.25;
 		box-shadow: none;
+		border-radius: var(--radius-sm);
 	}
 	.shelf-option.is-current { font-weight: 600; }
 	.shelf-option-icon {
@@ -207,12 +210,12 @@ try {
 		color: var(--color-primary);
 	}
 	.shelf-option:hover {
-		background: #f2f2f2;
+		background: rgba(87, 117, 144, 0.09);
 	}
 	.shelf-option-divider {
 		height: 1px;
-		margin: 0.2rem 0;
-		background: #ececec;
+		margin: 0.22rem 0.18rem;
+		background: var(--color-border-soft);
 	}
 	.shelf-feedback {
 		margin: 0.28rem 0 0;

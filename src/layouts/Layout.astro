@@ -139,13 +139,14 @@ import '../assets/global.css';
 
 	}
 	.container {
-		max-width: 1200px;
+		max-width: 1280px;
 		margin: auto;
 		display: grid;
-		grid-template-columns: minmax(240px, 26%) minmax(0, 1fr);
+		grid-template-columns: minmax(238px, 24%) minmax(0, 1fr);
 		min-height: 100vh;
 		align-items: start;
 		overflow-x: clip;
+		column-gap: clamp(0.5rem, 2vw, 1.5rem);
 	}
 	.column {
 		display: flex;
@@ -153,8 +154,12 @@ import '../assets/global.css';
 		min-width: 0;
 	}
 	.column {
-		padding: 1rem;
+		padding: clamp(0.85rem, 1.4vw, 1.35rem);
 		box-sizing: border-box;
+	}
+	.content-column {
+		padding-top: clamp(1rem, 2.1vw, 2rem);
+		padding-bottom: 2.5rem;
 	}
 	.container > .column:first-child {
 		position: sticky;
@@ -201,6 +206,10 @@ import '../assets/global.css';
 		.column {
 			padding: 0.6rem 0.5rem;
 			min-width: 0;
+		}
+		.content-column {
+			padding-top: 0.85rem;
+			padding-bottom: 1.5rem;
 		}
 		.container > .column:first-child {
 			position: sticky;
