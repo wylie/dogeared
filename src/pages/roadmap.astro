@@ -198,14 +198,14 @@ const roadmapStructuredData = JSON.stringify(buildBreadcrumbList([
 <style>
 	.roadmap-page { max-width: 960px; }
 	.hero { margin-bottom: 1rem; }
-	.eyebrow { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6a5c3d; }
+	.eyebrow { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); }
 	.roadmap-page h1 { margin: 0; line-height: 1.05; font-size: clamp(2rem, 3.8vw, 3.4rem); }
-	.panel { margin-top: 0.9rem; border: none; border-radius: 12px; background: #fff; padding: 0.8rem; }
+	.panel { margin-top: 0.9rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
 	.panel-plain { border: none; background: transparent; padding: 0; border-radius: 0; }
 	.panel-head h2 { margin: 0; }
 	.panel-head p { margin: 0.3rem 0 0; color: #515151; }
 	.roadmap-grid { margin-top: 0.7rem; display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.roadmap-item { border: none; border-radius: 12px; padding: 0.75rem; background: #fcfbf8; }
+	.roadmap-item { border: var(--border-subtle); border-radius: var(--radius-md); padding: 0.75rem; background: rgba(255, 255, 255, 0.56); }
 	.roadmap-item-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 	.roadmap-item h3 { margin: 0.35rem 0 0; font-size: 1rem; }
 	.roadmap-item p { margin: 0.45rem 0 0; color: #4f4f4f; line-height: 1.5; }
@@ -217,10 +217,10 @@ const roadmapStructuredData = JSON.stringify(buildBreadcrumbList([
 	.status-finished { background: #dbeafe; color: #1e40af; }
 	.finished-rank-pill { background: #e2e8f0; color: #475569; }
 	.support-grid { margin-top: 0.7rem; display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.support-card { border: none; border-radius: 12px; padding: 0.75rem; background: #fcfbf8; display: flex; flex-direction: column; min-height: 180px; }
+	.support-card { border: var(--border-subtle); border-radius: var(--radius-md); padding: 0.75rem; background: rgba(255, 255, 255, 0.56); display: flex; flex-direction: column; min-height: 180px; }
 	.support-card h3 { margin: 0; font-size: 1rem; }
 	.support-card p { margin: 0.45rem 0 0; color: #4f4f4f; line-height: 1.5; }
-	.support-feature { margin-bottom: 0.75rem; border: none; background: linear-gradient(135deg, #f8f2e4 0%, #fdfaf3 100%); border-radius: 12px; padding: 0.8rem; display: flex; justify-content: space-between; gap: 0.75rem; align-items: center; }
+	.support-feature { margin-bottom: 0.75rem; border: var(--border-subtle); background: rgba(255, 255, 255, 0.56); border-radius: var(--radius-md); padding: 0.8rem; display: flex; justify-content: space-between; gap: 0.75rem; align-items: center; }
 	.feature-eyebrow { margin: 0; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: #735d34; font-weight: 700; }
 	.support-feature h2 { margin: 0.24rem 0 0; font-size: clamp(1.15rem, 2.2vw, 1.6rem); }
 	.support-feature p { margin: 0.33rem 0 0; color: #4f4f4f; max-width: 54ch; }

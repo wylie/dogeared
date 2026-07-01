@@ -141,7 +141,7 @@ function renderAverageStars(value: number) {
 
 <style>
 	.book-card {
-		border: 1px solid var(--color-border-soft);
+		border: var(--border-subtle);
 		border-radius: var(--radius-lg);
 		background: var(--color-surface-raised);
 		padding: 0.78rem;
@@ -152,18 +152,15 @@ function renderAverageStars(value: number) {
 		display: grid;
 		grid-template-columns: 84px minmax(0, 1fr);
 		gap: 0.82rem;
-		box-shadow: var(--shadow-card);
 		backdrop-filter: blur(10px);
 		transition:
 			background-color var(--transition-medium),
 			border-color var(--transition-medium),
-			box-shadow var(--transition-medium),
 			transform var(--transition-medium);
 	}
 	.book-card:hover {
 		background: #fff;
-		border-color: rgba(87, 117, 144, 0.22);
-		box-shadow: var(--shadow-card-hover);
+		border-color: var(--color-border);
 	}
 	.book-card:has(.shelf-menu:not([hidden])) {
 		z-index: 50;
@@ -207,7 +204,7 @@ function renderAverageStars(value: number) {
 		right: 0;
 		min-width: 132px;
 		background: #fff;
-		border: 1px solid var(--color-border);
+		border: none;
 		border-radius: var(--radius-md);
 		box-shadow: var(--shadow-popover);
 		padding: 0.25rem;
@@ -248,14 +245,14 @@ function renderAverageStars(value: number) {
 		object-fit: cover;
 		border-radius: 7px;
 		background: rgba(255, 255, 255, 0.62);
-		box-shadow: 0 9px 18px rgba(15, 23, 42, 0.16);
+		box-shadow: var(--shadow-xs);
 	}
 	.cover-placeholder {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		color: var(--color-text-subtle);
-		border: 1px solid var(--color-border-soft);
+		border: var(--border-subtle);
 		box-shadow: none;
 	}
 	.card-body {
@@ -356,7 +353,7 @@ function renderAverageStars(value: number) {
 		grid-column: 1 / -1;
 		margin-top: 0.26rem;
 		padding-top: 0.58rem;
-		border-top: 1px solid var(--color-border-soft);
+		border-top: var(--border-subtle);
 		/* display: flex; */
 		/* align-items: center; */
 		gap: 0.6rem;

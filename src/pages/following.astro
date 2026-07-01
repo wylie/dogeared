@@ -310,8 +310,9 @@ const sectionLinks = [
 	}
 	.people-strip-card {
 		scroll-snap-align: start;
-		background: #fff;
-		border-radius: 12px;
+		background: var(--color-surface-raised);
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
 		padding: 0.75rem;
 		display: grid;
 		gap: 0.5rem;
@@ -458,7 +459,7 @@ const sectionLinks = [
 		width: 100%;
 		min-width: 0;
 		flex-wrap: nowrap;
-		border-top: 1px solid #e6edf4;
+		border-top: var(--border-subtle);
 		padding-top: 0.48rem;
 	}
 	.activity-like-button {
@@ -578,7 +579,7 @@ const sectionLinks = [
 		color: #1f2a44;
 	}
 	:global(.activity-comment-item + .activity-comment-item) {
-		border-top: 1px solid #e6edf5;
+		border-top: var(--border-subtle);
 	}
 	:global(.activity-comment-user) {
 		font-weight: 700;
@@ -600,7 +601,7 @@ const sectionLinks = [
 	.activity-comment-form input {
 		flex: 1 1 auto;
 		min-width: 0;
-		border: 1px solid #c8d3df;
+		border: var(--border-strong);
 		border-radius: 999px;
 		padding: 0.35rem 0.65rem;
 		min-height: 2rem;
@@ -643,9 +644,9 @@ const sectionLinks = [
 		}
 	}
 	.empty-following-panel {
-		border: none;
-		border-radius: 12px;
-		background: var(--color-surface);
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
 		padding: 1rem;
 	}
 	.empty-copy p,
@@ -669,8 +670,9 @@ const sectionLinks = [
 		scroll-snap-type: x proximity;
 	}
 	.reader-card {
-		background: #fff;
-		border-radius: 12px;
+		background: var(--color-surface-raised);
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
 		padding: 0.8rem;
 		display: grid;
 		gap: 0.55rem;

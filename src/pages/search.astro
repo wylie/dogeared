@@ -291,10 +291,10 @@ if (session?.userId) {
 		left: auto;
 		min-width: 180px;
 		background: #fff;
-		border: 1px solid #c9c9c9;
-		border-radius: 8px;
-		box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
-		padding: 0.25rem 0;
+		border: none;
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-popover);
+		padding: 0.28rem;
 		z-index: 25;
 	}
 
@@ -309,11 +309,11 @@ if (session?.userId) {
 		padding: 0.5rem 0.75rem;
 		font-size: 0.92rem;
 		cursor: pointer;
-		color: #222;
+		color: var(--color-text);
 	}
 
 	.shelf-option:hover {
-		background: #f2f2f2;
+		background: rgba(87, 117, 144, 0.09);
 	}
 
 	.shelf-feedback {
@@ -341,9 +341,9 @@ if (session?.userId) {
 		width: min(460px, 100%);
 		background: #111;
 		color: #fff;
-		border-radius: 18px;
+		border-radius: var(--radius-lg);
 		padding: 1rem;
-		box-shadow: 0 24px 52px rgba(0, 0, 0, 0.45);
+		box-shadow: var(--shadow-md);
 	}
 
 	.login-confirm-dialog p {

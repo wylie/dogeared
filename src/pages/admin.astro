@@ -100,14 +100,14 @@ const quickLinks = [
 <style>
 	.admin-page { max-width: 980px; }
 	.hero h1 { margin: 0; }
-	.hero p { margin: 0.35rem 0 0; color: #4d4d4d; }
-	.panel { margin-top: 1rem; border: 0; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.hero p { margin: 0.35rem 0 0; color: var(--color-text-muted); }
+	.panel { margin-top: 1rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
 	.panel-head h2 { margin: 0; }
 	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }
 	.grid { display: grid; gap: 0.55rem; margin-top: 0.7rem; }
 	.stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 	.recent-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-	.stat { border-radius: 10px; background: #f3f7fb; padding: 0.6rem; }
+	.stat { border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.56); padding: 0.6rem; }
 	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }
 	.stat strong { display: block; margin-top: 0.2rem; font-size: 1.2rem; }
 	.quick-link-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin-top: 0.7rem; }
@@ -115,11 +115,11 @@ const quickLinks = [
 		display: grid;
 		gap: 0.2rem;
 		padding: 0.7rem;
-		border-radius: 10px;
+		border-radius: var(--radius-md);
 		background: #f7fafc;
 		color: inherit;
 		text-decoration: none;
-		border: 1px solid #e5edf3;
+		border: var(--border-subtle);
 	}
 	.quick-link:hover { border-color: var(--color-secondary); }
 	.quick-link strong { color: var(--color-secondary); }

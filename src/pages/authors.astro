@@ -165,7 +165,7 @@ const authorsStructuredData = JSON.stringify([
 	.breadcrumbs a { color: var(--color-secondary); text-decoration: none; }
 	.header h1, .header p { margin: 0; }
 	.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-	.controls input, .controls select, .controls button { font: inherit; padding: 0.44rem 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--color-border); }
+	.controls input, .controls select, .controls button { font: inherit; padding: 0.44rem 0.6rem; border-radius: var(--radius-sm); border: var(--border-strong); }
 	.controls button {
 		background: var(--color-primary);
 		border-color: var(--color-primary);
@@ -178,7 +178,7 @@ const authorsStructuredData = JSON.stringify([
 		border-color: var(--color-primary-hover);
 	}
 	.author-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.85rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.author-card { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 0.68rem; align-items: center; text-decoration: none; color: inherit; background: var(--color-surface-raised); border: 1px solid var(--color-border-soft); border-radius: var(--radius-lg); padding: 0.72rem; box-shadow: var(--shadow-card); }
+	.author-card { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 0.68rem; align-items: center; text-decoration: none; color: inherit; background: var(--color-surface-raised); border: var(--border-subtle); border-radius: var(--radius-lg); padding: 0.72rem; }
 	.author-card img, .avatar-fallback { width: 56px; height: 56px; border-radius: 999px; object-fit: cover; background: #ece7dc; display: grid; place-items: center; }
 	.author-card strong { display: block; }
 	.author-card p { margin: 0.2rem 0 0; color: var(--color-text-muted); font-size: 0.88rem; }

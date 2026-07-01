@@ -135,8 +135,8 @@ function formatDate(value: string) {
 <style>
 	.admin-users-page { max-width: 980px; }
 	.hero h1 { margin: 0; }
-	.hero p { margin: 0.35rem 0 0; color: #4d4d4d; }
-	.panel { margin-top: 1rem; border: 0; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.hero p { margin: 0.35rem 0 0; color: var(--color-text-muted); }
+	.panel { margin-top: 1rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
 	.panel-head h2 { margin: 0; }
 	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }
 	.search-form { display: grid; gap: 0.4rem; margin-top: 0.65rem; }
@@ -146,8 +146,8 @@ function formatDate(value: string) {
 		flex: 1 1 260px;
 		min-width: 0;
 		height: 38px;
-		border: 1px solid #cad1db;
-		border-radius: 8px;
+		border: var(--border-strong);
+		border-radius: var(--radius-sm);
 		padding: 0 0.65rem;
 		font: inherit;
 	}
@@ -176,7 +176,7 @@ function formatDate(value: string) {
 	.admin-message.error { color: #991b1b; }
 	.table-wrap { margin-top: 0.7rem; overflow-x: auto; }
 	table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-	th, td { text-align: left; padding: 0.45rem; border-bottom: 1px solid #e8e8e8; vertical-align: top; }
+	th, td { text-align: left; padding: 0.45rem; border-bottom: var(--border-subtle); vertical-align: top; }
 	th { font-weight: 700; color: #444; }
 	.muted { color: #6b7280; }
 	.inline-delete-form { margin: 0; }

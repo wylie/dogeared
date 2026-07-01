@@ -2140,7 +2140,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.75rem;
-		border: 1px solid var(--color-border-soft);
+		border: var(--border-subtle);
 		border-radius: var(--radius-lg);
 		background: rgba(255, 255, 255, 0.56);
 		padding: 0.75rem 0.85rem;
@@ -2160,15 +2160,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		padding: 0.35rem 0.7rem;
 		cursor: pointer;
 	}
-	.state-card, .profile-card, .shelf-card, .activity-card { border: 1px solid var(--color-border-soft); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; box-shadow: var(--shadow-card); }
+	.state-card, .profile-card, .shelf-card, .activity-card { border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
 	.activity-card-plain { border: none; background: transparent; border-radius: 0; padding: 0; }
 	.notifications-card {
-		border: none;
-		border: 1px solid var(--color-border-soft);
+		border: var(--border-subtle);
 		border-radius: var(--radius-lg);
 		background: var(--color-surface-raised);
 		padding: 1rem;
-		box-shadow: var(--shadow-card);
 	}
 	.notifications-card-empty {
 		padding: 0.6rem 0.8rem;
@@ -2204,7 +2202,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		gap: 0.45rem;
 	}
 	.notification-item {
-		border: 1px solid #d5dee8;
+		border: var(--border-subtle);
 		border-radius: 10px;
 		padding: 0;
 		background: #fff;
@@ -2245,9 +2243,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		pointer-events: auto;
 	}
 	.notification-item-unread {
-		border-color: #c9d3df;
+		border-color: var(--color-border);
 		background: #fbfdff;
-		box-shadow: inset 3px 0 0 #cfd8e3;
 	}
 	.notification-title,
 	.notification-age {
@@ -2322,10 +2319,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		right: 0;
 		min-width: 132px;
 		background: #fff;
-		border: 1px solid #d8d8d8;
-		border-radius: 8px;
-		box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-		padding: 0.2rem 0;
+		border: none;
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-popover);
+		padding: 0.28rem;
 		z-index: 30;
 	}
 	.profile-actions-menu-item {
@@ -2337,13 +2334,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		padding: 0.45rem 0.65rem;
 		font: inherit;
 		font-size: 0.86rem;
-		color: #222;
+		color: var(--color-text);
 		text-decoration: none;
 		cursor: pointer;
 		box-sizing: border-box;
 	}
 	.profile-actions-menu-item:hover {
-		background: #f3f4f6;
+		background: rgba(87, 117, 144, 0.09);
 	}
 	.profile-head { display: flex; gap: 0.75rem; align-items: center; }
 	.avatar, .avatar-fallback { width: 64px; height: 64px; border-radius: 999px; object-fit: cover; }
@@ -2352,9 +2349,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.username { margin: 0.15rem 0 0; color: #5d5a53; }
 	.blurb { margin: 0.7rem 0 0; }
 	.follow-actions { margin-top: 0.55rem; display: flex; align-items: center; gap: 0.6rem; }
-	.follow-actions button { border: 1px solid #d1c8ba; border-radius: 999px; padding: 0.35rem 0.8rem; background: #1d1d1d; color: #fff; font: inherit; cursor: pointer; }
+	.follow-actions button { border: none; border-radius: 999px; padding: 0.35rem 0.8rem; background: #1d1d1d; color: #fff; font: inherit; cursor: pointer; }
 	.follow-actions button[disabled] { opacity: 0.6; cursor: default; }
-	.owner-edit-link { border: 1px solid #d1c8ba; border-radius: 999px; padding: 0.35rem 0.8rem; background: #f3efe7; color: #222; text-decoration: none; font-weight: 700; }
+	.owner-edit-link { border: var(--border-subtle); border-radius: 999px; padding: 0.35rem 0.8rem; background: #f3efe7; color: var(--color-text); text-decoration: none; font-weight: 700; }
 	.inline-profile-form {
 		margin-top: 0.75rem;
 		display: grid;
@@ -2372,8 +2369,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.inline-profile-form textarea {
 		width: 100%;
 		box-sizing: border-box;
-		border: 1px solid #d1d5db;
-		border-radius: 8px;
+		border: var(--border-strong);
+		border-radius: var(--radius-sm);
 		padding: 0.5rem 0.6rem;
 		font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 		font-weight: 400;
@@ -2515,7 +2512,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.reading-goal-books {
 		margin-top: 0.85rem;
 		padding-top: 0.75rem;
-		border-top: 1px solid #edf1f4;
+		border-top: var(--border-subtle);
 	}
 	.reading-goal-books-head {
 		display: flex;
@@ -2571,7 +2568,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.reading-goal-cover-placeholder {
 		display: grid;
 		place-items: center;
-		border: 1px solid #d7d7d7;
+		border: var(--border-subtle);
 		color: #8a8a8a;
 	}
 	.reading-goal-cover-placeholder .material-icons {
@@ -2607,17 +2604,17 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		padding: 0;
 	}
 	.shelf-summary-item {
-		border: 1px solid var(--color-border-soft);
+		border: var(--border-subtle);
 		border-radius: var(--radius-lg);
 		background: rgba(255, 255, 255, 0.58);
 		padding: 0.8rem 0.9rem;
 		text-decoration: none;
 		display: block;
-		transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+		transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 	}
 	.shelf-summary-item:hover {
 		transform: translateY(-1px);
-		box-shadow: var(--shadow-card-hover);
+		border-color: var(--color-border);
 	}
 	.shelf-summary-item-total:hover {
 		transform: none;
@@ -2697,8 +2694,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.create-shelf-modal-card input,
 	.create-shelf-modal-card select {
 		height: 38px;
-		border: 1px solid #cad1db;
-		border-radius: 8px;
+		border: var(--border-strong);
+		border-radius: var(--radius-sm);
 		padding: 0 0.55rem;
 		font: inherit;
 	}
@@ -2749,10 +2746,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		right: 0;
 		min-width: 120px;
 		background: #fff;
-		border: 1px solid #d8d8d8;
-		border-radius: 8px;
-		box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-		padding: 0.2rem 0;
+		border: none;
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-popover);
+		padding: 0.28rem;
 		z-index: 30;
 	}
 	.custom-shelf-menu-item {
@@ -2769,7 +2766,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		white-space: nowrap;
 	}
 	.custom-shelf-menu-item:hover {
-		background: #f3f4f6;
+		background: rgba(87, 117, 144, 0.09);
 	}
 	.custom-shelf-menu-item:disabled,
 	.custom-shelf-menu-item[aria-disabled="true"] {
@@ -2838,9 +2835,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	:global(.icon-picker-modal) {
 		width: min(500px, 100%);
 		background: #fff;
-		border: 1px solid #d8d8d8;
-		border-radius: 12px;
-		box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+		border: none;
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-md);
 		padding: 0.9rem;
 	}
 	:global(.icon-picker-title) {
@@ -2855,7 +2852,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		margin-top: 0.7rem;
 	}
 	:global(.icon-picker-option) {
-		border: 1px solid #d1d5db;
+		border: var(--border-subtle);
 		background: #fff;
 		border-radius: 10px;
 		padding: 0.55rem 0.35rem;
@@ -3013,7 +3010,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	:global(.activity-comment-item + .activity-comment-item) {
 		margin-top: 0.22rem;
 		padding-top: 0.22rem;
-		border-top: 1px solid #e7edf5;
+		border-top: var(--border-subtle);
 	}
 	.activity-comment-form {
 		display: flex;
@@ -3027,9 +3024,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		min-width: 0;
 		height: 1.9rem;
 		border-radius: 999px;
-		border: 1px solid #bac9dc;
+		border: var(--border-strong);
 		padding: 0 0.72rem;
-		background: #fdfefe;
+		background: rgba(255, 255, 255, 0.82);
 		color: #1f2937;
 		font-size: 0.86rem;
 	}
@@ -3065,7 +3062,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		margin-top: 0.55rem;
 		margin-bottom: 0.25rem;
 		padding: 0.75rem;
-		border: 1px solid var(--color-border-soft);
+		border: var(--border-subtle);
 		border-radius: var(--radius-lg);
 		background: rgba(255, 255, 255, 0.54);
 		display: grid;
@@ -3145,7 +3142,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		width: min(560px, calc(100vw - 1.5rem));
 		max-width: calc(100vw - 1.5rem);
 		background: #ffffff;
-		border: 1px solid var(--color-border);
+		border: none;
 		border-radius: var(--radius-md);
 		box-shadow: var(--shadow-popover);
 		padding: 0.6rem 0.7rem;
@@ -3210,8 +3207,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		flex: 1 1 92px;
 		min-width: 0;
 		height: 34px;
-		border: 1px solid #cfd4db;
-		border-radius: 8px;
+		border: var(--border-strong);
+		border-radius: var(--radius-sm);
 		padding: 0 0.45rem;
 		font-size: 0.85rem;
 		box-sizing: border-box;
@@ -3293,9 +3290,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.finish-rating-modal {
 		width: min(460px, 100%);
 		background: #fff;
-		border-radius: 14px;
+		border-radius: var(--radius-lg);
 		padding: 1rem;
-		box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
+		box-shadow: var(--shadow-md);
 	}
 	.finish-rating-title {
 		margin: 0;
@@ -3327,15 +3324,15 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.finish-reflection-input {
 		width: 100%;
 		box-sizing: border-box;
-		border: 1px solid #d6dde7;
-		border-radius: 10px;
+		border: var(--border-strong);
+		border-radius: var(--radius-md);
 		padding: 0.62rem 0.72rem;
 		font: inherit;
 		font-size: 0.9rem;
 		line-height: 1.35;
 		color: #243244;
 		background: #f8fbff;
-		transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+		transition: border-color var(--transition-fast), background-color var(--transition-fast);
 		resize: vertical;
 		min-height: 92px;
 	}
@@ -3346,7 +3343,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		outline: none;
 		border-color: #8ba7c9;
 		background: #fff;
-		box-shadow: 0 0 0 3px rgba(139, 167, 201, 0.22);
 	}
 	.finish-reflection-count {
 		margin: 0;
@@ -3408,9 +3404,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	:global(.finish-rating-modal) {
 		width: min(560px, 100%);
 		background: #fff;
-		border-radius: 14px;
+		border-radius: var(--radius-lg);
 		padding: 1rem;
-		box-shadow: 0 10px 26px rgba(0, 0, 0, 0.2);
+		box-shadow: var(--shadow-md);
 	}
 	:global(.finish-rating-title) {
 		margin: 0;
@@ -3452,8 +3448,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		display: block;
 		width: 100%;
 		box-sizing: border-box;
-		border: 1px solid #d6dde7;
-		border-radius: 10px;
+		border: var(--border-strong);
+		border-radius: var(--radius-md);
 		padding: 0.62rem 0.72rem;
 		font: inherit;
 		font-size: 0.9rem;
@@ -3470,7 +3466,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		outline: none;
 		border-color: #8ba7c9;
 		background: #fff;
-		box-shadow: 0 0 0 3px rgba(139, 167, 201, 0.22);
 	}
 	:global(.finish-reflection-count) {
 		margin: 0;

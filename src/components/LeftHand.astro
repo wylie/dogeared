@@ -211,7 +211,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   .primary-links {
     margin: 1.05rem 0 0;
     padding: 1.05rem 0 0;
-    border-top: 1px solid var(--color-border-soft);
+    border-top: var(--border-subtle);
     display: grid;
     gap: 1rem;
   }
@@ -253,7 +253,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   .sidebar-footer {
     margin-top: auto;
     padding-top: 1rem;
-    border-top: 1px solid var(--color-border-soft);
+    border-top: var(--border-subtle);
     color: var(--color-text-subtle);
     font-size: 0.78rem;
     line-height: 1.35;
@@ -303,7 +303,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     color: var(--color-secondary-hover);
     text-decoration: none;
     cursor: default;
-    box-shadow: inset 2px 0 0 var(--color-secondary);
+    border-left: 2px solid var(--color-secondary);
   }
   .section-links-nested a.section-active {
     text-decoration: underline;
@@ -348,7 +348,6 @@ const query = Astro.url.searchParams.get("q") ?? "";
     margin-top: 1rem;
     background: rgba(255, 255, 255, 0.72);
     color: var(--color-text);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
   }
   input[type="search"]::placeholder {
     color: var(--color-text-subtle);
@@ -435,7 +434,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    border: 1px solid var(--color-border);
+    border: var(--border-strong);
     border-radius: var(--radius-md);
     padding: 0.7rem 0.85rem;
     font-size: 16px;
@@ -488,7 +487,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
         "search"
         "footer";
       background: rgba(255, 255, 255, 0.92);
-      border-bottom: 1px solid var(--color-border-soft);
+      border-bottom: var(--border-subtle);
       border-bottom-left-radius: 18px;
       border-bottom-right-radius: 18px;
       padding: 0.6rem 0.5rem 0.55rem;
@@ -527,7 +526,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     #left-hand-nav input[type="search"] {
       margin-top: 0;
       padding: 0.4rem 0.8rem;
-      border: 1px solid var(--color-border);
+      border: var(--border-strong);
     }
     #left-hand-nav .primary-links {
       display: flex;
@@ -587,7 +586,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     #left-hand-nav .primary-links a.active {
       background: rgba(31, 93, 135, 0.08);
       text-decoration: none;
-      box-shadow: none;
+      border-left: 0;
     }
     #left-hand-nav .primary-links a.hover:hover,
     #left-hand-nav .primary-links .nav-text-button.hover:hover,
@@ -608,7 +607,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       list-style: none;
       margin: 0.15rem 0 0;
       padding: 0.6rem 0 0.35rem;
-      border-top: 1px solid var(--color-border-soft);
+      border-top: var(--border-subtle);
       align-items: center;
       min-width: 0;
       width: 100%;

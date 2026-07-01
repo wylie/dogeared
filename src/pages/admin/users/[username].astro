@@ -131,23 +131,23 @@ const isSelf = !!user?.id && user.id === admin.userId;
 <style>
 	.admin-user-detail-page { max-width: 980px; }
 	.hero h1 { margin: 0.2rem 0 0; }
-	.hero p { margin: 0.35rem 0 0; color: #4d4d4d; }
+	.hero p { margin: 0.35rem 0 0; color: var(--color-text-muted); }
 	.back-link { color: var(--color-secondary); font-weight: 700; text-decoration: none; }
 	.back-link:hover { text-decoration: underline; }
-	.panel { margin-top: 1rem; border: 0; border-radius: 12px; background: #fff; padding: 0.9rem; }
+	.panel { margin-top: 1rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
 	.panel-head h2,
 	.panel h2 { margin: 0; }
 	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; line-height: 1.4; }
 	.grid { display: grid; gap: 0.55rem; margin-top: 0.7rem; }
 	.stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-	.stat { border-radius: 10px; background: #f3f7fb; padding: 0.6rem; }
+	.stat { border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.56); padding: 0.6rem; }
 	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }
 	.stat strong { display: block; margin-top: 0.2rem; font-size: 1.2rem; }
 	.detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin-top: 0.7rem; }
 	.detail-grid p { margin: 0; display: grid; gap: 0.15rem; }
 	.detail-grid strong { color: #4b5563; font-size: 0.82rem; }
 	.detail-grid span { overflow-wrap: anywhere; }
-	.danger-panel { border: 1px solid #f0c7c7; }
+	.danger-panel { border-color: rgba(153, 27, 27, 0.26); }
 	.admin-message {
 		margin: 0.7rem 0 0;
 		min-height: 1.2rem;
@@ -159,8 +159,8 @@ const isSelf = !!user?.id && user.id === admin.userId;
 	.delete-form label { font-weight: 700; color: #3f3f3f; }
 	.delete-form input {
 		height: 38px;
-		border: 1px solid #cad1db;
-		border-radius: 8px;
+		border: var(--border-strong);
+		border-radius: var(--radius-sm);
 		padding: 0 0.65rem;
 		font: inherit;
 	}

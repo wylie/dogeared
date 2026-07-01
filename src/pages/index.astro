@@ -672,7 +672,7 @@ const isOnboardingComplete = (
 		text-decoration: none;
 		color: #244d6b;
 		background: rgba(255, 255, 255, 0.42);
-		border: 1px solid var(--color-border-soft);
+		border: var(--border-subtle);
 		border-radius: 999px;
 		padding: 0.26rem 0.66rem;
 		font-size: 0.82rem;
@@ -720,7 +720,7 @@ const isOnboardingComplete = (
 	.onboarding-checklist {
 		margin: 0 0 1rem;
 		background: rgba(255, 255, 255, 0.56);
-		border: 1px solid var(--color-border-soft);
+		border: var(--border-subtle);
 		border-radius: var(--radius-lg);
 		padding: 0.82rem;
 	}
@@ -809,8 +809,7 @@ const isOnboardingComplete = (
 		background: var(--color-surface-raised);
 		border-radius: var(--radius-lg);
 		padding: 0.95rem;
-		border: 1px solid var(--color-border-soft);
-		box-shadow: var(--shadow-card);
+		border: var(--border-subtle);
 	}
 	.community-suggestion-card h3 {
 		margin: 0;
@@ -954,7 +953,7 @@ const isOnboardingComplete = (
 		left: auto;
 		min-width: 180px;
 		background: #fff;
-		border: 1px solid var(--color-border);
+		border: none;
 		border-radius: var(--radius-md);
 		box-shadow: var(--shadow-popover);
 		padding: 0.28rem;
@@ -1011,9 +1010,9 @@ const isOnboardingComplete = (
 		width: min(460px, 100%);
 		background: #111;
 		color: #fff;
-		border-radius: 18px;
+		border-radius: var(--radius-lg);
 		padding: 1rem;
-		box-shadow: 0 24px 52px rgba(0, 0, 0, 0.45);
+		box-shadow: var(--shadow-md);
 	}
 
 	.login-confirm-dialog p {
