@@ -3192,8 +3192,8 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 	:global(.bars-row.is-drillable) { cursor: pointer; }
 	:global(.bars-row.is-drillable:hover) { background: #f3f9f4; }
 	:global(.bars-row-label) { color: #2b2b2b; font-size: 0.92rem; line-height: 1.25; }
-	:global(.metric-link) { color: #1e5f46; text-decoration: underline; text-underline-offset: 2px; }
-	:global(.metric-link:hover) { color: #114b35; }
+	:global(.metric-link) { color: var(--color-nav); text-decoration: underline; text-underline-offset: 2px; }
+	:global(.metric-link:hover) { color: var(--color-nav-hover); }
 	:global(.bars-row-bar) { position: relative; height: 22px; border-radius: 999px; background: #f2ecdf; overflow: hidden; display: flex; align-items: center; }
 	:global(.bars-row-fill) { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #2f8f57, #4ea86f); border-radius: 999px; }
 	:global(.bars-row-value) { position: relative; z-index: 1; margin-left: auto; margin-right: 0.45rem; color: #1f1f1f; font-weight: 700; font-size: 0.82rem; }

@@ -237,7 +237,8 @@ const booksStructuredData = JSON.stringify([
 <style>
 	.books-page { max-width: 1040px; display: grid; gap: 1.2rem; }
 	.breadcrumbs { display: flex; gap: 0.35rem; font-size: 0.84rem; color: var(--color-text-subtle); }
-	.breadcrumbs a { color: var(--color-secondary); text-decoration: none; }
+	.breadcrumbs a { color: var(--color-nav); text-decoration: none; }
+	.breadcrumbs a:hover, .breadcrumbs a:focus-visible { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
 	.header h1, .header p { margin: 0; }
 	.header h1 { line-height: 1.08; }
 	.header p { margin-top: 0.45rem; color: var(--color-text-muted); font-size: 1.02rem; line-height: 1.5; }

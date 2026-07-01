@@ -283,9 +283,12 @@ const sectionLinks = [
 	.section-heading-row h2 {
 		margin: 0;
 		font-size: 1.15rem;
+		color: var(--color-text);
+		font-weight: 680;
+		line-height: 1.16;
 	}
 	.section-heading-row span {
-		color: #5b6470;
+		color: var(--color-text-muted);
 		font-size: 0.82rem;
 		font-weight: 700;
 	}
@@ -376,12 +379,13 @@ const sectionLinks = [
 		font-weight: 800;
 	}
 	.people-strip-facts a {
-		color: var(--color-secondary);
+		color: var(--color-nav);
 		font-weight: 700;
 		text-decoration: none;
 	}
 	.people-strip-facts a:hover,
 	.people-strip-facts a:focus-visible {
+		color: var(--color-nav-hover);
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
@@ -425,13 +429,14 @@ const sectionLinks = [
 	}
 	.activity-prefix,
 	.actor-link {
-		color: var(--color-secondary);
+		color: var(--color-nav);
 	}
 	.actor-link {
 		text-decoration: none;
 	}
 	.actor-link:hover,
 	.actor-link:focus-visible {
+		color: var(--color-nav-hover);
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
@@ -468,7 +473,7 @@ const sectionLinks = [
 		gap: 0.35rem;
 		border: none;
 		background: transparent;
-		color: #496587;
+		color: var(--color-nav);
 		padding: 0;
 		min-height: 2rem;
 		font: inherit;
@@ -487,12 +492,12 @@ const sectionLinks = [
 	}
 	.activity-like-button:hover,
 	.activity-like-button:focus-visible {
-		color: #36597f;
+		color: var(--color-nav-hover);
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
 	.activity-like-button.is-liked {
-		color: #244c76;
+		color: var(--color-nav-active);
 	}
 	.activity-like-button:disabled {
 		opacity: .72;
@@ -619,8 +624,8 @@ const sectionLinks = [
 		font: inherit;
 		font-size: 0.8rem;
 		font-weight: 700;
-		background: #dde8f5;
-		color: #22466b;
+		background: var(--color-nav-surface);
+		color: var(--color-nav);
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -759,7 +764,7 @@ const sectionLinks = [
 		color: #4b5563;
 	}
 	.reader-feedback {
-		color: var(--color-secondary);
+		color: var(--color-primary);
 		font-weight: 700;
 		min-height: 1.1rem;
 	}

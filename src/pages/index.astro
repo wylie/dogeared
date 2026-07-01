@@ -637,14 +637,14 @@ const isOnboardingComplete = (
 	}
 
 	.intro {
-		margin-bottom: 1.8rem;
+		margin-bottom: 2.15rem;
 		min-width: 0;
 	}
 	.home-jump-links {
 		display: flex;
 		flex-wrap: nowrap;
 		gap: 0.45rem;
-		margin: -0.35rem 0 0.95rem;
+		margin: -0.1rem 0 1.2rem;
 		overflow-x: auto;
 		overflow-y: hidden;
 		white-space: nowrap;
@@ -670,8 +670,8 @@ const isOnboardingComplete = (
 		flex: 0 0 auto;
 		align-items: center;
 		text-decoration: none;
-		color: #244d6b;
-		background: rgba(255, 255, 255, 0.42);
+		color: var(--color-nav);
+		background: var(--color-nav-surface);
 		border: var(--border-subtle);
 		border-radius: 999px;
 		padding: 0.26rem 0.66rem;
@@ -682,8 +682,9 @@ const isOnboardingComplete = (
 	.home-jump-links a:hover,
 	.home-jump-links a:focus-visible {
 		text-decoration: none;
-		background: rgba(255, 255, 255, 0.68);
-		border-color: rgba(31, 93, 135, 0.25);
+		color: var(--color-nav-hover);
+		background: var(--color-nav-surface-hover);
+		border-color: var(--color-border);
 	}
 
 	.eyebrow {
@@ -703,7 +704,7 @@ const isOnboardingComplete = (
 	}
 
 	.subhead {
-		margin: 0.75rem 0 0;
+		margin: 0.9rem 0 0;
 		color: var(--color-text-muted);
 		max-width: 44rem;
 		font-size: 1.06rem;
@@ -738,7 +739,7 @@ const isOnboardingComplete = (
 	.checklist-dismiss {
 		border: none;
 		background: transparent;
-		color: var(--color-secondary);
+		color: var(--color-nav);
 		font: inherit;
 		font-size: 0.82rem;
 		font-weight: 700;
@@ -765,16 +766,18 @@ const isOnboardingComplete = (
 		margin: 0;
 		font-size: clamp(1.25rem, 2vw, 1.65rem);
 		line-height: 1.16;
+		font-weight: 680;
 	}
 	.section-head-link {
 		font-size: 0.84rem;
 		font-weight: 680;
-		color: var(--color-secondary);
+		color: var(--color-nav);
 		text-decoration: none;
 		white-space: nowrap;
 	}
 	.section-head-link:hover,
 	.section-head-link:focus-visible {
+		color: var(--color-nav-hover);
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}

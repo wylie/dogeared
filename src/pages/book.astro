@@ -1163,11 +1163,12 @@ const bookStructuredDataPayload = bookStructuredData
 		color: var(--color-text-subtle);
 	}
 	.breadcrumbs a {
-		color: var(--color-secondary);
+		color: var(--color-nav);
 		text-decoration: none;
 	}
 	.breadcrumbs a:hover,
 	.breadcrumbs a:focus-visible {
+		color: var(--color-nav-hover);
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
@@ -1188,7 +1189,7 @@ const bookStructuredDataPayload = bookStructuredData
 	.related-links-row:last-of-type { margin-bottom: 0.55rem; }
 	.related-link {
 		text-decoration: none;
-		color: #244d6b;
+		color: var(--color-nav);
 		background: rgba(255, 255, 255, 0.48);
 		border: var(--border-subtle);
 		border-radius: 999px;
@@ -1197,14 +1198,14 @@ const bookStructuredDataPayload = bookStructuredData
 		font-weight: 680;
 	}
 	.author-link-chip {
-		background: #fff0d8;
-		color: #6b4a1e;
-		border-color: rgba(107, 74, 30, 0.18);
+		background: var(--color-nav-surface);
+		color: var(--color-nav);
+		border-color: var(--color-border-soft);
 	}
 	.author-link-chip:hover,
 	.author-link-chip:focus-visible {
-		background: #ffe8bd;
-		color: #5b3e18;
+		background: var(--color-nav-surface-hover);
+		color: var(--color-nav-hover);
 	}
 	.synopsis-panel :global(.chip) {
 		border: var(--border-subtle);
@@ -1219,7 +1220,7 @@ const bookStructuredDataPayload = bookStructuredData
 	.synopsis-panel :global(.chip--topic) {
 		border-color: rgba(87, 117, 144, 0.14);
 	}
-	.related-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+	.related-link:hover { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
 	.synopsis-panel :global(a.chip:hover),
 	.synopsis-panel :global(a.chip:focus-visible) {
 		text-decoration: underline;
@@ -1252,7 +1253,7 @@ const bookStructuredDataPayload = bookStructuredData
 		margin: 0.3rem 0 0;
 		font-size: 0.86rem;
 		font-weight: 700;
-		color: var(--color-secondary);
+		color: var(--color-nav);
 	}
 	.review-date {
 		margin: 0.14rem 0 0;
@@ -1270,9 +1271,9 @@ const bookStructuredDataPayload = bookStructuredData
 	.activity-panel { border: none; background: transparent; padding: 0; }
 	.activity-grid { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.9rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.activity-headline { font-weight: 700; color: var(--color-text); }
-	.activity-prefix { color: var(--color-secondary); }
+	.activity-prefix { color: var(--color-nav); }
 	.activity-user { color: var(--color-text-muted); font-weight: 600; }
-	.activity-user a { color: var(--color-secondary); text-decoration: none; }
+	.activity-user a { color: var(--color-nav); text-decoration: none; }
 	.activity-user a:hover { text-decoration: underline; }
 	.activity-date { color: var(--color-text-subtle); font-weight: 600; }
 	.activity-social-row {
@@ -1291,16 +1292,16 @@ const bookStructuredDataPayload = bookStructuredData
 		appearance: none;
 		border: none;
 		background: transparent;
-		color: #2f4c77;
+		color: var(--color-nav);
 		font: inherit;
 		font-weight: 700;
 		padding: 0;
 		cursor: pointer;
 	}
-	.activity-like-button.is-liked { color: #1f4f7a; }
+	.activity-like-button.is-liked { color: var(--color-nav-active); }
 	.activity-like-button:disabled { opacity: 0.6; cursor: not-allowed; }
 	.activity-like-count {
-		color: #546374;
+		color: var(--color-text-muted);
 		font-size: 0.9rem;
 	}
 	.activity-comment-form {
@@ -1327,8 +1328,8 @@ const bookStructuredDataPayload = bookStructuredData
 		padding: 0 0.9rem;
 		border-radius: 999px;
 		border: none;
-		background: #d8e4f4;
-		color: #1f4f7a;
+		background: var(--color-nav-surface);
+		color: var(--color-nav);
 		font-weight: 700;
 		display: inline-flex;
 		align-items: center;
@@ -1360,7 +1361,7 @@ const bookStructuredDataPayload = bookStructuredData
 		gap: 0.35rem;
 	}
 	:global(.activity-comment-user) {
-		color: #254f82;
+		color: var(--color-nav);
 		text-decoration: underline;
 		text-decoration-thickness: 1px;
 		text-underline-offset: 2px;

@@ -299,7 +299,7 @@ const { isAuthenticated = false } = Astro.props as Props;
 		border: var(--border-subtle);
 		border-radius: var(--radius-sm);
 		background: #fff;
-		color: var(--color-secondary);
+		color: var(--color-nav);
 		cursor: pointer;
 	}
 	.feedback-form {
@@ -404,10 +404,11 @@ const { isAuthenticated = false } = Astro.props as Props;
 	.feedback-secondary {
 		border: var(--border-subtle);
 		background: #fff;
-		color: var(--color-secondary);
+		color: var(--color-nav);
 	}
 	.feedback-secondary:hover {
-		background: #f2f6f9;
+		background: var(--color-nav-surface-hover);
+		color: var(--color-nav-hover);
 	}
 	:global(body.feedback-modal-open) {
 		overflow: hidden;

@@ -767,11 +767,12 @@ const relatedStructuredDataPayload = JSON.stringify([
 		color: var(--color-text-subtle);
 	}
 	.breadcrumbs a {
-		color: var(--color-secondary);
+		color: var(--color-nav);
 		text-decoration: none;
 	}
 	.breadcrumbs a:hover,
 	.breadcrumbs a:focus-visible {
+		color: var(--color-nav-hover);
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
@@ -790,8 +791,8 @@ const relatedStructuredDataPayload = JSON.stringify([
 	.error { color: #991b1b; }
 	.book-grid { list-style: none; padding: 0; margin: 0.7rem 0 0; display: grid; gap: 0.95rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.meta { margin: 0.2rem 0; font-size: 0.87rem; color: var(--color-text-muted); }
-	.metric-link { color: var(--color-secondary); text-decoration: none; font-weight: 600; }
-	.metric-link:hover { color: var(--color-secondary-hover); text-decoration: underline; text-underline-offset: 2px; }
+	.metric-link { color: var(--color-nav); text-decoration: none; font-weight: 600; }
+	.metric-link:hover { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
 	.genre-chips { margin-top: 0.38rem; display: flex; flex-wrap: wrap; gap: 0.35rem; }
 	.genre-chip { font-size: 0.75rem; padding: 0.16rem 0.46rem; }
 	.genre-chip:hover { filter: brightness(0.96); }

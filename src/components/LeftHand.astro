@@ -248,7 +248,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   }
   .section-links-nested a {
     font-size: 0.9em;
-    color: var(--color-text-muted);
+    color: var(--color-nav);
   }
   .sidebar-footer {
     margin-top: auto;
@@ -268,15 +268,21 @@ const query = Astro.url.searchParams.get("q") ?? "";
     margin-top: 0.45rem;
   }
   .sidebar-footer a {
-    color: var(--color-text-muted);
+    color: var(--color-nav);
     text-decoration: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-pill);
+    padding: 0.16rem 0.42rem;
   }
   .sidebar-footer a:hover,
-  .sidebar-footer a:focus-visible,
+  .sidebar-footer a:focus-visible {
+    background: var(--color-nav-surface-hover);
+    color: var(--color-nav-hover);
+    text-decoration: none;
+  }
   .sidebar-footer a.active {
-    text-decoration: underline;
-    text-underline-offset: 2px;
+    background: var(--color-nav-surface);
+    color: var(--color-nav-active);
+    text-decoration: none;
   }
   li {
     text-align: left;
@@ -285,7 +291,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   }
   a {
     text-decoration: none;
-    color: var(--color-text);
+    color: var(--color-nav);
     border-radius: var(--radius-sm);
   }
   .primary-links .nav-group > ul > li > a,
@@ -295,24 +301,27 @@ const query = Astro.url.searchParams.get("q") ?? "";
     min-height: 2rem;
     width: 100%;
     box-sizing: border-box;
-    padding: 0.32rem 0.48rem;
+    padding: 0.34rem 0.58rem;
     line-height: 1.2;
+    border-radius: var(--radius-pill);
   }
   a.active {
-    background: rgba(255, 255, 255, 0.46);
-    color: var(--color-secondary-hover);
+    background: var(--color-nav-surface);
+    color: var(--color-nav-active);
     text-decoration: none;
     cursor: default;
-    border-left: 2px solid var(--color-secondary);
+    border-left: 0;
+    font-weight: 700;
   }
   .section-links-nested a.section-active {
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    color: var(--color-nav-active);
+    background: var(--color-nav-surface);
+    text-decoration: none;
   }
   .hover:hover {
-    color: var(--color-secondary-hover);
+    color: var(--color-nav-hover);
     text-decoration: none;
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--color-nav-surface-hover);
   }
   .nav-text-button {
     appearance: none;
@@ -320,17 +329,17 @@ const query = Astro.url.searchParams.get("q") ?? "";
     background: transparent;
     padding: 0;
     margin: 0;
-    color: var(--color-text);
+    color: var(--color-nav);
     font: inherit;
     cursor: pointer;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-pill);
   }
   .mobile-menu-toggle {
     display: none;
     appearance: none;
     border: none;
     background: transparent;
-    color: #2a2a2a;
+    color: var(--color-text);
     border-radius: 0;
     padding: 0.2rem 0.3rem;
     font: inherit;
@@ -354,7 +363,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   }
   input[type="search"]:focus {
     background: #fff;
-    border-color: rgba(31, 93, 135, 0.42);
+    border-color: var(--color-border);
   }
   .visually-hidden {
     position: absolute;
@@ -555,7 +564,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
     }
     #left-hand-nav .primary-links .nav-group-title {
       font-size: 0.72rem;
-      color: #6b7280;
+      color: var(--color-text-subtle);
       margin-bottom: 0.08rem;
     }
     #left-hand-nav .primary-links .nav-group > ul {
@@ -577,14 +586,15 @@ const query = Astro.url.searchParams.get("q") ?? "";
       align-items: center;
       border: none;
       background: transparent;
-      border-radius: 8px;
+      border-radius: var(--radius-pill);
       padding: 0.38rem 0.2rem;
       line-height: 1.25;
       text-decoration: none;
-      color: var(--color-text);
+      color: var(--color-nav);
     }
     #left-hand-nav .primary-links a.active {
-      background: rgba(31, 93, 135, 0.08);
+      background: var(--color-nav-surface);
+      color: var(--color-nav-active);
       text-decoration: none;
       border-left: 0;
     }
@@ -593,7 +603,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
     #left-hand-nav .primary-links a:focus-visible,
     #left-hand-nav .primary-links .nav-text-button:focus-visible {
       text-decoration: none;
-      background: rgba(87, 117, 144, 0.08);
+      background: var(--color-nav-surface-hover);
+      color: var(--color-nav-hover);
     }
     #left-hand-nav .section-links-nested {
       display: none;
@@ -632,14 +643,15 @@ const query = Astro.url.searchParams.get("q") ?? "";
       display: inline-flex;
       align-items: center;
       text-decoration: none;
-      color: var(--color-text);
+      color: var(--color-nav);
       line-height: 1.25;
       padding: 0.34rem 0.2rem;
-      border-radius: 8px;
+      border-radius: var(--radius-pill);
     }
     #left-hand-nav .secondary-links-mobile a.section-active {
-      text-decoration: underline;
-      text-underline-offset: 2px;
+      background: var(--color-nav-surface);
+      color: var(--color-nav-active);
+      text-decoration: none;
     }
     #left-hand-nav .sidebar-footer {
       grid-area: footer;

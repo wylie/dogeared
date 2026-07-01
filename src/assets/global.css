@@ -27,6 +27,11 @@
   --color-text: #1e262d;
   --color-text-muted: #52606d;
   --color-text-subtle: #6b7884;
+  --color-nav: var(--color-text-muted);
+  --color-nav-hover: var(--color-text);
+  --color-nav-active: #1f5138;
+  --color-nav-surface: rgba(238, 246, 234, 0.72);
+  --color-nav-surface-hover: rgba(255, 255, 255, 0.56);
   --color-border: rgba(87, 117, 144, 0.24);
   --color-border-soft: rgba(87, 117, 144, 0.16);
   --color-divider: rgba(255, 255, 255, 0.58);
@@ -70,7 +75,7 @@ body {
 }
 
 :where(a, button, input, select, textarea):focus-visible {
-  outline: 3px solid rgba(31, 93, 135, 0.72);
+  outline: 3px solid rgba(31, 122, 69, 0.72);
   outline-offset: 2px;
 }
 
@@ -118,22 +123,89 @@ input[type="reset"] {
   letter-spacing: 0;
 }
 
+.content-column h2 {
+  color: var(--color-text);
+  font-weight: 680;
+  letter-spacing: 0;
+  line-height: 1.16;
+}
+
+.content-column h3 {
+  color: var(--color-text);
+  font-weight: 680;
+  letter-spacing: 0;
+  line-height: 1.24;
+}
+
+.section-heading,
+.section-title,
+.panel-head h2,
+.panel-head h3,
+.section-header h2,
+.section-head h2,
+.settings-section h2,
+.support-section h2,
+.privacy-section h2,
+.mission-section h2,
+.books-section h2 {
+  color: var(--color-text);
+  font-weight: 680;
+  letter-spacing: 0;
+  line-height: 1.16;
+}
+
+.nav-link,
+.jump-link,
+.breadcrumb-link,
+.section-head-link,
+.metric-link,
+.table-link,
+.back-link,
+.owner-edit-link,
+.settings-link,
+.button-link.secondary {
+  color: var(--color-nav);
+}
+
+.nav-link:hover,
+.nav-link:focus-visible,
+.jump-link:hover,
+.jump-link:focus-visible,
+.breadcrumb-link:hover,
+.breadcrumb-link:focus-visible,
+.section-head-link:hover,
+.section-head-link:focus-visible,
+.metric-link:hover,
+.metric-link:focus-visible,
+.table-link:hover,
+.table-link:focus-visible,
+.back-link:hover,
+.back-link:focus-visible,
+.owner-edit-link:hover,
+.owner-edit-link:focus-visible,
+.settings-link:hover,
+.settings-link:focus-visible,
+.button-link.secondary:hover,
+.button-link.secondary:focus-visible {
+  color: var(--color-nav-hover);
+}
+
 .text-link,
 .text-link:hover,
 .text-link:visited {
-  color: var(--color-secondary);
+  color: var(--color-nav);
 }
 
 a.author-link,
 a.author-link:visited {
-  color: var(--color-secondary);
+  color: var(--color-nav);
   font-weight: 600;
   text-decoration: none;
 }
 
 a.author-link:hover,
 a.author-link:focus-visible {
-  color: var(--color-secondary-hover);
+  color: var(--color-nav-hover);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -154,7 +226,7 @@ a.author-link:focus-visible {
 a.chip:hover,
 a.chip:focus-visible {
   text-decoration: none;
-  border-color: rgba(31, 93, 135, 0.28);
+  border-color: var(--color-border);
   background-color: rgba(255, 255, 255, 0.74);
 }
 

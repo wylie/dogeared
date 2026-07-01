@@ -2127,11 +2127,12 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		color: var(--color-text-subtle);
 	}
 	.breadcrumbs a {
-		color: var(--color-secondary);
+		color: var(--color-nav);
 		text-decoration: none;
 	}
 	.breadcrumbs a:hover,
 	.breadcrumbs a:focus-visible {
+		color: var(--color-nav-hover);
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
@@ -2282,9 +2283,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		cursor: pointer;
 	}
 	.owner-edit-link-muted {
-		background: #f2f5f9;
-		border-color: #d4dce7;
-		color: #4b5563;
+		background: var(--color-nav-surface-hover);
+		border-color: var(--color-border-soft);
+		color: var(--color-nav);
 	}
 	.profile-card { position: relative; }
 	.profile-card-actions {
@@ -2351,7 +2352,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.follow-actions { margin-top: 0.55rem; display: flex; align-items: center; gap: 0.6rem; }
 	.follow-actions button { border: none; border-radius: 999px; padding: 0.35rem 0.8rem; background: #1d1d1d; color: #fff; font: inherit; cursor: pointer; }
 	.follow-actions button[disabled] { opacity: 0.6; cursor: default; }
-	.owner-edit-link { border: var(--border-subtle); border-radius: 999px; padding: 0.35rem 0.8rem; background: #f3efe7; color: var(--color-text); text-decoration: none; font-weight: 700; }
+	.owner-edit-link { border: var(--border-subtle); border-radius: 999px; padding: 0.35rem 0.8rem; background: var(--color-nav-surface); color: var(--color-nav); text-decoration: none; font-weight: 700; }
+	.owner-edit-link:hover,
+	.owner-edit-link:focus-visible { background: var(--color-nav-surface-hover); color: var(--color-nav-hover); }
 	.inline-profile-form {
 		margin-top: 0.75rem;
 		display: grid;
@@ -2905,7 +2908,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.public-profile-page :global(.activity-grid .book-card .activity-headline) {
 		padding-right: 2rem;
 	}
-	.activity-prefix { color: var(--color-secondary); }
+	.activity-prefix { color: var(--color-nav); }
 	.activity-date { color: #5b6470; font-weight: 600; }
 	.activity-social-row {
 		display: flex;
@@ -2924,7 +2927,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		appearance: none;
 		border: none;
 		background: transparent;
-		color: #2f4c77;
+		color: var(--color-nav);
 		font: inherit;
 		font-weight: 700;
 		padding: 0;
@@ -2933,18 +2936,19 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.activity-like-button:hover,
 	.activity-like-button:focus-visible {
+		color: var(--color-nav-hover);
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
 	.activity-like-button.is-liked {
-		color: #1f4f7a;
+		color: var(--color-nav-active);
 	}
 	.activity-like-button:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
 	}
 	.activity-like-count {
-		color: #546374;
+		color: var(--color-text-muted);
 		font-size: 0.9rem;
 	}
 	.activity-comments-wrap {
@@ -2979,7 +2983,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		gap: 0.35rem;
 	}
 	:global(.activity-comment-user) {
-		color: #254f82;
+		color: var(--color-nav);
 		text-decoration: underline;
 		text-decoration-thickness: 1px;
 		text-underline-offset: 2px;
@@ -3036,8 +3040,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		padding: 0 0.9rem;
 		border-radius: 999px;
 		border: none;
-		background: #d8e4f4;
-		color: #1f4f7a;
+		background: var(--color-nav-surface);
+		color: var(--color-nav);
 		font-weight: 700;
 		display: inline-flex;
 		align-items: center;
@@ -3102,7 +3106,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	[data-momentum-score].is-updating,
 	[data-momentum-streak].is-updating {
 		transform: translateY(-1px);
-		color: #0f4f72;
+		color: var(--color-primary);
 	}
 	.momentum-next {
 		grid-column: 1 / -1;
