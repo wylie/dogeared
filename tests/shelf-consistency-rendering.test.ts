@@ -22,16 +22,24 @@ test("mobile comment form buttons enforce symmetric padding and min width", () =
 });
 
 test("roadmap prioritizes reader-facing ordering", () => {
-	const source = readFileSync("src/pages/roadmap.astro", "utf8");
-	const idxRecommendations = source.indexOf('title: "Recommendations"');
-	const idxOnboarding = source.indexOf('title: "Reader Onboarding"');
-	const idxFollowedFeed = source.indexOf('title: "Followed Readers Feed"');
-	const idxRelated = source.indexOf('title: "Related Books"');
-	assert.ok(idxRecommendations > -1);
-	assert.ok(idxOnboarding > -1);
-	assert.ok(idxFollowedFeed > -1);
-	assert.ok(idxRelated > -1);
-	assert.ok(idxRecommendations < idxOnboarding);
-	assert.ok(idxOnboarding < idxFollowedFeed);
-	assert.ok(idxFollowedFeed < idxRelated);
+	const pageSource = readFileSync("src/pages/roadmap.astro", "utf8");
+	const dataSource = readFileSync("src/lib/roadmap.ts", "utf8");
+	const idxNow = pageSource.indexOf('{ id: "now", label: "Now" }');
+	const idxNext = pageSource.indexOf('{ id: "next", label: "Next" }');
+	const idxLater = pageSource.indexOf('{ id: "later", label: "Later" }');
+	const idxCompleted = pageSource.indexOf('{ id: "recently-completed", label: "Completed" }');
+	assert.ok(pageSource.includes("ROADMAP_ITEMS"));
+	assert.ok(pageSource.includes("ROADMAP_SECTIONS"));
+	assert.ok(pageSource.includes("RECENTLY_COMPLETED_ITEMS"));
+	assert.ok(idxNow > -1);
+	assert.ok(idxNext > -1);
+	assert.ok(idxLater > -1);
+	assert.ok(idxCompleted > -1);
+	assert.ok(idxNow < idxNext);
+	assert.ok(idxNext < idxLater);
+	assert.ok(idxLater < idxCompleted);
+	assert.ok(dataSource.includes('category: "now"'));
+	assert.ok(dataSource.includes('category: "next"'));
+	assert.ok(dataSource.includes('category: "later"'));
+	assert.ok(dataSource.includes('category: "completed"'));
 });

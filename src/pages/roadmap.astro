@@ -1,243 +1,278 @@
 ---
-import Layout from '../layouts/Layout.astro';
+import Layout from "../layouts/Layout.astro";
+import { ROADMAP_ITEMS, ROADMAP_SECTIONS, RECENTLY_COMPLETED_ITEMS, type RoadmapCategory, type RoadmapItem } from "../lib/roadmap";
 import { buildBreadcrumbList } from "../lib/seo";
 
 const sectionLinks = [
-	{ id: "support", label: "Support" },
-	{ id: "roadmap", label: "Roadmap" }
+	{ id: "now", label: "Now" },
+	{ id: "next", label: "Next" },
+	{ id: "later", label: "Later" },
+	{ id: "recently-completed", label: "Completed" }
 ];
 
-const SUPPORT_LINKS = {
-	buyMeACoffee: "https://buymeacoffee.com/wylie"
-};
-
-const roadmapItems = [
-	{
-		status: "Now",
-		title: "Recommendations",
-		description: "Find books you are likely to love with signals like “Because you liked Murderbot,” similar authors, similar genres, and similar readers. Reader benefit: less time searching, more great books."
-	},
-	{
-		status: "Now",
-		title: "Reader Onboarding",
-		description: "Get new readers to a useful library fast with import, starter ratings, follows, and reading preferences. Reader benefit: better personalization in the first session."
-	},
-	{
-		status: "Next",
-		title: "Followed Readers Feed",
-		description: "See what people you follow are reading, rating, and recommending in one clean feed. Reader benefit: discover books through readers you already trust."
-	},
-	{
-		status: "Next",
-		title: "Related Books",
-		description: "Every book page answers “If I liked this, what should I read next?” with stronger related suggestions. Reader benefit: better discovery from every detail page."
-	},
-	{
-		status: "Later",
-		title: "Reading Taste Profile",
-		description: "Summarize your favorite genres, themes, and reading patterns into a personal taste profile. Reader benefit: recommendations that feel tailored to you."
-	},
-	{
-		status: "Later",
-		title: "Reading Stats & Insights",
-		description: "Expand reading metrics and trends so you can understand your habits over time. Reader benefit: clearer progress and reading patterns."
-	},
-	{
-		status: "Later",
-		title: "Series Tracking",
-		description: "Track completed books, next-in-series, and what remains. Reader benefit: never lose track of a series again."
-	},
-	{
-		status: "Later",
-		title: "Book Lists",
-		description: "Create and share collections like favorite sci-fi, books about nature, or beginner-friendly picks. Reader benefit: organize and share recommendations."
-	},
-	{
-		status: "Later",
-		title: "Goodreads Import + Migration",
-		description: "Add migration paths for Goodreads CSV, StoryGraph, and other library handoff tools. Reader benefit: move your library without starting over."
-	},
-	{
-		status: "Later",
-		title: "Recommendations Expansion",
-		description: "Expand recommendation phases for author similarity, genre similarity, and reader-similarity models. Reader benefit: deeper discovery beyond one-off suggestions."
-	},
-	{
-		status: "Later",
-		title: "Reading Goals",
-		description: "Support yearly goals, monthly goals, and streak tracking. Reader benefit: keep momentum without losing the joy of reading."
-	},
-	{
-		status: "Later",
-		title: "Community Discovery",
-		description: "Discover readers, reviewers, and lists that match your interests. Reader benefit: more trusted paths to your next favorite book."
-	},
-	{
-		status: "Later",
-		title: "Series Tracking Expansion",
-		description: "Add reading order support, full series completion views, and upcoming releases. Reader benefit: finish series in the right order with less effort."
-	}
-];
-
-const statusOrder: Record<string, number> = { Now: 0, Next: 1, Later: 2 };
-const activeRoadmapItems = roadmapItems
-	.filter((item) => item.status !== "Finished")
-	.sort((a, b) => (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99));
-
-const supportOptions = [
-	{
-		title: "One-Time Support",
-		description: "Contribute once to help cover hosting, APIs, and development time.",
-		cta: "Buy Me a Coffee",
-		href: SUPPORT_LINKS.buyMeACoffee,
-		share: false
-	},
-	{
-		title: "Share With Readers",
-		description: "Sharing the project is one of the fastest ways to help it grow.",
-		cta: "Share DogEared",
-		href: "",
-		share: true
-	}
-];
 const roadmapStructuredData = JSON.stringify(buildBreadcrumbList([
 	{ name: "Home", item: "/" },
-	{ name: "Support", item: "/roadmap#support" },
 	{ name: "Roadmap", item: "/roadmap" }
 ], { site: Astro.site ?? Astro.url, logErrors: import.meta.env.DEV }));
+
+const itemsByCategory = ROADMAP_ITEMS.reduce((groups, item) => {
+	const current = groups.get(item.category) ?? [];
+	current.push(item);
+	groups.set(item.category, current);
+	return groups;
+}, new Map<RoadmapCategory, RoadmapItem[]>());
 ---
 
 <Layout
 	title="Roadmap"
 	sectionLinks={sectionLinks}
-	metaDescription="See what DogEared is building next: roadmap priorities, finished releases, and support options."
+	metaDescription="See what DogEared is working on now, what is planned next, and what has recently shipped."
 	canonicalUrl="/roadmap"
 	structuredData={roadmapStructuredData}
 >
 	<div slot="right" class="roadmap-page">
-		<header class="hero">
-			<h1>What’s coming next for DogEared, and how readers can help.</h1>
+		<header class="roadmap-hero">
+			<p class="eyebrow">Product Roadmap</p>
+			<h1>Building a calmer home for serious readers.</h1>
+			<p class="hero-copy">
+				DogEared is focused on helping readers track books, discover better recommendations, and share reading life without turning it into another feed to manage.
+			</p>
 		</header>
 
-		<section id="support" class="panel panel-plain support-panel">
-			<div class="support-feature">
-				<div>
-					<p class="feature-eyebrow">Support DogEared</p>
-					<h2>Help keep DogEared independent and improving.</h2>
-					<p>Your support helps cover hosting and gives me more time to ship the roadmap faster.</p>
-				</div>
-				<a class="support-feature-cta" href="/support">Support DogEared</a>
-			</div>
-			<div class="panel-head">
-				<h2>Support DogEared</h2>
-				<p>More ways readers can support the site and help fund new features.</p>
-			</div>
-			<div class="support-grid">
-				{supportOptions.map((option) => (
-					<article class="support-card">
-						<h3>{option.title}</h3>
-						<p>{option.description}</p>
-						{option.href ? (
-							<a class="support-cta" href={option.href} target="_blank" rel="noopener noreferrer">{option.cta}</a>
-						) : (
-							<button type="button" class="support-cta ghost" data-share={option.share ? "true" : "false"}>{option.cta}</button>
-						)}
-					</article>
-				))}
-			</div>
-		</section>
-
-		<section id="roadmap" class="panel panel-plain">
-			<div class="panel-head">
-				<h2>Roadmap</h2>
-				<p>Upcoming additions planned for DogEared.</p>
-			</div>
-			<div class="roadmap-grid">
-				{activeRoadmapItems.map((item, index) => (
-					<article class="roadmap-item">
-						<div class="roadmap-item-head">
-							<p class={`status-pill status-${item.status.toLowerCase()}`}>{item.status}</p>
-							<p class="rank-pill">#{index + 1}</p>
+		<div class="roadmap-sections" aria-label="Roadmap priorities">
+			{ROADMAP_SECTIONS.map((section) => {
+				const items = itemsByCategory.get(section.id) ?? [];
+				return (
+					<section id={section.id} class="roadmap-section">
+						<div class="section-head">
+							<p class="section-kicker">{section.title}</p>
+							<h2>{section.title === "Now" ? "What we are improving now" : (section.title === "Next" ? "What comes next" : "Ideas for later")}</h2>
+							<p>{section.description}</p>
 						</div>
-						<h3>{item.title}</h3>
-						<p>{item.description}</p>
+						<div class="roadmap-grid">
+							{items.map((item) => (
+								<article class="roadmap-card">
+									<div class="card-topline">
+										<span class={`status-badge status-${item.status.toLowerCase().replace(/\s+/g, "-")}`}>{item.status}</span>
+										{item.priority ? <span class="priority-label">{item.priority}</span> : null}
+									</div>
+									<h3>{item.title}</h3>
+									<p>{item.description}</p>
+								</article>
+							))}
+						</div>
+					</section>
+				);
+			})}
+		</div>
+
+		<section id="recently-completed" class="completed-section">
+			<div class="section-head">
+				<p class="section-kicker">Recently Completed</p>
+				<h2>Meaningful work already shipped</h2>
+				<p>A short snapshot of recent improvements, not a full changelog.</p>
+			</div>
+			<div class="completed-grid">
+				{RECENTLY_COMPLETED_ITEMS.map((item) => (
+					<article class="completed-card">
+						<span class="completed-mark" aria-hidden="true">✓</span>
+						<div>
+							<div class="card-topline">
+								<h3>{item.title}</h3>
+								<span class="status-badge status-completed">{item.status}</span>
+							</div>
+							<p>{item.description}</p>
+						</div>
 					</article>
 				))}
 			</div>
 		</section>
-
 	</div>
 </Layout>
 
-<script>
-	const shareButtons = Array.from(document.querySelectorAll("[data-share='true']"));
-	shareButtons.forEach((button) => {
-		button.addEventListener("click", async () => {
-			const url = window.location.origin;
-			try {
-				if (navigator.share) {
-					await navigator.share({ title: "DogEared", text: "Check out DogEared", url });
-					return;
-				}
-			} catch {
-				// no-op
-			}
-			try {
-				await navigator.clipboard.writeText(url);
-				if (button instanceof HTMLButtonElement) button.textContent = "Link Copied";
-				window.setTimeout(() => {
-					if (button instanceof HTMLButtonElement) button.textContent = "Share DogEared";
-				}, 1600);
-			} catch {
-				window.open(url, "_blank", "noopener,noreferrer");
-			}
-		});
-	});
-</script>
-
 <style>
-	.roadmap-page { max-width: 960px; }
-	.hero { margin-bottom: 1rem; }
-	.eyebrow { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); }
-	.roadmap-page h1 { margin: 0; line-height: 1.05; font-size: clamp(2rem, 3.8vw, 3.4rem); }
-	.panel { margin-top: 0.9rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
-	.panel-plain { border: none; background: transparent; padding: 0; border-radius: 0; }
-	.panel-head h2 { margin: 0; }
-	.panel-head p { margin: 0.3rem 0 0; color: #515151; }
-	.roadmap-grid { margin-top: 0.7rem; display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.roadmap-item { border: var(--border-subtle); border-radius: var(--radius-md); padding: 0.75rem; background: rgba(255, 255, 255, 0.56); }
-	.roadmap-item-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-	.roadmap-item h3 { margin: 0.35rem 0 0; font-size: 1rem; }
-	.roadmap-item p { margin: 0.45rem 0 0; color: #4f4f4f; line-height: 1.5; }
-	.status-pill { display: inline-flex; margin: 0; border-radius: 999px; padding: 0.14rem 0.5rem; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
-	.rank-pill { display: inline-flex; margin: 0; border-radius: 999px; background: #c7e2b8; color: #21351a; padding: 0.15rem 0.48rem; font-size: 0.8rem; font-weight: 700; line-height: 1.2; }
-	.status-now { background: #d7f1df; color: #176339; }
-	.status-next { background: #f6ebcf; color: #7a5a19; }
-	.status-later { background: #e8e8e8; color: #5e5e5e; }
-	.status-finished { background: var(--color-nav-surface); color: var(--color-nav-active); }
-	.finished-rank-pill { background: #e2e8f0; color: #475569; }
-	.support-grid { margin-top: 0.7rem; display: grid; gap: 0.6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.support-card { border: var(--border-subtle); border-radius: var(--radius-md); padding: 0.75rem; background: rgba(255, 255, 255, 0.56); display: flex; flex-direction: column; min-height: 180px; }
-	.support-card h3 { margin: 0; font-size: 1rem; }
-	.support-card p { margin: 0.45rem 0 0; color: #4f4f4f; line-height: 1.5; }
-	.support-feature { margin-bottom: 0.75rem; border: var(--border-subtle); background: rgba(255, 255, 255, 0.56); border-radius: var(--radius-md); padding: 0.8rem; display: flex; justify-content: space-between; gap: 0.75rem; align-items: center; }
-	.feature-eyebrow { margin: 0; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: #735d34; font-weight: 700; }
-	.support-feature h2 { margin: 0.24rem 0 0; font-size: clamp(1.15rem, 2.2vw, 1.6rem); }
-	.support-feature p { margin: 0.33rem 0 0; color: #4f4f4f; max-width: 54ch; }
-	.support-feature-cta { flex: 0 0 auto; text-decoration: none; border-radius: 999px; background: #121212; color: #fff; padding: 0.58rem 0.86rem; font-weight: 700; }
-	.support-feature-cta:hover { background: #2f8f57; }
-	.support-cta { margin-top: auto; align-self: flex-start; text-decoration: none; border: none; background: #1f1f1f; color: #fff; border-radius: 999px; padding: 0.5rem 0.75rem; font: inherit; font-size: 0.83rem; cursor: pointer; }
-	.support-cta:hover { background: #2f8f57; }
-	.support-cta.ghost { background: #efe9da; color: #4c3d21; }
-	.support-cta.ghost:hover { background: #e4ddcd; }
-	.support-hint { margin: 0.7rem 0 0; font-size: 0.84rem; color: #5d5d5d; }
-	.support-hint code { background: #f1efe9; border-radius: 6px; padding: 0.1rem 0.28rem; }
-	@media (max-width: 980px) {
-		.support-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.roadmap-page {
+		max-width: 980px;
+	}
+	.roadmap-hero {
+		padding: 0.25rem 0 1.4rem;
+		border-bottom: var(--border-subtle);
+	}
+	.eyebrow,
+	.section-kicker {
+		margin: 0 0 0.4rem;
+		font-size: 0.76rem;
+		font-weight: 760;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--color-text-subtle);
+	}
+	.roadmap-page h1 {
+		margin: 0;
+		max-width: 12ch;
+		font-size: clamp(2.15rem, 4vw, 3.65rem);
+		font-weight: 580;
+		line-height: 1.04;
+	}
+	.hero-copy {
+		margin: 0.85rem 0 0;
+		max-width: 66ch;
+		color: var(--color-text-muted);
+		font-size: 1.02rem;
+		line-height: 1.65;
+	}
+	.roadmap-sections {
+		display: grid;
+		gap: 1.35rem;
+		margin-top: 1.35rem;
+	}
+	.roadmap-section,
+	.completed-section {
+		padding-top: 1.2rem;
+		border-top: var(--border-subtle);
+	}
+	.roadmap-section:first-child {
+		padding-top: 0;
+		border-top: 0;
+	}
+	.section-head {
+		display: grid;
+		gap: 0.22rem;
+		max-width: 68ch;
+	}
+	.section-head h2 {
+		margin: 0;
+		color: var(--color-text);
+		font-size: clamp(1.35rem, 2vw, 1.75rem);
+		font-weight: 680;
+		line-height: 1.18;
+	}
+	.section-head p:last-child {
+		margin: 0.15rem 0 0;
+		color: var(--color-text-muted);
+		line-height: 1.55;
+	}
+	.roadmap-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.72rem;
+		margin-top: 0.78rem;
+	}
+	.roadmap-card,
+	.completed-card {
+		background: rgba(255, 255, 255, 0.68);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-xs);
+	}
+	.roadmap-card {
+		display: flex;
+		flex-direction: column;
+		min-height: 168px;
+		padding: 0.86rem;
+	}
+	.card-topline {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.6rem;
+	}
+	.roadmap-card h3,
+	.completed-card h3 {
+		margin: 0;
+		color: var(--color-text);
+		font-size: 1rem;
+		font-weight: 680;
+		line-height: 1.25;
+	}
+	.roadmap-card h3 {
+		margin-top: 0.58rem;
+	}
+	.roadmap-card p,
+	.completed-card p {
+		margin: 0.45rem 0 0;
+		color: var(--color-text-muted);
+		line-height: 1.54;
+	}
+	.status-badge,
+	.priority-label {
+		display: inline-flex;
+		align-items: center;
+		min-height: 24px;
+		border-radius: 999px;
+		padding: 0 0.58rem;
+		font-size: 0.74rem;
+		font-weight: 720;
+		line-height: 1;
+		white-space: nowrap;
+	}
+	.status-in-progress {
+		background: var(--color-nav-surface);
+		color: var(--color-nav-active);
+	}
+	.status-planning {
+		background: #f5ead3;
+		color: #73521a;
+	}
+	.status-research {
+		background: #edf5fb;
+		color: #365f7a;
+	}
+	.status-future {
+		background: #eef1f2;
+		color: #4f5e66;
+	}
+	.status-completed {
+		background: #edf4e8;
+		color: #1f5138;
+	}
+	.priority-label {
+		color: var(--color-text-subtle);
+		background: rgba(255, 255, 255, 0.64);
+	}
+	.completed-section {
+		margin-top: 1.45rem;
+	}
+	.completed-grid {
+		display: grid;
+		gap: 0.58rem;
+		margin-top: 0.78rem;
+	}
+	.completed-card {
+		display: grid;
+		grid-template-columns: 28px minmax(0, 1fr);
+		gap: 0.62rem;
+		padding: 0.76rem 0.82rem;
+	}
+	.completed-mark {
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		border-radius: 999px;
+		background: var(--color-nav-surface);
+		color: var(--color-nav-active);
+		font-weight: 800;
+		line-height: 1;
+	}
+	.completed-card .card-topline {
+		align-items: flex-start;
+	}
+	.completed-card .status-badge {
+		flex: 0 0 auto;
 	}
 	@media (max-width: 720px) {
-		.support-feature { flex-direction: column; align-items: flex-start; }
-		.roadmap-grid,
-		.support-grid { grid-template-columns: 1fr; }
+		.roadmap-page h1 {
+			max-width: none;
+		}
+		.roadmap-grid {
+			grid-template-columns: 1fr;
+		}
+		.card-topline {
+			align-items: flex-start;
+		}
+		.completed-card .card-topline {
+			flex-direction: column;
+			gap: 0.35rem;
+		}
 	}
 </style>
