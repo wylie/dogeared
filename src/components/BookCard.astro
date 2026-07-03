@@ -1,6 +1,6 @@
 ---
 import Chip from "./Chip.astro";
-import { normalizeBookCoverUrl } from "../lib/bookCovers";
+import { displayBookCoverUrl, normalizeBookCoverUrl } from "../lib/bookCovers";
 type Props = {
 	title: string;
 	titleHref?: string;
@@ -46,6 +46,7 @@ const normalizedShelves = Number(shelfEntries);
 const normalizedPages = Number(pageCount);
 const normalizedRating = Math.max(0, Math.min(5, Number(averageRating) || 0));
 const normalizedThumbnail = normalizeBookCoverUrl(thumbnail);
+const displayThumbnail = displayBookCoverUrl(normalizedThumbnail);
 const normalizedGenres = Array.from(new Set((Array.isArray(genres) ? genres : []).map((genre) => String(genre || "").trim()).filter(Boolean))).slice(0, 4);
 const normalizedTopics = Array.from(new Set((Array.isArray(topics) ? topics : []).map((topic) => String(topic || "").trim()).filter(Boolean))).slice(0, 4);
 
@@ -79,8 +80,8 @@ function renderAverageStars(value: number) {
 	<div class="cover-wrap">
 		{normalizedThumbnail ? (
 			titleHref
-				? <a href={titleHref} aria-label={`View ${title}`}><img class="cover" src={normalizedThumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="84" height="126" sizes="(max-width: 420px) 72px, 84px" /></a>
-				: <img class="cover" src={normalizedThumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="84" height="126" sizes="(max-width: 420px) 72px, 84px" />
+				? <a href={titleHref} aria-label={`View ${title}`}><img class="cover" src={displayThumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="84" height="126" sizes="(max-width: 420px) 72px, 84px" /></a>
+				: <img class="cover" src={displayThumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="84" height="126" sizes="(max-width: 420px) 72px, 84px" />
 		) : (
 			<div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>
 		)}

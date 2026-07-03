@@ -30,6 +30,8 @@ const {
 };
 const currentPath = Astro.url.pathname;
 const shouldLoadAnalytics = !["localhost", "127.0.0.1"].includes(Astro.url.hostname);
+const fontStylesheetHref = "https://fonts.googleapis.com/css2?family=Copse&family=Outfit:wght@100..900&display=swap";
+const iconStylesheetHref = "https://fonts.googleapis.com/icon?family=Material+Icons&display=swap";
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
 const adminSession = isAuthenticated ? await resolveAdminSession(Astro.request) : { isAdmin: false };
@@ -108,9 +110,12 @@ import '../assets/global.css';
 		{pageStructuredData ? <script type="application/ld+json" set:html={pageStructuredData}></script> : null}
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-		<link rel="preconnect" href="https://books.google.com">
-		<link href="https://fonts.googleapis.com/css2?family=Copse&family=Outfit:wght@100..900&display=swap" rel="stylesheet">
-		<link href="https://fonts.googleapis.com/icon?family=Material+Icons&display=swap" rel="stylesheet">
+		<link rel="preload" as="style" href={fontStylesheetHref} onload="this.onload=null;this.rel='stylesheet'">
+		<link rel="preload" as="style" href={iconStylesheetHref} onload="this.onload=null;this.rel='stylesheet'">
+		<noscript>
+			<link href={fontStylesheetHref} rel="stylesheet">
+			<link href={iconStylesheetHref} rel="stylesheet">
+		</noscript>
 	</head>
 		<body>
 			<a class="skip-link" href="#main-content">Skip to main content</a>

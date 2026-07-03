@@ -7,6 +7,7 @@ export type ClientAuthState = {
 
 const AUTH_PREVIEW_KEY = "dogeared:auth-preview";
 const AUTH_EVENT = "dogeared:auth-state-changed";
+let liveAuthStatePromise: Promise<ClientAuthState> | null = null;
 
 function isLocalhostHost() {
 	const host = String(window.location.hostname || "").toLowerCase();
@@ -53,6 +54,7 @@ function readModeFromUrl() {
 
 export function setAuthPreviewMode(mode: AuthViewMode) {
 	writePreviewMode(mode);
+	liveAuthStatePromise = null;
 	window.dispatchEvent(new CustomEvent(AUTH_EVENT));
 }
 
@@ -69,11 +71,16 @@ export async function resolveClientAuthState(options?: { ssrAuthenticated?: bool
 	if (mode === "logged-in") return { authenticated: true, mode };
 	if (mode === "logged-out") return { authenticated: false, mode };
 
-	try {
-		const response = await fetch("/api/auth/me", { credentials: "same-origin" });
-		const data = await response.json().catch(() => ({}));
-		return { authenticated: !!data?.authenticated, mode: "live" };
-	} catch {
-		return { authenticated: ssrAuthenticated, mode: "live" };
+	if (!liveAuthStatePromise) {
+		liveAuthStatePromise = (async () => {
+			try {
+				const response = await fetch("/api/auth/me", { credentials: "same-origin" });
+				const data = await response.json().catch(() => ({}));
+				return { authenticated: !!data?.authenticated, mode: "live" };
+			} catch {
+				return { authenticated: ssrAuthenticated, mode: "live" };
+			}
+		})();
 	}
+	return liveAuthStatePromise;
 }

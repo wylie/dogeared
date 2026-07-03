@@ -11,8 +11,10 @@ test("home page includes onboarding checklist guidance", () => {
 
 test("home page includes recommendation fallback section", () => {
 	const source = readFileSync("src/pages/index.astro", "utf8");
-	assert.equal(source.includes("Popular With Readers"), true);
-	assert.equal(source.includes("Start here while DogEared learns your taste"), true);
+	const homeSectionsSource = readFileSync("src/lib/homeSections.ts", "utf8");
+	assert.equal(source.includes("resolvePublicHomeSections"), true);
+	assert.equal(homeSectionsSource.includes("Popular With Readers"), true);
+	assert.equal(homeSectionsSource.includes("Start here while DogEared learns your taste"), true);
 });
 
 test("home empty state is actionable", () => {

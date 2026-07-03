@@ -16,6 +16,17 @@ export function normalizeBookCoverUrl(value: unknown) {
 	}
 }
 
+export function isGoogleBooksCoverUrl(value: unknown) {
+	const normalized = normalizeBookCoverUrl(value);
+	return /\/\/books\.google\.[^/]+\/books\/(?:publisher\/)?content/i.test(normalized);
+}
+
+export function displayBookCoverUrl(value: unknown) {
+	const normalized = normalizeBookCoverUrl(value);
+	if (!normalized || !isGoogleBooksCoverUrl(normalized)) return normalized;
+	return `/api/books/cover?url=${encodeURIComponent(normalized)}`;
+}
+
 export function googleBooksCoverUrl(imageLinks: GoogleImageLinks, quality: "card" | "detail" = "card") {
 	if (!imageLinks || typeof imageLinks !== "object") return "";
 	const candidates = quality === "detail"

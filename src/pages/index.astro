@@ -6,47 +6,33 @@ import Chip from '../components/Chip.astro';
 import RatingControl from '../components/RatingControl.astro';
 import { resolveUserBySession } from '../lib/auth';
 import { getNeonSql } from '../lib/neon';
-import { formatGenreLabel } from '../lib/genres';
-import { authorHref } from '../lib/author';
-import { resolvePublicReaderSuggestions } from "../lib/feed";
+import { formatPublishedLabel, resolvePublicHomeSections, type BrowseSection } from "../lib/homeSections";
 
 export const prerender = false;
+const shouldProfileHome = import.meta.env.DEV;
+const homeSsrStarted = performance.now();
+
+function logHomeTiming(label: string, durationMs: number) {
+	if (!shouldProfileHome) return;
+	console.info(`[home:ssr] ${label}: ${durationMs.toFixed(1)}ms`);
+}
+
+async function timedSsr<T>(label: string, loader: () => Promise<T>) {
+	const start = performance.now();
+	try {
+		return await loader();
+	} finally {
+		logHomeTiming(label, performance.now() - start);
+	}
+}
+
 let session: Awaited<ReturnType<typeof resolveUserBySession>> = null;
 try {
-	session = await resolveUserBySession(Astro.request);
+	session = await timedSsr("session", () => resolveUserBySession(Astro.request));
 } catch (error) {
 	console.error("Home session lookup failed; rendering as logged out.", error);
 }
 const isAuthenticated = !!session?.userId;
-
-type BrowseBook = {
-	id: string;
-	title: string;
-	authors: string[];
-	authorId: number;
-	shelfCount: number;
-	thumbnail: string;
-	publishedDate: string;
-	description: string;
-	pageCount: number;
-	format: string;
-	language: string;
-	isbn10?: string;
-	isbn13?: string;
-	averageRating: number;
-	ratingCount: number;
-	source: "google_books" | "open_library" | "nyt";
-	sourceWorkId?: string;
-	sourceEditionId?: string;
-	sourceUrl?: string;
-};
-
-type BrowseSection = {
-	id: string;
-	title: string;
-	subtitle: string;
-	books: BrowseBook[];
-};
 
 type ShelfIdea = {
 	name: string;
@@ -55,88 +41,10 @@ type ShelfIdea = {
 	icon: string;
 };
 
-const NON_GENRE_SLUGS = new Set([
-	"",
-	"all",
-	"book-club",
-	"books-i-own",
-	"currently-reading",
-	"default",
-	"did-not-finish",
-	"dnf",
-	"faves",
-	"favorites",
-	"fiction",
-	"general",
-	"kindle",
-	"library",
-	"maybe",
-	"owned",
-	"physical",
-	"read",
-	"re-read",
-	"reread",
-	"tbr",
-	"to-buy",
-	"to-read",
-	"want-to-buy",
-	"want-to-own"
-]);
-
-function isGenreSlug(slug: string) {
-	if (!slug || NON_GENRE_SLUGS.has(slug)) return false;
-	if (/^\d{4}(-reads)?$/.test(slug)) return false;
-	if (/^\d+$/.test(slug)) return false;
-	return true;
-}
-
-function formatGenreTitle(slug: string, fallback: string) {
-	const source = String(fallback || slug || "").trim();
-	return formatGenreLabel(source, "Genre");
-}
-
-function formatPublishedLabel(value: string) {
-	const text = String(value || "").trim();
-	if (!text) return "";
-	if (/^\d{4}$/.test(text)) return text;
-	if (/^\d{4}-\d{2}$/.test(text)) {
-		const parsed = new Date(`${text}-01`);
-		if (!Number.isFinite(parsed.getTime())) return text;
-		return parsed.toLocaleDateString("en-US", {
-			month: "long",
-			year: "numeric"
-		});
-	}
-	const parsed = new Date(text);
-	if (!Number.isFinite(parsed.getTime())) return text;
-	return parsed.toLocaleDateString("en-US", {
-		month: "long",
-		day: "numeric",
-		year: "numeric"
-	});
-}
-
-function renderAverageStars(value: number) {
-	const clamped = Math.max(0, Math.min(5, Number(value) || 0));
-	const rounded = Math.round(clamped);
-	return Array.from({ length: 5 }, (_, index) => (index < rounded ? "★" : "☆")).join("");
-}
-
-function sanitizeDescription(value: string, maxLength = 220) {
-	const text = String(value || "")
-		.replace(/<[^>]+>/g, " ")
-		.replace(/\s+/g, " ")
-		.trim();
-	if (!text) return "";
-	if (text.length <= maxLength) return text;
-	return `${text.slice(0, maxLength).trimEnd()}…`;
-}
-
 let sections: BrowseSection[] = [];
 let errorMessage = "";
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let viewerRatingByBookId = new Map<number, number>();
-let readerSuggestions: Awaited<ReturnType<typeof resolvePublicReaderSuggestions>> = [];
 let onboardingProgress = {
 	totalBooks: 0,
 	ratedBooks: 0,
@@ -144,13 +52,6 @@ let onboardingProgress = {
 	follows: 0,
 	profileComplete: false
 };
-if (session?.userId) {
-	try {
-		readerSuggestions = await resolvePublicReaderSuggestions(session.userId, 6);
-	} catch (error) {
-		console.error("Home reader suggestions unavailable.", error);
-	}
-}
 const shelfIdeas: ShelfIdea[] = [
 	{
 		name: "Weekend One-Sitting Reads",
@@ -174,146 +75,7 @@ const shelfIdeas: ShelfIdea[] = [
 
 try {
 	const sql = getNeonSql();
-	const genreRows = await sql<Array<{
-		genre_slug: string;
-		genre_name: string;
-		book_count: number;
-	}>>`
-		select
-			bg.genre_slug,
-			min(bg.genre_name) as genre_name,
-			count(distinct bg.book_id) as book_count
-		from book_genre bg
-		join user_book ub on ub.book_id = bg.book_id
-		group by bg.genre_slug
-		order by count(distinct bg.book_id) desc, min(bg.genre_name) asc
-		limit 24
-	`;
-
-	const sectionsConfig = genreRows
-		.filter((row) => isGenreSlug(String(row.genre_slug || "").trim()))
-		.slice(0, 10)
-		.map((row) => {
-			const id = String(row.genre_slug || "").trim();
-			const title = formatGenreTitle(id, String(row.genre_name || "").trim());
-			return {
-				id,
-				title,
-				subtitle: `Books readers on DogEared are shelving in ${title.toLowerCase()}.`
-			};
-		});
-
-	const results = await Promise.all(sectionsConfig.map(async (section) => {
-		const rows = await sql<Array<{
-			book_id: number;
-			title: string;
-			primary_author: string;
-			author_id: number | null;
-			shelf_count: number;
-			synopsis: string;
-			cover_url: string;
-			published_year: number | null;
-			language: string;
-			isbn10: string;
-			isbn13: string;
-			google_books_id: string;
-			page_count: number;
-			average_rating: number | null;
-			rating_count: number;
-			page_count: number;
-			source: "google_books" | "open_library" | "nyt" | null;
-			source_work_id: string | null;
-			source_edition_id: string | null;
-			source_url: string | null;
-		}>>`
-			with ranked as (
-				select book_id
-				from get_top_books_by_genre(${section.id}, 20, 3650)
-			)
-			select
-				b.id as book_id,
-				b.title,
-				b.primary_author,
-				b.author_id,
-				coalesce(sc.shelf_count, 0)::int as shelf_count,
-				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
-				b.cover_url,
-				b.published_year,
-				b.language,
-				b.isbn10,
-				b.isbn13,
-				b.google_books_id,
-				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
-				coalesce(ra.average_rating, 0) as average_rating,
-				coalesce(ra.rating_count, 0)::int as rating_count,
-				bs.source,
-				bs.source_work_id,
-				bs.source_edition_id,
-				bs.source_url
-			from ranked r
-			join book b on b.id = r.book_id
-			left join lateral (
-				select count(*)::int as shelf_count
-				from user_book ub
-				where ub.book_id = b.id
-			) sc on true
-			left join lateral (
-				select
-					round(avg(ub.rating)::numeric, 1) as average_rating,
-					count(*) filter (where ub.rating is not null) as rating_count
-				from user_book ub
-				where ub.book_id = b.id
-			) ra on true
-			left join lateral (
-				select
-					source,
-					source_work_id,
-					source_edition_id,
-					source_url
-				from book_source
-				where book_id = b.id
-				order by
-					case source
-						when 'google_books' then 1
-						when 'open_library' then 2
-						when 'nyt' then 3
-						else 9
-					end,
-					id asc
-				limit 1
-			) bs on true
-			order by coalesce(sc.shelf_count, 0) desc, b.title asc
-		`;
-
-		const books: BrowseBook[] = rows.map((row) => ({
-			id: `book_${row.book_id}`,
-			title: String(row.title || "").trim(),
-			authors: [String(row.primary_author || "").trim()].filter(Boolean),
-			authorId: Number(row.author_id || 0),
-			shelfCount: Number(row.shelf_count || 0),
-			thumbnail: String(row.cover_url || "").trim(),
-			publishedDate: row.published_year ? String(row.published_year) : "",
-			description: sanitizeDescription(String(row.synopsis || "")),
-			pageCount: Math.max(0, Number(row.page_count || 0) || 0),
-			format: "Book",
-			language: String(row.language || "").trim().toUpperCase(),
-			isbn10: String(row.isbn10 || "").trim(),
-			isbn13: String(row.isbn13 || "").trim(),
-			averageRating: Number(row.average_rating || 0),
-			ratingCount: Number(row.rating_count || 0),
-			source: row.source || (row.google_books_id ? "google_books" : "open_library"),
-			sourceWorkId: String(row.source_work_id || row.google_books_id || "").trim(),
-			sourceEditionId: String(row.source_edition_id || "").trim(),
-			sourceUrl: String(
-				row.source_url ||
-				(row.google_books_id ? `https://books.google.com/books?id=${encodeURIComponent(String(row.google_books_id).trim())}` : "")
-			).trim()
-		}));
-
-		return { ...section, books };
-	}));
-
-	sections = results.filter((section) => section.books.length > 0);
+	sections = await resolvePublicHomeSections({ onTiming: logHomeTiming });
 	if (session?.userId && sections.length > 0) {
 		const bookIds = Array.from(new Set(
 			sections
@@ -373,85 +135,6 @@ try {
 			console.error("Home onboarding progress query failed.", error);
 		}
 	}
-	if (!errorMessage && sections.length === 0) {
-		const fallbackRows = await sql<Array<{
-			book_id: number;
-			title: string;
-			primary_author: string;
-			author_id: number | null;
-			shelf_count: number;
-			synopsis: string;
-			cover_url: string;
-			published_year: number | null;
-			language: string;
-			isbn10: string;
-			isbn13: string;
-			google_books_id: string;
-			page_count: number;
-			average_rating: number | null;
-			rating_count: number;
-		}>>`
-			select
-				b.id as book_id,
-				b.title,
-				b.primary_author,
-				b.author_id,
-				coalesce(sc.shelf_count, 0)::int as shelf_count,
-				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
-				b.cover_url,
-				b.published_year,
-				b.language,
-				b.isbn10,
-				b.isbn13,
-				b.google_books_id,
-				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
-				coalesce(ra.average_rating, 0) as average_rating,
-				coalesce(ra.rating_count, 0)::int as rating_count
-			from book b
-			left join lateral (
-				select count(*)::int as shelf_count
-				from user_book ub
-				where ub.book_id = b.id
-			) sc on true
-			left join lateral (
-				select
-					round(avg(ub.rating)::numeric, 1) as average_rating,
-					count(*) filter (where ub.rating is not null) as rating_count
-				from user_book ub
-				where ub.book_id = b.id
-			) ra on true
-			where coalesce(sc.shelf_count, 0) > 0
-			order by coalesce(sc.shelf_count, 0) desc, coalesce(ra.average_rating, 0) desc
-			limit 16
-		`;
-		if (fallbackRows.length > 0) {
-			sections = [{
-				id: "popular-now",
-				title: "Popular With Readers",
-				subtitle: "Start here while DogEared learns your taste. These books are popular with active readers.",
-				books: fallbackRows.map((row) => ({
-					id: `book_${row.book_id}`,
-					title: String(row.title || "").trim(),
-					authors: [String(row.primary_author || "").trim()].filter(Boolean),
-					authorId: Number(row.author_id || 0),
-					shelfCount: Number(row.shelf_count || 0),
-					thumbnail: String(row.cover_url || "").trim(),
-					publishedDate: row.published_year ? String(row.published_year) : "",
-					description: sanitizeDescription(String(row.synopsis || "")),
-					pageCount: Math.max(0, Number(row.page_count || 0) || 0),
-					format: "Book",
-					language: String(row.language || "").trim().toUpperCase(),
-					isbn10: String(row.isbn10 || "").trim(),
-					isbn13: String(row.isbn13 || "").trim(),
-					averageRating: Number(row.average_rating || 0),
-					ratingCount: Number(row.rating_count || 0),
-					source: row.google_books_id ? "google_books" : "open_library",
-					sourceWorkId: String(row.google_books_id || "").trim(),
-					sourceUrl: row.google_books_id ? `https://books.google.com/books?id=${encodeURIComponent(String(row.google_books_id).trim())}` : ""
-				}))
-			}];
-		}
-	}
 } catch (error) {
 	console.error("Home shelves query failed.", error);
 	errorMessage = "Live home shelves are temporarily unavailable.";
@@ -463,6 +146,7 @@ const isOnboardingComplete = (
 	&& onboardingProgress.follows > 0
 	&& onboardingProgress.profileComplete
 );
+logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 ---
 
 <Layout
@@ -529,11 +213,11 @@ const isOnboardingComplete = (
 										? Number(book.ratingCount || 0)
 										: (viewerRating > 0 ? 1 : 0);
 									return (
-									<BookCard
+										<BookCard
 										title={book.title}
 										titleHref={`/book?bookId=${encodeURIComponent(String(book.id).replace(/^book_/, ""))}`}
 										author={book.authors.length > 0 ? book.authors.join(", ") : "Unknown author"}
-										authorHref={book.authors.length === 1 && book.authors[0] ? authorHref(book.authors[0], book.authorId) : ""}
+										authorHref={book.authors.length === 1 && book.authors[0] ? book.authorHref : ""}
 										thumbnail={book.thumbnail}
 										description={book.description || "Synopsis unavailable for this edition."}
 										readers={book.shelfCount}
@@ -579,24 +263,18 @@ const isOnboardingComplete = (
 							</ul>
 						)}
 					</section>
-					{((sectionIndex === 1 && readerSuggestions.length > 0) || sectionIndex === 4) && (
+					{((sectionIndex === 1 && isAuthenticated) || sectionIndex === 4) && (
 						<section class="browse-section community-discovery-section">
 							<div class="section-head">
 								<h2>{sectionIndex === 1 ? "Readers You Might Like" : "Custom Shelf Ideas"}</h2>
 							</div>
 							{sectionIndex === 1 ? (
-								<ul class="community-suggestion-grid">
-									{readerSuggestions.map((reader) => (
-										<li class="community-suggestion-card" data-reader-card>
-											<h3><a href={`/profile/${encodeURIComponent(reader.username)}`}>@{reader.username}</a></h3>
-											<p>{reader.blurb || "Public profile with recent reading activity."}</p>
-											<div class="suggestion-chip-row">
-												{reader.favoriteAuthor && <Chip className="shelf-count-badge" label={reader.favoriteAuthor} />}
-												{reader.favoriteBook && <Chip className="shelf-count-badge" label={reader.favoriteBook} />}
-												{reader.location && <Chip className="shelf-count-badge" label={reader.location} />}
-											</div>
-											<button type="button" class="reader-follow-button" data-action="follow-reader" data-username={reader.username}>Follow</button>
-											<p class="reader-feedback" data-reader-feedback role="status" aria-live="polite" hidden></p>
+								<ul class="community-suggestion-grid" data-reader-suggestions aria-busy="true">
+									{Array.from({ length: 3 }, () => (
+										<li class="community-suggestion-card community-suggestion-skeleton" aria-hidden="true">
+											<span></span>
+											<span></span>
+											<span></span>
 										</li>
 									))}
 								</ul>
@@ -813,6 +491,27 @@ const isOnboardingComplete = (
 		border-radius: var(--radius-lg);
 		padding: 0.95rem;
 		border: var(--border-subtle);
+	}
+	.community-suggestion-skeleton {
+		display: grid;
+		gap: 0.55rem;
+		min-height: 150px;
+	}
+	.community-suggestion-skeleton span {
+		display: block;
+		height: 0.8rem;
+		border-radius: var(--radius-pill);
+		background: rgba(82, 96, 109, 0.14);
+	}
+	.community-suggestion-skeleton span:first-child {
+		width: 58%;
+		height: 1rem;
+	}
+	.community-suggestion-skeleton span:nth-child(2) {
+		width: 92%;
+	}
+	.community-suggestion-skeleton span:last-child {
+		width: 74%;
 	}
 	.community-suggestion-card h3 {
 		margin: 0;
@@ -1255,6 +954,70 @@ const isOnboardingComplete = (
 		}
 	}
 
+	function escapeHtml(value) {
+		return String(value || "")
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&#39;");
+	}
+
+	function renderSuggestionChip(label) {
+		const text = String(label || "").trim();
+		if (!text) return "";
+		return `<span class="chip chip--highlight chip--static shelf-count-badge">${escapeHtml(text)}</span>`;
+	}
+
+	function renderReaderSuggestion(reader) {
+		const username = String(reader?.username || "").trim();
+		if (!username) return "";
+		const chips = [
+			renderSuggestionChip(reader?.favoriteAuthor),
+			renderSuggestionChip(reader?.favoriteBook),
+			renderSuggestionChip(reader?.location)
+		].join("");
+		return `
+			<li class="community-suggestion-card" data-reader-card>
+				<h3><a href="/profile/${encodeURIComponent(username)}">@${escapeHtml(username)}</a></h3>
+				<p>${escapeHtml(reader?.blurb || "Public profile with recent reading activity.")}</p>
+				${chips ? `<div class="suggestion-chip-row">${chips}</div>` : ""}
+				<button type="button" class="reader-follow-button" data-action="follow-reader" data-username="${escapeHtml(username)}">Follow</button>
+				<p class="reader-feedback" data-reader-feedback role="status" aria-live="polite" hidden></p>
+			</li>
+		`;
+	}
+
+	async function loadReaderSuggestions() {
+		const list = document.querySelector("[data-reader-suggestions]");
+		if (!(list instanceof HTMLElement)) return;
+		if (!isAuthenticated) {
+			list.closest(".community-discovery-section")?.remove();
+			return;
+		}
+		if (import.meta.env.DEV) performance.mark("home:reader-suggestions:start");
+		try {
+			const response = await fetch("/api/home/reader-suggestions", { credentials: "same-origin" });
+			const data = await response.json().catch(() => ({}));
+			const readers = Array.isArray(data?.readers) ? data.readers : [];
+			if (!response.ok || readers.length === 0) {
+				list.closest(".community-discovery-section")?.remove();
+				return;
+			}
+			list.innerHTML = readers.map(renderReaderSuggestion).join("");
+			list.setAttribute("aria-busy", "false");
+		} catch {
+			list.closest(".community-discovery-section")?.remove();
+		} finally {
+			if (import.meta.env.DEV) {
+				performance.mark("home:reader-suggestions:end");
+				performance.measure("home:reader-suggestions", "home:reader-suggestions:start", "home:reader-suggestions:end");
+				const measure = performance.getEntriesByName("home:reader-suggestions").pop();
+				console.info(`[home:client] reader suggestions: ${Math.round(measure?.duration || 0)}ms`);
+			}
+		}
+	}
+
 	async function createMockShelf(button) {
 		if (!(button instanceof HTMLButtonElement)) return;
 		if (!isAuthenticated) {
@@ -1444,10 +1207,26 @@ const isOnboardingComplete = (
 	}
 
 	async function initAuthState() {
+		if (import.meta.env.DEV) performance.mark("home:hydration:start");
 		migrateShelfEntriesInPlace();
 		const state = await resolveClientAuthState({ ssrAuthenticated: isAuthenticated });
 		isAuthenticated = state.authenticated;
 		syncExistingState();
+		if (import.meta.env.DEV) {
+			performance.mark("home:hydration:end");
+			performance.measure("home:hydration", "home:hydration:start", "home:hydration:end");
+			const measure = performance.getEntriesByName("home:hydration").pop();
+			console.info(`[home:client] hydration/auth sync: ${Math.round(measure?.duration || 0)}ms`);
+		}
+		void loadReaderSuggestions();
+	}
+
+	if (import.meta.env.DEV) {
+		window.addEventListener("load", () => {
+			const covers = Array.from(document.querySelectorAll(".book-card img.cover"));
+			const loaded = covers.filter((cover) => cover instanceof HTMLImageElement && cover.complete).length;
+			console.info(`[home:client] cover images loaded at window load: ${loaded}/${covers.length}`);
+		}, { once: true });
 	}
 
 	document.addEventListener("click", (event) => {
