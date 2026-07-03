@@ -82,7 +82,7 @@ const sectionLinks = [
 					<li class="people-strip-card" data-reader-card>
 						<div class="people-strip-top">
 							{reader.avatar
-								? <img src={reader.avatar} alt="" class="people-strip-avatar" />
+								? <img src={reader.avatar} alt="" class="people-strip-avatar" loading="lazy" decoding="async" width="54" height="54" />
 								: <span class="people-strip-avatar people-strip-avatar-fallback" aria-hidden="true">@</span>}
 							<button
 								type="button"
@@ -128,7 +128,7 @@ const sectionLinks = [
 						<li class="people-strip-card following-management-card" data-reader-card data-following-card>
 							<div class="people-strip-top">
 								{reader.avatar
-									? <img src={reader.avatar} alt="" class="people-strip-avatar" />
+									? <img src={reader.avatar} alt="" class="people-strip-avatar" loading="lazy" decoding="async" width="54" height="54" />
 									: <span class="people-strip-avatar people-strip-avatar-fallback" aria-hidden="true">@</span>}
 								<button type="button" class="follow-button follow-button-small" data-action="unfollow-reader" data-username={reader.username}>Unfollow</button>
 							</div>

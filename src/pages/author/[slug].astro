@@ -249,7 +249,7 @@ const authorStructuredData = displayName
 		<section class="panel author-head">
 			<div class="author-photo">
 				{authorPhotoUrl
-					? <img src={authorPhotoUrl} alt={`${displayName} photo`} loading="lazy" />
+					? <img src={authorPhotoUrl} alt={`${displayName} photo`} loading="lazy" decoding="async" width="120" height="120" />
 					: <div class="photo-placeholder"><span class="material-icons" aria-hidden="true">person</span></div>}
 			</div>
 			<div class="author-meta">

@@ -1302,6 +1302,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 									src={profile.avatar}
 									alt=""
 									class="avatar"
+									loading="lazy"
+									decoding="async"
+									width="64"
+									height="64"
 									onerror="this.outerHTML='<div class=&quot;avatar-fallback&quot; aria-hidden=&quot;true&quot;>@</div>';"
 								/>
 							) : (

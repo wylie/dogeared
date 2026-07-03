@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { getNeonSql } from "../../../lib/neon";
 import { resolveUserBySession } from "../../../lib/auth";
+import { googleBooksCoverUrl } from "../../../lib/bookCovers";
 import { fromShelfEntryInput } from "../../../lib/bookPayload";
 import { ensureAuthorEnriched } from "../../../lib/authorEnrichment";
 import {
@@ -304,7 +305,7 @@ async function inferMetadataForBook(input: {
 		const matchedIsbn10 = normalizeIsbn(ids.find((id: any) => String(id?.type || "") === "ISBN_10")?.identifier || "");
 		const publishedMatch = String(info.publishedDate || "").match(/\d{4}/);
 		out.synopsis = normalizeText(info.description);
-		out.coverUrl = normalizeText(info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail);
+		out.coverUrl = googleBooksCoverUrl(info.imageLinks, "card");
 		out.language = normalizeText(info.language);
 		out.publishedYear = publishedMatch ? Number(publishedMatch[0]) : null;
 		out.pageCount = normalizeCatalogPageCount(info.pageCount);

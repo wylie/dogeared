@@ -9,6 +9,7 @@ import { getEncryptionKey, resolveUserBySession } from "../lib/auth";
 import { authorHref } from "../lib/author";
 import { normalizeGenreEntry } from "../lib/genres";
 import { buildBookReviewList, type BookReview } from "../lib/bookReviews";
+import { googleBooksCoverUrl } from "../lib/bookCovers";
 import { resolveCustomShelfOptions } from "../lib/customShelves";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
 
@@ -593,7 +594,7 @@ try {
 				author: normalizeText(Array.isArray(info.authors) ? info.authors[0] : queryAuthor),
 				authorId: 0,
 				synopsis: sanitizeSynopsis(info.description || ""),
-				coverUrl: normalizeText(info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail),
+				coverUrl: googleBooksCoverUrl(info.imageLinks, "detail"),
 				language: normalizeText(info.language),
 				isbn10: normalizeText(queryIsbn10),
 				isbn13: normalizeText(queryIsbn13),

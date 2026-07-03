@@ -23,10 +23,10 @@
   --color-chip-static: #edf4e8;
   --color-chip-genre: #eef6ea;
   --color-chip-topic: #edf5fb;
-  --color-rating: var(--palette-4);
+  --color-rating: #9b4818;
   --color-text: #1e262d;
   --color-text-muted: #52606d;
-  --color-text-subtle: #6b7884;
+  --color-text-subtle: #586470;
   --color-nav: var(--color-text-muted);
   --color-nav-hover: var(--color-text);
   --color-nav-active: #1f5138;

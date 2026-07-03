@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { googleBooksCoverUrl } from "../../../lib/bookCovers";
 import { createPublicCacheControl, withRuntimeCache } from "../../../lib/runtimeCache";
 
 export const prerender = false;
@@ -17,23 +18,8 @@ function normalizeText(value: string) {
 		.trim();
 }
 
-function toHttps(value: unknown) {
-	const input = String(value || "").trim();
-	if (!input) return "";
-	if (input.startsWith("http://")) return `https://${input.slice(7)}`;
-	return input;
-}
-
 function getGoogleCover(imageLinks: Record<string, unknown> | null | undefined) {
-	if (!imageLinks || typeof imageLinks !== "object") return "";
-	return toHttps(
-		imageLinks.extraLarge ||
-		imageLinks.large ||
-		imageLinks.medium ||
-		imageLinks.small ||
-		imageLinks.thumbnail ||
-		imageLinks.smallThumbnail
-	);
+	return googleBooksCoverUrl(imageLinks, "detail");
 }
 
 function scoreGoogleItem(item: Record<string, unknown>, query: string) {

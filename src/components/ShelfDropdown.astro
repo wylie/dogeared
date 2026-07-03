@@ -1,9 +1,14 @@
 ---
+import { normalizeBookCoverUrl } from "../lib/bookCovers";
 type Props = {
 	attrs?: Record<string, string | number | boolean | null | undefined>;
 };
 
 const { attrs = {} } = Astro.props as Props;
+const normalizedAttrs = { ...attrs };
+if ("data-cover" in normalizedAttrs) {
+	normalizedAttrs["data-cover"] = normalizeBookCoverUrl(normalizedAttrs["data-cover"]);
+}
 const initialStatusRaw = String(attrs["data-initial-status"] || "").trim();
 const initialStatus = (
 	initialStatusRaw === "reading" || initialStatusRaw === "finished" || initialStatusRaw === "want_to_read"
@@ -42,7 +47,7 @@ try {
 
 <div
 	class={`shelf-dropdown${hasInitialStatus ? " is-shelved" : ""}`}
-	{...attrs}
+	{...normalizedAttrs}
 >
 	<button
 		type="button"

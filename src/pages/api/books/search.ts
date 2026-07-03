@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { googleBooksCoverUrl } from "../../../lib/bookCovers";
 import { getNeonSql } from "../../../lib/neon";
 import { createPublicCacheControl, withRuntimeCache } from "../../../lib/runtimeCache";
 
@@ -435,7 +436,7 @@ export const GET: APIRoute = async ({ url }) => {
 				pageCount: typeof info.pageCount === "number" ? info.pageCount : null,
 				categories: Array.isArray(info.categories) ? info.categories : [],
 				language: info.language ?? "",
-				thumbnail: info.imageLinks?.thumbnail ?? "",
+				thumbnail: googleBooksCoverUrl(info.imageLinks, "card"),
 				isbn10,
 				isbn13,
 				googleBooksId: String(item?.id || "").trim()

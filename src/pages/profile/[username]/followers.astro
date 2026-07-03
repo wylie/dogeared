@@ -130,7 +130,7 @@ const followersStructuredData = JSON.stringify(buildBreadcrumbList([
 						<li>
 							<a href={`/profile/${encodeURIComponent(reader.username)}`}>
 								{reader.avatar
-									? <img src={reader.avatar} alt="" class="follow-list-avatar" loading="lazy" decoding="async" />
+									? <img src={reader.avatar} alt="" class="follow-list-avatar" loading="lazy" decoding="async" width="44" height="44" />
 									: <span class="follow-list-avatar follow-list-avatar-fallback" aria-hidden="true">@</span>}
 								<span>{reader.name || `@${reader.username}`}</span>
 							</a>

@@ -29,6 +29,7 @@ const {
 	structuredData?: string;
 };
 const currentPath = Astro.url.pathname;
+const shouldLoadAnalytics = !["localhost", "127.0.0.1"].includes(Astro.url.hostname);
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
 const adminSession = isAuthenticated ? await resolveAdminSession(Astro.request) : { isAdmin: false };
@@ -63,12 +64,10 @@ import '../assets/global.css';
 <html lang="en">
 	<head>
 		<!-- Google Analytics: Only load in production -->
-		<script async src="https://www.googletagmanager.com/gtag/js?id=G-RT7DKML8JY"></script>
-		<script is:inline>
-			if (
-				typeof window !== "undefined" &&
-				!['localhost', '127.0.0.1'].includes(window.location.hostname)
-			) {
+		{shouldLoadAnalytics ? (
+			<>
+				<script async src="https://www.googletagmanager.com/gtag/js?id=G-RT7DKML8JY"></script>
+				<script is:inline>
 				// @ts-ignore
 				window.dataLayer = window.dataLayer || [];
 				// @ts-ignore
@@ -77,10 +76,11 @@ import '../assets/global.css';
 				gtag('js', new Date());
 				// @ts-ignore
 				gtag('config', 'G-RT7DKML8JY');
-			}
-		</script>
+				</script>
+			</>
+		) : null}
 		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		{METADATA_ICON_LINKS.map((link) => (
 			<link rel={link.rel} type={link.type} sizes={link.sizes} href={link.href} />
 		))}
@@ -108,8 +108,9 @@ import '../assets/global.css';
 		{pageStructuredData ? <script type="application/ld+json" set:html={pageStructuredData}></script> : null}
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="preconnect" href="https://books.google.com">
 		<link href="https://fonts.googleapis.com/css2?family=Copse&family=Outfit:wght@100..900&display=swap" rel="stylesheet">
-		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+		<link href="https://fonts.googleapis.com/icon?family=Material+Icons&display=swap" rel="stylesheet">
 	</head>
 		<body>
 			<a class="skip-link" href="#main-content">Skip to main content</a>

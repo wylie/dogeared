@@ -1,5 +1,6 @@
 ---
 import Chip from "./Chip.astro";
+import { normalizeBookCoverUrl } from "../lib/bookCovers";
 type Props = {
 	title: string;
 	titleHref?: string;
@@ -44,6 +45,7 @@ const normalizedReaders = Number(readers);
 const normalizedShelves = Number(shelfEntries);
 const normalizedPages = Number(pageCount);
 const normalizedRating = Math.max(0, Math.min(5, Number(averageRating) || 0));
+const normalizedThumbnail = normalizeBookCoverUrl(thumbnail);
 const normalizedGenres = Array.from(new Set((Array.isArray(genres) ? genres : []).map((genre) => String(genre || "").trim()).filter(Boolean))).slice(0, 4);
 const normalizedTopics = Array.from(new Set((Array.isArray(topics) ? topics : []).map((topic) => String(topic || "").trim()).filter(Boolean))).slice(0, 4);
 
@@ -75,10 +77,10 @@ function renderAverageStars(value: number) {
 	)}
 	{hasTopRight && <div class="top-right"><slot name="topRight" /></div>}
 	<div class="cover-wrap">
-		{thumbnail ? (
+		{normalizedThumbnail ? (
 			titleHref
-				? <a href={titleHref} aria-label={`View ${title}`}><img class="cover" src={thumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="76" height="114" /></a>
-				: <img class="cover" src={thumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="76" height="114" />
+				? <a href={titleHref} aria-label={`View ${title}`}><img class="cover" src={normalizedThumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="84" height="126" sizes="(max-width: 420px) 72px, 84px" /></a>
+				: <img class="cover" src={normalizedThumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="84" height="126" sizes="(max-width: 420px) 72px, 84px" />
 		) : (
 			<div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>
 		)}
@@ -270,6 +272,9 @@ function renderAverageStars(value: number) {
 		overflow-wrap: anywhere;
 	}
 	.card-body h3 a {
+		display: inline-flex;
+		align-items: center;
+		min-height: 24px;
 		color: inherit;
 		text-decoration: none;
 	}
@@ -286,6 +291,11 @@ function renderAverageStars(value: number) {
 	}
 	:global(.book-card .meta + .meta) {
 		margin-top: 0.1rem;
+	}
+	.meta :global(a.author-link) {
+		display: inline-flex;
+		align-items: center;
+		min-height: 24px;
 	}
 	.genre-links, .topic-links { display: flex; flex-wrap: wrap; gap: 0.32rem; margin-top: 0.38rem; }
 	.genre-links :global(.chip), .topic-links :global(.chip) { padding: 0.16rem 0.5rem; font-size: 0.74rem; font-weight: 650; }
