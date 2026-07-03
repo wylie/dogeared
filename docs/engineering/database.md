@@ -112,6 +112,33 @@ Relationships:
 - Belongs to `book`.
 - Powers related/genre pages and top-by-genre lists.
 
+## Series
+
+Entities: `series`, `series_book`
+
+Series records store reading-order metadata:
+
+- Series name and unique slug.
+- Optional description and cover image.
+- Total-book count.
+- Extensible JSON metadata for later additions.
+
+Series-book records store:
+
+- Series.
+- Optional DogEared book.
+- Optional title override for known books not yet in the catalog.
+- Book order.
+- Publication order.
+- Chronological order.
+- Extensible JSON metadata.
+
+Relationships:
+
+- A series has many series-book entries.
+- A series-book entry may reference a catalog `book`, or may represent a missing/not-yet-cataloged title.
+- Reader progress for series is derived from `user_book` statuses joined through `series_book`, so profiles can later support series-completed and series-in-progress views without a separate progress table.
+
 ## Topic Tags
 
 Entity: `book_tag`
@@ -321,6 +348,7 @@ The provider layer ranks these aggregate signals in application code so each rec
 - A user owns shelf entries, custom shelves, activity, progress events, auth state, profile data, follows, likes, comments, notifications, and feedback.
 - A book belongs to the catalog and can be referenced by many users through shelf entries and activity.
 - An author can have many books.
+- A series can have many ordered book entries; entries can point to catalog books or known missing titles.
 - Activity connects social interactions to a reader and book.
 - Reviews are currently part of shelf entries, not separate objects.
 - Custom shelves supplement the default shelf status model rather than replacing it.

@@ -30,6 +30,9 @@ type SearchResult = {
 	googleBooksId: string;
 	bookId?: number;
 	authorId?: number;
+	seriesName?: string;
+	seriesBookOrder?: number;
+	seriesLabel?: string;
 	variantCount?: number;
 	variants?: Array<{
 		title: string;
@@ -171,6 +174,7 @@ if (session?.userId) {
 					genres={result.categories}
 				>
 						<div slot="meta">
+							{result.seriesLabel && <p class="meta series-meta">{result.seriesLabel}</p>}
 							{result.publisher && <p class="meta">Publisher: {result.publisher}</p>}
 							{Number(result.bookId || 0) > 0 && viewerStatusByBookId.get(Number(result.bookId || 0)) === "finished" && (
 								<RatingControl
@@ -241,6 +245,10 @@ if (session?.userId) {
 		margin: 0.2rem 0;
 		color: #4a4a4a;
 		font-size: 0.92rem;
+	}
+	.series-meta {
+		color: var(--color-nav);
+		font-weight: 700;
 	}
 
 	.shelf-dropdown {

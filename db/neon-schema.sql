@@ -123,6 +123,31 @@ create table if not exists book_genre (
 	primary key (book_id, genre_slug)
 );
 
+create table if not exists series (
+	id bigserial primary key,
+	name text not null,
+	slug text not null unique,
+	description text not null default '',
+	cover_url text not null default '',
+	total_books int not null default 0,
+	metadata jsonb not null default '{}'::jsonb,
+	created_at timestamptz not null default now(),
+	updated_at timestamptz not null default now()
+);
+
+create table if not exists series_book (
+	series_id bigint not null references series(id) on delete cascade,
+	book_id bigint references book(id) on delete set null,
+	title_override text not null default '',
+	book_order numeric,
+	publication_order numeric,
+	chronological_order numeric,
+	metadata jsonb not null default '{}'::jsonb,
+	created_at timestamptz not null default now(),
+	updated_at timestamptz not null default now(),
+	check (book_id is not null or trim(title_override) <> '')
+);
+
 create table if not exists user_book (
 	user_id uuid not null references app_user(id) on delete cascade,
 	book_id bigint not null references book(id) on delete cascade,
@@ -155,6 +180,9 @@ create table if not exists user_follow (
 create index if not exists idx_book_genre_slug on book_genre(genre_slug);
 create index if not exists idx_book_source_book on book_source(book_id);
 create index if not exists idx_book_source_source on book_source(source, source_work_id, source_edition_id);
+create index if not exists idx_series_book_series_order on series_book(series_id, book_order, publication_order, chronological_order);
+create index if not exists idx_series_book_book on series_book(book_id) where book_id is not null;
+create unique index if not exists idx_series_book_unique_book on series_book(series_id, book_id) where book_id is not null;
 create index if not exists idx_user_activity_user_created on user_activity(user_id, created_at desc);
 create index if not exists idx_user_book_status_updated on user_book(status, updated_at desc);
 create index if not exists idx_user_book_book on user_book(book_id);

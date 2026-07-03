@@ -44,7 +44,7 @@ Most APIs resolve the current session when mutating or reading private user data
 Shared product/data logic lives in `src/lib/`.
 
 - Authentication and account helpers: `auth`, `authHardening`, `emailChange`, `email`.
-- Catalog and metadata helpers: `catalog`, `bookPayload`, `bookCovers`, `catalogKeys`, `author`, `authorEnrichment`, `externalAuthorBooks`, `genres`, `metadataAssets`.
+- Catalog and metadata helpers: `catalog`, `bookPayload`, `bookCovers`, `catalogKeys`, `author`, `authorEnrichment`, `externalAuthorBooks`, `genres`, `metadataAssets`, `series`.
 - Reader/product logic: `shelfClient`, `shelfStorage`, `customShelves`, `readingGoal`, `momentumPrediction`, `goodreadsImport`, `bookReviews`.
 - Discovery logic: `discoveryProviders` exposes the discovery service and reusable Home providers; `homeSections` loads cached aggregate signals and maps provider output to book cards.
 - Community and privacy: `feed`, `publicProfile`, `privacy`, `followPolicy`, `demoVisibility`.
@@ -59,10 +59,15 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 1. A page renders from Astro on the server.
 2. Server code resolves session state when needed.
 3. Pages query Neon directly or through library helpers.
-4. Home discovery loads cached aggregate community signals, ranks them through reusable providers, and renders explainable sections.
-5. Client-side scripts enhance the page by calling API routes for mutations or lazy loading.
-6. API routes validate the session, normalize input, mutate Neon, and return JSON.
-7. Client-side UI updates the current card/section and often refreshes shelf/activity state from APIs.
+4. Catalog pages enrich books with optional series metadata when available.
+5. Home discovery loads cached aggregate community signals, ranks them through reusable providers, and renders explainable sections.
+6. Client-side scripts enhance the page by calling API routes for mutations or lazy loading.
+7. API routes validate the session, normalize input, mutate Neon, and return JSON.
+8. Client-side UI updates the current card/section and often refreshes shelf/activity state from APIs.
+
+## Series Support
+
+Series support lives in `src/lib/series`. The helper owns schema readiness, series-book ordering, current-book detection, next-book continuation logic, and author-page grouping. Book detail pages load a series context when a book belongs to a series. Search attaches series labels to catalog results, and author pages group books by series while keeping standalone books separate.
 
 ## Discovery Providers
 

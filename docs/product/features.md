@@ -89,7 +89,7 @@ Limitations: There is no separate following list route for another user's follow
 
 Status: Complete
 
-Search combines DogEared catalog, Google Books, and Open Library results. Users can add search results to shelves.
+Search combines DogEared catalog, Google Books, and Open Library results. Users can add search results to shelves, and catalog matches show series name/book number when available.
 
 Limitations: External APIs can fail or return incomplete metadata.
 
@@ -97,9 +97,17 @@ Limitations: External APIs can fail or return incomplete metadata.
 
 Status: Complete
 
-Book pages show metadata, cover, synopsis, author link, genres, topics, shelf controls, ratings, reviews, and activity.
+Book pages show metadata, cover, synopsis, author link, series context, genres, topics, shelf controls, ratings, reviews, and activity.
 
 Limitations: If a book is not in DogEared, the page may resolve from Google Books/Open Library query parameters and may have sparse metadata.
+
+### Series Support
+
+Status: Complete
+
+DogEared stores first-class series records with name, optional description, optional cover, total-book count, ordered book entries, publication order, chronological order, and extensible metadata. Book pages show a Series section with the current book highlighted, reader completion state, missing-title placeholders, and links to available books. Finished readers see a Continue the series callout for the next available book, including one-click Add to Want to Read when it is not already shelved.
+
+Limitations: Series metadata must exist in DogEared; the app does not currently auto-import or infer series membership from external catalogs.
 
 ### Books Index
 
@@ -121,7 +129,7 @@ Limitations: Author quality depends on catalog and backfill data.
 
 Status: Complete
 
-Author pages show author metadata, reader/shelf counts, books in DogEared, and shelf controls.
+Author pages show author metadata, reader/shelf counts, books in DogEared grouped by series where available, standalone books, and shelf controls.
 
 Limitations: Author bio and photo may be missing.
 

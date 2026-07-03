@@ -12,6 +12,7 @@ import { buildBookReviewList, type BookReview } from "../lib/bookReviews";
 import { googleBooksCoverUrl } from "../lib/bookCovers";
 import { resolveCustomShelfOptions } from "../lib/customShelves";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
+import { loadBookSeriesContext, type BookSeriesContext, type ShelfStatus } from "../lib/series";
 
 export const prerender = false;
 
@@ -104,6 +105,13 @@ function activityHeading(eventType: string) {
 	return { prefix: "Updated shelf", shelf: "" };
 }
 
+function shelfStatusLabel(status: ShelfStatus) {
+	if (status === "reading") return "Currently Reading";
+	if (status === "finished") return "Read";
+	if (status === "want_to_read") return "Want to Read";
+	return "";
+}
+
 function formatTopicLabel(value: string) {
 	return normalizeText(value)
 		.replace(/[-_]+/g, " ")
@@ -183,6 +191,7 @@ let viewerRating = 0;
 let bookGenres: string[] = [];
 let bookTopics: string[] = [];
 let customShelfOptionsJson = "[]";
+let seriesContext: BookSeriesContext | null = null;
 
 async function fetchGoogleBook() {
 	const apiKey = normalizeText(import.meta.env.GOOGLE_BOOKS_API_KEY);
@@ -686,6 +695,9 @@ if (book && session?.userId) {
 			}
 		}
 	}
+	if (book?.id) {
+		seriesContext = await loadBookSeriesContext(sql, book.id, session?.userId || "");
+	}
 } catch (error) {
 	errorMessage = error instanceof Error ? error.message : "Failed to load book.";
 }
@@ -813,6 +825,90 @@ const bookStructuredDataPayload = bookStructuredData
 						</BookCard>
 					</ul>
 				</section>
+
+				{seriesContext && (
+					<section class="panel series-panel" aria-labelledby="series-heading">
+						<div class="series-heading-row">
+							{(seriesContext.series.coverUrl || seriesContext.currentBook?.coverUrl || book.coverUrl) ? (
+								<img
+									class="series-cover"
+									src={seriesContext.series.coverUrl || seriesContext.currentBook?.coverUrl || book.coverUrl}
+									alt=""
+									loading="lazy"
+									decoding="async"
+									width="54"
+									height="78"
+								/>
+							) : (
+								<div class="series-cover series-cover-placeholder" aria-hidden="true"><span class="material-icons">auto_stories</span></div>
+							)}
+							<div>
+								<h2 id="series-heading">Series</h2>
+								<p class="series-name">{seriesContext.series.name}</p>
+								{seriesContext.currentBook && (
+									<p class="series-position">
+										{seriesContext.currentBook.orderLabel}{seriesContext.series.totalBooks > 0 ? ` of ${seriesContext.series.totalBooks}` : ""}
+									</p>
+								)}
+								{seriesContext.series.description && <p class="series-description">{seriesContext.series.description}</p>}
+							</div>
+						</div>
+						<ol class="series-list">
+							{seriesContext.books.map((seriesBook) => (
+								<li class={`series-book${seriesBook.isCurrent ? " is-current" : ""}`} aria-current={seriesBook.isCurrent ? "true" : undefined}>
+									{seriesBook.coverUrl ? (
+										<img class="series-book-cover" src={seriesBook.coverUrl} alt="" loading="lazy" decoding="async" width="38" height="56" />
+									) : (
+										<div class="series-book-cover series-book-cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></div>
+									)}
+									<div class="series-book-main">
+										<p class="series-book-order">{seriesBook.orderLabel}</p>
+										{seriesBook.bookHref ? (
+											<a class="series-book-title" href={seriesBook.bookHref}>{seriesBook.title}</a>
+										) : (
+											<span class="series-book-title">{seriesBook.title}</span>
+										)}
+										{seriesBook.isCurrent && <span class="series-current-badge">Current book</span>}
+									</div>
+									<div class="series-book-state">
+										{seriesBook.shelfStatus === "finished" ? (
+											<span class="series-state-read"><span aria-hidden="true">✓</span> Read</span>
+										) : (
+											shelfStatusLabel(seriesBook.shelfStatus || "") || "Not on shelf"
+										)}
+									</div>
+								</li>
+							))}
+						</ol>
+						{viewerShelfStatus === "finished" && seriesContext.nextBook && (
+							<div
+								class="series-continue"
+								data-title={seriesContext.nextBook.title}
+								data-author={seriesContext.nextBook.author || ""}
+								data-description={seriesContext.nextBook.synopsis || ""}
+								data-cover={seriesContext.nextBook.coverUrl || ""}
+								data-pages={String(seriesContext.nextBook.pageCount || 0)}
+								data-language={seriesContext.nextBook.language || ""}
+								data-isbn10={seriesContext.nextBook.isbn10 || ""}
+								data-isbn13={seriesContext.nextBook.isbn13 || ""}
+								data-google-books-id={seriesContext.nextBook.googleBooksId || ""}
+								data-book-id={String(seriesContext.nextBook.bookId || 0)}
+							>
+								<div>
+									<p class="series-continue-eyebrow">Continue the series →</p>
+									<p class="series-continue-title">{seriesContext.nextBook.title}</p>
+									<p class="series-continue-meta">{seriesContext.nextBook.orderLabel}</p>
+								</div>
+								{seriesContext.nextBook.shelfStatus ? (
+									<p class="series-continue-state">Already on {shelfStatusLabel(seriesContext.nextBook.shelfStatus)}</p>
+								) : (
+									<button type="button" class="series-continue-button" data-action="series-add-want">Add to Want to Read</button>
+								)}
+								<p class="series-continue-feedback" role="status" aria-live="polite" hidden></p>
+							</div>
+						)}
+					</section>
+				)}
 
 				<section class="panel synopsis-panel">
 					<h2>Synopsis</h2>
@@ -1181,6 +1277,177 @@ const bookStructuredDataPayload = bookStructuredData
 	.book-head :global(.shelf-state) { display: none !important; }
 	.panel { margin-top: 0.95rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
 	.panel h2 { margin: 0 0 0.55rem; }
+	.series-panel {
+		display: grid;
+		gap: 0.8rem;
+	}
+	.series-heading-row {
+		display: grid;
+		grid-template-columns: 54px minmax(0, 1fr);
+		gap: 0.75rem;
+		align-items: start;
+	}
+	.series-cover,
+	.series-cover-placeholder {
+		width: 54px;
+		height: 78px;
+		border-radius: var(--radius-sm);
+		object-fit: cover;
+		background: rgba(255, 255, 255, 0.62);
+		border: var(--border-subtle);
+	}
+	.series-cover-placeholder {
+		display: grid;
+		place-items: center;
+		color: var(--color-text-subtle);
+	}
+	.series-name {
+		margin: 0;
+		font-size: 1.05rem;
+		font-weight: 760;
+		color: var(--color-text);
+	}
+	.series-position,
+	.series-description {
+		margin: 0.2rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.9rem;
+		line-height: 1.4;
+	}
+	.series-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.45rem;
+	}
+	.series-book {
+		display: grid;
+		grid-template-columns: 38px minmax(0, 1fr) auto;
+		gap: 0.65rem;
+		align-items: center;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.54);
+		padding: 0.55rem;
+	}
+	.series-book.is-current {
+		border-color: var(--color-border);
+		background: #fff;
+	}
+	.series-book-cover,
+	.series-book-cover-placeholder {
+		width: 38px;
+		height: 56px;
+		border-radius: var(--radius-sm);
+		object-fit: cover;
+		background: rgba(255, 255, 255, 0.7);
+		border: var(--border-subtle);
+	}
+	.series-book-cover-placeholder {
+		display: grid;
+		place-items: center;
+		color: var(--color-text-subtle);
+	}
+	.series-book-main {
+		min-width: 0;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.22rem 0.45rem;
+	}
+	.series-book-order {
+		flex: 0 0 100%;
+		margin: 0;
+		color: var(--color-text-subtle);
+		font-size: 0.78rem;
+		font-weight: 700;
+	}
+	.series-book-title {
+		color: var(--color-nav);
+		font-weight: 760;
+		text-decoration: none;
+		overflow-wrap: anywhere;
+	}
+	.series-book-title:hover,
+	.series-book-title:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.series-current-badge {
+		border-radius: 999px;
+		background: var(--color-nav-surface);
+		color: var(--color-nav);
+		padding: 0.12rem 0.45rem;
+		font-size: 0.72rem;
+		font-weight: 760;
+	}
+	.series-book-state {
+		color: var(--color-text-muted);
+		font-size: 0.84rem;
+		font-weight: 700;
+		white-space: nowrap;
+	}
+	.series-state-read {
+		color: var(--color-primary);
+	}
+	.series-continue {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.8rem;
+		border-radius: var(--radius-md);
+		background: var(--color-nav-surface);
+		border: var(--border-subtle);
+		padding: 0.75rem;
+	}
+	.series-continue-eyebrow,
+	.series-continue-title,
+	.series-continue-meta,
+	.series-continue-state,
+	.series-continue-feedback {
+		margin: 0;
+	}
+	.series-continue-eyebrow {
+		color: var(--color-nav);
+		font-size: 0.82rem;
+		font-weight: 760;
+	}
+	.series-continue-title {
+		margin-top: 0.12rem;
+		font-weight: 760;
+	}
+	.series-continue-meta,
+	.series-continue-state {
+		margin-top: 0.1rem;
+		color: var(--color-text-muted);
+		font-size: 0.84rem;
+	}
+	.series-continue-button {
+		border: none;
+		border-radius: 999px;
+		background: var(--color-primary);
+		color: #fff;
+		font: inherit;
+		font-size: 0.9rem;
+		font-weight: 760;
+		min-height: 2.4rem;
+		padding: 0.45rem 0.8rem;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.series-continue-button:hover,
+	.series-continue-button:focus-visible {
+		background: var(--color-primary-hover);
+	}
+	.series-continue-feedback {
+		color: var(--color-primary);
+		font-size: 0.84rem;
+		font-weight: 700;
+	}
+	.series-continue-feedback[hidden] {
+		display: none;
+	}
 	.related-links-row {
 		display: flex;
 		flex-wrap: wrap;
@@ -1406,6 +1673,19 @@ const bookStructuredDataPayload = bookStructuredData
 	@media (max-width: 860px) {
 		.activity-grid { grid-template-columns: 1fr; }
 		.review-card { padding: 0.65rem; }
+		.series-continue {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+	}
+	@media (max-width: 540px) {
+		.series-book {
+			grid-template-columns: 34px minmax(0, 1fr);
+		}
+		.series-book-state {
+			grid-column: 2;
+			white-space: normal;
+		}
 	}
 	@media (max-width: 760px) {}
 </style>
@@ -1430,28 +1710,28 @@ const bookStructuredDataPayload = bookStructuredData
 
 	const page = document.querySelector(".book-page");
 	let isAuthenticated = page?.dataset.authenticated === "true";
-	const dropdown = document.querySelector(".shelf-dropdown");
+	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	const feedbackTimers = new WeakMap();
 	initRatingControls();
-	function buildEntry(status) {
-		if (!dropdown) return null;
+	function buildEntry(source, status) {
+		if (!(source instanceof HTMLElement)) return null;
 		const bookPayload = normalizeBookPayload({
-			title: String(dropdown.dataset.title || "").trim(),
-			author: String(dropdown.dataset.author || "").trim(),
-			description: String(dropdown.dataset.description || "").trim(),
-			pageCount: Number(dropdown.dataset.pages || 0) || 0,
-			coverUrl: String(dropdown.dataset.cover || "").trim(),
+			title: String(source.dataset.title || "").trim(),
+			author: String(source.dataset.author || "").trim(),
+			description: String(source.dataset.description || "").trim(),
+			pageCount: Number(source.dataset.pages || 0) || 0,
+			coverUrl: String(source.dataset.cover || "").trim(),
 			categories: [],
 			format: "",
-			language: "",
+			language: String(source.dataset.language || "").trim(),
 			publisher: "",
 			publishedDate: "",
-			isbn10: String(dropdown.dataset.isbn10 || "").trim(),
-			isbn13: String(dropdown.dataset.isbn13 || "").trim(),
-			googleBooksId: String(dropdown.dataset.googleBooksId || "").trim()
+			isbn10: String(source.dataset.isbn10 || "").trim(),
+			isbn13: String(source.dataset.isbn13 || "").trim(),
+			googleBooksId: String(source.dataset.googleBooksId || "").trim()
 		});
 		return buildShelfEntryFromRecord({
-			bookId: Number(dropdown.dataset.bookId || 0),
+			bookId: Number(source.dataset.bookId || 0),
 			title: bookPayload.title,
 			author: bookPayload.author,
 			description: bookPayload.description,
@@ -1472,70 +1752,100 @@ const bookStructuredDataPayload = bookStructuredData
 		});
 	}
 
-	function setSelected(status) {
-		if (!dropdown) return;
+	function setSelected(dropdown, status) {
+		if (!(dropdown instanceof HTMLElement)) return;
 		setShelvedState(dropdown, true);
 		setDropdownLabel(dropdown, status);
 	}
 
-	if (dropdown) {
-		resolveClientAuthState().then((state) => {
-			isAuthenticated = !!state.isAuthenticated;
-		}).catch(() => {});
+	function showSeriesFeedback(container, message) {
+		const feedback = container?.querySelector?.(".series-continue-feedback");
+		if (feedback instanceof HTMLElement) {
+			feedback.hidden = false;
+			feedback.textContent = message;
+		}
+	}
 
-		dropdown.addEventListener("click", async (event) => {
-			const target = event.target instanceof HTMLElement ? event.target : null;
-			if (!target) return;
+	resolveClientAuthState().then((state) => {
+		isAuthenticated = !!state.isAuthenticated;
+	}).catch(() => {});
 
-			const toggle = target.closest('[data-action="toggle-shelf"]');
-			if (toggle) {
-				toggleShelfMenu(dropdown, [dropdown]);
-				return;
-			}
+	document.addEventListener("click", async (event) => {
+		const target = event.target instanceof HTMLElement ? event.target : null;
+		if (!target) return;
 
-			const option = target.closest('[data-action="set-shelf"]');
-			const removeOption = target.closest('[data-action="remove-from-shelves"]');
-			if (removeOption) {
-				closeShelfMenus([dropdown]);
-				if (!isAuthenticated) {
-					promptForShelfLogin();
-					return;
-				}
-				const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
-				const entry = buildEntry("want_to_read");
-				const result = await removeBookFromAllShelvesOnServer(bookId, entry);
-				if (result.ok) {
-					setShelvedState(dropdown, false);
-					setDropdownLabel(dropdown, "");
-					showShelfFeedback(dropdown, "Removed from shelves.", feedbackTimers);
-				} else {
-					showShelfFeedback(dropdown, resolveShelfRemoveMessage(result), feedbackTimers);
-				}
-				return;
-			}
-			if (!option) return;
-			const status = String(option.getAttribute("data-status") || "want_to_read");
-			closeShelfMenus([dropdown]);
+		const seriesAdd = target.closest('[data-action="series-add-want"]');
+		if (seriesAdd instanceof HTMLButtonElement) {
+			const container = seriesAdd.closest(".series-continue");
 			if (!isAuthenticated) {
 				promptForShelfLogin();
 				return;
 			}
-			const entry = buildEntry(status);
+			if (!(container instanceof HTMLElement)) return;
+			const entry = buildEntry(container, "want_to_read");
+			if (!entry?.title) return;
+			seriesAdd.disabled = true;
+			const result = await saveShelfEntryWithRetry(entry);
+			if (result.ok) {
+				seriesAdd.replaceWith(Object.assign(document.createElement("p"), {
+					className: "series-continue-state",
+					textContent: "Added to Want to Read"
+				}));
+				showSeriesFeedback(container, "Saved to Want to Read.");
+			} else if (result.message) {
+				seriesAdd.disabled = false;
+				showSeriesFeedback(container, result.message);
+			}
+			return;
+		}
+
+		const toggle = target.closest('[data-action="toggle-shelf"]');
+		if (toggle) {
+			const dropdown = toggle.closest(".shelf-dropdown");
+			if (dropdown instanceof HTMLElement) toggleShelfMenu(dropdown, shelfDropdowns);
+			return;
+		}
+
+		const option = target.closest('[data-action="set-shelf"]');
+		const removeOption = target.closest('[data-action="remove-from-shelves"]');
+		const dropdown = target.closest(".shelf-dropdown");
+		if (removeOption && dropdown instanceof HTMLElement) {
+			closeShelfMenus(shelfDropdowns);
+			if (!isAuthenticated) {
+				promptForShelfLogin();
+				return;
+			}
+			const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
+			const entry = buildEntry(dropdown, "want_to_read");
+			const result = await removeBookFromAllShelvesOnServer(bookId, entry);
+			if (result.ok) {
+				setShelvedState(dropdown, false);
+				setDropdownLabel(dropdown, "");
+				showShelfFeedback(dropdown, "Removed from shelves.", feedbackTimers);
+			} else {
+				showShelfFeedback(dropdown, resolveShelfRemoveMessage(result), feedbackTimers);
+			}
+			return;
+		}
+		if (option && dropdown instanceof HTMLElement) {
+			const status = String(option.getAttribute("data-status") || "want_to_read");
+			closeShelfMenus(shelfDropdowns);
+			if (!isAuthenticated) {
+				promptForShelfLogin();
+				return;
+			}
+			const entry = buildEntry(dropdown, status);
 			if (!entry?.title) return;
 			const result = await saveShelfEntryWithRetry(entry);
-			const ok = !!result.ok;
-			if (ok) {
-				setSelected(status);
+			if (result.ok) {
+				setSelected(dropdown, status);
 				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
 			} else if (result.message) {
 				showShelfFeedback(dropdown, result.message, feedbackTimers);
 			}
-		});
+			return;
+		}
 
-		document.addEventListener("click", (event) => {
-			const target = event.target instanceof HTMLElement ? event.target : null;
-			if (!target) return;
-			if (!target.closest(".shelf-dropdown")) closeShelfMenus([dropdown]);
-		});
-	}
+		if (!target.closest(".shelf-dropdown")) closeShelfMenus(shelfDropdowns);
+	});
 </script>

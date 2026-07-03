@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { googleBooksCoverUrl } from "../../../lib/bookCovers";
 import { getNeonSql } from "../../../lib/neon";
 import { createPublicCacheControl, withRuntimeCache } from "../../../lib/runtimeCache";
+import { ensureSeriesSchema } from "../../../lib/series";
 
 export const prerender = false;
 
@@ -23,6 +24,9 @@ type SearchResult = {
 	googleBooksId: string;
 	bookId?: number;
 	authorId?: number;
+	seriesName?: string;
+	seriesBookOrder?: number;
+	seriesLabel?: string;
 	variantCount?: number;
 	variants?: Array<{
 		title: string;
@@ -212,6 +216,13 @@ function passesQualityGate(result: SearchResult) {
 	return true;
 }
 
+function formatSeriesSearchLabel(seriesName: string, bookOrder: number) {
+	const name = String(seriesName || "").trim();
+	if (!name) return "";
+	const order = Number(bookOrder || 0);
+	return order > 0 ? `${name} • Book ${order}` : name;
+}
+
 function dedupeVariants(input: SearchResult[], queryText: string) {
 	const grouped = new Map<string, SearchResult[]>();
 	for (const [index, result] of input.entries()) {
@@ -282,6 +293,9 @@ function dedupeVariants(input: SearchResult[], queryText: string) {
 				if (!representative.description && candidate.description) representative.description = candidate.description;
 				if (!representative.pageCount && candidate.pageCount) representative.pageCount = candidate.pageCount;
 				if (!representative.publisher && candidate.publisher) representative.publisher = candidate.publisher;
+				if (!representative.seriesName && candidate.seriesName) representative.seriesName = candidate.seriesName;
+				if (!representative.seriesBookOrder && candidate.seriesBookOrder) representative.seriesBookOrder = candidate.seriesBookOrder;
+				if (!representative.seriesLabel && candidate.seriesLabel) representative.seriesLabel = candidate.seriesLabel;
 				matched = true;
 				break;
 			}
@@ -309,6 +323,7 @@ export const GET: APIRoute = async ({ url }) => {
 	try {
 		const sql = getNeonSql();
 		await sql`alter table book add column if not exists publisher text not null default ''`;
+		await ensureSeriesSchema(sql);
 		const queryLike = `%${query}%`;
 		const queryDigits = query.replace(/[^0-9Xx]/g, "").toUpperCase();
 		const dbdRows = await withRuntimeCache(
@@ -328,6 +343,8 @@ export const GET: APIRoute = async ({ url }) => {
 				google_books_id: string;
 				page_count: number;
 				publisher: string;
+				series_name: string;
+				series_book_order: number;
 			}>>`
 				select
 					b.id,
@@ -342,17 +359,23 @@ export const GET: APIRoute = async ({ url }) => {
 					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
 					coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
 					coalesce(nullif(trim(b.publisher), ''), '') as publisher,
+					coalesce(s.name, '') as series_name,
+					coalesce(sb.book_order, 0)::numeric as series_book_order,
 					coalesce(nullif(b.page_count, 0), 0)::int as page_count
 				from book b
+				left join series_book sb on sb.book_id = b.id
+				left join series s on s.id = sb.series_id
 				where
 					b.title ilike ${queryLike}
 					or b.primary_author ilike ${queryLike}
+					or s.name ilike ${queryLike}
 					or (${queryDigits} <> '' and (replace(coalesce(b.isbn13, ''), '-', '') = ${queryDigits} or replace(coalesce(b.isbn10, ''), '-', '') = ${queryDigits}))
 				order by
 					case
 						when lower(coalesce(b.title, '')) = lower(${query}) then 0
 						when lower(coalesce(b.title, '')) like lower(${`${query}%`}) then 1
 						when lower(coalesce(b.primary_author, '')) = lower(${query}) then 2
+						when lower(coalesce(s.name, '')) = lower(${query}) then 3
 						else 9
 					end,
 					b.updated_at desc,
@@ -378,7 +401,10 @@ export const GET: APIRoute = async ({ url }) => {
 			isbn13: row.isbn13 || "",
 			googleBooksId: row.google_books_id || "",
 			bookId: Number(row.id || 0) || 0,
-			authorId: Number(row.author_id || 0) || 0
+			authorId: Number(row.author_id || 0) || 0,
+			seriesName: String(row.series_name || "").trim(),
+			seriesBookOrder: Number(row.series_book_order || 0) || 0,
+			seriesLabel: formatSeriesSearchLabel(String(row.series_name || ""), Number(row.series_book_order || 0) || 0)
 		}));
 
 		const fetchGoogleItems = async (q: string) => {
@@ -517,25 +543,39 @@ export const GET: APIRoute = async ({ url }) => {
 				google_books_id: string;
 				isbn13: string;
 				isbn10: string;
+				series_name: string;
+				series_book_order: number;
 			}>>`
 				select
 					b.id,
 					b.author_id,
 					coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
 					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
-					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10
+					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+					coalesce(s.name, '') as series_name,
+					coalesce(sb.book_order, 0)::numeric as series_book_order
 				from book b
+				left join series_book sb on sb.book_id = b.id
+				left join series s on s.id = sb.series_id
 				where
 					(array_length(${googleIds}::text[], 1) is not null and b.google_books_id = any(${googleIds}::text[]))
 					or (array_length(${isbn13s}::text[], 1) is not null and b.isbn13 = any(${isbn13s}::text[]))
 					or (array_length(${isbn10s}::text[], 1) is not null and b.isbn10 = any(${isbn10s}::text[]))
 			`
 		);
-		const byGoogleId = new Map<string, { bookId: number; authorId: number }>();
-		const byIsbn13 = new Map<string, { bookId: number; authorId: number }>();
-		const byIsbn10 = new Map<string, { bookId: number; authorId: number }>();
+		const byGoogleId = new Map<string, { bookId: number; authorId: number; seriesName: string; seriesBookOrder: number; seriesLabel: string }>();
+		const byIsbn13 = new Map<string, { bookId: number; authorId: number; seriesName: string; seriesBookOrder: number; seriesLabel: string }>();
+		const byIsbn10 = new Map<string, { bookId: number; authorId: number; seriesName: string; seriesBookOrder: number; seriesLabel: string }>();
 		for (const row of catalogRows) {
-			const pair = { bookId: Number(row.id || 0), authorId: Number(row.author_id || 0) || 0 };
+			const seriesName = String(row.series_name || "").trim();
+			const seriesBookOrder = Number(row.series_book_order || 0) || 0;
+			const pair = {
+				bookId: Number(row.id || 0),
+				authorId: Number(row.author_id || 0) || 0,
+				seriesName,
+				seriesBookOrder,
+				seriesLabel: formatSeriesSearchLabel(seriesName, seriesBookOrder)
+			};
 			if (pair.bookId <= 0) continue;
 			const gid = String(row.google_books_id || "").trim();
 			const i13 = String(row.isbn13 || "").trim();
@@ -549,7 +589,10 @@ export const GET: APIRoute = async ({ url }) => {
 			return {
 				...item,
 				bookId: Number(item.bookId || 0) > 0 ? Number(item.bookId || 0) : (match?.bookId || 0),
-				authorId: Number(item.authorId || 0) > 0 ? Number(item.authorId || 0) : (match?.authorId || 0)
+				authorId: Number(item.authorId || 0) > 0 ? Number(item.authorId || 0) : (match?.authorId || 0),
+				seriesName: item.seriesName || match?.seriesName || "",
+				seriesBookOrder: Number(item.seriesBookOrder || 0) > 0 ? Number(item.seriesBookOrder || 0) : (match?.seriesBookOrder || 0),
+				seriesLabel: item.seriesLabel || match?.seriesLabel || ""
 			};
 		});
 		const results = dedupeVariants(mappedWithIds, query);

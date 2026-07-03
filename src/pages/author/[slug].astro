@@ -10,6 +10,7 @@ import { authorHref, canonicalizeAuthor, normalizeAuthorName, slugifyAuthor } fr
 import { fetchExternalAuthorBooks, type ExternalAuthorBook } from "../../lib/externalAuthorBooks";
 import { authorCanonicalPath } from "../../lib/indexing";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
+import { ensureSeriesSchema, groupAuthorBooksBySeries } from "../../lib/series";
 
 export const prerender = false;
 
@@ -31,6 +32,11 @@ type BookRow = {
 	pageCount: number;
 	averageRating: number;
 	ratingCount: number;
+	seriesId: number;
+	seriesName: string;
+	bookOrder: number;
+	publicationOrder: number;
+	chronologicalOrder: number;
 };
 
 const slug = String(Astro.params.slug || "").trim().toLowerCase();
@@ -93,6 +99,7 @@ async function fetchOpenLibraryBio(name: string) {
 
 try {
 	const sql = getNeonSql();
+	await ensureSeriesSchema(sql);
 	const canonicalAuthorRows = await sql<Array<{
 		id: number;
 		name: string;
@@ -134,10 +141,17 @@ try {
 			coalesce(b.published_year, 0)::int as "publishedYear",
 			coalesce(nullif(b.page_count, 0), 0)::int as "pageCount",
 			coalesce(rt.average_rating, 0) as "averageRating",
-			coalesce(rt.rating_count, 0)::int as "ratingCount"
+			coalesce(rt.rating_count, 0)::int as "ratingCount",
+			coalesce(s.id, 0)::bigint as "seriesId",
+			coalesce(s.name, '') as "seriesName",
+			coalesce(sb.book_order, 0)::numeric as "bookOrder",
+			coalesce(sb.publication_order, 0)::numeric as "publicationOrder",
+			coalesce(sb.chronological_order, 0)::numeric as "chronologicalOrder"
 		from book b
 		left join user_book ub on ub.book_id = b.id
 		left join book_genre bg on bg.book_id = b.id
+		left join series_book sb on sb.book_id = b.id
+		left join series s on s.id = sb.series_id
 		left join lateral (
 			select
 				round(avg(ub2.rating)::numeric, 2) as average_rating,
@@ -149,8 +163,8 @@ try {
 			(${authorId} > 0 and b.author_id = ${authorId})
 			or lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
 		)
-		group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis, b.published_year, b.page_count, rt.average_rating, rt.rating_count
-		order by shelves desc, readers desc, b.title asc
+		group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis, b.published_year, b.page_count, rt.average_rating, rt.rating_count, s.id, s.name, sb.book_order, sb.publication_order, sb.chronological_order
+		order by coalesce(s.name, '') asc, coalesce(sb.book_order, 999999) asc, shelves desc, readers desc, b.title asc
 	`;
 
 	if (rows.length > 0) {
@@ -201,6 +215,7 @@ try {
 	errorMessage = error instanceof Error ? error.message : "Failed to load author page.";
 }
 if (authorName) externalBooks = await fetchExternalAuthorBooks(authorName, books);
+const bookGroups = groupAuthorBooksBySeries(books);
 
 const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 const cleanAuthorPath = displayName ? authorCanonicalPath(displayName) : "/authors";
@@ -272,53 +287,65 @@ const authorStructuredData = displayName
 			{books.length === 0 ? (
 				<p>No books by this author have been added yet. Choose a book below to start this author's DogEared shelf.</p>
 			) : (
-				<ul class="book-grid">
-					{books.map((book) => (
-						<BookCard
-							title={book.title}
-							titleHref={`/book?bookId=${encodeURIComponent(String(book.id))}`}
-							author={book.author}
-							authorHref={book.author ? authorHref(book.author, book.authorId) : ""}
-							thumbnail={book.coverUrl}
-							description={book.synopsis || "Synopsis unavailable for this title."}
-							readers={book.readers}
-							shelfEntries={book.shelves}
-							publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
-							pageCount={book.pageCount}
-							averageRating={book.averageRating}
-							genres={book.genres}
-						>
-							<div slot="preMeta">
-								{viewerStatusByBookId.get(Number(book.id || 0)) === "finished" && (
-									<RatingControl
-										bookId={String(book.id || 0)}
-										rating={viewerRatingByBookId.get(Number(book.id || 0)) || 0}
-										editable={true}
-									/>
-								)}
-								{viewerStatusByBookId.get(Number(book.id || 0)) !== "finished" && !(Number(book.ratingCount || 0) > 0) && (
-									<p class="meta">No ratings yet.</p>
-								)}
-							</div>
-							<div slot="actions">
-								<ShelfDropdown attrs={{
-									"data-book-id": String(book.id || 0),
-									"data-initial-status": viewerStatusByBookId.get(Number(book.id || 0)) || "",
-									"data-title": book.title,
-									"data-author": book.author,
-									"data-cover": book.coverUrl,
-									"data-description": book.synopsis,
-									"data-pages": String(book.pageCount || 0),
-									"data-language": book.language,
-									"data-isbn10": book.isbn10,
-									"data-isbn13": book.isbn13,
-									"data-google-books-id": book.googleBooksId,
-									"data-categories": JSON.stringify(book.genres ?? [])
-								}} />
-							</div>
-						</BookCard>
+				<div class="author-book-groups">
+					{bookGroups.map((group) => (
+						<section class="author-book-group" aria-labelledby={`author-book-group-${group.id}`}>
+							<h3 id={`author-book-group-${group.id}`}>{group.title}</h3>
+							<ul class="book-grid">
+								{group.books.map((book) => (
+									<BookCard
+										title={book.title}
+										titleHref={`/book?bookId=${encodeURIComponent(String(book.id))}`}
+										author={book.author}
+										authorHref={book.author ? authorHref(book.author, book.authorId) : ""}
+										thumbnail={book.coverUrl}
+										description={book.synopsis || "Synopsis unavailable for this title."}
+										readers={book.readers}
+										shelfEntries={book.shelves}
+										publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
+										pageCount={book.pageCount}
+										averageRating={book.averageRating}
+										genres={book.genres}
+									>
+										<div slot="preTitle">
+											{group.kind === "series" && (
+												<p class="series-chip">{book.bookOrder > 0 ? `Book ${book.bookOrder}` : "Series"}</p>
+											)}
+										</div>
+										<div slot="preMeta">
+											{viewerStatusByBookId.get(Number(book.id || 0)) === "finished" && (
+												<RatingControl
+													bookId={String(book.id || 0)}
+													rating={viewerRatingByBookId.get(Number(book.id || 0)) || 0}
+													editable={true}
+												/>
+											)}
+											{viewerStatusByBookId.get(Number(book.id || 0)) !== "finished" && !(Number(book.ratingCount || 0) > 0) && (
+												<p class="meta">No ratings yet.</p>
+											)}
+										</div>
+										<div slot="actions">
+											<ShelfDropdown attrs={{
+												"data-book-id": String(book.id || 0),
+												"data-initial-status": viewerStatusByBookId.get(Number(book.id || 0)) || "",
+												"data-title": book.title,
+												"data-author": book.author,
+												"data-cover": book.coverUrl,
+												"data-description": book.synopsis,
+												"data-pages": String(book.pageCount || 0),
+												"data-language": book.language,
+												"data-isbn10": book.isbn10,
+												"data-isbn13": book.isbn13,
+												"data-google-books-id": book.googleBooksId,
+												"data-categories": JSON.stringify(book.genres ?? [])
+											}} />
+										</div>
+									</BookCard>
+								))}
+							</ul>
+						</section>
 					))}
-				</ul>
+				</div>
 			)}
 			</section>
 			<ExternalAuthorBooks books={externalBooks} />
@@ -473,9 +500,29 @@ const authorStructuredData = displayName
 	.bio { margin-top: 0.6rem; line-height: 1.5; }
 	.books-section { margin-top: 0.95rem; }
 	.books-section h2 { margin: 0 0 0.6rem; }
+	.author-book-groups {
+		display: grid;
+		gap: 1rem;
+	}
+	.author-book-group h3 {
+		margin: 0 0 0.45rem;
+		font-size: 1.05rem;
+	}
 	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.95rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.book-card-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
 	.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+	.series-chip {
+		display: inline-flex;
+		width: fit-content;
+		max-width: 100%;
+		margin: 0 0 0.25rem;
+		border-radius: 999px;
+		background: var(--color-nav-surface);
+		color: var(--color-nav);
+		padding: 0.12rem 0.48rem;
+		font-size: 0.76rem;
+		font-weight: 760;
+	}
 	.rating-meta { color: var(--color-text-muted); font-weight: 400; }
 	.error { color: #991b1b; }
 	@media (max-width: 860px) {

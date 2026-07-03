@@ -33,11 +33,11 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 ## Major Application Sections
 
 - Home: transparent community discovery sections, onboarding checklist, discovery jump links, reader suggestions, and custom shelf ideas.
-- Search: book search backed by DogEared catalog results plus Google Books and Open Library.
+- Search: book search backed by DogEared catalog results plus Google Books and Open Library, with series labels when available.
 - Books: curated catalog views such as trending, most shelved, top rated, and recently active.
-- Book detail: metadata, synopsis, genres, topics, shelf controls, ratings, reviews, and related activity.
+- Book detail: metadata, series context, synopsis, genres, topics, shelf controls, ratings, reviews, and related activity.
 - Authors: searchable and sortable author index.
-- Author detail: author profile, author books in DogEared, and external author-book context.
+- Author detail: author profile, author books grouped by series where available, standalone books, and external author-book context.
 - Profiles: public reader pages with about information, shelf summary, custom shelves, reading goal, current reads, activity, followers, and following.
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
@@ -48,7 +48,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 ## Major Workflows
 
 - Account setup: request a magic link, verify it, set a username, then manage profile and settings.
-- Book discovery: browse explainable home recommendations, search books, open book pages, browse author pages, or explore related genre/topic/author/book pages.
+- Book discovery: browse explainable home recommendations, search books with series context, open book pages, browse author pages, or explore related genre/topic/author/book pages.
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
 - Reviews and ratings: rate finished books and optionally save a short finished reflection.
@@ -66,7 +66,15 @@ DogEared uses email magic links for sign-in. Sessions are stored server-side and
 
 ### Books
 
-Books have catalog records with title, primary author, author link, ISBNs, Google Books ID, synopsis, cover, language, page count, publisher, published year, genres, topic tags, and source records. Books can be found through search, home sections, book lists, related pages, author pages, profile shelves, and activity.
+Books have catalog records with title, primary author, author link, ISBNs, Google Books ID, synopsis, cover, language, page count, publisher, published year, genres, topic tags, source records, and optional series membership. Books can be found through search, home sections, book lists, related pages, author pages, profile shelves, and activity.
+
+### Series
+
+DogEared supports first-class series metadata. A series can have a name, description, cover image, total-book count, ordered book entries, publication order, chronological order, and extensible metadata. Series entries can point to DogEared books or represent known missing titles with a title override.
+
+When a book belongs to a series, the book page shows a dedicated Series section with the current book highlighted, ordered entries, completion state from the signed-in reader's shelves, and direct links to available books. If the signed-in reader has finished the current book and the next available book exists, DogEared shows a calm Continue the series callout with a one-click Add to Want to Read action unless the next book is already on a shelf.
+
+Author pages group books by series when metadata exists and keep standalone books in a separate section. Search results show series labels such as series name and book number for catalog matches.
 
 ### Community Discovery
 
@@ -156,7 +164,7 @@ The Roadmap page groups product direction into Now, Next, Later, and recently co
 
 ### Search
 
-Search queries DogEared catalog records first, then Google Books, then Open Library. Results are scored and deduplicated, and known catalog matches attach local book and author IDs.
+Search queries DogEared catalog records first, then Google Books, then Open Library. Results are scored and deduplicated, and known catalog matches attach local book, author, and series metadata when available.
 
 ### Genre And Related Pages
 
@@ -170,12 +178,13 @@ Derived from the current repository structure and implementation:
 - API routes: 33 endpoint files.
 - Admin pages: 4 routes.
 - Redirect-only compatibility routes: `/discover`, `/feed`, `/myreads`, `/profile`, `/author`, and `/u/[username]`.
-- User-facing feature areas documented here: 42.
+- User-facing feature areas documented here: 43.
 - Default persisted shelf statuses: 3 (`want_to_read`, `reading`, `finished`).
 - Custom shelf icon options: 16.
 - Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.
 - Community discovery providers: 7.
+- Series ordering modes: book order, publication order, chronological order.
 - Supported social interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment.
-- Supported catalog metadata types: genres and topic tags.
+- Supported catalog metadata types: series, genres, and topic tags.
 - Supported import source in Settings: Goodreads CSV.
 - Supported data export format in Settings: JSON.

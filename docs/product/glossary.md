@@ -96,6 +96,14 @@ A collection/state for a reader's books. Implemented default shelf statuses are 
 
 The user-book relation that stores a reader's status, rating, total pages, current page, finished date, finished reflection, first-added timestamp, and update timestamp.
 
+## Series
+
+A catalog entity for an ordered set of books. Series can store name, description, cover image, total-book count, and ordered entries.
+
+## Series Entry
+
+A book's position inside a series. Series entries can reference a DogEared book or represent a known missing title, and can store book order, publication order, and chronological order.
+
 ## Status
 
 The default shelf state on a shelf entry. Valid persisted values are `want_to_read`, `reading`, and `finished`.
