@@ -8,6 +8,7 @@ import {
 	NewReleaseProvider,
 	RecentlyReviewedProvider,
 	TrendingProvider,
+	createDiscoveryService,
 	resolveDiscoveryProviderSections,
 	type CommunityDiscoverySignal
 } from "../src/lib/discoveryProviders.ts";
@@ -40,6 +41,8 @@ function signal(overrides: Partial<CommunityDiscoverySignal>): CommunityDiscover
 		reviewCount: 0,
 		recentReviewText: "",
 		recentReviewUserId: "",
+		recentReviewUsername: "",
+		recentReviewRating: 0,
 		recentReviewUpdatedAt: "",
 		recentReviewReactions: 0,
 		...overrides
@@ -121,6 +124,8 @@ test("recently reviewed returns direct review anchors and favors reactions", () 
 			title: "Reacted Review",
 			recentReviewText: "A thoughtful review with a few reactions from the community.",
 			recentReviewUserId: "user-two",
+			recentReviewUsername: "casey",
+			recentReviewRating: 4,
 			recentReviewUpdatedAt: "2026-07-02",
 			recentReviewReactions: 3
 		})
@@ -128,6 +133,9 @@ test("recently reviewed returns direct review anchors and favors reactions", () 
 
 	assert.equal(books[0]?.bookId, 2);
 	assert.equal(books[0]?.titleHref, "/book?bookId=2#review-user-two");
+	assert.equal(books[0]?.reviewerName, "casey");
+	assert.equal(books[0]?.reviewerHref, "/profile/casey");
+	assert.equal(books[0]?.reviewRating, 4);
 	assert.match(books[0]?.reason || "", /reactions/);
 });
 
@@ -154,4 +162,13 @@ test("empty provider sections are hidden and populated sections keep priority or
 
 	assert.deepEqual(sections.map((section) => section.id), ["community-favorites", "most-finished-this-week"]);
 	assert.equal(sections.some((section) => section.id === "most-added-this-week"), false);
+});
+
+test("discovery service returns provider sections with plain explanations", () => {
+	const sections = createDiscoveryService([new CommunityFavoritesProvider(1)]).getSections([
+		signal({ bookId: 1, title: "Favorite", averageRating: 5, ratingCount: 2, readerCount: 2 })
+	], { limit: 10 });
+
+	assert.equal(sections[0]?.title, "Community Favorites");
+	assert.equal(sections[0]?.description, "The highest-rated books on DogEared.");
 });

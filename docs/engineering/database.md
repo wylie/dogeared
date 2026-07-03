@@ -310,6 +310,7 @@ Community discovery does not use a standalone recommendation table. Home provide
 - Shelf entries and reader counts from `user_book`.
 - Ratings and review counts from `user_book`.
 - Recent shelf, finished, and rating activity from `user_activity`.
+- Reviewer usernames from `app_user` for Recently Reviewed attribution.
 - Review reactions from `user_activity_like` and `user_activity_comment`.
 - Publication year and catalog metadata from `book`.
 

@@ -46,7 +46,7 @@ Shared product/data logic lives in `src/lib/`.
 - Authentication and account helpers: `auth`, `authHardening`, `emailChange`, `email`.
 - Catalog and metadata helpers: `catalog`, `bookPayload`, `bookCovers`, `catalogKeys`, `author`, `authorEnrichment`, `externalAuthorBooks`, `genres`, `metadataAssets`.
 - Reader/product logic: `shelfClient`, `shelfStorage`, `customShelves`, `readingGoal`, `momentumPrediction`, `goodreadsImport`, `bookReviews`.
-- Discovery logic: `discoveryProviders` ranks transparent community signals into reusable Home providers; `homeSections` loads cached aggregate signals and maps provider output to book cards.
+- Discovery logic: `discoveryProviders` exposes the discovery service and reusable Home providers; `homeSections` loads cached aggregate signals and maps provider output to book cards.
 - Community and privacy: `feed`, `publicProfile`, `privacy`, `followPolicy`, `demoVisibility`.
 - Operations: `admin`, `adminData`, `monitoring`, `feedback`, `runtimeCache`, `indexing`, `seo`, `roadmap`, `homeSections`.
 
@@ -66,7 +66,7 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 
 ## Discovery Providers
 
-Home discovery is provider-based. Providers are pure ranking modules that receive aggregate community signals and return section metadata plus ranked book IDs and reasons. The SQL layer gathers activity, ratings, reviews, reactions, publication year, and shelf counts in one cached aggregate pass to avoid N+1 discovery queries.
+Home discovery is provider-based. The discovery service runs pure ranking providers that receive aggregate community signals and return section metadata plus ranked book IDs, reasons, and optional review metadata. The SQL layer gathers activity, ratings, reviews, reviewer usernames, reactions, publication year, and shelf counts in one cached aggregate pass to avoid N+1 discovery queries.
 
 Current providers:
 

@@ -1,6 +1,6 @@
 import { authorHref } from "./author";
 import {
-	resolveDiscoveryProviderSections,
+	createDiscoveryService,
 	type CommunityDiscoverySignal
 } from "./discoveryProviders";
 import { getNeonSql } from "./neon";
@@ -26,6 +26,9 @@ export type BrowseBook = {
 	discoveryReason?: string;
 	titleHref?: string;
 	reviewSnippet?: string;
+	reviewerName?: string;
+	reviewerHref?: string;
+	reviewRating?: number;
 	source: "google_books" | "open_library" | "nyt";
 	sourceWorkId?: string;
 	sourceEditionId?: string;
@@ -46,6 +49,7 @@ type TimingReporter = (label: string, durationMs: number) => void;
 const HOME_RECOMMENDATION_CACHE_MS = 5 * 60 * 1000;
 const HOME_SECTION_LIMIT = 8;
 const HOME_BOOKS_PER_SECTION = 12;
+const publicHomeDiscoveryService = createDiscoveryService();
 
 export function formatPublishedLabel(value: string) {
 	const text = String(value || "").trim();
@@ -208,6 +212,8 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 		previous_reviews_14d: number;
 		recent_review_text: string | null;
 		recent_review_user_id: string | null;
+		recent_review_username: string | null;
+		recent_review_rating: number | null;
 		recent_review_updated_at: string | null;
 		recent_review_reactions: number;
 		source: "google_books" | "open_library" | "nyt" | null;
@@ -320,6 +326,8 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 			coalesce(ss.previous_reviews_14d, 0)::int as previous_reviews_14d,
 			recent_review.finished_reflection as recent_review_text,
 			recent_review.user_id as recent_review_user_id,
+			recent_review.username as recent_review_username,
+			recent_review.rating as recent_review_rating,
 			recent_review.updated_at as recent_review_updated_at,
 			coalesce(recent_review.reactions, 0)::int as recent_review_reactions,
 			bs.source,
@@ -332,10 +340,13 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 		left join lateral (
 			select
 				ub.user_id::text as user_id,
+				coalesce(nullif(trim(au.username), ''), '') as username,
+				ub.rating,
 				ub.finished_reflection,
 				ub.updated_at::text as updated_at,
 				coalesce(reaction_counts.reactions, 0)::int as reactions
 			from user_book ub
+			join app_user au on au.id = ub.user_id
 			left join lateral (
 				select ua.id
 				from user_activity ua
@@ -418,12 +429,14 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 			reviewCount: Math.max(0, Number(row.review_count || 0)),
 			recentReviewText: sanitizeDescription(String(row.recent_review_text || ""), 260),
 			recentReviewUserId: String(row.recent_review_user_id || ""),
+			recentReviewUsername: String(row.recent_review_username || ""),
+			recentReviewRating: Math.max(0, Math.min(5, Number(row.recent_review_rating || 0) || 0)),
 			recentReviewUpdatedAt: String(row.recent_review_updated_at || ""),
 			recentReviewReactions: Math.max(0, Number(row.recent_review_reactions || 0))
 		};
 	});
 
-	const providerSections = resolveDiscoveryProviderSections(signals, undefined, { limit: HOME_BOOKS_PER_SECTION });
+	const providerSections = publicHomeDiscoveryService.getSections(signals, { limit: HOME_BOOKS_PER_SECTION });
 	const sections = providerSections
 		.slice(0, HOME_SECTION_LIMIT)
 		.map((section) => ({
@@ -440,7 +453,10 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 						...toBook(row),
 						discoveryReason: result.reason,
 						titleHref: result.titleHref,
-						reviewSnippet: result.reviewSnippet
+						reviewSnippet: result.reviewSnippet,
+						reviewerName: result.reviewerName,
+						reviewerHref: result.reviewerHref,
+						reviewRating: result.reviewRating
 					};
 				})
 				.filter((book): book is BrowseBook => !!book)

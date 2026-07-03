@@ -26,6 +26,11 @@ async function timedSsr<T>(label: string, loader: () => Promise<T>) {
 	}
 }
 
+function renderStars(value: number) {
+	const rounded = Math.round(Math.max(0, Math.min(5, Number(value) || 0)));
+	return Array.from({ length: 5 }, (_, index) => (index < rounded ? "★" : "☆")).join("");
+}
+
 let session: Awaited<ReturnType<typeof resolveUserBySession>> = null;
 try {
 	session = await timedSsr("session", () => resolveUserBySession(Astro.request));
@@ -212,9 +217,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 									const displayAverageRating = Number(book.averageRating || 0) > 0
 										? Number(book.averageRating || 0)
 										: viewerRating;
-									const displayRatingCount = Number(book.ratingCount || 0) > 0
-										? Number(book.ratingCount || 0)
-										: (viewerRating > 0 ? 1 : 0);
+									const reviewRating = Math.max(0, Math.min(5, Number(book.reviewRating || 0) || 0));
 									return (
 										<BookCard
 										title={book.title}
@@ -244,6 +247,17 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 												/>
 											)}
 										</div>
+										{book.reviewerName && (
+											<p slot="preMeta" class="review-attribution">
+												Reviewed by{" "}
+												{book.reviewerHref
+													? <a href={book.reviewerHref}>@{book.reviewerName.replace(/^@+/, "")}</a>
+													: book.reviewerName}
+												{reviewRating > 0 && (
+													<span> · {renderStars(reviewRating)} {reviewRating}/5</span>
+												)}
+											</p>
+										)}
 										<div slot="actions">
 											<ShelfDropdown attrs={{
 												'data-book-id': String(book.id || "").replace(/^book_/, ""),
@@ -609,6 +623,22 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		font-size: 0.8rem;
 		font-weight: 700;
 		line-height: 1.3;
+	}
+	.review-attribution {
+		margin: 0.16rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.84rem;
+		line-height: 1.35;
+	}
+	.review-attribution a {
+		color: var(--color-nav);
+		font-weight: 680;
+		text-decoration: none;
+	}
+	.review-attribution a:hover,
+	.review-attribution a:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 
 	:global(.shelf-count-badge) {

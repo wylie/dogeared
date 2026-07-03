@@ -70,7 +70,7 @@ Books have catalog records with title, primary author, author link, ISBNs, Googl
 
 ### Community Discovery
 
-Home discovery is generated from transparent community activity, not an AI recommendation engine. Reusable providers rank books into sections such as Community Favorites, Most Added This Week, Most Finished This Week, Trending Up, Hidden Gems, Recently Reviewed, and New Releases Readers Love. Each section explains why it exists, and each book card shows a concrete reason such as rating count, unique readers, recent finishes, activity growth, review length/reactions, or recent publication with strong activity.
+Home discovery is generated from transparent community activity, not an AI recommendation engine. A discovery service runs reusable providers for sections such as Community Favorites, Most Added This Week, Most Finished This Week, Trending Up, Hidden Gems, Recently Reviewed, and New Releases Readers Love. Each section explains why it exists, and each book card shows a concrete reason such as rating count, unique readers, recent finishes, activity growth, review length/reactions, or recent publication with strong activity.
 
 If DogEared does not have enough data for a provider, that provider is hidden. If no provider has enough data, Home falls back to a simple Popular With Readers section when shelf activity exists, or a friendly empty state when it does not.
 
@@ -116,7 +116,7 @@ Activity is created for shelf changes, finished updates, progress updates, and r
 
 Reviews are represented as finished-book reflections on `user_book`, optionally paired with a star rating. Reviews appear on book detail pages, profile activity, and admin review counts.
 
-Recently Reviewed recommendations link directly to anchored review cards on the book page.
+Recently Reviewed recommendations show a review excerpt, reviewer attribution when a username is available, the reviewer's rating when present, and a direct link to the anchored review card on the book page.
 
 ### Comments
 

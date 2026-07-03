@@ -25,6 +25,8 @@ export type CommunityDiscoverySignal = {
 	reviewCount: number;
 	recentReviewText: string;
 	recentReviewUserId: string;
+	recentReviewUsername: string;
+	recentReviewRating: number;
 	recentReviewUpdatedAt: string;
 	recentReviewReactions: number;
 };
@@ -34,6 +36,9 @@ export type DiscoveryProviderBook = {
 	reason: string;
 	titleHref?: string;
 	reviewSnippet?: string;
+	reviewerName?: string;
+	reviewerHref?: string;
+	reviewRating?: number;
 };
 
 export type DiscoveryProviderSection = {
@@ -87,7 +92,7 @@ function sortByRecent(a: string, b: string) {
 export class CommunityFavoritesProvider implements DiscoveryProvider {
 	id = "community-favorites";
 	title = "Community Favorites";
-	description = "Highly rated books with enough DogEared ratings to be trustworthy.";
+	description = "The highest-rated books on DogEared.";
 	priority = 10;
 	emptyState = "Community favorites will appear once more readers rate finished books.";
 	private minimumRatingCount: number;
@@ -116,7 +121,7 @@ export class CommunityFavoritesProvider implements DiscoveryProvider {
 export class MostAddedProvider implements DiscoveryProvider {
 	id = "most-added-this-week";
 	title = "Most Added This Week";
-	description = "Books added to shelves by the most unique readers over the past seven days.";
+	description = "The books readers are adding to their shelves the most.";
 	priority = 20;
 	emptyState = "Most Added will appear when readers start shelving books this week.";
 	private minimumUniqueReaders: number;
@@ -145,7 +150,7 @@ export class MostAddedProvider implements DiscoveryProvider {
 export class MostFinishedProvider implements DiscoveryProvider {
 	id = "most-finished-this-week";
 	title = "Most Finished This Week";
-	description = "Books readers are completing right now, ranked by unique finishers and recent completions.";
+	description = "The books readers are actually finishing.";
 	priority = 30;
 	emptyState = "Most Finished will appear once readers finish books this week.";
 	private minimumUniqueReaders: number;
@@ -175,7 +180,7 @@ export class MostFinishedProvider implements DiscoveryProvider {
 export class TrendingProvider implements DiscoveryProvider {
 	id = "trending-up";
 	title = "Trending Up";
-	description = "Books gaining momentum from recent readers, finishes, ratings, and reviews compared with the prior two weeks.";
+	description = "Books gaining momentum across the community.";
 	priority = 40;
 	emptyState = "Trending books will appear when recent activity rises above prior activity.";
 
@@ -216,7 +221,7 @@ export class TrendingProvider implements DiscoveryProvider {
 export class HiddenGemsProvider implements DiscoveryProvider {
 	id = "hidden-gems";
 	title = "Hidden Gems";
-	description = "Excellent ratings on books with a smaller DogEared readership.";
+	description = "Excellent books that deserve more attention.";
 	priority = 50;
 	emptyState = "Hidden gems will appear once smaller-readership books have enough ratings.";
 	private minimumRatingCount: number;
@@ -258,7 +263,7 @@ export class HiddenGemsProvider implements DiscoveryProvider {
 export class RecentlyReviewedProvider implements DiscoveryProvider {
 	id = "recently-reviewed";
 	title = "Recently Reviewed";
-	description = "Recent thoughtful reviews, with longer reflections and reactions surfaced first.";
+	description = "Thoughtful recent reviews from DogEared readers.";
 	priority = 60;
 	emptyState = "Recent reviews will appear when readers leave thoughtful finished-book reflections.";
 	private minimumReviewLength: number;
@@ -289,6 +294,9 @@ export class RecentlyReviewedProvider implements DiscoveryProvider {
 				bookId: book.bookId,
 				titleHref: `/book?bookId=${encodeURIComponent(String(book.bookId))}#${reviewAnchor(book.recentReviewUserId)}`,
 				reviewSnippet: book.recentReviewText,
+				reviewerName: book.recentReviewUsername || "A reader",
+				reviewerHref: book.recentReviewUsername ? `/profile/${encodeURIComponent(book.recentReviewUsername)}` : "",
+				reviewRating: Math.max(0, Math.min(5, Number(book.recentReviewRating || 0) || 0)),
 				reason: `${countLabel(book.recentReviewText.length, "character")} review${book.recentReviewReactions > 0 ? ` with ${countLabel(book.recentReviewReactions, "reaction")}` : ""}.`
 			}));
 	}
@@ -297,7 +305,7 @@ export class RecentlyReviewedProvider implements DiscoveryProvider {
 export class NewReleaseProvider implements DiscoveryProvider {
 	id = "new-releases-readers-love";
 	title = "New Releases Readers Love";
-	description = "Recently published books with strong ratings and meaningful DogEared activity.";
+	description = "Recently published books receiving strong community reception.";
 	priority = 70;
 	emptyState = "New releases will appear once recent books earn enough reader activity.";
 	private minimumRatingCount: number;
@@ -369,4 +377,12 @@ export function resolveDiscoveryProviderSections(
 		}))
 		.filter((section) => section.books.length > 0)
 		.sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title));
+}
+
+export function createDiscoveryService(providers: DiscoveryProvider[] = createDefaultDiscoveryProviders()) {
+	return {
+		getSections(signals: CommunityDiscoverySignal[], context: DiscoveryProviderContext = { limit: 12 }) {
+			return resolveDiscoveryProviderSections(signals, providers, context);
+		}
+	};
 }
