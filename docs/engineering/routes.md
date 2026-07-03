@@ -11,7 +11,7 @@ Authentication requirements:
 
 | Route | Auth | Purpose | Major components/data |
 | --- | --- | --- | --- |
-| `/` | Public | Home discovery, onboarding checklist, book sections, reader suggestions, custom shelf ideas. | `BookCard`, `ShelfDropdown`, `RatingControl`, home sections, reader suggestions API. |
+| `/` | Public | Explainable community discovery, onboarding checklist, provider sections, reader suggestions, custom shelf ideas. | `BookCard`, `ShelfDropdown`, `RatingControl`, `discoveryProviders`, `homeSections`, reader suggestions API. |
 | `/search` | Public | Search books and add results to shelves. | `BookCard`, `ShelfDropdown`, `RatingControl`, `/api/books/search`. |
 | `/books` | Public | Browse catalog sections like trending, most shelved, top rated, and recently active. | `BookCard`, `ShelfDropdown`, catalog stats. |
 | `/book` | Public | Book detail by book ID or external/query metadata. | `BookCard`, `ShelfDropdown`, `RatingControl`, `Chip`, reviews, activity likes/comments. |

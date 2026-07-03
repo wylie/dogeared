@@ -1,5 +1,8 @@
 import { authorHref } from "./author";
-import { formatGenreLabel } from "./genres";
+import {
+	resolveDiscoveryProviderSections,
+	type CommunityDiscoverySignal
+} from "./discoveryProviders";
 import { getNeonSql } from "./neon";
 import { withRuntimeCache } from "./runtimeCache";
 
@@ -20,6 +23,9 @@ export type BrowseBook = {
 	isbn13?: string;
 	averageRating: number;
 	ratingCount: number;
+	discoveryReason?: string;
+	titleHref?: string;
+	reviewSnippet?: string;
 	source: "google_books" | "open_library" | "nyt";
 	sourceWorkId?: string;
 	sourceEditionId?: string;
@@ -30,6 +36,8 @@ export type BrowseSection = {
 	id: string;
 	title: string;
 	subtitle: string;
+	priority?: number;
+	emptyState?: string;
 	books: BrowseBook[];
 };
 
@@ -38,46 +46,6 @@ type TimingReporter = (label: string, durationMs: number) => void;
 const HOME_RECOMMENDATION_CACHE_MS = 5 * 60 * 1000;
 const HOME_SECTION_LIMIT = 8;
 const HOME_BOOKS_PER_SECTION = 12;
-
-const NON_GENRE_SLUGS = new Set([
-	"",
-	"all",
-	"book-club",
-	"books-i-own",
-	"currently-reading",
-	"default",
-	"did-not-finish",
-	"dnf",
-	"faves",
-	"favorites",
-	"fiction",
-	"general",
-	"kindle",
-	"library",
-	"maybe",
-	"owned",
-	"physical",
-	"read",
-	"re-read",
-	"reread",
-	"tbr",
-	"to-buy",
-	"to-read",
-	"want-to-buy",
-	"want-to-own"
-]);
-
-function isGenreSlug(slug: string) {
-	if (!slug || NON_GENRE_SLUGS.has(slug)) return false;
-	if (/^\d{4}(-reads)?$/.test(slug)) return false;
-	if (/^\d+$/.test(slug)) return false;
-	return true;
-}
-
-function formatGenreTitle(slug: string, fallback: string) {
-	const source = String(fallback || slug || "").trim();
-	return formatGenreLabel(source, "Genre");
-}
 
 export function formatPublishedLabel(value: string) {
 	const text = String(value || "").trim();
@@ -170,52 +138,47 @@ async function timed<T>(label: string, reporter: TimingReporter | undefined, loa
 	}
 }
 
+let discoverySupportSchemaReady: Promise<void> | null = null;
+
+function ensureDiscoverySupportSchema() {
+	if (!discoverySupportSchemaReady) {
+		const sql = getNeonSql();
+		discoverySupportSchemaReady = Promise.all([
+			sql`alter table user_book add column if not exists rating int`,
+			sql`alter table user_book add column if not exists finished_reflection text not null default ''`,
+			sql`
+				create table if not exists user_activity_like (
+					activity_id bigint not null references user_activity(id) on delete cascade,
+					user_id uuid not null references app_user(id) on delete cascade,
+					created_at timestamptz not null default now(),
+					primary key (activity_id, user_id)
+				)
+			`,
+			sql`
+				create table if not exists user_activity_comment (
+					id bigserial primary key,
+					activity_id bigint not null references user_activity(id) on delete cascade,
+					user_id uuid not null references app_user(id) on delete cascade,
+					body text not null default '',
+					created_at timestamptz not null default now(),
+					check (char_length(trim(body)) between 1 and 500)
+				)
+			`
+		]).then(() => undefined);
+	}
+	return discoverySupportSchemaReady;
+}
+
 async function loadPublicHomeSections(reporter?: TimingReporter): Promise<BrowseSection[]> {
 	const sql = getNeonSql();
-	const genreRows = await timed("db:home-genres", reporter, () => sql<Array<{
-		genre_slug: string;
-		genre_name: string;
-		book_count: number;
-	}>>`
-		select
-			bg.genre_slug,
-			min(bg.genre_name) as genre_name,
-			count(distinct bg.book_id) as book_count
-		from book_genre bg
-		join user_book ub on ub.book_id = bg.book_id
-		group by bg.genre_slug
-		order by count(distinct bg.book_id) desc, min(bg.genre_name) asc
-		limit 24
-	`);
-
-	const sectionsConfig = genreRows
-		.filter((row) => isGenreSlug(String(row.genre_slug || "").trim()))
-		.slice(0, HOME_SECTION_LIMIT)
-		.map((row) => {
-			const id = String(row.genre_slug || "").trim();
-			const title = formatGenreTitle(id, String(row.genre_name || "").trim());
-			return {
-				id,
-				title,
-				subtitle: `Books readers on DogEared are shelving in ${title.toLowerCase()}.`
-			};
-		});
-
-	if (sectionsConfig.length === 0) return resolveFallbackHomeSections(reporter);
-
-	const sectionIds = sectionsConfig.map((section) => section.id);
-	const sectionTitles = sectionsConfig.map((section) => section.title);
-	const sectionSubtitles = sectionsConfig.map((section) => section.subtitle);
-	const rows = await timed("db:home-section-books", reporter, () => sql<Array<{
-		section_id: string;
-		section_title: string;
-		section_subtitle: string;
-		section_order: number;
+	await timed("db:home-discovery-schema", reporter, () => ensureDiscoverySupportSchema());
+	const rows = await timed("db:home-community-signals", reporter, () => sql<Array<{
 		book_id: number;
 		title: string;
 		primary_author: string;
 		author_id: number | null;
 		shelf_count: number;
+		reader_count: number;
 		synopsis: string;
 		cover_url: string;
 		published_year: number | null;
@@ -226,38 +189,108 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 		page_count: number;
 		average_rating: number | null;
 		rating_count: number;
+		review_count: number;
+		added_events_7d: number;
+		added_readers_7d: number;
+		last_added_at: string | null;
+		finished_events_7d: number;
+		finished_readers_7d: number;
+		last_finished_at: string | null;
+		current_activity_14d: number;
+		previous_activity_14d: number;
+		current_readers_14d: number;
+		previous_readers_14d: number;
+		current_finishes_14d: number;
+		previous_finishes_14d: number;
+		current_ratings_14d: number;
+		previous_ratings_14d: number;
+		current_reviews_14d: number;
+		previous_reviews_14d: number;
+		recent_review_text: string | null;
+		recent_review_user_id: string | null;
+		recent_review_updated_at: string | null;
+		recent_review_reactions: number;
 		source: "google_books" | "open_library" | "nyt" | null;
 		source_work_id: string | null;
 		source_edition_id: string | null;
 		source_url: string | null;
 	}>>`
-		with section_config as (
-			select *
-			from unnest(${sectionIds}::text[], ${sectionTitles}::text[], ${sectionSubtitles}::text[])
-				with ordinality as s(section_id, section_title, section_subtitle, section_order)
-		),
-		ranked as (
+		with shelf_stats as (
 			select
-				s.section_id,
-				s.section_title,
-				s.section_subtitle,
-				s.section_order,
-				top_books.book_id,
-				top_books.book_rank
-			from section_config s
-			cross join lateral get_top_books_by_genre(s.section_id, ${HOME_BOOKS_PER_SECTION}, 3650)
-				with ordinality as top_books(book_id, book_rank)
+				ub.book_id,
+				count(*)::int as shelf_count,
+				count(distinct ub.user_id)::int as reader_count,
+				round(avg(ub.rating)::numeric, 2) as average_rating,
+				count(*) filter (where ub.rating is not null)::int as rating_count,
+				count(*) filter (where char_length(trim(coalesce(ub.finished_reflection, ''))) > 0)::int as review_count,
+				count(*) filter (where ub.first_added_at >= now() - interval '7 days')::int as added_events_7d,
+				count(distinct ub.user_id) filter (where ub.first_added_at >= now() - interval '7 days')::int as added_readers_7d,
+				max(ub.first_added_at) filter (where ub.first_added_at >= now() - interval '7 days')::text as last_added_at,
+				count(*) filter (
+					where char_length(trim(coalesce(ub.finished_reflection, ''))) > 0
+						and ub.updated_at >= now() - interval '14 days'
+				)::int as current_reviews_14d,
+				count(*) filter (
+					where char_length(trim(coalesce(ub.finished_reflection, ''))) > 0
+						and ub.updated_at >= now() - interval '28 days'
+						and ub.updated_at < now() - interval '14 days'
+				)::int as previous_reviews_14d
+			from user_book ub
+			group by ub.book_id
+		),
+		activity_stats as (
+			select
+				ua.book_id,
+				count(*) filter (
+					where ua.event_type = 'finished'
+						and ua.created_at >= now() - interval '7 days'
+				)::int as finished_events_7d,
+				count(distinct ua.user_id) filter (
+					where ua.event_type = 'finished'
+						and ua.created_at >= now() - interval '7 days'
+				)::int as finished_readers_7d,
+				max(ua.created_at) filter (
+					where ua.event_type = 'finished'
+						and ua.created_at >= now() - interval '7 days'
+				)::text as last_finished_at,
+				count(*) filter (where ua.created_at >= now() - interval '14 days')::int as current_activity_14d,
+				count(*) filter (
+					where ua.created_at >= now() - interval '28 days'
+						and ua.created_at < now() - interval '14 days'
+				)::int as previous_activity_14d,
+				count(distinct ua.user_id) filter (where ua.created_at >= now() - interval '14 days')::int as current_readers_14d,
+				count(distinct ua.user_id) filter (
+					where ua.created_at >= now() - interval '28 days'
+						and ua.created_at < now() - interval '14 days'
+				)::int as previous_readers_14d,
+				count(*) filter (
+					where ua.event_type = 'finished'
+						and ua.created_at >= now() - interval '14 days'
+				)::int as current_finishes_14d,
+				count(*) filter (
+					where ua.event_type = 'finished'
+						and ua.created_at >= now() - interval '28 days'
+						and ua.created_at < now() - interval '14 days'
+				)::int as previous_finishes_14d,
+				count(*) filter (
+					where ua.event_type = 'rating'
+						and ua.created_at >= now() - interval '14 days'
+				)::int as current_ratings_14d,
+				count(*) filter (
+					where ua.event_type = 'rating'
+						and ua.created_at >= now() - interval '28 days'
+						and ua.created_at < now() - interval '14 days'
+				)::int as previous_ratings_14d
+			from user_activity ua
+			group by ua.book_id
 		)
 		select
-			r.section_id,
-			r.section_title,
-			r.section_subtitle,
-			r.section_order::int,
 			b.id as book_id,
 			b.title,
 			b.primary_author,
 			b.author_id,
-			coalesce(sc.shelf_count, 0)::int as shelf_count,
+			coalesce(ss.shelf_count, 0)::int as shelf_count,
+			coalesce(ss.reader_count, 0)::int as reader_count,
 			coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 			b.cover_url,
 			b.published_year,
@@ -266,26 +299,67 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 			b.isbn13,
 			b.google_books_id,
 			coalesce(nullif(b.page_count, 0), 0)::int as page_count,
-			coalesce(ra.average_rating, 0) as average_rating,
-			coalesce(ra.rating_count, 0)::int as rating_count,
+			coalesce(ss.average_rating, 0) as average_rating,
+			coalesce(ss.rating_count, 0)::int as rating_count,
+			coalesce(ss.review_count, 0)::int as review_count,
+			coalesce(ss.added_events_7d, 0)::int as added_events_7d,
+			coalesce(ss.added_readers_7d, 0)::int as added_readers_7d,
+			ss.last_added_at,
+			coalesce(ast.finished_events_7d, 0)::int as finished_events_7d,
+			coalesce(ast.finished_readers_7d, 0)::int as finished_readers_7d,
+			ast.last_finished_at,
+			coalesce(ast.current_activity_14d, 0)::int as current_activity_14d,
+			coalesce(ast.previous_activity_14d, 0)::int as previous_activity_14d,
+			coalesce(ast.current_readers_14d, 0)::int as current_readers_14d,
+			coalesce(ast.previous_readers_14d, 0)::int as previous_readers_14d,
+			coalesce(ast.current_finishes_14d, 0)::int as current_finishes_14d,
+			coalesce(ast.previous_finishes_14d, 0)::int as previous_finishes_14d,
+			coalesce(ast.current_ratings_14d, 0)::int as current_ratings_14d,
+			coalesce(ast.previous_ratings_14d, 0)::int as previous_ratings_14d,
+			coalesce(ss.current_reviews_14d, 0)::int as current_reviews_14d,
+			coalesce(ss.previous_reviews_14d, 0)::int as previous_reviews_14d,
+			recent_review.finished_reflection as recent_review_text,
+			recent_review.user_id as recent_review_user_id,
+			recent_review.updated_at as recent_review_updated_at,
+			coalesce(recent_review.reactions, 0)::int as recent_review_reactions,
 			bs.source,
 			bs.source_work_id,
 			bs.source_edition_id,
 			bs.source_url
-		from ranked r
-		join book b on b.id = r.book_id
-		left join lateral (
-			select count(*)::int as shelf_count
-			from user_book ub
-			where ub.book_id = b.id
-		) sc on true
+		from book b
+		join shelf_stats ss on ss.book_id = b.id
+		left join activity_stats ast on ast.book_id = b.id
 		left join lateral (
 			select
-				round(avg(ub.rating)::numeric, 1) as average_rating,
-				count(*) filter (where ub.rating is not null) as rating_count
+				ub.user_id::text as user_id,
+				ub.finished_reflection,
+				ub.updated_at::text as updated_at,
+				coalesce(reaction_counts.reactions, 0)::int as reactions
 			from user_book ub
+			left join lateral (
+				select ua.id
+				from user_activity ua
+				where ua.user_id = ub.user_id
+					and ua.book_id = ub.book_id
+					and ua.event_type in ('finished', 'rating')
+				order by ua.created_at desc, ua.id desc
+				limit 1
+			) review_activity on true
+			left join lateral (
+				select (
+					(select count(*)::int from user_activity_like ual where ual.activity_id = review_activity.id)
+					+
+					(select count(*)::int from user_activity_comment uac where uac.activity_id = review_activity.id)
+				)::int as reactions
+			) reaction_counts on true
 			where ub.book_id = b.id
-		) ra on true
+				and char_length(trim(coalesce(ub.finished_reflection, ''))) > 0
+			order by
+				coalesce(reaction_counts.reactions, 0) desc,
+				ub.updated_at desc,
+				char_length(ub.finished_reflection) desc
+			limit 1
+		) recent_review on true
 		left join lateral (
 			select
 				source,
@@ -304,20 +378,74 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 				id asc
 			limit 1
 		) bs on true
-		order by r.section_order, r.book_rank
+		where coalesce(ss.shelf_count, 0) > 0
+		order by greatest(
+			coalesce(ast.current_activity_14d, 0),
+			coalesce(ss.rating_count, 0),
+			coalesce(ss.review_count, 0)
+		) desc, b.updated_at desc
+		limit 500
 	`);
 
-	const sectionsById = new Map<string, BrowseSection>();
-	for (const section of sectionsConfig) {
-		sectionsById.set(section.id, { ...section, books: [] });
-	}
-	for (const row of rows) {
-		const section = sectionsById.get(String(row.section_id || ""));
-		if (!section) continue;
-		section.books.push(toBook(row));
-	}
+	const rowsByBookId = new Map<number, typeof rows[number]>();
+	const signals: CommunityDiscoverySignal[] = rows.map((row) => {
+		const bookId = Number(row.book_id || 0);
+		rowsByBookId.set(bookId, row);
+		return {
+			bookId,
+			title: String(row.title || "").trim(),
+			averageRating: Number(row.average_rating || 0),
+			ratingCount: Math.max(0, Number(row.rating_count || 0)),
+			readerCount: Math.max(0, Number(row.reader_count || 0)),
+			shelfCount: Math.max(0, Number(row.shelf_count || 0)),
+			publishedYear: Math.max(0, Number(row.published_year || 0) || 0),
+			addedEvents7d: Math.max(0, Number(row.added_events_7d || 0)),
+			addedReaders7d: Math.max(0, Number(row.added_readers_7d || 0)),
+			lastAddedAt: String(row.last_added_at || ""),
+			finishedEvents7d: Math.max(0, Number(row.finished_events_7d || 0)),
+			finishedReaders7d: Math.max(0, Number(row.finished_readers_7d || 0)),
+			lastFinishedAt: String(row.last_finished_at || ""),
+			currentActivity14d: Math.max(0, Number(row.current_activity_14d || 0)),
+			previousActivity14d: Math.max(0, Number(row.previous_activity_14d || 0)),
+			currentReaders14d: Math.max(0, Number(row.current_readers_14d || 0)),
+			previousReaders14d: Math.max(0, Number(row.previous_readers_14d || 0)),
+			currentFinishes14d: Math.max(0, Number(row.current_finishes_14d || 0)),
+			previousFinishes14d: Math.max(0, Number(row.previous_finishes_14d || 0)),
+			currentRatings14d: Math.max(0, Number(row.current_ratings_14d || 0)),
+			previousRatings14d: Math.max(0, Number(row.previous_ratings_14d || 0)),
+			currentReviews14d: Math.max(0, Number(row.current_reviews_14d || 0)),
+			previousReviews14d: Math.max(0, Number(row.previous_reviews_14d || 0)),
+			reviewCount: Math.max(0, Number(row.review_count || 0)),
+			recentReviewText: sanitizeDescription(String(row.recent_review_text || ""), 260),
+			recentReviewUserId: String(row.recent_review_user_id || ""),
+			recentReviewUpdatedAt: String(row.recent_review_updated_at || ""),
+			recentReviewReactions: Math.max(0, Number(row.recent_review_reactions || 0))
+		};
+	});
 
-	const sections = Array.from(sectionsById.values()).filter((section) => section.books.length > 0);
+	const providerSections = resolveDiscoveryProviderSections(signals, undefined, { limit: HOME_BOOKS_PER_SECTION });
+	const sections = providerSections
+		.slice(0, HOME_SECTION_LIMIT)
+		.map((section) => ({
+			id: section.id,
+			title: section.title,
+			subtitle: section.description,
+			priority: section.priority,
+			emptyState: section.emptyState,
+			books: section.books
+				.map((result) => {
+					const row = rowsByBookId.get(result.bookId);
+					if (!row) return null;
+					return {
+						...toBook(row),
+						discoveryReason: result.reason,
+						titleHref: result.titleHref,
+						reviewSnippet: result.reviewSnippet
+					};
+				})
+				.filter((book): book is BrowseBook => !!book)
+		}))
+		.filter((section) => section.books.length > 0);
 	if (sections.length === 0) return resolveFallbackHomeSections(reporter);
 	return sections;
 }
@@ -380,13 +508,17 @@ async function resolveFallbackHomeSections(reporter?: TimingReporter): Promise<B
 		id: "popular-now",
 		title: "Popular With Readers",
 		subtitle: "Start here while DogEared learns your taste. These books are popular with active readers.",
-		books: fallbackRows.map(toBook)
+		priority: 999,
+		books: fallbackRows.map((row) => ({
+			...toBook(row),
+			discoveryReason: `${Number(row.shelf_count || 0).toLocaleString()} shelf entries from DogEared readers.`
+		}))
 	}];
 }
 
 export async function resolvePublicHomeSections(options: { onTiming?: TimingReporter } = {}) {
 	return timed("provider:public-home-sections", options.onTiming, () => withRuntimeCache(
-		"home:public-sections:v2",
+		"home:public-sections:v3",
 		HOME_RECOMMENDATION_CACHE_MS,
 		() => loadPublicHomeSections(options.onTiming)
 	));

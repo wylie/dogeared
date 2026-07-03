@@ -32,7 +32,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 
 ## Major Application Sections
 
-- Home: curated book sections, onboarding checklist, genre jump links, reader suggestions, and custom shelf ideas.
+- Home: transparent community discovery sections, onboarding checklist, discovery jump links, reader suggestions, and custom shelf ideas.
 - Search: book search backed by DogEared catalog results plus Google Books and Open Library.
 - Books: curated catalog views such as trending, most shelved, top rated, and recently active.
 - Book detail: metadata, synopsis, genres, topics, shelf controls, ratings, reviews, and related activity.
@@ -48,7 +48,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 ## Major Workflows
 
 - Account setup: request a magic link, verify it, set a username, then manage profile and settings.
-- Book discovery: browse home sections, search books, open book pages, browse author pages, or explore related genre/topic/author/book pages.
+- Book discovery: browse explainable home recommendations, search books, open book pages, browse author pages, or explore related genre/topic/author/book pages.
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
 - Reviews and ratings: rate finished books and optionally save a short finished reflection.
@@ -67,6 +67,12 @@ DogEared uses email magic links for sign-in. Sessions are stored server-side and
 ### Books
 
 Books have catalog records with title, primary author, author link, ISBNs, Google Books ID, synopsis, cover, language, page count, publisher, published year, genres, topic tags, and source records. Books can be found through search, home sections, book lists, related pages, author pages, profile shelves, and activity.
+
+### Community Discovery
+
+Home discovery is generated from transparent community activity, not an AI recommendation engine. Reusable providers rank books into sections such as Community Favorites, Most Added This Week, Most Finished This Week, Trending Up, Hidden Gems, Recently Reviewed, and New Releases Readers Love. Each section explains why it exists, and each book card shows a concrete reason such as rating count, unique readers, recent finishes, activity growth, review length/reactions, or recent publication with strong activity.
+
+If DogEared does not have enough data for a provider, that provider is hidden. If no provider has enough data, Home falls back to a simple Popular With Readers section when shelf activity exists, or a friendly empty state when it does not.
 
 ### Authors
 
@@ -109,6 +115,8 @@ Activity is created for shelf changes, finished updates, progress updates, and r
 ### Reviews
 
 Reviews are represented as finished-book reflections on `user_book`, optionally paired with a star rating. Reviews appear on book detail pages, profile activity, and admin review counts.
+
+Recently Reviewed recommendations link directly to anchored review cards on the book page.
 
 ### Comments
 
@@ -162,10 +170,11 @@ Derived from the current repository structure and implementation:
 - API routes: 33 endpoint files.
 - Admin pages: 4 routes.
 - Redirect-only compatibility routes: `/discover`, `/feed`, `/myreads`, `/profile`, `/author`, and `/u/[username]`.
-- User-facing feature areas documented here: 35.
+- User-facing feature areas documented here: 42.
 - Default persisted shelf statuses: 3 (`want_to_read`, `reading`, `finished`).
 - Custom shelf icon options: 16.
 - Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.
+- Community discovery providers: 7.
 - Supported social interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment.
 - Supported catalog metadata types: genres and topic tags.
 - Supported import source in Settings: Goodreads CSV.

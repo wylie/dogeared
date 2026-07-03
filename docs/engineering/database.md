@@ -303,6 +303,18 @@ Settings are stored inside `app_user.profile_data.settings`, not as standalone t
 - Import controls.
 - Personalization.
 
+## Discovery Signals
+
+Community discovery does not use a standalone recommendation table. Home providers derive recommendations from existing data:
+
+- Shelf entries and reader counts from `user_book`.
+- Ratings and review counts from `user_book`.
+- Recent shelf, finished, and rating activity from `user_activity`.
+- Review reactions from `user_activity_like` and `user_activity_comment`.
+- Publication year and catalog metadata from `book`.
+
+The provider layer ranks these aggregate signals in application code so each recommendation can expose a clear reason.
+
 ## Relationship Summary
 
 - A user owns shelf entries, custom shelves, activity, progress events, auth state, profile data, follows, likes, comments, notifications, and feedback.

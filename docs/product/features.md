@@ -313,9 +313,83 @@ Limitations: Notification settings exist for browser/release/weekly preferences,
 
 Status: Beta
 
-Home surfaces curated book sections, genre jump links, reader suggestions, onboarding checklist, and custom shelf ideas.
+Home surfaces explainable community discovery sections, discovery jump links, reader suggestions, onboarding checklist, and custom shelf ideas.
 
-Limitations: Section quality depends on catalog and shelf activity. Some shelf ideas are mock prompts that create custom shelves.
+Limitations: Section quality depends on catalog, shelf, rating, review, and activity volume. Some shelf ideas are prompts that create custom shelves.
+
+### Community Discovery Providers
+
+Status: Complete
+
+Home discovery is generated from reusable providers. Each provider returns a title, description, ranked books, display priority, and optional empty state. The UI renders provider output rather than hardcoding book sections.
+
+Current providers:
+
+- Community Favorites.
+- Most Added This Week.
+- Most Finished This Week.
+- Trending Up.
+- Hidden Gems.
+- Recently Reviewed.
+- New Releases Readers Love.
+
+Limitations: Providers hide themselves when DogEared lacks enough real community data. They do not fabricate recommendations.
+
+### Community Favorites
+
+Status: Complete
+
+Shows books with enough ratings, ranked by highest average rating, rating count, and readership.
+
+Limitations: Books below the minimum rating count are excluded.
+
+### Most Added This Week
+
+Status: Complete
+
+Shows books added to shelves by the most unique readers over the last seven days. Duplicate additions by the same reader do not inflate the unique-reader ranking.
+
+Limitations: Requires recent shelf activity.
+
+### Most Finished This Week
+
+Status: Complete
+
+Shows books readers are completing now, ranked by unique finishers, completion count, recency, and rating context.
+
+Limitations: Requires recent finished-book activity.
+
+### Trending Up
+
+Status: Complete
+
+Shows books whose recent community activity is rising compared with the previous two-week window. Signals include recent readers, finishes, ratings, and reviews.
+
+Limitations: This is transparent activity growth, not a personalized or AI model.
+
+### Hidden Gems
+
+Status: Complete
+
+Shows books with excellent ratings, enough ratings to be credible, and relatively few readers.
+
+Limitations: The provider intentionally excludes books that are already broadly read on DogEared.
+
+### Recently Reviewed
+
+Status: Complete
+
+Shows thoughtful recent reviews, prioritizing longer reflections, reactions, and recency. Cards link directly to the surfaced review on the book page.
+
+Limitations: Reviews must have enough written substance to qualify.
+
+### New Releases Readers Love
+
+Status: Complete
+
+Shows recently published books with strong ratings and meaningful community activity.
+
+Limitations: Requires publication-year metadata plus ratings and reader activity.
 
 ### Related Pages
 

@@ -848,7 +848,7 @@ const bookStructuredDataPayload = bookStructuredData
 					) : (
 						<ul class="reviews-list">
 							{reviews.map((review) => (
-								<li class="review-card">
+								<li class="review-card" id={`review-${String(review.userId || "").replace(/[^a-zA-Z0-9_-]/g, "")}`}>
 									<p class="review-rating">{renderAverageStars(review.rating)} {review.rating}/5</p>
 									<p class="review-user">@{review.username.replace(/^@+/, "")}</p>
 									<p class="review-date">{formatActivityDate(review.reviewDate)}</p>
