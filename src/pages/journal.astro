@@ -1,0 +1,322 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { resolveUserBySession } from "../lib/auth";
+import { getNeonSql } from "../lib/neon";
+import { searchJournalEntries, type JournalSearchResult } from "../lib/readingJournal";
+
+export const prerender = false;
+
+const session = await resolveUserBySession(Astro.request);
+const viewerUserId = session?.userId || "";
+const query = String(Astro.url.searchParams.get("q") || "").replace(/\s+/g, " ").trim();
+let entries: JournalSearchResult[] = [];
+let loadError = "";
+
+if (viewerUserId) {
+	try {
+		const sql = getNeonSql();
+		entries = await searchJournalEntries(sql, viewerUserId, query, 60);
+	} catch (error) {
+		loadError = error instanceof Error ? error.message : "Failed to load journal.";
+	}
+}
+
+function formatDate(value: string) {
+	const date = new Date(String(value || ""));
+	if (!Number.isFinite(date.getTime())) return "";
+	return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
+function bookHref(entry: JournalSearchResult) {
+	return `/book?bookId=${encodeURIComponent(String(entry.bookId))}#reading-journal`;
+}
+
+function excerptFor(entry: JournalSearchResult) {
+	const text = [
+		entry.finishedThoughts,
+		entry.midBookNotes,
+		entry.startedThoughts,
+		entry.favoriteQuote,
+		entry.recommendedTo
+	].map((part) => String(part || "").replace(/\s+/g, " ").trim()).find(Boolean) || "";
+	return text.length > 220 ? `${text.slice(0, 217).trim()}...` : text;
+}
+
+const sectionLinks = viewerUserId ? [
+	{ id: "journal-search", label: "Search" },
+	{ id: "journal-entries", label: "Entries" }
+] : [];
+---
+
+<Layout
+	title="Reading Journal"
+	sectionLinks={sectionLinks}
+	metaDescription="Search your private DogEared reading journal."
+	canonicalUrl="/journal"
+	robots="noindex,nofollow"
+>
+	<div slot="right" class="journal-page">
+		<nav class="breadcrumbs" aria-label="Breadcrumb">
+			<a href="/">Home</a>
+			<span aria-hidden="true">/</span>
+			<span>Reading Journal</span>
+		</nav>
+
+		{!viewerUserId ? (
+			<section class="journal-state-card">
+				<h1>Reading Journal</h1>
+				<p>Your journal is private. Log in to write, search, and revisit personal notes for your books.</p>
+				<a class="primary-link" href={`/?next=${encodeURIComponent("/journal")}`}>Log in</a>
+			</section>
+		) : (
+			<>
+				<section class="journal-hero" id="journal-search">
+					<p class="journal-eyebrow">Private notebook</p>
+					<h1>Reading Journal</h1>
+					<p>Search your own notes, quotes, tags, and book titles. Journal entries are private by default.</p>
+					<form class="journal-search-form" action="/journal" method="get">
+						<label class="visually-hidden" for="journal-query">Search journal</label>
+						<input id="journal-query" type="search" name="q" value={query} placeholder="Search notes, quotes, tags, or books" />
+						<button type="submit">Search</button>
+						{query && <a class="secondary-link" href="/journal">Clear</a>}
+					</form>
+				</section>
+
+				<section class="journal-results" id="journal-entries">
+					<div class="journal-results-head">
+						<h2>{query ? "Search Results" : "Recent Journal Entries"}</h2>
+						<p>{entries.length.toLocaleString()} {entries.length === 1 ? "entry" : "entries"}</p>
+					</div>
+					{loadError ? (
+						<p class="journal-empty">{loadError}</p>
+					) : entries.length === 0 ? (
+						<p class="journal-empty">
+							{query ? "No journal entries matched that search." : "No journal entries yet. Open a book on your shelf to start writing."}
+						</p>
+					) : (
+						<ul class="journal-entry-list">
+							{entries.map((entry) => (
+								<li class="journal-entry-card">
+									<a class="journal-entry-cover-link" href={bookHref(entry)} aria-label={`Open journal entry for ${entry.title}`}>
+										{entry.coverUrl ? (
+											<img src={entry.coverUrl} alt="" loading="lazy" decoding="async" width="52" height="76" />
+										) : (
+											<span class="journal-cover-placeholder" aria-hidden="true">book</span>
+										)}
+									</a>
+									<div class="journal-entry-main">
+										<h3><a href={bookHref(entry)}>{entry.title}</a></h3>
+										<p class="journal-entry-meta">
+											{entry.author}
+											{entry.rating > 0 && <> · {entry.rating}/5</>}
+											{formatDate(entry.updatedAt) && <> · Updated {formatDate(entry.updatedAt)}</>}
+										</p>
+										{excerptFor(entry) && <p class="journal-entry-excerpt">{excerptFor(entry)}</p>}
+										{entry.personalTags.length > 0 && (
+											<ul class="journal-tags" aria-label="Personal tags">
+												{entry.personalTags.map((tag) => <li>{tag}</li>)}
+											</ul>
+										)}
+									</div>
+								</li>
+							))}
+						</ul>
+					)}
+				</section>
+			</>
+		)}
+	</div>
+</Layout>
+
+<style>
+	.journal-page {
+		max-width: 980px;
+	}
+	.breadcrumbs {
+		display: flex;
+		gap: 0.35rem;
+		align-items: center;
+		flex-wrap: wrap;
+		margin: 0 0 0.65rem;
+		font-size: 0.84rem;
+		color: var(--color-text-subtle);
+	}
+	.breadcrumbs a {
+		color: var(--color-nav);
+		text-decoration: none;
+	}
+	.breadcrumbs a:hover,
+	.breadcrumbs a:focus-visible {
+		color: var(--color-nav-hover);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.journal-state-card,
+	.journal-hero,
+	.journal-results {
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		padding: 1rem;
+	}
+	.journal-hero,
+	.journal-results {
+		margin-top: 0.95rem;
+	}
+	.journal-eyebrow {
+		margin: 0 0 0.25rem;
+		color: var(--color-text-subtle);
+		font-size: 0.78rem;
+		font-weight: 760;
+		text-transform: uppercase;
+		letter-spacing: 0;
+	}
+	.journal-state-card h1,
+	.journal-hero h1,
+	.journal-results h2 {
+		margin: 0 0 0.45rem;
+	}
+	.journal-state-card p,
+	.journal-hero p,
+	.journal-results-head p,
+	.journal-empty {
+		margin: 0;
+		color: var(--color-text-muted);
+		line-height: 1.45;
+	}
+	.primary-link,
+	.secondary-link {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 42px;
+		margin-top: 0.9rem;
+		color: var(--color-nav);
+		font-weight: 760;
+		text-decoration: none;
+	}
+	.secondary-link {
+		margin-top: 0;
+	}
+	.primary-link:hover,
+	.primary-link:focus-visible,
+	.secondary-link:hover,
+	.secondary-link:focus-visible {
+		color: var(--color-nav-hover);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.journal-search-form {
+		margin-top: 0.95rem;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto;
+		gap: 0.6rem;
+		align-items: center;
+	}
+	.journal-search-form input {
+		width: 100%;
+		min-height: 44px;
+		box-sizing: border-box;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.72);
+		color: var(--color-text);
+		font: inherit;
+		padding: 0.65rem 0.75rem;
+	}
+	.journal-search-form input:focus {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+	.journal-results-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 0.8rem;
+	}
+	.journal-entry-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.65rem;
+	}
+	.journal-entry-card {
+		display: grid;
+		grid-template-columns: 52px minmax(0, 1fr);
+		gap: 0.75rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.58);
+		padding: 0.65rem;
+	}
+	.journal-entry-cover-link,
+	.journal-entry-cover-link img,
+	.journal-cover-placeholder {
+		width: 52px;
+		height: 76px;
+		border-radius: var(--radius-sm);
+	}
+	.journal-entry-cover-link img {
+		object-fit: cover;
+		border: var(--border-subtle);
+	}
+	.journal-cover-placeholder {
+		display: grid;
+		place-items: center;
+		background: rgba(255, 255, 255, 0.72);
+		border: var(--border-subtle);
+		color: var(--color-text-subtle);
+		font-size: 0.7rem;
+	}
+	.journal-entry-main {
+		min-width: 0;
+	}
+	.journal-entry-main h3 {
+		margin: 0;
+		font-size: 1rem;
+	}
+	.journal-entry-main h3 a {
+		color: var(--color-text);
+		text-decoration: none;
+	}
+	.journal-entry-main h3 a:hover,
+	.journal-entry-main h3 a:focus-visible {
+		color: var(--color-nav-hover);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.journal-entry-meta,
+	.journal-entry-excerpt {
+		margin: 0.25rem 0 0;
+		color: var(--color-text-muted);
+		line-height: 1.45;
+	}
+	.journal-tags {
+		list-style: none;
+		margin: 0.5rem 0 0;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+	}
+	.journal-tags li {
+		border: var(--border-subtle);
+		border-radius: 999px;
+		background: rgba(255, 255, 255, 0.68);
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+		padding: 0.18rem 0.48rem;
+	}
+	@media (max-width: 620px) {
+		.journal-search-form {
+			grid-template-columns: 1fr;
+		}
+		.journal-results-head {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 0.25rem;
+		}
+	}
+</style>

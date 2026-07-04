@@ -9,6 +9,7 @@ Goals:
 - Save books without maintaining a complex system.
 - Quickly mark a book Currently Reading or Read.
 - Rate a finished book.
+- Keep private notes without turning them into reviews.
 - Keep a small profile and reading history.
 
 How DogEared helps:
@@ -16,6 +17,7 @@ How DogEared helps:
 - Default shelves keep the model simple.
 - Search and book detail pages make saving books direct.
 - Reading goal and metrics remain optional context.
+- Reading Journal gives them a private place to remember thoughts and quotes.
 - Privacy controls let casual readers decide how public they want to be.
 
 ## Heavy Reader
@@ -27,6 +29,7 @@ Goals:
 - Track many books across statuses.
 - Import existing history.
 - Add ratings and short reflections.
+- Keep longer private notes, quotes, tags, and reread intent.
 - Use metrics to understand patterns.
 - Organize books beyond default shelves.
 
@@ -36,6 +39,7 @@ How DogEared helps:
 - Custom shelves add personal organization.
 - Profiles show Currently Reading, Want to Read, Read, and custom shelves.
 - Metrics, streaks, momentum, and annual goals summarize progress without turning reading into competition.
+- Reading Journal and My Reading Life preserve richer long-term memory beyond public reviews.
 
 ## Book Club Reader
 
@@ -47,6 +51,7 @@ Goals:
 - See what trusted readers are reading or finishing.
 - Comment on activity.
 - Discover books through community activity.
+- Keep private notes for future meetings without publishing them as reviews.
 
 How DogEared helps:
 
@@ -54,6 +59,7 @@ How DogEared helps:
 - Likes and comments support small conversations.
 - Reader suggestions and profiles help find people to follow.
 - Book and activity surfaces keep the book at the center.
+- Reading Journal gives them a private preparation space alongside public discussion.
 
 Current limitation:
 

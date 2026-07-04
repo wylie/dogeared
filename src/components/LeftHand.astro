@@ -7,6 +7,7 @@ const isActive = (href: string) => normalize(current) === normalize(href);
 const currentNormalized = normalize(current);
 const isProfilePage = currentNormalized === "/profile" || currentNormalized.startsWith("/profile/");
 const isReadingLifePage = currentNormalized === "/reading-life";
+const isJournalPage = currentNormalized === "/journal";
 const isHomePage = currentNormalized === "/";
 const isAdminDashboardPage = currentNormalized === "/admin";
 const isAdminCollectionsPage = currentNormalized === "/admin/collections";
@@ -56,6 +57,16 @@ const query = Astro.url.searchParams.get("q") ?? "";
           <li id="left-hand-reading-life-item" hidden={!isAuthenticated}>
             <a href={isReadingLifePage ? undefined : '/reading-life'} class={isReadingLifePage ? 'active' : 'hover'} aria-current={isReadingLifePage ? 'page' : undefined}>My Reading Life</a>
             {isReadingLifePage && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
+          <li id="left-hand-journal-item" hidden={!isAuthenticated}>
+            <a href={isJournalPage ? undefined : '/journal'} class={isJournalPage ? 'active' : 'hover'} aria-current={isJournalPage ? 'page' : undefined}>Reading Journal</a>
+            {isJournalPage && sectionLinks.length > 0 && (
               <ul class="section-links-nested">
                 {sectionLinks.map((link) => (
                   <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>

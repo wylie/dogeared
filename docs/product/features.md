@@ -57,7 +57,9 @@ Status: Complete
 
 Profiles show reader identity, shelf summary, reading goal, shelves, custom shelves, recent activity, followers, and following counts.
 
-Limitations: Private profiles are hidden from non-owners.
+Profile owners also see Recent Journal Entries on their own profile.
+
+Limitations: Private profiles are hidden from non-owners. Recent Journal Entries are private and are never shown to other readers.
 
 ### Profile Editing
 
@@ -256,6 +258,16 @@ Status: Complete
 Signed-in readers can open `/reading-life` from the You navigation to see a private reflection on their reading history. The page shows books completed this year, pages read, reading streak, goal progress, average rating, average pages per day, average book length, reading pace, current books, favorite genre, favorite author, and newest author discovered. It also includes a finished-book timeline with year/month/search filters, a calendar heatmap with textual alternative, genre insights, author insights, fun statistics, and yearly reading-journey summaries.
 
 Limitations: My Reading Life is derived from recorded DogEared data. Rereads are not tracked separately today because the default shelf model stores one row per reader/book.
+
+### Reading Journal
+
+Status: Complete
+
+Signed-in readers can keep private journal entries for books they have added to their shelves. Book pages show a Reading Journal section for owned books with fields for started thoughts, mid-book notes, finished thoughts, favorite quote, would-reread intent, recommended-to notes, and personal tags. The writing surface supports Markdown text, autosave, local draft recovery, character count, editing, and deletion.
+
+The private `/journal` page lets readers search their own journal by book title, author, note body, quote, recommendation, and personal tag. Profile owners see a Recent Journal Entries preview on their own profile.
+
+Limitations: Journal entries are private-only in the current UI. The data model includes future visibility states for friends, public, and shared entries, but the permission policy currently allows only the owner to access entries.
 
 ### Reading Challenge
 

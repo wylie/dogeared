@@ -10,7 +10,7 @@ The product uses gentle language and restrained metrics. Momentum, streaks, and 
 
 ### Privacy
 
-Readers control profile visibility, location sharing, activity sharing, discovery, and follow availability. Private profiles are hidden from non-owners. Activity feeds respect profile and activity-sharing preferences.
+Readers control profile visibility, location sharing, activity sharing, discovery, and follow availability. Private profiles are hidden from non-owners. Activity feeds respect profile and activity-sharing preferences. Reading Journal entries are private to their owner in the current product.
 
 ### Reader-First Design
 
@@ -22,7 +22,7 @@ The design system expects visible focus states, keyboard-reachable shelf and act
 
 ### Long-Term Memory
 
-DogEared treats shelves, ratings, reviews, finished dates, progress history, and profile context as part of a reader's durable record. Account email changes preserve reading history and social relationships.
+DogEared treats shelves, ratings, reviews, private journal entries, finished dates, progress history, and profile context as part of a reader's durable record. Account email changes preserve reading history and social relationships.
 
 ### Thoughtful Discovery
 

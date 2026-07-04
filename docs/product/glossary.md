@@ -68,6 +68,10 @@ A reaction on activity. Readers cannot like their own activity. Likes can create
 
 An email sign-in link with a hashed token, expiration, and used timestamp.
 
+## Journal Entry
+
+A private note record owned by one reader for one shelved book. It can include started thoughts, mid-book notes, finished thoughts, a favorite quote, would-reread intent, recommended-to notes, personal tags, visibility metadata, and timestamps.
+
 ## Momentum Score
 
 A profile signal for Currently Reading books based on page progress, recency, elapsed days, and progress update count. It avoids predictions when confidence is low.
@@ -80,6 +84,10 @@ A private reader-facing page that reflects a signed-in reader's finished books, 
 
 A record created when another reader likes or comments on a user's activity. Current notification types are `activity_like` and `activity_comment`.
 
+## Personal Tags
+
+Reader-defined tags on private journal entries. They are searchable by the owning reader and are separate from public catalog genres or topic tags.
+
 ## Profile Data
 
 JSON stored on `app_user.profile_data`. It contains profile fields and settings such as privacy, reading defaults, notification preferences, import controls, and personalization.
@@ -91,6 +99,10 @@ A DogEared user with an account and, usually, a username/profile.
 ## Reading Progress Event
 
 A stored forward page movement for a reader and book, with from-page, to-page, page delta, and recorded time.
+
+## Reading Journal
+
+A private reader-facing notebook for books the reader has added to shelves. The journal is searchable from `/journal` and appears on book pages for owned books.
 
 ## Reading Timeline
 

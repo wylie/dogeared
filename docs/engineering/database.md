@@ -19,7 +19,7 @@ Stores the account identity:
 
 Relationships:
 
-- Owns sessions, magic links, email changes, shelf entries, activity, follows, custom shelves, likes, comments, notifications, feedback events, and progress events.
+- Owns sessions, magic links, email changes, shelf entries, reading journal entries, activity, follows, custom shelves, likes, comments, notifications, feedback events, and progress events.
 
 ## Authentication
 
@@ -66,7 +66,7 @@ Stores local catalog records:
 Relationships:
 
 - May reference `author`.
-- Has zero or more source records, genres, topic tags, collection entries, shelf entries, activity rows, and progress events.
+- Has zero or more source records, genres, topic tags, collection entries, shelf entries, reading journal entries, activity rows, and progress events.
 
 ## Authors
 
@@ -208,6 +208,34 @@ Relationships:
 Current limitation:
 
 - DNF is not a valid persisted status in the current table/API model.
+
+## Reading Journal Entries
+
+Entity: `reading_journal_entry`
+
+Stores a private reader notebook entry for one user and one book:
+
+- User and book.
+- Started thoughts.
+- Mid-book notes.
+- Finished thoughts.
+- Favorite quote.
+- Would-reread flag.
+- Recommended-to notes.
+- Personal tags.
+- Visibility value.
+- Extensible metadata.
+- Created and updated timestamps.
+
+Relationships:
+
+- Joins `app_user` and `book`.
+- Requires the reader to have the book on a default shelf before creating or updating the journal entry.
+- Used by the book page Reading Journal section, the private `/journal` search page, and the owner-only Recent Journal Entries profile section.
+
+Current limitation:
+
+- The table supports `private`, `friends`, `public`, and `shared` visibility values for future expansion, but current access policy only exposes entries to the owning reader.
 
 ## Reading Progress Events
 

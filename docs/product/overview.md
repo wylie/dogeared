@@ -2,7 +2,7 @@
 
 DogEared is a calm social reading and book-tracking application. It helps readers save books, track reading progress, rate and review finished books, discover titles through reader activity, and maintain a long-term memory of their reading life.
 
-DogEared is inspired by book communities and personal reading journals, but the current product avoids ad-driven social media patterns. The application is organized around books, authors, reader profiles, shelves, recent activity, and lightweight community interactions.
+DogEared is inspired by book communities and personal reading journals, but the current product avoids ad-driven social media patterns. The application is organized around books, authors, reader profiles, shelves, private journal entries, recent activity, and lightweight community interactions.
 
 ## Target Audience
 
@@ -35,12 +35,13 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Home: featured editorial collections, transparent community discovery sections, onboarding checklist, discovery jump links, reader suggestions, and custom shelf ideas.
 - Search: book search backed by DogEared catalog results plus Google Books and Open Library, with series labels and editorial collection matches when available.
 - Books: curated catalog views such as trending, most shelved, top rated, and recently active.
-- Book detail: metadata, series context, synopsis, genres, topics, shelf controls, ratings, reviews, and related activity.
+- Book detail: metadata, series context, synopsis, genres, topics, shelf controls, ratings, private journal entry controls for shelved books, reviews, and related activity.
 - Authors: searchable and sortable author index.
 - Author detail: author profile, editorial collections featuring the author, author books grouped by series where available, standalone books, and external author-book context.
 - Editorial Collections: curated book lists with editorial introductions, book ordering, notes, quotes, and shelf controls.
 - Profiles: public reader pages with about information, shelf summary, custom shelves, reading goal, current reads, activity, followers, and following.
 - My Reading Life: private personal reflection across finished books, pages, streaks, goals, ratings, timeline, reading calendar, genres, authors, fun statistics, and yearly summaries.
+- Reading Journal: private searchable notebook for a reader's own book notes, quotes, reread intent, recommendations, and tags.
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
 - Settings: profile/account entry points, magic-link auth, email changes, Goodreads import, preferences, privacy, notifications, data export, shelf clearing, API endpoint references, and sessions.
@@ -54,6 +55,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
 - Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, and yearly summaries.
+- Private journaling: write, autosave, search, edit, and delete private notes for books already on the reader's shelves.
 - Reviews and ratings: rate finished books and optionally save a short finished reflection.
 - Social reading: follow readers, view following activity, like activity, comment on activity, and receive activity notifications.
 - Profile management: update name, avatar, location, birth year, goal text, favorite book, favorite author, blurb, and genres.
@@ -99,7 +101,7 @@ Authors have an index page, canonical author detail routes, optional bio/photo/s
 
 ### Profiles
 
-Profiles show reader identity, shelf counts, followers/following counts, reading goal progress, notifications for the owner, custom shelves, recent activity, and default shelf sections. Owners can edit profile information directly from their profile page.
+Profiles show reader identity, shelf counts, followers/following counts, reading goal progress, notifications for the owner, recent private journal entries for the owner, custom shelves, recent activity, and default shelf sections. Owners can edit profile information directly from their profile page.
 
 ### Shelves
 
@@ -130,6 +132,16 @@ My Reading Life is a private, authenticated page for reflecting on a reader's ow
 The overview shows books completed this year, pages read, reading streak, reading goal progress, average rating, average pages per day, average book length, reading pace, current books, favorite genre, favorite author, and newest author discovered. The page also includes a finished-book timeline with year/month/search filters, a calendar-style activity heatmap with textual summary, genre insights, author insights, fun statistics, and yearly reading-journey summaries prepared for future Year in Books experiences.
 
 Current limitations: rereads are not tracked separately because DogEared stores one default shelf entry per user/book. My Reading Life only reflects data the reader has recorded in DogEared.
+
+### Reading Journal
+
+DogEared supports a private Reading Journal for signed-in readers. A journal entry belongs to one reader and one shelved book. Entries can store started thoughts, mid-book notes, finished thoughts, a favorite quote, whether the reader would reread the book, who they would recommend it to, personal tags, visibility metadata, and last-edited timestamps.
+
+On a book page, the Reading Journal section appears only when the signed-in reader has that exact DogEared book on a shelf. The form supports Markdown text, autosaves through the journal API, keeps a local draft for recovery, shows a character count, and supports deleting the private entry.
+
+The private `/journal` page lets readers search their own journal across book titles, authors, note bodies, quotes, recommendations, and tags. Profile owners also see a Recent Journal Entries section on their own profile; it is not shown to other readers.
+
+Current limitations: journal visibility is stored with future states for friends, public, and shared entries, but the current UI and permission policy keep journal entries private to their owner.
 
 ### Reading Challenge
 
@@ -185,6 +197,8 @@ The Roadmap page groups product direction into Now, Next, Later, and recently co
 
 Search queries DogEared catalog records first, then Google Books, then Open Library. Results are scored and deduplicated, and known catalog matches attach local book, author, and series metadata when available. Matching published editorial collections appear as a separate result group.
 
+Private journal search is separate from public book search. Signed-in readers can search their own journal entries from `/journal`; those results are private and are not exposed through public search.
+
 ### Genre And Related Pages
 
 Related pages support landing exploration plus specific `kind=genre`, `kind=topic`, `kind=author`, and `kind=book` views. Genre pages show books, reader counts, shelf counts, and related authors when available.
@@ -193,18 +207,18 @@ Related pages support landing exploration plus specific `kind=genre`, `kind=topi
 
 Derived from the current repository structure and implementation:
 
-- Major non-API page routes: 32 application/content routes plus `robots.txt` and `sitemap.xml`.
-- API routes: 33 endpoint files.
+- Major non-API page routes: 33 application/content routes plus `robots.txt` and `sitemap.xml`.
+- API routes: 34 endpoint files.
 - Admin pages: 5 routes.
 - Redirect-only compatibility routes: `/discover`, `/feed`, `/myreads`, `/profile`, `/author`, and `/u/[username]`.
-- User-facing feature areas documented here: 45.
+- User-facing feature areas documented here: 46.
 - Default persisted shelf statuses: 3 (`want_to_read`, `reading`, `finished`).
 - Custom shelf icon options: 16.
 - Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, My Reading Life overview, finished-book timeline, reading calendar, genre/author insights, fun statistics, yearly summaries, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.
 - Community discovery providers: 7.
 - Editorial collection publication states: 3 (`draft`, `published`, `archived`).
 - Series ordering modes: book order, publication order, chronological order.
-- Supported social interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment.
+- Supported social/private interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment, create/edit/delete/search own journal entries.
 - Supported catalog metadata types: editorial collections, series, genres, and topic tags.
 - Supported import source in Settings: Goodreads CSV.
 - Supported data export format in Settings: JSON.

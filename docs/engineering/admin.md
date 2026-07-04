@@ -158,6 +158,7 @@ Admin delete-user logic removes reader-owned data:
 - Magic links.
 - Sessions.
 - Reading progress events.
+- Reading journal entries.
 - Custom shelf book rows.
 - Custom shelves.
 - Follow relationships.

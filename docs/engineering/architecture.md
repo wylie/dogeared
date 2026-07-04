@@ -9,7 +9,7 @@ This is a high-level overview only. Implementation details should be read from t
 Routes live in `src/pages/`.
 
 - Content and product pages: home, books, authors, book detail, author detail, editorial collections, related, mission, roadmap, privacy, support.
-- Authenticated reader pages: profile, following, My Reading Life, settings, welcome, metrics.
+- Authenticated reader pages: profile, following, My Reading Life, Reading Journal, settings, welcome, metrics.
 - Admin pages: admin overview, collections, data health, users, user detail.
 - Compatibility redirects: discover, feed, myreads, profile index, author query redirect, legacy `/u/[username]`.
 - System routes: robots and sitemap.
@@ -33,6 +33,7 @@ API routes live in `src/pages/api/` and are grouped by product area:
 - Auth: magic-link request, verification, current user, logout.
 - Books: search, suggestions, cover proxy.
 - Follow: follow state and mutations.
+- Journal: private journal entry load/search, upsert, and delete.
 - Profile/public: profile info, username, public shelf/activity/profile.
 - Shelf: shelf entries, ratings, custom shelves, custom shelf books, section ordering.
 - Admin-adjacent/system: health, feedback, notifications count, onboarding status, top lists, reader suggestions.
@@ -45,7 +46,7 @@ Shared product/data logic lives in `src/lib/`.
 
 - Authentication and account helpers: `auth`, `authHardening`, `emailChange`, `email`.
 - Catalog and metadata helpers: `catalog`, `bookPayload`, `bookCovers`, `catalogKeys`, `author`, `authorEnrichment`, `externalAuthorBooks`, `genres`, `metadataAssets`, `series`, `collections`.
-- Reader/product logic: `shelfClient`, `shelfStorage`, `customShelves`, `readingGoal`, `readingLife`, `momentumPrediction`, `goodreadsImport`, `bookReviews`.
+- Reader/product logic: `shelfClient`, `shelfStorage`, `customShelves`, `readingGoal`, `readingLife`, `readingJournal`, `momentumPrediction`, `goodreadsImport`, `bookReviews`.
 - Discovery logic: `discoveryProviders` exposes the discovery service and reusable Home providers; `homeSections` loads cached aggregate signals and maps provider output to book cards.
 - Community and privacy: `feed`, `publicProfile`, `privacy`, `followPolicy`, `demoVisibility`.
 - Operations: `admin`, `adminData`, `monitoring`, `feedback`, `runtimeCache`, `indexing`, `seo`, `roadmap`, `homeSections`.
@@ -62,10 +63,11 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 4. Catalog pages enrich books with optional series and editorial collection metadata when available.
 5. Editorial collection pages load published collection records and ordered collection-book entries with notes, quotes, ratings, and shelf state.
 6. My Reading Life derives private personal summaries from shelf entries, finished dates, ratings, progress events, genres, authors, series, and profile goal data.
-7. Home discovery loads cached aggregate community signals, ranks them through reusable providers, and renders explainable sections.
-8. Client-side scripts enhance the page by calling API routes for mutations or lazy loading.
-9. API routes validate the session, normalize input, mutate Neon, and return JSON.
-10. Client-side UI updates the current card/section and often refreshes shelf/activity state from APIs.
+7. Reading Journal loads private user/book journal entries for owned books, saves through an authenticated API, and searches only the signed-in reader's entries.
+8. Home discovery loads cached aggregate community signals, ranks them through reusable providers, and renders explainable sections.
+9. Client-side scripts enhance the page by calling API routes for mutations or lazy loading.
+10. API routes validate the session, normalize input, mutate Neon, and return JSON.
+11. Client-side UI updates the current card/section and often refreshes shelf/activity state from APIs.
 
 ## Series Support
 
@@ -78,6 +80,10 @@ Editorial collection logic lives in `src/lib/collections`. The helper owns schem
 ## My Reading Life
 
 My Reading Life lives at `/reading-life` and uses `src/lib/readingLife` for pure calculations. The route loads the signed-in reader's finished books, current books, progress events, and profile goal, then derives overview statistics, timeline filters, calendar heatmap data, genre insights, author insights, fun statistics, and yearly journey summaries. The page is marked `noindex,nofollow` and appears in signed-in navigation under You.
+
+## Reading Journal
+
+Reading Journal lives at `/journal` and uses `src/lib/readingJournal` for schema readiness, input normalization, permission checks, upserts, deletion, book-level loading, recent-entry loading, and private search. Book detail pages load a journal entry only when the signed-in reader has the exact book on a shelf. The client form autosaves to `/api/journal/entries` and keeps a local draft for recovery. Profile pages show recent journal entries only for the profile owner.
 
 ## Discovery Providers
 
