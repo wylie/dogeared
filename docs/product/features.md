@@ -57,9 +57,9 @@ Status: Complete
 
 Profiles show reader identity, shelf summary, reading goal, shelves, custom shelves, recent activity, followers, and following counts.
 
-Profile owners also see Recent Journal Entries on their own profile.
+Profiles are the "Who am I as a reader?" surface, so the owner experience stays focused on profile card, notifications, bio, favorite book/author, concise reading goal summary, shelf summary, currently reading, recent activity, and settings access.
 
-Limitations: Private profiles are hidden from non-owners. Recent Journal Entries are private and are never shown to other readers.
+Limitations: Private profiles are hidden from non-owners. Private journal entries are intentionally not shown on profiles.
 
 ### Profile Editing
 
@@ -257,25 +257,27 @@ Status: Complete
 
 Signed-in readers can open `/reading-life` from the You navigation to see a private reflection on their reading history. The page shows books completed this year, pages read, reading streak, goal progress, average rating, average pages per day, average book length, reading pace, current books, favorite genre, favorite author, and newest author discovered. It also includes a finished-book timeline with year/month/search filters, a calendar heatmap with textual alternative, genre insights, author insights, fun statistics, and yearly reading-journey summaries.
 
+My Reading Life is the "How has my reading changed over time?" surface. Its content is consolidated into richer overview, history, insights, and journey areas rather than split across many small pages.
+
 Limitations: My Reading Life is derived from recorded DogEared data. Rereads are not tracked separately today because the default shelf model stores one row per reader/book.
 
 ### Reading Timeline
 
 Status: Complete
 
-Signed-in readers can open `/reading-timeline` from the You navigation or their profile action menu. The page shows finished books grouped by year and month, with each book displaying cover, title, author, finish date, rating, shelf labels, and a book link. Filters support year, genre, shelf, rating, author, and search query.
+Reading Timeline is now a History section inside My Reading Life rather than a separate primary navigation destination. It shows finished books chronologically with cover, title, author, finish date, rating, and book links. The active My Reading Life timeline supports year, month, and search filters.
 
-Monthly summaries show books finished, pages read, favorite genre, average rating, and reading streak. Milestones highlight reflective moments such as first finished book, 100th book when present, longest book, shortest book, biggest reading month, longest reading streak, and reading goal completion.
-
-Limitations: Timeline entries depend on finished books with finished dates or usable update dates. Future journal entries, quotes, reading notes, photos, and annual recaps are prepared for in structure but not implemented in the page.
+Limitations: The legacy `/reading-timeline` route redirects to `/reading-life#timeline` for backwards compatibility. Timeline entries depend on finished books with finished dates or usable update dates.
 
 ### Reading Journal
 
 Status: Complete
 
+Reading Journal is private notebook space for "What was I thinking while reading?"
+
 Signed-in readers can keep private journal entries for books they have added to their shelves. Book pages show a Reading Journal section for owned books with fields for started thoughts, mid-book notes, finished thoughts, favorite quote, would-reread intent, recommended-to notes, and personal tags. The writing surface supports Markdown text, autosave, local draft recovery, character count, editing, and deletion.
 
-The private `/journal` page lets readers search their own journal by book title, author, note body, quote, recommendation, and personal tag. Profile owners see a Recent Journal Entries preview on their own profile.
+The private `/journal` page lets readers search their own journal by book title, author, note body, quote, recommendation, and personal tag. Journal entries do not appear on profiles, shelves, or reading statistics surfaces.
 
 Limitations: Journal entries are private-only in the current UI. The data model includes future visibility states for friends, public, and shared entries, but the permission policy currently allows only the owner to access entries.
 

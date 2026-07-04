@@ -125,11 +125,8 @@ const selectedMonth = Number(Astro.url.searchParams.get("month") || 0) || 0;
 const timelineQuery = String(Astro.url.searchParams.get("q") || "").trim();
 const sectionLinks = [
 	{ id: "overview", label: "Overview" },
-	{ id: "timeline", label: "Timeline" },
-	{ id: "calendar", label: "Calendar" },
-	{ id: "genres", label: "Genres" },
-	{ id: "authors", label: "Authors" },
-	{ id: "fun-statistics", label: "Fun Stats" },
+	{ id: "timeline", label: "History" },
+	{ id: "genres", label: "Insights" },
 	{ id: "journey", label: "Journey" }
 ];
 

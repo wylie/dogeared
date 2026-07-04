@@ -7,7 +7,6 @@ const isActive = (href: string) => normalize(current) === normalize(href);
 const currentNormalized = normalize(current);
 const isProfilePage = currentNormalized === "/profile" || currentNormalized.startsWith("/profile/");
 const isReadingLifePage = currentNormalized === "/reading-life";
-const isReadingTimelinePage = currentNormalized === "/reading-timeline";
 const isJournalPage = currentNormalized === "/journal";
 const isHomePage = currentNormalized === "/";
 const isAdminDashboardPage = currentNormalized === "/admin";
@@ -45,9 +44,9 @@ const query = Astro.url.searchParams.get("q") ?? "";
         <h3 class="nav-group-title">You</h3>
         <ul>
           <li id="left-hand-login-item" hidden={isAuthenticated}><button type="button" class="nav-text-button hover">Log In</button></li>
-          <li id="left-hand-following-item" hidden={!isAuthenticated}>
-            <a href={isActive('/following') ? undefined : '/following'} class={isActive('/following') ? 'active' : 'hover'} aria-current={isActive('/following') ? 'page' : undefined}>Following</a>
-            {isActive('/following') && sectionLinks.length > 0 && (
+          <li id="left-hand-profile-item" hidden={!isAuthenticated}>
+            <a href="/profile" class={isProfilePage ? 'active' : 'hover'} aria-current={isProfilePage ? 'page' : undefined}><span id="left-hand-profile-label">Profile</span></a>
+            {isProfilePage && sectionLinks.length > 0 && (
               <ul class="section-links-nested">
                 {sectionLinks.map((link) => (
                   <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
@@ -65,29 +64,9 @@ const query = Astro.url.searchParams.get("q") ?? "";
               </ul>
             )}
           </li>
-          <li id="left-hand-reading-timeline-item" hidden={!isAuthenticated}>
-            <a href={isReadingTimelinePage ? undefined : '/reading-timeline'} class={isReadingTimelinePage ? 'active' : 'hover'} aria-current={isReadingTimelinePage ? 'page' : undefined}>Reading Timeline</a>
-            {isReadingTimelinePage && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
           <li id="left-hand-journal-item" hidden={!isAuthenticated}>
             <a href={isJournalPage ? undefined : '/journal'} class={isJournalPage ? 'active' : 'hover'} aria-current={isJournalPage ? 'page' : undefined}>Reading Journal</a>
             {isJournalPage && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-          <li id="left-hand-profile-item" hidden={!isAuthenticated}>
-            <a href="/settings#account-settings" class={isProfilePage ? 'active' : 'hover'} aria-current={isProfilePage ? 'page' : undefined}><span id="left-hand-profile-label">Profile</span></a>
-            {isProfilePage && sectionLinks.length > 0 && (
               <ul class="section-links-nested">
                 {sectionLinks.map((link) => (
                   <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
@@ -135,6 +114,16 @@ const query = Astro.url.searchParams.get("q") ?? "";
           <li>
             <a href={isActive('/collections') ? undefined : '/collections'} class={isActive('/collections') || currentNormalized.startsWith('/collections/') ? 'active' : 'hover'} aria-current={isActive('/collections') || currentNormalized.startsWith('/collections/') ? 'page' : undefined}>Collections</a>
             {(isActive('/collections') || currentNormalized.startsWith('/collections/')) && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
+          <li id="left-hand-following-item" hidden={!isAuthenticated}>
+            <a href={isActive('/following') ? undefined : '/following'} class={isActive('/following') ? 'active' : 'hover'} aria-current={isActive('/following') ? 'page' : undefined}>Following</a>
+            {isActive('/following') && sectionLinks.length > 0 && (
               <ul class="section-links-nested">
                 {sectionLinks.map((link) => (
                   <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>

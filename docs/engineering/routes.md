@@ -21,13 +21,13 @@ Authentication requirements:
 | `/collections` | Public | Browse published editorial collections by category. | `collections` helper, collection cards, published collection metadata. |
 | `/collections/[slug]` | Public | Editorial collection detail page with introduction, ordered books, notes, quotes, ratings, and shelf controls. | `BookCard`, `ShelfDropdown`, `RatingControl`, `collections` helper. |
 | `/related` | Public | Landing and related pages for genres, topics, authors, and books. | `BookCard`, `ShelfDropdown`, genre/topic/author/book queries. |
-| `/profile/[username]` | Public with privacy checks | Public reader profile; owner can edit profile, view recent private journal entries, and manage shelves. | Profile bundle, shelf summary, custom shelves, reading goal, recent journal entries for owner, momentum, notifications, activity likes/comments. |
+| `/profile/[username]` | Public with privacy checks | Public reader identity and current reading state; owner can edit profile, view notifications, and manage shelves. | Profile bundle, shelf summary, custom shelves, concise reading goal, momentum, current reads, notifications, activity likes/comments. |
 | `/profile/[username]/followers` | Public with privacy checks | Paginated followers list for a profile. | Public profile bundle, follower search/sort. |
 | `/profile` | Redirect | Sends the signed-in user to their profile or settings. | Session and username lookup. |
 | `/u/[username]` | Redirect | Legacy profile alias. | Redirects to `/profile/[username]`. |
 | `/following` | Authenticated | Manage followed readers and view following activity. | Reader suggestions, following readers, `BookCard`, likes/comments, follow API. |
-| `/reading-life` | Authenticated | Private reflection on the signed-in reader's reading history, timeline, calendar, genres, authors, fun statistics, and yearly summaries. | `readingLife` helper, shelf entries, progress events, genres, authors, series metadata, reading goal data. |
-| `/reading-timeline` | Authenticated | Private chronological reading history grouped by year/month with filters, monthly summaries, and milestones. | `readingTimeline` helper, shelf entries, custom shelf labels, progress events, genres, ratings, reading goal data. |
+| `/reading-life` | Authenticated | Private reflection on the signed-in reader's historical reading life, organized around overview, history, insights, and journey. | `readingLife` helper, shelf entries, progress events, genres, authors, series metadata, reading goal data, timeline, calendar, statistics. |
+| `/reading-timeline` | Redirect | Compatibility route for old timeline links. | Redirects to `/reading-life#timeline` while preserving query parameters. |
 | `/journal` | Authenticated | Private searchable reading journal for the signed-in reader's own book notes, quotes, recommendations, and tags. | `readingJournal` helper, journal search, recent entries, book links to `#reading-journal`. |
 | `/feed` | Redirect | Legacy route for feed. | Redirects to `/following`. |
 | `/myreads` | Redirect | Legacy reader library route. | Redirects signed-in users to their profile; otherwise settings. |

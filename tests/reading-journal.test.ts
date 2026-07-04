@@ -76,7 +76,7 @@ test("journal API enforces authentication, ownership, CRUD, and search", () => {
 	assert.match(service, /unnest\(j\.personal_tags\)/);
 });
 
-test("journal UI is wired into book, profile, navigation, and autosave", () => {
+test("journal UI is wired into book, private journal page, navigation, and autosave", () => {
 	const bookPage = readFileSync("src/pages/book.astro", "utf8");
 	const profilePage = readFileSync("src/pages/profile/[username].astro", "utf8");
 	const journalPage = readFileSync("src/pages/journal.astro", "utf8");
@@ -87,8 +87,8 @@ test("journal UI is wired into book, profile, navigation, and autosave", () => {
 	assert.match(bookPage, /dogeared:journal-draft/);
 	assert.match(bookPage, /Recovered an unsaved local draft/);
 	assert.match(bookPage, /\/api\/journal\/entries/);
-	assert.match(profilePage, /Recent Journal Entries/);
-	assert.match(profilePage, /isOwnerViewer && \(/);
+	assert.doesNotMatch(profilePage, /Recent Journal Entries/);
+	assert.doesNotMatch(profilePage, /loadRecentJournalEntries/);
 	assert.match(journalPage, /Search your own notes/);
 	assert.match(journalPage, /robots="noindex,nofollow"/);
 	assert.match(nav, /Reading Journal/);

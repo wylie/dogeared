@@ -231,7 +231,7 @@ Relationships:
 
 - Joins `app_user` and `book`.
 - Requires the reader to have the book on a default shelf before creating or updating the journal entry.
-- Used by the book page Reading Journal section, the private `/journal` search page, and the owner-only Recent Journal Entries profile section.
+- Used by the book page Reading Journal section and the private `/journal` search page.
 
 Current limitation:
 
@@ -268,18 +268,17 @@ Relationships:
 
 ## Reading Timeline Data
 
-Reading Timeline does not introduce a new persistence table. It derives its view from existing entities:
+Reading Timeline is a section inside My Reading Life and does not introduce a new persistence table. It derives its view from existing entities:
 
 - `user_book` for finished books, ratings, page counts, shelf status, finished dates, and update dates.
-- `user_custom_shelf` and `user_custom_shelf_book` for custom shelf labels used in timeline display and shelf filtering.
 - `user_reading_progress_event` for reading streak calculations.
 - `book`, `author`, `book_genre`, and `series_book`/`series` for catalog, author, genre, and series context.
 - `app_user.profile_data.readingGoal` for reading goal completion milestones.
 
 Relationships:
 
-- The page is scoped to the signed-in `app_user`.
-- Year/month groups, monthly summaries, filters, and milestones are calculated at render time from the reader's recorded data.
+- The view is scoped to the signed-in `app_user`.
+- Timeline history, filters, calendar context, and milestones are calculated at render time from the reader's recorded data.
 
 ## Activity
 

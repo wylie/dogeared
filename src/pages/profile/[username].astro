@@ -12,7 +12,6 @@ import { ensureCustomShelfSchema } from "../../lib/customShelves";
 import { daysSinceDate, resolveMomentumPrediction } from "../../lib/momentumPrediction";
 import { resolveReadingGoalProgress } from "../../lib/readingGoal";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
-import { loadRecentJournalEntries, type JournalSearchResult } from "../../lib/readingJournal";
 
 export const prerender = false;
 
@@ -392,7 +391,6 @@ let notifications: Array<{
 	bookId: number;
 	activityId: number;
 }> = [];
-let recentJournalEntries: JournalSearchResult[] = [];
 const PAGE_SIZE = 12;
 const recentPage = Math.max(1, Number(Astro.url.searchParams.get("ra_page") || "1") || 1);
 const readingPage = Math.max(1, Number(Astro.url.searchParams.get("cr_page") || "1") || 1);
@@ -457,11 +455,6 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			}));
 		} catch {
 			notifications = [];
-		}
-		try {
-			recentJournalEntries = await loadRecentJournalEntries(sql, bundle.targetUserId, 5);
-		} catch {
-			recentJournalEntries = [];
 		}
 	}
 	followState = {
@@ -907,17 +900,6 @@ function formatActivityDate(value: string) {
 	});
 }
 
-function journalExcerpt(entry: JournalSearchResult) {
-	const text = [
-		entry.finishedThoughts,
-		entry.midBookNotes,
-		entry.startedThoughts,
-		entry.favoriteQuote,
-		entry.recommendedTo
-	].map((part) => String(part || "").replace(/\s+/g, " ").trim()).find(Boolean) || "";
-	return text.length > 150 ? `${text.slice(0, 147).trim()}...` : text;
-}
-
 function finishedDateTimestamp(value: string) {
 	const parsed = new Date(String(value || "").trim());
 	const time = parsed.getTime();
@@ -1046,7 +1028,6 @@ const baseSectionLinks = [
 	...(isOwnerViewer ? [{ id: "notifications", label: "Notifications" }] : []),
 	{ id: "about", label: "About" },
 	{ id: "reading-goal", label: "Reading Goal" },
-	...(isOwnerViewer ? [{ id: "recent-journal", label: "Journal" }] : []),
 	{ id: "shelf-summary", label: "Shelf Summary" }
 ];
 const orderedShelfSectionLinks = isOwnerViewer
@@ -1310,8 +1291,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 									<a class="profile-actions-menu-item" href={`/profile/${encodeURIComponent(profile.username)}?edit=1`}>
 										{editMode ? "Editing..." : "Edit Profile"}
 									</a>
-									<a class="profile-actions-menu-item" href="/reading-timeline">Reading Timeline</a>
 									<a class="profile-actions-menu-item" href="/reading-life">My Reading Life</a>
+									<a class="profile-actions-menu-item" href="/settings">Settings</a>
 								</div>
 							</div>
 						</div>
@@ -1490,41 +1471,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 						)}
 					</div>
 				</section>
-				{isOwnerViewer && (
-					<section id="recent-journal" class="reading-journal-card">
-						<div class="reading-journal-head">
-							<div>
-								<h2>Recent Journal Entries</h2>
-								<p class="meta">Private notes only you can see.</p>
-							</div>
-							<a class="owner-edit-link" href="/journal">Open journal</a>
-						</div>
-						{recentJournalEntries.length === 0 ? (
-							<p class="reading-journal-empty">No journal entries yet. Open a book on your shelf to start a private note.</p>
-						) : (
-							<ul class="reading-journal-list">
-								{recentJournalEntries.map((entry) => (
-									<li>
-										<a class="reading-journal-entry" href={`/book?bookId=${encodeURIComponent(String(entry.bookId))}#reading-journal`}>
-											{entry.coverUrl ? (
-												<img src={entry.coverUrl} alt="" loading="lazy" decoding="async" width="42" height="62" />
-											) : (
-												<span class="reading-journal-cover-placeholder" aria-hidden="true">
-													<span class="material-icons" aria-hidden="true">menu_book</span>
-												</span>
-											)}
-											<span class="reading-journal-entry-main">
-												<strong>{entry.title}</strong>
-												<span>{entry.author}{formatActivityDate(entry.updatedAt) && <> · Updated {formatActivityDate(entry.updatedAt)}</>}</span>
-												{journalExcerpt(entry) && <em>{journalExcerpt(entry)}</em>}
-											</span>
-										</a>
-									</li>
-								))}
-							</ul>
-						)}
-					</section>
-				)}
 				<section id="shelf-summary" class="shelf-card">
 					<div class="shelf-summary-head">
 						<h2>Shelf Summary</h2>
@@ -2641,89 +2587,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		margin: 0.55rem 0 0;
 		color: #52606d;
 		line-height: 1.5;
-	}
-	.reading-journal-card {
-		border: none;
-		border-radius: 12px;
-		background: var(--color-surface);
-		padding: 0.9rem;
-	}
-	.reading-journal-head {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 0.75rem;
-		margin-bottom: 0.65rem;
-	}
-	.reading-journal-head h2,
-	.reading-journal-head .meta {
-		margin: 0;
-	}
-	.reading-journal-head .meta {
-		margin-top: 0.2rem;
-	}
-	.reading-journal-empty {
-		margin: 0;
-		color: #52606d;
-		line-height: 1.5;
-	}
-	.reading-journal-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: grid;
-		gap: 0.5rem;
-	}
-	.reading-journal-list li {
-		list-style: none;
-	}
-	.reading-journal-entry {
-		display: grid;
-		grid-template-columns: 42px minmax(0, 1fr);
-		gap: 0.65rem;
-		align-items: start;
-		border: var(--border-subtle);
-		border-radius: 10px;
-		background: rgba(255, 255, 255, 0.58);
-		padding: 0.55rem;
-		color: inherit;
-		text-decoration: none;
-	}
-	.reading-journal-entry:hover,
-	.reading-journal-entry:focus-visible {
-		border-color: var(--color-border);
-		outline: none;
-	}
-	.reading-journal-entry img,
-	.reading-journal-cover-placeholder {
-		width: 42px;
-		height: 62px;
-		border-radius: 6px;
-		object-fit: cover;
-		background: #f1f1f1;
-		border: var(--border-subtle);
-	}
-	.reading-journal-cover-placeholder {
-		display: grid;
-		place-items: center;
-		color: #8a8a8a;
-	}
-	.reading-journal-entry-main {
-		min-width: 0;
-		display: grid;
-		gap: 0.15rem;
-	}
-	.reading-journal-entry-main strong {
-		color: #1f2937;
-	}
-	.reading-journal-entry-main span,
-	.reading-journal-entry-main em {
-		color: #52606d;
-		font-size: 0.88rem;
-		line-height: 1.35;
-	}
-	.reading-journal-entry-main em {
-		font-style: normal;
 	}
 	.shelf-summary-grid {
 		margin-top: 0.7rem;

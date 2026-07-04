@@ -106,7 +106,7 @@ A private reader-facing notebook for books the reader has added to shelves. The 
 
 ## Reading Timeline
 
-A private chronological history of finished books. The dedicated `/reading-timeline` page groups books by year and month, supports filters for year, genre, shelf, rating, author, and search, and includes monthly summaries and reflective milestones. My Reading Life also contains a compact timeline section.
+A private chronological history of finished books inside My Reading Life. The legacy `/reading-timeline` route redirects to `/reading-life#timeline` for backwards compatibility.
 
 ## Reading Streak
 
