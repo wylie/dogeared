@@ -19,20 +19,6 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
 		priority: "Primary"
 	},
 	{
-		title: "Reading goal improvements",
-		description: "Help readers keep gentle momentum with clearer goals, progress, and context that never turns reading into a chore.",
-		status: "In Progress",
-		category: "now",
-		priority: "High"
-	},
-	{
-		title: "Reader profiles",
-		description: "Give every reader a warmer home for shelves, reviews, current reads, and the reading identity they want to share.",
-		status: "In Progress",
-		category: "now",
-		priority: "High"
-	},
-	{
 		title: "Import quality improvements",
 		description: "Make moving a reading history into DogEared more reliable, cleaner, and easier to trust.",
 		status: "In Progress",
@@ -54,11 +40,11 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
 		priority: "Medium"
 	},
 	{
-		title: "Recommendation engine",
-		description: "Help readers discover books they will genuinely enjoy without relying on engagement algorithms.",
+		title: "DNF shelf",
+		description: "Make it possible to stop reading a book cleanly without treating it as unfinished progress.",
 		status: "Planning",
 		category: "next",
-		priority: "Primary"
+		priority: "High"
 	},
 	{
 		title: "Better search",
@@ -68,25 +54,11 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
 		priority: "High"
 	},
 	{
-		title: "Personalized discovery",
-		description: "Turn shelves, ratings, follows, and reading patterns into quieter paths toward the next good book.",
+		title: "Discovery refinements",
+		description: "Deepen transparent community discovery and editorial browsing without opaque engagement algorithms.",
 		status: "Planning",
 		category: "next",
 		priority: "High"
-	},
-	{
-		title: "Reading statistics",
-		description: "Show useful reading patterns over time without making the experience feel competitive or gamified.",
-		status: "Planning",
-		category: "next",
-		priority: "Medium"
-	},
-	{
-		title: "Reading history visualization",
-		description: "Give readers a clear, beautiful way to look back at what they read and when they read it.",
-		status: "Research",
-		category: "next",
-		priority: "Medium"
 	},
 	{
 		title: "Mobile experience improvements",
@@ -189,8 +161,38 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
 		category: "completed"
 	},
 	{
-		title: "DNF shelf",
-		description: "Made it possible to stop reading a book cleanly without treating it as unfinished progress.",
+		title: "My Reading Life",
+		description: "Added a private reflective area for yearly progress, timeline history, calendar patterns, insights, and yearly summaries.",
+		status: "Completed",
+		category: "completed"
+	},
+	{
+		title: "Private Reading Journal",
+		description: "Added private book notes with Markdown, autosave, draft recovery, quote fields, personal tags, and private search.",
+		status: "Completed",
+		category: "completed"
+	},
+	{
+		title: "Community discovery providers",
+		description: "Added explainable Home discovery sections powered by transparent community activity rather than black-box recommendations.",
+		status: "Completed",
+		category: "completed"
+	},
+	{
+		title: "Editorial collections",
+		description: "Added curated collection pages, featured Home placement, author/search surfacing, and admin collection management.",
+		status: "Completed",
+		category: "completed"
+	},
+	{
+		title: "Series support",
+		description: "Added first-class series metadata, book-detail series context, continue-series actions, author grouping, and search labels.",
+		status: "Completed",
+		category: "completed"
+	},
+	{
+		title: "Reader information architecture",
+		description: "Clarified Profile, My Reading Life, and Reading Journal so each personal destination has a single purpose.",
 		status: "Completed",
 		category: "completed"
 	},

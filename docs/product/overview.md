@@ -117,7 +117,7 @@ Profiles show who a reader is and what they are reading now. They include reader
 
 The implemented default shelf statuses are Want to Read, Currently Reading, and Read. Readers can also create custom shelves with names, slugs, icons, ordering, renaming, and deletion. Assigning a book to a default shelf removes it from custom shelves; assigning to a custom shelf stores a separate custom shelf-book relation.
 
-DNF is referenced in roadmap/completed copy and filtered from imported Goodreads genre tags, but it is not currently a persisted default shelf status in the main shelf schema or shelf API.
+DNF is referenced in roadmap and filtered from imported Goodreads genre tags, but it is not currently a persisted default shelf status in the main shelf schema or shelf API.
 
 ### Reading Progress
 
@@ -141,15 +141,11 @@ My Reading Life is a private, authenticated page for reflecting on a reader's ow
 
 The area is organized as a richer reflective destination rather than many sparse pages. Overview covers yearly progress, goal progress, books finished, pages read, favorite genre, favorite author, and current pace. History covers the finished-book timeline, calendar, and milestones. Insights covers genres, authors, statistics, and fun facts. Journey covers yearly summaries prepared for future Year in Books experiences.
 
-Current limitations: rereads are not tracked separately because DogEared stores one default shelf entry per user/book. My Reading Life only reflects data the reader has recorded in DogEared.
-
-### Reading Timeline
-
-Reading Timeline is now part of My Reading Life's History area instead of a separate primary destination. It gives readers a chronological journal-like view of finished books, with small covers, title, author, finish date, rating, and links back to books. The active timeline section supports year, month, and search filters. My Reading Life also contains the calendar and reflective historical context around the timeline.
+The Reading Timeline is part of My Reading Life's History area. It shows finished books chronologically with small covers, title, author, finish date, rating, and links back to books. The active timeline section supports year, month, and search filters.
 
 The legacy `/reading-timeline` URL remains as a compatibility redirect to `/reading-life#timeline` so old links keep working.
 
-Current limitations: Reading Timeline depends on finished books having usable finished dates or update dates. Rereads are not tracked separately.
+Current limitations: My Reading Life and its timeline depend on recorded DogEared data. Finished-book timeline entries need usable finished dates or update dates, and rereads are not tracked separately because DogEared stores one default shelf entry per user/book.
 
 ### Reading Journal
 
@@ -209,7 +205,7 @@ The Mission page explains the product vision: less noise, more memory, better ta
 
 ### Roadmap
 
-The Roadmap page groups product direction into Now, Next, Later, and recently completed work. Some roadmap copy may be aspirational or historical; implemented behavior should be verified against code before being treated as current capability.
+The Roadmap page groups product direction into Now, Next, Later, and recently completed work. It is maintained in `src/lib/roadmap.ts`.
 
 ### Search
 
@@ -229,7 +225,7 @@ Derived from the current repository structure and implementation:
 - API routes: 34 endpoint files.
 - Admin pages: 5 routes.
 - Redirect-only compatibility routes: `/discover`, `/feed`, `/myreads`, `/profile`, `/author`, `/reading-timeline`, and `/u/[username]`.
-- User-facing feature areas documented here: 47.
+- Feature entries in `docs/product/features.md`: 68.
 - Default persisted shelf statuses: 3 (`want_to_read`, `reading`, `finished`).
 - Custom shelf icon options: 16.
 - Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, My Reading Life overview, timeline history, timeline milestones, monthly timeline summaries, reading calendar, genre/author insights, fun statistics, yearly summaries, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.

@@ -252,7 +252,7 @@ Relationships:
 - Belongs to `app_user` and `book`.
 - Used by profile momentum/streak, metrics, and My Reading Life calendar/streak summaries.
 
-## My Reading Life Data
+## My Reading Life And Timeline Data
 
 My Reading Life does not introduce a new persistence table. It derives its summaries from existing entities:
 
@@ -264,21 +264,8 @@ My Reading Life does not introduce a new persistence table. It derives its summa
 Relationships:
 
 - The page is scoped to the signed-in `app_user`.
-- Yearly summaries, timeline filters, genre/author insights, and fun statistics are calculated at render time from the reader's recorded data.
-
-## Reading Timeline Data
-
-Reading Timeline is a section inside My Reading Life and does not introduce a new persistence table. It derives its view from existing entities:
-
-- `user_book` for finished books, ratings, page counts, shelf status, finished dates, and update dates.
-- `user_reading_progress_event` for reading streak calculations.
-- `book`, `author`, `book_genre`, and `series_book`/`series` for catalog, author, genre, and series context.
-- `app_user.profile_data.readingGoal` for reading goal completion milestones.
-
-Relationships:
-
-- The view is scoped to the signed-in `app_user`.
-- Timeline history, filters, calendar context, and milestones are calculated at render time from the reader's recorded data.
+- Overview, timeline filters, calendar context, genre/author insights, fun statistics, and yearly summaries are calculated at render time from the reader's recorded data.
+- The legacy `/reading-timeline` route redirects into this page and does not add separate persistence.
 
 ## Activity
 

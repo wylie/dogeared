@@ -63,12 +63,11 @@ A user can:
 - Want To Read
 - Currently Reading
 - Finished
-- DNF
 - Custom shelves
 
 Finished books should never remain in Currently Reading.
 
-DNF books should never appear as Currently Reading.
+DNF is planned but not currently a persisted default shelf status in the active shelf API.
 
 ---
 

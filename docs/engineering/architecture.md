@@ -81,10 +81,6 @@ Editorial collection logic lives in `src/lib/collections`. The helper owns schem
 
 My Reading Life lives at `/reading-life` and uses `src/lib/readingLife` for pure calculations. The route loads the signed-in reader's finished books, current books, progress events, and profile goal, then derives overview statistics, timeline filters, calendar heatmap data, genre insights, author insights, fun statistics, and yearly journey summaries. The page is marked `noindex,nofollow` and appears in signed-in navigation under You. It is the historical/reflection destination for overview, history, insights, and journey content.
 
-## Reading Timeline
-
-Reading Timeline is implemented as a section of My Reading Life. The legacy `/reading-timeline` route remains as a redirect to `/reading-life#timeline` and preserves query parameters for backwards compatibility.
-
 ## Reading Journal
 
 Reading Journal lives at `/journal` and uses `src/lib/readingJournal` for schema readiness, input normalization, permission checks, upserts, deletion, book-level loading, recent-entry loading, and private search. Book detail pages load a journal entry only when the signed-in reader has the exact book on a shelf. The client form autosaves to `/api/journal/entries` and keeps a local draft for recovery. Journal content remains private notebook data and is not rendered on profile or statistics surfaces.

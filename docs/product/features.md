@@ -181,7 +181,7 @@ Limitations: Ordering applies to profile shelf sections, not global navigation.
 
 Status: Planned
 
-DNF appears in roadmap/completed copy and Goodreads import filtering, but the current persisted shelf model does not expose DNF as a shelf status.
+DNF appears in roadmap copy and Goodreads import filtering, but the current persisted shelf model does not expose DNF as a shelf status.
 
 Limitations: DNF imports map to Want to Read unless a different implemented status is provided.
 
@@ -257,17 +257,9 @@ Status: Complete
 
 Signed-in readers can open `/reading-life` from the You navigation to see a private reflection on their reading history. The page shows books completed this year, pages read, reading streak, goal progress, average rating, average pages per day, average book length, reading pace, current books, favorite genre, favorite author, and newest author discovered. It also includes a finished-book timeline with year/month/search filters, a calendar heatmap with textual alternative, genre insights, author insights, fun statistics, and yearly reading-journey summaries.
 
-My Reading Life is the "How has my reading changed over time?" surface. Its content is consolidated into richer overview, history, insights, and journey areas rather than split across many small pages.
+My Reading Life is the "How has my reading changed over time?" surface. Its content is consolidated into richer overview, history, insights, and journey areas rather than split across many small pages. The legacy `/reading-timeline` URL redirects to `/reading-life#timeline` for backwards compatibility.
 
 Limitations: My Reading Life is derived from recorded DogEared data. Rereads are not tracked separately today because the default shelf model stores one row per reader/book.
-
-### Reading Timeline
-
-Status: Complete
-
-Reading Timeline is now a History section inside My Reading Life rather than a separate primary navigation destination. It shows finished books chronologically with cover, title, author, finish date, rating, and book links. The active My Reading Life timeline supports year, month, and search filters.
-
-Limitations: The legacy `/reading-timeline` route redirects to `/reading-life#timeline` for backwards compatibility. Timeline entries depend on finished books with finished dates or usable update dates.
 
 ### Reading Journal
 
