@@ -3,6 +3,7 @@ import type { getNeonSql } from "./neon";
 type Sql = ReturnType<typeof getNeonSql>;
 
 export type JournalVisibility = "private" | "friends" | "public" | "shared";
+export type ReadingPositionType = "" | "page" | "percent" | "chapter" | "location";
 
 export type ReadingJournalEntry = {
 	id?: number;
@@ -14,6 +15,8 @@ export type ReadingJournalEntry = {
 	progressSnapshot?: number | null;
 	pageNumber?: number | null;
 	chapterLocation?: string;
+	readingPositionType?: ReadingPositionType;
+	readingPositionValue?: string;
 	mood?: string;
 	startedThoughts: string;
 	midBookNotes: string;
@@ -36,6 +39,8 @@ export type ReadingJournalInput = {
 	progressSnapshot?: unknown;
 	pageNumber?: unknown;
 	chapterLocation?: unknown;
+	readingPositionType?: unknown;
+	readingPositionValue?: unknown;
 	mood?: unknown;
 	startedThoughts?: unknown;
 	midBookNotes?: unknown;
@@ -71,6 +76,8 @@ type RawJournalRow = {
 	progress_snapshot?: number | null;
 	page_number?: number | null;
 	chapter_location?: string | null;
+	reading_position_type?: string | null;
+	reading_position_value?: string | null;
 	mood?: string | null;
 	started_thoughts: string | null;
 	mid_book_notes: string | null;
@@ -93,6 +100,22 @@ export function normalizeJournalVisibility(value: unknown): JournalVisibility {
 	const visibility = String(value || "").trim().toLowerCase();
 	if (visibility === "friends" || visibility === "public" || visibility === "shared") return visibility;
 	return "private";
+}
+
+export function normalizeReadingPositionType(value: unknown): ReadingPositionType {
+	const type = String(value || "").trim().toLowerCase();
+	if (type === "page" || type === "percent" || type === "chapter" || type === "location") return type;
+	return "";
+}
+
+export function formatReadingPosition(type: unknown, value: unknown) {
+	const positionType = normalizeReadingPositionType(type);
+	const positionValue = normalizeJournalText(value, 160);
+	if (!positionType || !positionValue) return "";
+	if (positionType === "page") return `Page ${positionValue}`;
+	if (positionType === "percent") return positionValue.endsWith("%") ? positionValue : `${positionValue}%`;
+	if (positionType === "chapter") return /^chapter\b/i.test(positionValue) ? positionValue : `Chapter ${positionValue}`;
+	return positionValue;
 }
 
 export function normalizeJournalText(value: unknown, maxLength = 4000) {
@@ -119,8 +142,33 @@ export function parseJournalTags(value: unknown, maxTags = 16) {
 
 export function normalizeJournalInput(input: ReadingJournalInput) {
 	const bookId = Math.max(0, Number(input.bookId || 0) || 0);
-	const pageNumber = Math.max(0, Math.floor(Number(input.pageNumber || 0) || 0));
-	const progressSnapshot = Math.max(0, Math.floor(Number(input.progressSnapshot || 0) || 0));
+	const legacyPageNumber = Math.max(0, Math.floor(Number(input.pageNumber || 0) || 0));
+	const legacyProgressSnapshot = Math.max(0, Math.floor(Number(input.progressSnapshot || 0) || 0));
+	const legacyChapterLocation = normalizeJournalText(input.chapterLocation, 160);
+	let readingPositionType = normalizeReadingPositionType(input.readingPositionType);
+	let readingPositionValue = normalizeJournalText(input.readingPositionValue, 160);
+	if (!readingPositionType || !readingPositionValue) {
+		if (legacyPageNumber > 0) {
+			readingPositionType = "page";
+			readingPositionValue = String(legacyPageNumber);
+		} else if (legacyProgressSnapshot > 0) {
+			readingPositionType = "percent";
+			readingPositionValue = String(legacyProgressSnapshot);
+		} else if (legacyChapterLocation) {
+			readingPositionType = /^chapter\b/i.test(legacyChapterLocation) ? "chapter" : "location";
+			readingPositionValue = legacyChapterLocation.replace(/^chapter\s*/i, "").trim() || legacyChapterLocation;
+		}
+	}
+	if (!readingPositionType || !readingPositionValue) {
+		readingPositionType = "";
+		readingPositionValue = "";
+	}
+	const numericPosition = Math.max(0, Math.floor(Number(String(readingPositionValue || "").replace(/[^0-9.]/g, "")) || 0));
+	const pageNumber = readingPositionType === "page" && numericPosition > 0 ? numericPosition : 0;
+	const progressSnapshot = readingPositionType === "percent" && numericPosition > 0 ? Math.min(100, numericPosition) : 0;
+	const chapterLocation = readingPositionType === "chapter" || readingPositionType === "location"
+		? readingPositionValue
+		: "";
 	const wouldRereadRaw = input.wouldReread;
 	const wouldReread = wouldRereadRaw === true || wouldRereadRaw === "true" || wouldRereadRaw === "on"
 		? true
@@ -133,7 +181,9 @@ export function normalizeJournalInput(input: ReadingJournalInput) {
 		entryAt: normalizeJournalDateTime(input.entryAt),
 		progressSnapshot: progressSnapshot > 0 ? progressSnapshot : null,
 		pageNumber: pageNumber > 0 ? pageNumber : null,
-		chapterLocation: normalizeJournalText(input.chapterLocation, 160),
+		chapterLocation,
+		readingPositionType,
+		readingPositionValue,
 		mood: normalizeJournalText(input.mood, 80),
 		startedThoughts: normalizeJournalText(input.startedThoughts),
 		midBookNotes: normalizeJournalText(input.midBookNotes),
@@ -200,6 +250,23 @@ function parseTagsFromDb(value: RawJournalRow["personal_tags"]) {
 }
 
 function mapJournalRow(row: RawJournalRow): ReadingJournalEntry {
+	const legacyPageNumber = row.page_number ? Math.max(0, Number(row.page_number || 0) || 0) : 0;
+	const legacyProgressSnapshot = row.progress_snapshot ? Math.max(0, Number(row.progress_snapshot || 0) || 0) : 0;
+	const legacyChapterLocation = String(row.chapter_location || "");
+	let readingPositionType = normalizeReadingPositionType(row.reading_position_type);
+	let readingPositionValue = String(row.reading_position_value || "").trim();
+	if (!readingPositionType || !readingPositionValue) {
+		if (legacyPageNumber > 0) {
+			readingPositionType = "page";
+			readingPositionValue = String(legacyPageNumber);
+		} else if (legacyProgressSnapshot > 0) {
+			readingPositionType = "percent";
+			readingPositionValue = String(legacyProgressSnapshot);
+		} else if (legacyChapterLocation) {
+			readingPositionType = /^chapter\b/i.test(legacyChapterLocation) ? "chapter" : "location";
+			readingPositionValue = legacyChapterLocation.replace(/^chapter\s*/i, "").trim() || legacyChapterLocation;
+		}
+	}
 	return {
 		userId: String(row.user_id || ""),
 		id: Math.max(0, Number(row.id || 0) || 0),
@@ -207,9 +274,11 @@ function mapJournalRow(row: RawJournalRow): ReadingJournalEntry {
 		entryTitle: String(row.entry_title || ""),
 		body: String(row.body || ""),
 		entryAt: String(row.entry_at || ""),
-		progressSnapshot: row.progress_snapshot ? Math.max(0, Number(row.progress_snapshot || 0) || 0) : null,
-		pageNumber: row.page_number ? Math.max(0, Number(row.page_number || 0) || 0) : null,
-		chapterLocation: String(row.chapter_location || ""),
+		progressSnapshot: legacyProgressSnapshot || null,
+		pageNumber: legacyPageNumber || null,
+		chapterLocation: legacyChapterLocation,
+		readingPositionType,
+		readingPositionValue,
 		mood: String(row.mood || ""),
 		startedThoughts: String(row.started_thoughts || ""),
 		midBookNotes: String(row.mid_book_notes || ""),
@@ -247,6 +316,8 @@ export async function ensureReadingJournalSchema(sql: Sql) {
 			progress_snapshot int,
 			page_number int,
 			chapter_location text not null default '',
+			reading_position_type text not null default '' check (reading_position_type in ('', 'page', 'percent', 'chapter', 'location')),
+			reading_position_value text not null default '',
 			mood text not null default '',
 			personal_tags text[] not null default '{}',
 			visibility text not null default 'private' check (visibility in ('private', 'friends', 'public', 'shared')),
@@ -255,6 +326,10 @@ export async function ensureReadingJournalSchema(sql: Sql) {
 			updated_at timestamptz not null default now()
 		)
 	`;
+	await Promise.all([
+		sql`alter table reading_journal_note add column if not exists reading_position_type text not null default ''`,
+		sql`alter table reading_journal_note add column if not exists reading_position_value text not null default ''`
+	]);
 	await Promise.all([
 		sql`create index if not exists idx_reading_journal_note_user_entry on reading_journal_note(user_id, entry_at desc, updated_at desc)`,
 		sql`create index if not exists idx_reading_journal_note_book on reading_journal_note(user_id, book_id, entry_at desc)`,
@@ -463,6 +538,8 @@ export async function saveJournalNote(sql: Sql, userId: string, input: ReadingJo
 				progress_snapshot = ${normalized.progressSnapshot},
 				page_number = ${normalized.pageNumber},
 				chapter_location = ${normalized.chapterLocation},
+				reading_position_type = ${normalized.readingPositionType},
+				reading_position_value = ${normalized.readingPositionValue},
 				mood = ${normalized.mood},
 				personal_tags = ${normalized.personalTags},
 				visibility = 'private',
@@ -479,6 +556,8 @@ export async function saveJournalNote(sql: Sql, userId: string, input: ReadingJo
 				progress_snapshot,
 				page_number,
 				chapter_location,
+				reading_position_type,
+				reading_position_value,
 				mood,
 				personal_tags,
 				visibility,
@@ -495,6 +574,8 @@ export async function saveJournalNote(sql: Sql, userId: string, input: ReadingJo
 				progress_snapshot,
 				page_number,
 				chapter_location,
+				reading_position_type,
+				reading_position_value,
 				mood,
 				personal_tags,
 				visibility,
@@ -509,6 +590,8 @@ export async function saveJournalNote(sql: Sql, userId: string, input: ReadingJo
 				${normalized.progressSnapshot},
 				${normalized.pageNumber},
 				${normalized.chapterLocation},
+				${normalized.readingPositionType},
+				${normalized.readingPositionValue},
 				${normalized.mood},
 				${normalized.personalTags},
 				'private',
@@ -524,6 +607,8 @@ export async function saveJournalNote(sql: Sql, userId: string, input: ReadingJo
 				progress_snapshot,
 				page_number,
 				chapter_location,
+				reading_position_type,
+				reading_position_value,
 				mood,
 				personal_tags,
 				visibility,
@@ -572,6 +657,8 @@ export async function searchJournalEntries(
 			j.progress_snapshot,
 			j.page_number,
 			j.chapter_location,
+			j.reading_position_type,
+			j.reading_position_value,
 			j.mood,
 			'' as started_thoughts,
 			'' as mid_book_notes,
@@ -601,6 +688,7 @@ export async function searchJournalEntries(
 				or j.entry_title ilike ${pattern}
 				or j.body ilike ${pattern}
 				or j.chapter_location ilike ${pattern}
+				or j.reading_position_value ilike ${pattern}
 				or j.mood ilike ${pattern}
 				or exists (
 					select 1

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
 	canAccessJournalEntry,
+	formatReadingPosition,
 	journalCharacterCount,
 	journalHasContent,
 	normalizeJournalInput,
@@ -19,8 +20,8 @@ test("journal helpers normalize visibility and private content", () => {
 		bookId: "42",
 		entryTitle: "  Chapter note ",
 		body: "  Started **strong**  ",
-		pageNumber: "18",
-		chapterLocation: "Chapter 2",
+		readingPositionType: "chapter",
+		readingPositionValue: "4",
 		mood: "curious",
 		wouldReread: "true",
 		personalTags: "Quiet, favorite, quiet"
@@ -29,14 +30,42 @@ test("journal helpers normalize visibility and private content", () => {
 	assert.equal(input.bookId, 42);
 	assert.equal(input.entryTitle, "Chapter note");
 	assert.equal(input.body, "Started **strong**");
-	assert.equal(input.pageNumber, 18);
-	assert.equal(input.chapterLocation, "Chapter 2");
+	assert.equal(input.readingPositionType, "chapter");
+	assert.equal(input.readingPositionValue, "4");
+	assert.equal(input.pageNumber, null);
+	assert.equal(input.chapterLocation, "4");
 	assert.equal(input.mood, "curious");
 	assert.equal(input.wouldReread, true);
 	assert.deepEqual(input.personalTags, ["Quiet", "favorite"]);
 	assert.equal(input.visibility, "private");
 	assert.equal(journalHasContent(input), true);
 	assert.equal(journalCharacterCount(input), "Started **strong**Quiet, favorite".length);
+});
+
+test("journal position model stores one reading position at a time", () => {
+	const page = normalizeJournalInput({
+		bookId: "42",
+		body: "Page note",
+		readingPositionType: "page",
+		readingPositionValue: "20",
+		progressSnapshot: "58",
+		chapterLocation: "Chapter 4"
+	});
+	assert.equal(page.readingPositionType, "page");
+	assert.equal(page.readingPositionValue, "20");
+	assert.equal(page.pageNumber, 20);
+	assert.equal(page.progressSnapshot, null);
+	assert.equal(page.chapterLocation, "");
+	assert.equal(formatReadingPosition(page.readingPositionType, page.readingPositionValue), "Page 20");
+
+	const percent = normalizeJournalInput({
+		bookId: "42",
+		body: "Halfway",
+		readingPositionType: "percent",
+		readingPositionValue: "58"
+	});
+	assert.equal(percent.progressSnapshot, 58);
+	assert.equal(formatReadingPosition(percent.readingPositionType, percent.readingPositionValue), "58%");
 });
 
 test("journal tag parsing prevents duplicate personal tags", () => {
@@ -62,6 +91,8 @@ test("journal database schema supports future visibility states", () => {
 	assert.match(schema, /progress_snapshot/);
 	assert.match(schema, /page_number/);
 	assert.match(schema, /chapter_location/);
+	assert.match(schema, /reading_position_type/);
+	assert.match(schema, /reading_position_value/);
 	assert.match(schema, /mood/);
 	assert.match(schema, /started_thoughts/);
 	assert.match(schema, /mid_book_notes/);
@@ -120,7 +151,12 @@ test("journal UI is wired into book, private journal page, navigation, and autos
 	assert.match(journalPage, /New Entry/);
 	assert.match(journalPage, /data-journal-entry-form/);
 	assert.match(journalPage, /Filter by book/);
+	assert.match(journalPage, /journal-owned-books/);
+	assert.match(journalPage, /data-book-picker/);
 	assert.match(journalPage, /Filter journal entries by date/);
+	assert.match(journalPage, /Reading position/);
+	assert.match(journalPage, /readingPositionType/);
+	assert.match(journalPage, /readingPositionValue/);
 	assert.match(journalPage, /Journal Timeline/);
 	assert.match(journalPage, /Create your first journal entry/);
 	assert.match(journalPage, /data-action="view-journal-entry"/);

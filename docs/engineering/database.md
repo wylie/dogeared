@@ -220,9 +220,7 @@ Stores private notebook entries for one reader:
 - Optional entry title.
 - Required body.
 - Journal date/time.
-- Optional reading progress snapshot.
-- Optional page number.
-- Optional chapter/location.
+- Optional reading position type and value. Supported position types are Page, Percent, Chapter, and Location.
 - Optional mood.
 - Personal tags.
 - Visibility value.
@@ -234,7 +232,12 @@ Relationships:
 - Belongs to `app_user`.
 - May reference `book`; if a book is supplied, the reader must already have that book on a default shelf before creating or updating the entry.
 - Book detail pages load recent entries for the signed-in owner.
-- The private `/journal` page searches, date-filters, book-filters, and paginates only the signed-in reader's entries.
+- The private `/journal` page searches, date-filters, saved-book-filters, and paginates only the signed-in reader's entries. The UI uses a searchable saved-book picker instead of a long dropdown.
+
+Compatibility fields:
+
+- `progress_snapshot`, `page_number`, and `chapter_location` remain available for older data and older links.
+- New writes use `reading_position_type` and `reading_position_value` and derive only the matching compatibility field.
 
 Compatibility entity: `reading_journal_entry`
 

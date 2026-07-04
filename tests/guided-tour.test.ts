@@ -89,6 +89,14 @@ test("guided tour anchors are present on primary surfaces", () => {
 	assert.equal(readFileSync("src/pages/book.astro", "utf8").includes('data-guided-anchor="reviews"'), true);
 });
 
+test("fresh-user home guidance is mounted and starts from Home", () => {
+	const layout = readFileSync("src/layouts/Layout.astro", "utf8");
+	const component = readFileSync("src/components/GuidedTip.astro", "utf8");
+	assert.equal(layout.includes("<GuidedTip isAuthenticated={isAuthenticated} />"), true);
+	assert.match(component, /id: "home-welcome"[\s\S]+path: "\/"/);
+	assert.match(component, /id: "home-welcome"[\s\S]+stats\.totalBooks === 0/);
+});
+
 test("journal page uses consistent local button classes", () => {
 	const source = readFileSync("src/pages/journal.astro", "utf8");
 	assert.equal(source.includes("journal-button-primary"), true);

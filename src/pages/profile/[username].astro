@@ -4804,8 +4804,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		const link = document.createElement("a");
 		const params = new URLSearchParams({
 			bookId: String(bookId),
-			progressSnapshot: String(currentPage),
-			pageNumber: String(currentPage)
+			readingPositionType: "page",
+			readingPositionValue: String(currentPage)
 		});
 		link.href = `/journal?${params.toString()}#new-entry`;
 		link.textContent = "Write Journal Entry";

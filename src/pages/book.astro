@@ -13,7 +13,7 @@ import { googleBooksCoverUrl } from "../lib/bookCovers";
 import { resolveCustomShelfOptions } from "../lib/customShelves";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
 import { loadBookSeriesContext, type BookSeriesContext, type ShelfStatus } from "../lib/series";
-import { loadJournalEntriesForBook, type JournalSearchResult } from "../lib/readingJournal";
+import { formatReadingPosition, loadJournalEntriesForBook, type JournalSearchResult } from "../lib/readingJournal";
 
 export const prerender = false;
 
@@ -981,22 +981,21 @@ const bookStructuredDataPayload = bookStructuredData
 									</label>
 									<div class="journal-grid-two">
 										<label>
-											<span>Page number <em>optional</em></span>
-											<input type="number" name="pageNumber" min="1" inputmode="numeric" />
+											<span>Reading position <em>optional</em></span>
+											<div class="journal-position-row">
+												<select name="readingPositionType" aria-label="Reading position type">
+													<option value="">No position</option>
+													<option value="page">Page</option>
+													<option value="percent">Percent</option>
+													<option value="chapter">Chapter</option>
+													<option value="location">Location</option>
+												</select>
+												<input type="text" name="readingPositionValue" maxlength="160" placeholder="20, 58%, Chapter 4, or Kindle location 1234" />
+											</div>
 										</label>
-										<label>
-											<span>Chapter or location <em>optional</em></span>
-											<input type="text" name="chapterLocation" maxlength="160" />
-										</label>
-									</div>
-									<div class="journal-grid-two journal-grid-two-bottom">
 										<label>
 											<span>Mood <em>optional</em></span>
 											<input type="text" name="mood" maxlength="80" />
-										</label>
-										<label>
-											<span>Progress snapshot <em>optional</em></span>
-											<input type="number" name="progressSnapshot" min="1" inputmode="numeric" />
 										</label>
 									</div>
 									<div class="journal-actions">
@@ -1018,7 +1017,7 @@ const bookStructuredDataPayload = bookStructuredData
 									{journalEntries.map((entry) => (
 										<li>
 											<strong>{entry.entryTitle || "Journal entry"}</strong>
-											<span>{formatActivityDate(entry.entryAt || entry.updatedAt)}{entry.pageNumber && <> · p. {entry.pageNumber}</>}</span>
+											<span>{formatActivityDate(entry.entryAt || entry.updatedAt)}{formatReadingPosition(entry.readingPositionType, entry.readingPositionValue) && <> · {formatReadingPosition(entry.readingPositionType, entry.readingPositionValue)}</>}</span>
 											<p>{String(entry.body || "").replace(/\s+/g, " ").trim().slice(0, 180)}</p>
 										</li>
 									))}
@@ -1186,38 +1185,35 @@ const bookStructuredDataPayload = bookStructuredData
 				entryTitle: form?.querySelector('[name="entryTitle"]'),
 				entryAt: form?.querySelector('[name="entryAt"]'),
 				body: form?.querySelector('[name="body"]'),
-				pageNumber: form?.querySelector('[name="pageNumber"]'),
-				chapterLocation: form?.querySelector('[name="chapterLocation"]'),
-				mood: form?.querySelector('[name="mood"]'),
-				progressSnapshot: form?.querySelector('[name="progressSnapshot"]')
+				readingPositionType: form?.querySelector('[name="readingPositionType"]'),
+				readingPositionValue: form?.querySelector('[name="readingPositionValue"]'),
+				mood: form?.querySelector('[name="mood"]')
 			});
 			const readJournalPayload = () => {
 				const currentFields = fields();
-				const readText = (field) => field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement ? field.value : "";
+				const readText = (field) => field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement || field instanceof HTMLSelectElement ? field.value : "";
 				return {
 					bookId,
 					entryTitle: readText(currentFields.entryTitle),
 					entryAt: readText(currentFields.entryAt),
 					body: readText(currentFields.body),
-					pageNumber: readText(currentFields.pageNumber),
-					chapterLocation: readText(currentFields.chapterLocation),
+					readingPositionType: readText(currentFields.readingPositionType),
+					readingPositionValue: readText(currentFields.readingPositionValue),
 					mood: readText(currentFields.mood),
-					progressSnapshot: readText(currentFields.progressSnapshot),
 					visibility: "private"
 				};
 			};
 			const writeJournalPayload = (payload) => {
 				const currentFields = fields();
 				const writeText = (field, value) => {
-					if (field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement) field.value = String(value || "");
+					if (field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement || field instanceof HTMLSelectElement) field.value = String(value || "");
 				};
 				writeText(currentFields.entryTitle, payload.entryTitle);
 				writeText(currentFields.entryAt, payload.entryAt);
 				writeText(currentFields.body, payload.body);
-				writeText(currentFields.pageNumber, payload.pageNumber);
-				writeText(currentFields.chapterLocation, payload.chapterLocation);
+				writeText(currentFields.readingPositionType, payload.readingPositionType);
+				writeText(currentFields.readingPositionValue, payload.readingPositionValue);
 				writeText(currentFields.mood, payload.mood);
-				writeText(currentFields.progressSnapshot, payload.progressSnapshot);
 			};
 			const updateCharacterCount = () => {
 				const payload = readJournalPayload();
@@ -1246,20 +1242,25 @@ const bookStructuredDataPayload = bookStructuredData
 			};
 			const saveJournal = async () => {
 				if (!bookId || saving) return;
-				if (!String(readJournalPayload().body || "").trim()) {
-					setStatus("Write a body before saving.");
-					return;
-				}
-				saving = true;
-				if (saveButton instanceof HTMLButtonElement) saveButton.disabled = true;
-				setStatus("Saving...");
-				try {
-					const response = await fetch("/api/journal/entries", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						credentials: "same-origin",
-						body: JSON.stringify(readJournalPayload())
-					});
+					if (!String(readJournalPayload().body || "").trim()) {
+						setStatus("Write a body before saving.");
+						return;
+					}
+					const payload = readJournalPayload();
+					if (String(payload.readingPositionValue || "").trim() && !String(payload.readingPositionType || "").trim()) {
+						setStatus("Choose a reading position type or clear the position value.");
+						return;
+					}
+					saving = true;
+					if (saveButton instanceof HTMLButtonElement) saveButton.disabled = true;
+					setStatus("Saving...");
+					try {
+						const response = await fetch("/api/journal/entries", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							credentials: "same-origin",
+							body: JSON.stringify(payload)
+						});
 					const data = await response.json().catch(() => ({}));
 					if (!response.ok) throw new Error(String(data?.error || "Failed to save journal."));
 					try { window.localStorage.removeItem(draftKey); } catch {}
@@ -1560,24 +1561,32 @@ const bookStructuredDataPayload = bookStructuredData
 	.journal-form textarea,
 	.journal-form input[type="text"],
 	.journal-form input[type="number"],
-	.journal-form input[type="datetime-local"] {
+	.journal-form input[type="datetime-local"],
+	.journal-form select {
 		width: 100%;
+		min-height: 42px;
 		box-sizing: border-box;
 		border: var(--border-subtle);
-		border-radius: var(--radius-md);
-		background: rgba(255, 255, 255, 0.72);
+		border-radius: var(--radius-sm);
+		background: rgba(255, 255, 255, 0.78);
 		color: var(--color-text);
 		font: inherit;
 		font-weight: 400;
 		line-height: 1.5;
-		padding: 0.7rem 0.78rem;
+		padding: 0.6rem 0.72rem;
 	}
 	.journal-form textarea:focus,
 	.journal-form input[type="text"]:focus,
 	.journal-form input[type="number"]:focus,
-	.journal-form input[type="datetime-local"]:focus {
+	.journal-form input[type="datetime-local"]:focus,
+	.journal-form select:focus {
 		outline: 2px solid var(--color-accent);
 		outline-offset: 2px;
+	}
+	.journal-position-row {
+		display: grid;
+		grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr);
+		gap: 0.5rem;
 	}
 	.journal-grid-two {
 		display: grid;
@@ -2065,6 +2074,9 @@ const bookStructuredDataPayload = bookStructuredData
 			flex-direction: column;
 		}
 		.journal-grid-two {
+			grid-template-columns: 1fr;
+		}
+		.journal-position-row {
 			grid-template-columns: 1fr;
 		}
 		.journal-count {

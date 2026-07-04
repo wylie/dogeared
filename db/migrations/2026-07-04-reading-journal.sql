@@ -29,6 +29,8 @@ create table if not exists reading_journal_note (
 	progress_snapshot int,
 	page_number int,
 	chapter_location text not null default '',
+	reading_position_type text not null default '' check (reading_position_type in ('', 'page', 'percent', 'chapter', 'location')),
+	reading_position_value text not null default '',
 	mood text not null default '',
 	personal_tags text[] not null default '{}',
 	visibility text not null default 'private' check (visibility in ('private', 'friends', 'public', 'shared')),

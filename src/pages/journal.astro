@@ -2,7 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import { resolveUserBySession } from "../lib/auth";
 import { getNeonSql } from "../lib/neon";
-import { searchJournalEntries, type JournalSearchResult } from "../lib/readingJournal";
+import { formatReadingPosition, searchJournalEntries, type JournalSearchResult } from "../lib/readingJournal";
 
 export const prerender = false;
 
@@ -13,8 +13,13 @@ const filterBookId = Math.max(0, Number(Astro.url.searchParams.get("bookId") || 
 const filterDate = String(Astro.url.searchParams.get("date") || "").trim().slice(0, 10);
 const currentPage = Math.max(1, Number(Astro.url.searchParams.get("page") || 1) || 1);
 const pageSize = 20;
-const initialProgressSnapshot = Math.max(0, Number(Astro.url.searchParams.get("progressSnapshot") || 0) || 0);
-const initialPageNumber = Math.max(0, Number(Astro.url.searchParams.get("pageNumber") || 0) || 0);
+const initialReadingPositionType = String(
+	Astro.url.searchParams.get("readingPositionType")
+	|| Astro.url.searchParams.get("positionType")
+	|| (Astro.url.searchParams.get("pageNumber") ? "page" : "")
+	|| (Astro.url.searchParams.get("progressSnapshot") ? "percent" : "")
+).trim();
+const initialReadingPositionValue = String(Astro.url.searchParams.get("readingPositionValue") || Astro.url.searchParams.get("positionValue") || Astro.url.searchParams.get("pageNumber") || Astro.url.searchParams.get("progressSnapshot") || "").trim();
 let entries: JournalSearchResult[] = [];
 let ownedBookOptions: Array<{ id: number; title: string; author: string }> = [];
 let loadError = "";
@@ -67,6 +72,19 @@ function bookHref(entry: JournalSearchResult) {
 	return entry.bookId ? `/book?bookId=${encodeURIComponent(String(entry.bookId))}#reading-journal` : "/journal";
 }
 
+function bookLabel(book: { title: string; author: string }) {
+	return `${book.title}${book.author ? ` by ${book.author}` : ""}`;
+}
+
+function bookLabelById(bookId: number) {
+	const match = ownedBookOptions.find((book) => book.id === bookId);
+	return match ? bookLabel(match) : "";
+}
+
+function entryBookLabel(entry: JournalSearchResult) {
+	return entry.title ? `${entry.title}${entry.author ? ` by ${entry.author}` : ""}` : "";
+}
+
 function excerptFor(entry: JournalSearchResult) {
 	const text = String(entry.body || "").replace(/\s+/g, " ").trim();
 	return text.length > 220 ? `${text.slice(0, 217).trim()}...` : text;
@@ -115,16 +133,18 @@ const sectionLinks = viewerUserId ? [
 					<form class="journal-search-form" action="/journal" method="get">
 						<label class="visually-hidden" for="journal-query">Search journal</label>
 						<input id="journal-query" type="search" name="q" value={query} placeholder="Search notes, tags, books, or moods" />
-						<label class="visually-hidden" for="journal-book-filter">Filter by book</label>
-						<select id="journal-book-filter" name="bookId">
-							<option value="">All books</option>
-							{ownedBookOptions.map((book) => <option value={String(book.id)} selected={filterBookId === book.id}>{book.title}{book.author ? ` by ${book.author}` : ""}</option>)}
-						</select>
+						<label class="visually-hidden" for="journal-book-filter-label">Filter by book</label>
+						<input type="hidden" id="journal-book-filter" name="bookId" value={filterBookId > 0 ? String(filterBookId) : ""} data-book-id-field />
+						<input id="journal-book-filter-label" type="search" value={bookLabelById(filterBookId)} placeholder="All books" list="journal-owned-books" data-book-picker />
 						<label class="visually-hidden" for="journal-date-filter">Filter by date</label>
 						<input id="journal-date-filter" type="date" name="date" value={filterDate} aria-label="Filter journal entries by date" />
 						<button type="submit" class="journal-button journal-button-primary journal-button-compact">Search</button>
 						{(query || filterBookId || filterDate) && <a class="journal-button journal-button-secondary journal-button-compact" href="/journal">Clear</a>}
 					</form>
+					<datalist id="journal-owned-books">
+						{ownedBookOptions.map((book) => <option value={bookLabel(book)} data-book-id={String(book.id)} />)}
+					</datalist>
+					<script type="application/json" id="journal-owned-books-data" set:html={JSON.stringify(ownedBookOptions.map((book) => ({ ...book, label: bookLabel(book) })))}></script>
 				</section>
 
 				<section class="journal-editor" id="new-entry" data-guided-anchor="journal-entry-form" aria-labelledby="journal-editor-title" tabindex="-1">
@@ -145,19 +165,25 @@ const sectionLinks = viewerUserId ? [
 						<div class="journal-grid-two">
 							<label>
 								<span>Book <em>optional</em></span>
-								<select name="bookId">
-									<option value="">General note</option>
-									{ownedBookOptions.map((book) => <option value={String(book.id)} selected={filterBookId === book.id}>{book.title}{book.author ? ` by ${book.author}` : ""}</option>)}
-								</select>
+								<input type="hidden" name="bookId" value={filterBookId > 0 ? String(filterBookId) : ""} data-book-id-field />
+								<input type="search" name="bookLabel" value={bookLabelById(filterBookId)} placeholder="General note" list="journal-owned-books" autocomplete="off" data-book-picker />
 							</label>
-							<label><span>Page number <em>optional</em></span><input type="number" name="pageNumber" min="1" inputmode="numeric" value={initialPageNumber > 0 ? String(initialPageNumber) : ""} /></label>
+							<label>
+								<span>Reading position <em>optional</em></span>
+								<div class="position-row">
+									<select name="readingPositionType" aria-label="Reading position type">
+										<option value="">No position</option>
+										<option value="page" selected={initialReadingPositionType === "page"}>Page</option>
+										<option value="percent" selected={initialReadingPositionType === "percent"}>Percent</option>
+										<option value="chapter" selected={initialReadingPositionType === "chapter"}>Chapter</option>
+										<option value="location" selected={initialReadingPositionType === "location"}>Location</option>
+									</select>
+									<input type="text" name="readingPositionValue" maxlength="160" placeholder="20, 58%, Chapter 4, or Kindle location 1234" value={initialReadingPositionValue} />
+								</div>
+							</label>
 						</div>
 						<div class="journal-grid-two">
-							<label><span>Chapter or location <em>optional</em></span><input type="text" name="chapterLocation" maxlength="160" /></label>
 							<label><span>Mood <em>optional</em></span><input type="text" name="mood" maxlength="80" /></label>
-						</div>
-						<div class="journal-grid-two">
-							<label><span>Progress snapshot <em>optional</em></span><input type="number" name="progressSnapshot" min="1" inputmode="numeric" placeholder="Current page or percent" value={initialProgressSnapshot > 0 ? String(initialProgressSnapshot) : ""} /></label>
 							<label><span>Personal tags <em>optional</em></span><input type="text" name="personalTags" maxlength="400" placeholder="quiet, quote, book club" /></label>
 						</div>
 						<div class="journal-actions">
@@ -198,9 +224,9 @@ const sectionLinks = viewerUserId ? [
 										data-body={entry.body || ""}
 										data-entry-at={dateTimeInput(entry.entryAt || entry.updatedAt)}
 										data-book-id={String(entry.bookId || "")}
-										data-page-number={String(entry.pageNumber || "")}
-										data-progress-snapshot={String(entry.progressSnapshot || "")}
-										data-chapter-location={entry.chapterLocation || ""}
+										data-book-label={entryBookLabel(entry)}
+										data-reading-position-type={entry.readingPositionType || ""}
+										data-reading-position-value={entry.readingPositionValue || ""}
 										data-mood={entry.mood || ""}
 										data-personal-tags={(entry.personalTags || []).join(", ")}
 									>
@@ -209,15 +235,32 @@ const sectionLinks = viewerUserId ? [
 										</a>
 										<div class="journal-entry-main">
 											<h3>{entry.entryTitle || entry.title || "Untitled journal entry"}</h3>
-											<p class="journal-entry-meta">
-												{entry.title ? <a href={bookHref(entry)}>{entry.title}</a> : "General note"}
-												{entry.author && <> by {entry.author}</>}
-												{formatDate(entry.createdAt || entry.entryAt || entry.updatedAt) && <> · Created {formatDate(entry.createdAt || entry.entryAt || entry.updatedAt)}</>}
-												{entry.pageNumber && <> · p. {entry.pageNumber}</>}
-												{entry.chapterLocation && <> · {entry.chapterLocation}</>}
-												{entry.progressSnapshot && <> · progress {entry.progressSnapshot}</>}
-												{entry.mood && <> · {entry.mood}</>}
-											</p>
+											<dl class="journal-entry-meta">
+												{entry.title && (
+													<div>
+														<dt>Book</dt>
+														<dd><a href={bookHref(entry)}>{entryBookLabel(entry)}</a></dd>
+													</div>
+												)}
+												{formatDate(entry.createdAt || entry.entryAt || entry.updatedAt) && (
+													<div>
+														<dt>Date</dt>
+														<dd>{formatDate(entry.createdAt || entry.entryAt || entry.updatedAt)}</dd>
+													</div>
+												)}
+												{formatReadingPosition(entry.readingPositionType, entry.readingPositionValue) && (
+													<div>
+														<dt>Position</dt>
+														<dd>{formatReadingPosition(entry.readingPositionType, entry.readingPositionValue)}</dd>
+													</div>
+												)}
+												{entry.mood && (
+													<div>
+														<dt>Mood</dt>
+														<dd>{entry.mood}</dd>
+													</div>
+												)}
+											</dl>
 											{excerptFor(entry) && <p class="journal-entry-excerpt">{excerptFor(entry)}</p>}
 											<div class="journal-entry-detail" hidden>
 												<p>{entry.body}</p>
@@ -252,9 +295,29 @@ const sectionLinks = viewerUserId ? [
 		const count = document.querySelector("[data-journal-count]");
 		const mode = document.querySelector("[data-editor-mode]");
 		const draftKey = "dogeared:journal-page-draft";
-		const fields = ["id", "entryTitle", "entryAt", "body", "bookId", "pageNumber", "chapterLocation", "mood", "progressSnapshot", "personalTags"];
+		let ownedBooks = [];
+		try {
+			const node = document.getElementById("journal-owned-books-data");
+			ownedBooks = JSON.parse(node?.textContent || "[]");
+		} catch {
+			ownedBooks = [];
+		}
+		const fields = ["id", "entryTitle", "entryAt", "body", "bookId", "bookLabel", "readingPositionType", "readingPositionValue", "mood", "personalTags"];
 		const setStatus = (message) => { if (status instanceof HTMLElement) status.textContent = message; };
 		const field = (name) => form.elements.namedItem(name);
+		const normalizeBookLabel = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+		const resolveBookId = (label) => {
+			const normalized = normalizeBookLabel(label);
+			if (!normalized) return "";
+			const match = ownedBooks.find((book) => normalizeBookLabel(book.label) === normalized);
+			return match?.id ? String(match.id) : "";
+		};
+		const syncBookPicker = (picker) => {
+			const label = String(picker?.value || "").trim();
+			const wrap = picker?.closest("form") || picker?.parentElement;
+			const idField = wrap?.querySelector("[data-book-id-field]");
+			if (idField instanceof HTMLInputElement) idField.value = resolveBookId(label);
+		};
 		const readPayload = () => Object.fromEntries(fields.map((name) => {
 			const item = field(name);
 			return [name, item instanceof HTMLInputElement || item instanceof HTMLTextAreaElement || item instanceof HTMLSelectElement ? item.value : ""];
@@ -264,6 +327,8 @@ const sectionLinks = viewerUserId ? [
 				const item = field(name);
 				if (item instanceof HTMLInputElement || item instanceof HTMLTextAreaElement || item instanceof HTMLSelectElement) item.value = String(payload[name] || "");
 			}
+			const picker = field("bookLabel");
+			if (picker instanceof HTMLInputElement) syncBookPicker(picker);
 			if (!String(payload.entryAt || "").trim()) {
 				const entryAt = field("entryAt");
 				if (entryAt instanceof HTMLInputElement) {
@@ -294,11 +359,25 @@ const sectionLinks = viewerUserId ? [
 		} catch {}
 		updateCount();
 		form.addEventListener("input", rememberDraft);
+		document.querySelectorAll("[data-book-picker]").forEach((picker) => {
+			if (!(picker instanceof HTMLInputElement)) return;
+			picker.addEventListener("input", () => syncBookPicker(picker));
+			picker.addEventListener("change", () => syncBookPicker(picker));
+		});
 		form.addEventListener("submit", async (event) => {
 			event.preventDefault();
 			const payload = readPayload();
 			if (!String(payload.body || "").trim()) {
 				setStatus("Write a body before saving.");
+				return;
+			}
+			if (String(payload.readingPositionValue || "").trim() && !String(payload.readingPositionType || "").trim()) {
+				setStatus("Choose a reading position type or clear the position value.");
+				return;
+			}
+			const bookLabel = String(payload.bookLabel || "").trim();
+			if (bookLabel && !String(payload.bookId || "").trim()) {
+				setStatus("Choose a saved book from the list, or clear the book field for a general note.");
 				return;
 			}
 			setStatus("Saving...");
@@ -392,6 +471,7 @@ const sectionLinks = viewerUserId ? [
 	.journal-entry-form label span { display: block; margin-bottom: 0.28rem; font-weight: 760; }
 	.journal-entry-form label em { color: var(--color-text-muted); font-style: normal; font-weight: 500; }
 	.journal-grid-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+	.position-row { display: grid; grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr); gap: 0.5rem; }
 	.journal-results-head, .journal-actions, .journal-entry-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
 	.journal-actions { justify-content: space-between; align-items: center; padding-top: 0.15rem; }
 	.journal-action-buttons { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
@@ -402,8 +482,12 @@ const sectionLinks = viewerUserId ? [
 	.journal-entry-cover-link img { object-fit: cover; border: var(--border-subtle); }
 	.journal-cover-placeholder { display: grid; place-items: center; background: var(--color-chip-topic); color: var(--color-nav); font-family: "Material Icons"; }
 	.journal-entry-main { min-width: 0; }
-	.journal-entry-main h3, .journal-entry-meta, .journal-entry-excerpt { margin: 0 0 0.3rem; }
-	.journal-entry-meta, .journal-entry-excerpt { color: var(--color-text-muted); line-height: 1.4; }
+	.journal-entry-main h3, .journal-entry-meta, .journal-entry-excerpt { margin: 0 0 0.45rem; }
+	.journal-entry-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.35rem 0.75rem; color: var(--color-text-muted); line-height: 1.35; }
+	.journal-entry-meta div { min-width: 0; }
+	.journal-entry-meta dt { margin: 0; font-size: 0.74rem; font-weight: 760; color: var(--color-text-subtle); text-transform: uppercase; letter-spacing: 0; }
+	.journal-entry-meta dd { margin: 0.08rem 0 0; color: var(--color-text-muted); }
+	.journal-entry-excerpt { color: var(--color-text-muted); line-height: 1.4; }
 	.journal-entry-detail { margin: 0.65rem 0; border-left: 3px solid var(--color-accent); padding-left: 0.75rem; color: var(--color-text); white-space: pre-wrap; line-height: 1.5; }
 	.journal-empty-state { border: 1px dashed rgba(87,117,144,0.55); border-radius: var(--radius-md); background: rgba(255,255,255,0.48); padding: 1rem; }
 	.journal-empty-state h3 { margin: 0 0 0.35rem; }
@@ -416,7 +500,7 @@ const sectionLinks = viewerUserId ? [
 	.journal-pagination a:hover, .journal-pagination a:focus-visible { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
 	@media (max-width: 680px) {
 		.journal-hero-head { grid-template-columns: 1fr; gap: 0.7rem; }
-		.journal-search-form, .journal-grid-two { grid-template-columns: 1fr; }
+		.journal-search-form, .journal-grid-two, .position-row { grid-template-columns: 1fr; }
 		.journal-search-form .journal-button, .journal-hero-head .journal-button { width: 100%; }
 		.journal-actions, .journal-action-buttons, .journal-form-meta { align-items: stretch; flex-direction: column; }
 		.journal-actions { gap: 0.65rem; }

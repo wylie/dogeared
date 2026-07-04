@@ -267,9 +267,9 @@ Status: Complete
 
 Reading Journal is private notebook space for "What was I thinking while reading?"
 
-Signed-in readers can create private journal entries from `/journal` with a prominent New Entry action. Entries support an optional title, required body, journal date/time, optional book association, optional reading progress snapshot, optional page number, optional chapter/location, optional mood, and personal tags. The page shows a newest-first journal timeline, supports text search, filters by book and date, paginates longer journals, recovers a local draft, opens entry detail inline, edits existing entries, and deletes entries after confirmation.
+Signed-in readers can create private journal entries from `/journal` with a prominent New Entry action. Entries support an optional title, required body, journal date/time, optional book association, one optional reading position, optional mood, and personal tags. Reading position uses a type/value pair: Page, Percent, Chapter, or Location. The page shows a newest-first journal timeline, supports text search, searchable saved-book filtering, date filtering, paginates longer journals, recovers a local draft, opens entry detail inline, edits existing entries, and deletes entries after confirmation.
 
-Book pages show a Reading Journal section for signed-in readers who have that exact book on a shelf. Currently Reading books expose a Write Journal Entry form on the book page, and all owned book pages show recent private entries plus a link to the filtered journal view. After profile reading progress is saved, DogEared offers an optional prompt to create a journal entry with the current book and progress snapshot.
+Book pages show a Reading Journal section for signed-in readers who have that exact book on a shelf. Currently Reading books expose a Write Journal Entry form on the book page, and all owned book pages show recent private entries plus a link to the filtered journal view. After profile reading progress is saved, DogEared offers an optional prompt to create a journal entry with the current book and page position.
 
 Journal entries do not appear on profiles, shelves, activity feeds, public search, or reading statistics surfaces.
 
@@ -355,7 +355,7 @@ Limitations: Section quality depends on catalog, shelf, rating, review, and acti
 
 Status: Complete
 
-Signed-in readers can receive contextual first-time tips instead of a traditional onboarding wizard. Tips are lightweight callouts that point at relevant areas, include a title, explanation, optional icon, primary action, and dismiss control, and are keyboard accessible. The current tip set covers Home, Search, book detail shelf controls, first book added, Currently Reading progress, first progress update, Reading Journal privacy, first finished book, Reviews versus private Journal Entries, and Settings Learning controls.
+Signed-in readers can receive contextual first-time tips instead of a traditional onboarding wizard. Tips are lightweight callouts that point at relevant areas, include a title, explanation, optional icon, primary action, and dismiss control, and are keyboard accessible. Fresh-user guidance starts on Home. The current tip set covers Home, Search, book detail shelf controls, first book added, Currently Reading progress, first progress update, Reading Journal privacy, first finished book, Reviews versus private Journal Entries, and Settings Learning controls.
 
 DogEared chooses tips from transparent reader state: shelf count, Currently Reading count, finished books, reviews, progress updates, and journal entries. Only one tip appears at a time. Completed or dismissed tips are stored per user and do not reappear. Settings includes Learning controls to turn helpful tips on or off and reset the guided tour.
 

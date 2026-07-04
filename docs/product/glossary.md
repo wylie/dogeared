@@ -78,7 +78,11 @@ An email sign-in link with a hashed token, expiration, and used timestamp.
 
 ## Journal Entry
 
-A private note record owned by one reader. It can be linked to a shelved book or kept as a general journal note, and stores an optional title, required body, journal date/time, optional progress snapshot, optional page number, optional chapter/location, optional mood, personal tags, visibility metadata, and timestamps.
+A private note record owned by one reader. It can be linked to a shelved book or kept as a general journal note, and stores an optional title, required body, journal date/time, one optional reading position, optional mood, personal tags, visibility metadata, and timestamps.
+
+## Reading Position
+
+Optional location metadata on a journal entry. DogEared stores one position per entry as a type and value: Page, Percent, Chapter, or Location.
 
 ## Momentum Score
 

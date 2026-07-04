@@ -41,7 +41,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Editorial Collections: curated book lists with editorial introductions, book ordering, notes, quotes, and shelf controls.
 - Profiles: public reader identity and current reading state, including profile card, notifications for the owner, bio, favorite book/author, concise reading goal summary, shelf summary, current reads, recent activity, and settings access.
 - My Reading Life: private historical reflection across finished books, pages, streaks, goals, ratings, timeline, reading calendar, genre and author history, milestones, fun statistics, and yearly summaries.
-- Reading Journal: private searchable notebook for what a reader was thinking while reading, including dated entries, optional book context, progress snapshots, page/chapter context, moods, and personal tags.
+- Reading Journal: private searchable notebook for what a reader was thinking while reading, including dated entries, optional book context, one optional reading position, moods, and personal tags.
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
 - Settings: profile/account entry points, magic-link auth, email changes, Goodreads import, preferences, privacy, notifications, Learning controls for helpful tips, data export, shelf clearing, API endpoint references, and sessions.
@@ -62,7 +62,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 
 - Account setup: request a magic link, verify it, set a username, then manage profile and settings.
 - Book discovery: browse featured editorial collections, explainable home recommendations, search books with series context, open book pages, browse author pages, or explore related genre/topic/author/book pages.
-- Guided first experience: signed-in readers see one contextual, dismissible tip at a time when it is relevant, such as searching for a first book, updating reading progress, opening the private journal, or understanding public reviews versus private journal entries.
+- Guided first experience: signed-in readers see one contextual, dismissible tip at a time when it is relevant, starting on Home for fresh users and continuing through Search, book shelves, reading progress, reviews, Settings, and Journal moments.
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
 - Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, timeline history, milestones, and yearly summaries.
@@ -100,7 +100,7 @@ If DogEared does not have enough data for a provider, that provider is hidden. I
 
 ### Guided First Experience
 
-DogEared includes site-wide contextual first-time guidance for signed-in readers. Instead of a full-screen onboarding wizard, the application shows lightweight callouts near relevant interface areas across the first reader journey: Home, Search, book detail shelf controls, adding a first book, Currently Reading progress, the first progress update, Reading Journal, Reviews, and Settings.
+DogEared includes site-wide contextual first-time guidance for signed-in readers. Instead of a full-screen onboarding wizard, the application shows lightweight callouts near relevant interface areas across the first reader journey. Fresh users begin on Home, then guidance can appear for Search, book detail shelf controls, adding a first book, Currently Reading progress, the first progress update, Reading Journal, Reviews, and Settings.
 
 Tips are shown only when the reader's current route and state make them useful. DogEared shows at most one active tip, and each tip can be dismissed or completed. Progress is stored per user in Settings data so completed or dismissed tips do not reappear. Settings includes a Learning section with a Show helpful tips checkbox and Reset Guided Tour action.
 
@@ -158,9 +158,9 @@ Current limitations: My Reading Life and its timeline depend on recorded DogEare
 
 ### Reading Journal
 
-DogEared supports a private Reading Journal for signed-in readers. A journal entry belongs to one reader and may optionally be linked to a shelved book. Entries store an optional title, required body, journal date/time, optional reading progress snapshot, optional page number, optional chapter/location, optional mood, personal tags, visibility metadata, and last-edited timestamps.
+DogEared supports a private Reading Journal for signed-in readers. A journal entry belongs to one reader and may optionally be linked to a shelved book. Entries store an optional title, required body, journal date/time, one optional reading position, optional mood, personal tags, visibility metadata, and last-edited timestamps. Reading position is stored as a type and value, such as Page 20, 58%, Chapter 4, or Kindle location 1234.
 
-The private `/journal` page provides a prominent New Entry action, newest-first journal timeline, text search, book filtering, date filtering, pagination, local draft recovery, inline entry viewing, editing, and delete-with-confirmation controls. Entries created there can be general notes or linked to a shelved book.
+The private `/journal` page provides a prominent New Entry action, newest-first journal timeline, text search, searchable saved-book picker/filtering, date filtering, pagination, local draft recovery, inline entry viewing, editing, and delete-with-confirmation controls. Entries created there can be general notes or linked to a shelved book.
 
 On a book page, the Reading Journal section appears only when the signed-in reader has that exact DogEared book on a shelf. If the book is Currently Reading, the page offers a Write Journal Entry form with autosave draft recovery. The section also shows recent private entries for that book and links to the filtered journal view. After a reader saves forward progress on their profile, DogEared offers an optional prompt to write down anything worth remembering from that reading session.
 

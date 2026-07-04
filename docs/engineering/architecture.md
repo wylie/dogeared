@@ -84,7 +84,7 @@ My Reading Life lives at `/reading-life` and uses `src/lib/readingLife` for pure
 
 ## Reading Journal
 
-Reading Journal lives at `/journal` and uses `src/lib/readingJournal` for schema readiness, input normalization, permission checks, entry creation/update, deletion, book-level recent entries, and private search/filtering. The main journal page renders a newest-first paginated timeline, prominent new-entry form, book/date filters, inline entry detail, edit/delete controls, and local draft recovery. Book detail pages show recent entries for owned books and offer quick creation when the book is Currently Reading. Profile progress updates can offer an optional journal prompt that deep-links to a prefilled private draft. Journal content remains private notebook data and is not rendered on profiles, public search, activity feeds, comments, or statistics surfaces.
+Reading Journal lives at `/journal` and uses `src/lib/readingJournal` for schema readiness, input normalization, permission checks, entry creation/update, deletion, book-level recent entries, and private search/filtering. The main journal page renders a newest-first paginated timeline, prominent new-entry form, searchable saved-book picker, date filters, inline entry detail, edit/delete controls, and local draft recovery. Journal entries store one optional reading position as a type/value pair. Book detail pages show recent entries for owned books and offer quick creation when the book is Currently Reading. Profile progress updates can offer an optional journal prompt that deep-links to a prefilled private draft. Journal content remains private notebook data and is not rendered on profiles, public search, activity feeds, comments, or statistics surfaces.
 
 ## Discovery Providers
 
