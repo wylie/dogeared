@@ -32,7 +32,9 @@ export const GET: APIRoute = async ({ request, url }) => {
 		}
 		const query = String(url.searchParams.get("q") || "").trim();
 		const filterBookId = Math.max(0, Number(url.searchParams.get("filterBookId") || 0) || 0);
-		const entries = await searchJournalEntries(sql, session.userId, query, 50, filterBookId);
+		const date = String(url.searchParams.get("date") || "").trim().slice(0, 10);
+		const offset = Math.max(0, Number(url.searchParams.get("offset") || 0) || 0);
+		const entries = await searchJournalEntries(sql, session.userId, query, 50, filterBookId, { date, offset });
 		return jsonResponse({ ok: true, entries });
 	} catch (error) {
 		monitorEvent("journal.entries.get.error", { message: error instanceof Error ? error.message : "Unknown error" }, "error");

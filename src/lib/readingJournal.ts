@@ -55,6 +55,12 @@ export type JournalSearchResult = ReadingJournalEntry & {
 	status: string;
 };
 
+export type JournalSearchOptions = {
+	offset?: number;
+	bookId?: number;
+	date?: string;
+};
+
 type RawJournalRow = {
 	id?: number | null;
 	user_id: string;
@@ -540,11 +546,21 @@ export async function deleteJournalNote(sql: Sql, userId: string, entryId: numbe
 	return rows.length > 0;
 }
 
-export async function searchJournalEntries(sql: Sql, userId: string, query: string, limit = 24, bookId = 0) {
+export async function searchJournalEntries(
+	sql: Sql,
+	userId: string,
+	query: string,
+	limit = 24,
+	bookId = 0,
+	options: JournalSearchOptions = {}
+) {
 	await ensureReadingJournalSchema(sql);
 	if (!userId) return [] as JournalSearchResult[];
 	const normalizedQuery = String(query || "").replace(/\s+/g, " ").trim();
 	const pattern = `%${normalizedQuery}%`;
+	const normalizedBookId = Math.max(0, Number(options.bookId || bookId || 0) || 0);
+	const offset = Math.max(0, Math.floor(Number(options.offset || 0) || 0));
+	const dateFilter = String(options.date || "").trim().slice(0, 10);
 	const rows = await sql<RawJournalRow[]>`
 		select
 			j.id,
@@ -576,7 +592,8 @@ export async function searchJournalEntries(sql: Sql, userId: string, query: stri
 		left join book b on b.id = j.book_id
 		left join user_book ub on ub.user_id = j.user_id and ub.book_id = j.book_id
 		where j.user_id = ${userId}::uuid
-			and (${Math.max(0, Number(bookId || 0) || 0)} = 0 or j.book_id = ${Math.max(0, Number(bookId || 0) || 0)})
+			and (${normalizedBookId} = 0 or j.book_id = ${normalizedBookId})
+			and (${dateFilter} = '' or j.entry_at::date = ${dateFilter || null}::date)
 			and (
 				${normalizedQuery} = ''
 				or coalesce(b.title, '') ilike ${pattern}
@@ -593,6 +610,7 @@ export async function searchJournalEntries(sql: Sql, userId: string, query: stri
 			)
 		order by j.entry_at desc, j.updated_at desc, coalesce(b.title, '') asc
 		limit ${Math.max(1, Math.min(100, Math.floor(limit)))}
+		offset ${offset}
 	`;
 	return rows.map(mapSearchRow);
 }

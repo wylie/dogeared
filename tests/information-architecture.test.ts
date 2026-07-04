@@ -54,7 +54,7 @@ test("reading journal remains a private notebook rather than a profile or stats 
 	const journalPage = readFileSync("src/pages/journal.astro", "utf8");
 
 	assert.match(journalPage, /Search your own notes/);
-	assert.match(journalPage, /Recent Journal Entries/);
+	assert.match(journalPage, /Journal Timeline/);
 	assert.match(journalPage, /robots="noindex,nofollow"/);
 	assert.doesNotMatch(journalPage, /Reading Goal/);
 	assert.doesNotMatch(journalPage, /Shelf Summary/);

@@ -14,7 +14,7 @@ Authentication requirements:
 | `/` | Public | Featured editorial collections, explainable community discovery, onboarding checklist, provider sections, reader suggestions, custom shelf ideas. | `BookCard`, `ShelfDropdown`, `RatingControl`, `collections`, `discoveryProviders`, `homeSections`, reader suggestions API. |
 | `/search` | Public | Search books and add results to shelves, with series labels and editorial collection matches. | `BookCard`, `ShelfDropdown`, `RatingControl`, `/api/books/search`, series metadata, collection results. |
 | `/books` | Public | Browse catalog sections like trending, most shelved, top rated, and recently active. | `BookCard`, `ShelfDropdown`, catalog stats. |
-| `/book` | Public | Book detail by book ID or external/query metadata, including series context and private journal access when available. | `BookCard`, `ShelfDropdown`, `RatingControl`, `Chip`, series section, continue-series callout, recent Reading Journal entries and quick creation for owned Currently Reading books, reviews, activity likes/comments. |
+| `/book` | Public | Book detail by book ID or external/query metadata, including series context and private journal access when available. | `BookCard`, `ShelfDropdown`, `RatingControl`, `Chip`, series section, continue-series callout, recent Reading Journal entries and Write Journal Entry form for owned Currently Reading books, reviews, activity likes/comments. |
 | `/authors` | Public | Search, filter, sort, and page through authors. | Author cards, author stats. |
 | `/author/[slug]` | Public | Canonical author detail page with Featured In collections and series-grouped local books. | `BookCard`, `ShelfDropdown`, `RatingControl`, collection links, series grouping, external author books, author metadata. |
 | `/author` | Redirect | Legacy author query route. | Redirects to canonical author path or `/authors`. |
@@ -28,7 +28,7 @@ Authentication requirements:
 | `/following` | Authenticated | Manage followed readers and view following activity. | Reader suggestions, following readers, `BookCard`, likes/comments, follow API. |
 | `/reading-life` | Authenticated | Private reflection on the signed-in reader's historical reading life, organized around overview, history, insights, and journey. | `readingLife` helper, shelf entries, progress events, genres, authors, series metadata, reading goal data, timeline, calendar, statistics. |
 | `/reading-timeline` | Redirect | Compatibility route for old timeline links. | Redirects to `/reading-life#timeline` while preserving query parameters. |
-| `/journal` | Authenticated | Private reading journal for creating, searching, filtering, editing, and deleting the signed-in reader's own notes. | `readingJournal` helper, newest-first journal search, book filter, new-entry form, edit/delete controls, local draft recovery, book links to `#reading-journal`. |
+| `/journal` | Authenticated | Private reading journal for creating, viewing, searching, filtering, editing, and deleting the signed-in reader's own notes. | `readingJournal` helper, newest-first paginated timeline, search, book/date filters, new-entry form, inline detail view, edit/delete controls, local draft recovery, book links to `#reading-journal`. |
 | `/feed` | Redirect | Legacy route for feed. | Redirects to `/following`. |
 | `/myreads` | Redirect | Legacy reader library route. | Redirects signed-in users to their profile; otherwise settings. |
 | `/settings` | Authenticated | Account, auth, email change, privacy, import, export, API references, sessions, preferences. | Settings scripts, Goodreads import helpers, account APIs, shelf APIs. |
@@ -70,7 +70,7 @@ Authentication requirements:
 | `/api/shelf/custom-shelves` | GET, POST, PATCH, DELETE | Authenticated | Manage custom shelves. |
 | `/api/shelf/custom-shelf-books` | GET, POST, DELETE | Authenticated | Manage custom shelf book assignments. |
 | `/api/shelf/section-order` | GET, POST | Authenticated | Load/save profile shelf section ordering. |
-| `/api/journal/entries` | GET, POST, DELETE | Authenticated | Search/filter, create/update, and delete the current user's private journal entries. Book-linked entries require the reader to own the book. |
+| `/api/journal/entries` | GET, POST, DELETE | Authenticated | Search/filter/paginate, create/update, and delete the current user's private journal entries. Book-linked entries require the reader to own the book. |
 | `/api/activity/recent` | GET | Authenticated | Return recent activity for settings/security surfaces. |
 | `/api/activity/like` | POST, DELETE | Authenticated | Like or unlike activity. |
 | `/api/activity/comments` | GET, POST, DELETE | Authenticated | Load, create, or delete activity comments. |

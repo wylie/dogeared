@@ -168,7 +168,7 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
 	},
 	{
 		title: "Private Reading Journal",
-		description: "Added private book notes with Markdown, autosave, draft recovery, quote fields, personal tags, and private search.",
+		description: "Added private journal entries with optional book context, progress/page snapshots, tags, mood, autosaved drafts, search, filters, inline viewing, editing, deletion, and book/progress prompts.",
 		status: "Completed",
 		category: "completed"
 	},

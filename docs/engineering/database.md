@@ -234,7 +234,7 @@ Relationships:
 - Belongs to `app_user`.
 - May reference `book`; if a book is supplied, the reader must already have that book on a default shelf before creating or updating the entry.
 - Book detail pages load recent entries for the signed-in owner.
-- The private `/journal` page searches and filters only the signed-in reader's entries.
+- The private `/journal` page searches, date-filters, book-filters, and paginates only the signed-in reader's entries.
 
 Compatibility entity: `reading_journal_entry`
 

@@ -961,48 +961,51 @@ const bookStructuredDataPayload = bookStructuredData
 							<a class="journal-all-link" href={`/journal?bookId=${encodeURIComponent(String(book.id))}`}>View all journal entries</a>
 						</div>
 						{viewerShelfStatus === "reading" ? (
-							<form class="journal-form" data-journal-form>
-								<input type="hidden" name="bookId" value={String(book.id)} />
-								<div class="journal-grid-two">
+							<div class="journal-write">
+								<h3>Write Journal Entry</h3>
+								<form class="journal-form" data-journal-form>
+									<input type="hidden" name="bookId" value={String(book.id)} />
+									<div class="journal-grid-two">
+										<label>
+											<span>Title <em>optional</em></span>
+											<input type="text" name="entryTitle" maxlength="160" placeholder="A thought to remember" />
+										</label>
+										<label>
+											<span>Date and time</span>
+											<input type="datetime-local" name="entryAt" />
+										</label>
+									</div>
 									<label>
-										<span>Title <em>optional</em></span>
-										<input type="text" name="entryTitle" maxlength="160" placeholder="A thought to remember" />
+										<span>Body</span>
+										<textarea name="body" rows="6" maxlength="8000" required placeholder="Capture a thought, quote, question, or moment from this reading session."></textarea>
 									</label>
-									<label>
-										<span>Date and time</span>
-										<input type="datetime-local" name="entryAt" />
-									</label>
-								</div>
-								<label>
-									<span>Body</span>
-									<textarea name="body" rows="6" maxlength="8000" required placeholder="Capture a thought, quote, question, or moment from this reading session."></textarea>
-								</label>
-								<div class="journal-grid-two">
-									<label>
-										<span>Page number <em>optional</em></span>
-										<input type="number" name="pageNumber" min="1" inputmode="numeric" />
-									</label>
-									<label>
-										<span>Chapter or location <em>optional</em></span>
-										<input type="text" name="chapterLocation" maxlength="160" />
-									</label>
-								</div>
-								<div class="journal-grid-two journal-grid-two-bottom">
-									<label>
-										<span>Mood <em>optional</em></span>
-										<input type="text" name="mood" maxlength="80" />
-									</label>
-									<label>
-										<span>Progress snapshot <em>optional</em></span>
-										<input type="number" name="progressSnapshot" min="1" inputmode="numeric" />
-									</label>
-								</div>
-								<div class="journal-actions">
-									<button type="submit" data-journal-save>Save entry</button>
-									<p class="journal-status" data-journal-status role="status" aria-live="polite">Drafts autosave as you write.</p>
-									<p class="journal-count" data-journal-count>0 characters</p>
-								</div>
-							</form>
+									<div class="journal-grid-two">
+										<label>
+											<span>Page number <em>optional</em></span>
+											<input type="number" name="pageNumber" min="1" inputmode="numeric" />
+										</label>
+										<label>
+											<span>Chapter or location <em>optional</em></span>
+											<input type="text" name="chapterLocation" maxlength="160" />
+										</label>
+									</div>
+									<div class="journal-grid-two journal-grid-two-bottom">
+										<label>
+											<span>Mood <em>optional</em></span>
+											<input type="text" name="mood" maxlength="80" />
+										</label>
+										<label>
+											<span>Progress snapshot <em>optional</em></span>
+											<input type="number" name="progressSnapshot" min="1" inputmode="numeric" />
+										</label>
+									</div>
+									<div class="journal-actions">
+										<button type="submit" data-journal-save>Save entry</button>
+										<p class="journal-status" data-journal-status role="status" aria-live="polite">Drafts autosave as you write.</p>
+										<p class="journal-count" data-journal-count>0 characters</p>
+									</div>
+								</form>
+							</div>
 						) : (
 							<p class="journal-description">Add this book to Currently Reading to create new journal entries from the book page.</p>
 						)}
@@ -1527,6 +1530,17 @@ const bookStructuredDataPayload = bookStructuredData
 		color: var(--color-nav-hover);
 		text-decoration: underline;
 		text-underline-offset: 2px;
+	}
+	.journal-write {
+		margin-top: 0.9rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.5);
+		padding: 0.85rem;
+	}
+	.journal-write h3 {
+		margin: 0 0 0.65rem;
+		font-size: 1rem;
 	}
 	.journal-form {
 		display: grid;

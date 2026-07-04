@@ -10,6 +10,11 @@ const session = await resolveUserBySession(Astro.request);
 const viewerUserId = session?.userId || "";
 const query = String(Astro.url.searchParams.get("q") || "").replace(/\s+/g, " ").trim();
 const filterBookId = Math.max(0, Number(Astro.url.searchParams.get("bookId") || 0) || 0);
+const filterDate = String(Astro.url.searchParams.get("date") || "").trim().slice(0, 10);
+const currentPage = Math.max(1, Number(Astro.url.searchParams.get("page") || 1) || 1);
+const pageSize = 20;
+const initialProgressSnapshot = Math.max(0, Number(Astro.url.searchParams.get("progressSnapshot") || 0) || 0);
+const initialPageNumber = Math.max(0, Number(Astro.url.searchParams.get("pageNumber") || 0) || 0);
 let entries: JournalSearchResult[] = [];
 let ownedBookOptions: Array<{ id: number; title: string; author: string }> = [];
 let loadError = "";
@@ -17,7 +22,10 @@ let loadError = "";
 if (viewerUserId) {
 	try {
 		const sql = getNeonSql();
-		entries = await searchJournalEntries(sql, viewerUserId, query, 80, filterBookId);
+		entries = await searchJournalEntries(sql, viewerUserId, query, pageSize + 1, filterBookId, {
+			date: filterDate,
+			offset: (currentPage - 1) * pageSize
+		});
 		const rows = await sql<Array<{ id: number; title: string | null; primary_author: string | null }>>`
 			select
 				b.id,
@@ -39,6 +47,9 @@ if (viewerUserId) {
 	}
 }
 
+const hasNextPage = entries.length > pageSize;
+entries = entries.slice(0, pageSize);
+
 function formatDate(value: string) {
 	const date = new Date(String(value || ""));
 	if (!Number.isFinite(date.getTime())) return "";
@@ -59,6 +70,16 @@ function bookHref(entry: JournalSearchResult) {
 function excerptFor(entry: JournalSearchResult) {
 	const text = String(entry.body || "").replace(/\s+/g, " ").trim();
 	return text.length > 220 ? `${text.slice(0, 217).trim()}...` : text;
+}
+
+function pageHref(page: number) {
+	const params = new URLSearchParams();
+	if (query) params.set("q", query);
+	if (filterBookId > 0) params.set("bookId", String(filterBookId));
+	if (filterDate) params.set("date", filterDate);
+	if (page > 1) params.set("page", String(page));
+	const suffix = params.toString();
+	return suffix ? `/journal?${suffix}#journal-entries` : "/journal#journal-entries";
 }
 
 const sectionLinks = viewerUserId ? [
@@ -85,8 +106,8 @@ const sectionLinks = viewerUserId ? [
 				<section class="journal-hero" id="journal-search">
 					<p class="journal-eyebrow">Private notebook</p>
 					<h1>Reading Journal</h1>
-					<p>Capture what you are thinking while you read. Search your own notes, tags, books, and moods. Entries are private and never appear on profiles or activity feeds.</p>
-					<a class="new-entry-button" href="#new-entry" data-action="new-journal-entry">New Journal Entry</a>
+					<p>Capture what you are thinking while you read. Search your own notes, tags, books, dates, and moods. Entries are private and never appear on profiles or activity feeds.</p>
+					<a class="new-entry-button" href="#new-entry" data-action="new-journal-entry">New Entry</a>
 					<form class="journal-search-form" action="/journal" method="get">
 						<label class="visually-hidden" for="journal-query">Search journal</label>
 						<input id="journal-query" type="search" name="q" value={query} placeholder="Search notes, tags, books, or moods" />
@@ -95,8 +116,10 @@ const sectionLinks = viewerUserId ? [
 							<option value="">All books</option>
 							{ownedBookOptions.map((book) => <option value={String(book.id)} selected={filterBookId === book.id}>{book.title}{book.author ? ` by ${book.author}` : ""}</option>)}
 						</select>
+						<label class="visually-hidden" for="journal-date-filter">Filter by date</label>
+						<input id="journal-date-filter" type="date" name="date" value={filterDate} aria-label="Filter journal entries by date" />
 						<button type="submit">Search</button>
-						{(query || filterBookId) && <a class="secondary-link" href="/journal">Clear</a>}
+						{(query || filterBookId || filterDate) && <a class="secondary-link" href="/journal">Clear</a>}
 					</form>
 				</section>
 
@@ -104,7 +127,7 @@ const sectionLinks = viewerUserId ? [
 					<div class="journal-results-head">
 						<div>
 							<p class="journal-eyebrow">Private entry</p>
-							<h2 id="journal-editor-title">New Journal Entry</h2>
+							<h2 id="journal-editor-title">New Entry</h2>
 						</div>
 						<p data-editor-mode>New entry</p>
 					</div>
@@ -120,17 +143,17 @@ const sectionLinks = viewerUserId ? [
 								<span>Book <em>optional</em></span>
 								<select name="bookId">
 									<option value="">General note</option>
-									{ownedBookOptions.map((book) => <option value={String(book.id)}>{book.title}{book.author ? ` by ${book.author}` : ""}</option>)}
+									{ownedBookOptions.map((book) => <option value={String(book.id)} selected={filterBookId === book.id}>{book.title}{book.author ? ` by ${book.author}` : ""}</option>)}
 								</select>
 							</label>
-							<label><span>Page number <em>optional</em></span><input type="number" name="pageNumber" min="1" inputmode="numeric" /></label>
+							<label><span>Page number <em>optional</em></span><input type="number" name="pageNumber" min="1" inputmode="numeric" value={initialPageNumber > 0 ? String(initialPageNumber) : ""} /></label>
 						</div>
 						<div class="journal-grid-two">
 							<label><span>Chapter or location <em>optional</em></span><input type="text" name="chapterLocation" maxlength="160" /></label>
 							<label><span>Mood <em>optional</em></span><input type="text" name="mood" maxlength="80" /></label>
 						</div>
 						<div class="journal-grid-two">
-							<label><span>Progress snapshot <em>optional</em></span><input type="number" name="progressSnapshot" min="1" inputmode="numeric" placeholder="Current page or percent" /></label>
+							<label><span>Progress snapshot <em>optional</em></span><input type="number" name="progressSnapshot" min="1" inputmode="numeric" placeholder="Current page or percent" value={initialProgressSnapshot > 0 ? String(initialProgressSnapshot) : ""} /></label>
 							<label><span>Personal tags <em>optional</em></span><input type="text" name="personalTags" maxlength="400" placeholder="quiet, quote, book club" /></label>
 						</div>
 						<div class="journal-actions">
@@ -144,52 +167,69 @@ const sectionLinks = viewerUserId ? [
 
 				<section class="journal-results" id="journal-entries">
 					<div class="journal-results-head">
-						<h2>{query || filterBookId ? "Filtered Entries" : "Recent Journal Entries"}</h2>
-						<p>{entries.length.toLocaleString()} {entries.length === 1 ? "entry" : "entries"}</p>
+						<h2>{query || filterBookId || filterDate ? "Filtered Entries" : "Journal Timeline"}</h2>
+						<p>Newest first · page {currentPage.toLocaleString()}</p>
 					</div>
 					{loadError ? (
 						<p class="journal-empty">{loadError}</p>
 					) : entries.length === 0 ? (
-						<p class="journal-empty">{query || filterBookId ? "No journal entries matched those filters." : "No journal entries yet. Use New Journal Entry to capture a private thought, quote, page note, or reading moment."}</p>
+						<div class="journal-empty-state">
+							<h3>{query || filterBookId || filterDate ? "No journal entries matched those filters." : "Start a private record of your reading life."}</h3>
+							<p>{query || filterBookId || filterDate ? "Try clearing the filters or searching for a different phrase." : "Use the Reading Journal to remember reactions, questions, favorite lines, page notes, and the small moments that do not belong in a public review."}</p>
+							<p>{query || filterBookId || filterDate ? "Your journal remains private even when filtered." : "Entries are private by default and never appear on public profiles, comments, feeds, or recent activity."}</p>
+							<a class="new-entry-button" href="#new-entry">Create your first journal entry</a>
+						</div>
 					) : (
-						<ul class="journal-entry-list">
-							{entries.map((entry) => (
-								<li
-									class="journal-entry-card"
-									data-entry-id={String(entry.id || 0)}
-									data-entry-title={entry.entryTitle || ""}
-									data-body={entry.body || ""}
-									data-entry-at={dateTimeInput(entry.entryAt || entry.updatedAt)}
-									data-book-id={String(entry.bookId || "")}
-									data-page-number={String(entry.pageNumber || "")}
-									data-progress-snapshot={String(entry.progressSnapshot || "")}
-									data-chapter-location={entry.chapterLocation || ""}
-									data-mood={entry.mood || ""}
-									data-personal-tags={(entry.personalTags || []).join(", ")}
-								>
-									<a class="journal-entry-cover-link" href={bookHref(entry)} aria-label={entry.title ? `Open ${entry.title}` : "Open journal"}>
-										{entry.coverUrl ? <img src={entry.coverUrl} alt="" loading="lazy" decoding="async" width="52" height="76" /> : <span class="journal-cover-placeholder" aria-hidden="true">book</span>}
-									</a>
-									<div class="journal-entry-main">
-										<h3>{entry.entryTitle || entry.title || "Untitled journal entry"}</h3>
-										<p class="journal-entry-meta">
-											{entry.title ? <a href={bookHref(entry)}>{entry.title}</a> : "General note"}
-											{entry.author && <> by {entry.author}</>}
-											{formatDate(entry.entryAt || entry.updatedAt) && <> · {formatDate(entry.entryAt || entry.updatedAt)}</>}
-											{entry.pageNumber && <> · p. {entry.pageNumber}</>}
-											{entry.chapterLocation && <> · {entry.chapterLocation}</>}
-											{entry.mood && <> · {entry.mood}</>}
-										</p>
-										{excerptFor(entry) && <p class="journal-entry-excerpt">{excerptFor(entry)}</p>}
-										{entry.personalTags.length > 0 && <ul class="journal-tags" aria-label="Personal tags">{entry.personalTags.map((tag) => <li>{tag}</li>)}</ul>}
-										<div class="journal-entry-actions">
-											<button type="button" class="secondary-link-button" data-action="edit-journal-entry">Edit</button>
-											<button type="button" class="secondary-link-button destructive" data-action="delete-journal-entry">Delete</button>
+						<>
+							<ul class="journal-entry-list">
+								{entries.map((entry) => (
+									<li
+										class="journal-entry-card"
+										data-entry-id={String(entry.id || 0)}
+										data-entry-title={entry.entryTitle || ""}
+										data-body={entry.body || ""}
+										data-entry-at={dateTimeInput(entry.entryAt || entry.updatedAt)}
+										data-book-id={String(entry.bookId || "")}
+										data-page-number={String(entry.pageNumber || "")}
+										data-progress-snapshot={String(entry.progressSnapshot || "")}
+										data-chapter-location={entry.chapterLocation || ""}
+										data-mood={entry.mood || ""}
+										data-personal-tags={(entry.personalTags || []).join(", ")}
+									>
+										<a class="journal-entry-cover-link" href={bookHref(entry)} aria-label={entry.title ? `Open ${entry.title}` : "Open journal"}>
+											{entry.coverUrl ? <img src={entry.coverUrl} alt="" loading="lazy" decoding="async" width="52" height="76" /> : <span class="journal-cover-placeholder" aria-hidden="true">book</span>}
+										</a>
+										<div class="journal-entry-main">
+											<h3>{entry.entryTitle || entry.title || "Untitled journal entry"}</h3>
+											<p class="journal-entry-meta">
+												{entry.title ? <a href={bookHref(entry)}>{entry.title}</a> : "General note"}
+												{entry.author && <> by {entry.author}</>}
+												{formatDate(entry.createdAt || entry.entryAt || entry.updatedAt) && <> · Created {formatDate(entry.createdAt || entry.entryAt || entry.updatedAt)}</>}
+												{entry.pageNumber && <> · p. {entry.pageNumber}</>}
+												{entry.chapterLocation && <> · {entry.chapterLocation}</>}
+												{entry.progressSnapshot && <> · progress {entry.progressSnapshot}</>}
+												{entry.mood && <> · {entry.mood}</>}
+											</p>
+											{excerptFor(entry) && <p class="journal-entry-excerpt">{excerptFor(entry)}</p>}
+											<div class="journal-entry-detail" hidden>
+												<p>{entry.body}</p>
+											</div>
+											{entry.personalTags.length > 0 && <ul class="journal-tags" aria-label="Personal tags">{entry.personalTags.map((tag) => <li>{tag}</li>)}</ul>}
+											<div class="journal-entry-actions">
+												<button type="button" class="secondary-link-button" data-action="view-journal-entry" aria-expanded="false">View</button>
+												<button type="button" class="secondary-link-button" data-action="edit-journal-entry">Edit</button>
+												<button type="button" class="secondary-link-button destructive" data-action="delete-journal-entry">Delete</button>
+											</div>
 										</div>
-									</div>
-								</li>
-							))}
-						</ul>
+									</li>
+								))}
+							</ul>
+							<nav class="journal-pagination" aria-label="Journal pages">
+								<a href={currentPage > 1 ? pageHref(currentPage - 1) : undefined} aria-disabled={currentPage <= 1}>Previous</a>
+								<span>Page {currentPage}</span>
+								<a href={hasNextPage ? pageHref(currentPage + 1) : undefined} aria-disabled={!hasNextPage}>Next</a>
+							</nav>
+						</>
 					)}
 				</section>
 			</>
@@ -281,6 +321,16 @@ const sectionLinks = viewerUserId ? [
 			if (!(target instanceof HTMLElement)) return;
 			const card = target.closest(".journal-entry-card");
 			if (!(card instanceof HTMLElement)) return;
+			if (target.closest('[data-action="view-journal-entry"]')) {
+				const detail = card.querySelector(".journal-entry-detail");
+				const button = target.closest('[data-action="view-journal-entry"]');
+				if (detail instanceof HTMLElement && button instanceof HTMLButtonElement) {
+					const expanded = button.getAttribute("aria-expanded") === "true";
+					detail.hidden = expanded;
+					button.setAttribute("aria-expanded", String(!expanded));
+					button.textContent = expanded ? "View" : "Hide";
+				}
+			}
 			if (target.closest('[data-action="edit-journal-entry"]')) {
 				writePayload(card.dataset);
 				if (mode instanceof HTMLElement) mode.textContent = "Editing entry";
@@ -316,7 +366,7 @@ const sectionLinks = viewerUserId ? [
 	.journal-state-card p, .journal-hero p, .journal-results-head p, .journal-empty, .journal-status, .journal-count { margin: 0; color: var(--color-text-muted); line-height: 1.45; }
 	.primary-link, .new-entry-button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; margin-top: 0.9rem; font-weight: 760; text-decoration: none; }
 	.new-entry-button { border-radius: 999px; background: var(--color-primary); color: #fff; padding: 0.65rem 1rem; }
-	.journal-search-form { margin-top: 0.95rem; display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 220px) auto auto; gap: 0.6rem; align-items: center; }
+	.journal-search-form { margin-top: 0.95rem; display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 220px) minmax(140px, 170px) auto auto; gap: 0.6rem; align-items: center; }
 	.journal-search-form input, .journal-search-form select, .journal-entry-form input, .journal-entry-form select, .journal-entry-form textarea { width: 100%; min-height: 44px; box-sizing: border-box; border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255,255,255,0.72); color: var(--color-text); font: inherit; padding: 0.65rem 0.75rem; }
 	.journal-entry-form textarea { resize: vertical; }
 	.journal-search-form input:focus, .journal-search-form select:focus, .journal-entry-form input:focus, .journal-entry-form select:focus, .journal-entry-form textarea:focus { outline: 2px solid var(--color-accent); outline-offset: 2px; }
@@ -336,10 +386,18 @@ const sectionLinks = viewerUserId ? [
 	.journal-entry-main { min-width: 0; }
 	.journal-entry-main h3, .journal-entry-meta, .journal-entry-excerpt { margin: 0 0 0.3rem; }
 	.journal-entry-meta, .journal-entry-excerpt { color: var(--color-text-muted); line-height: 1.4; }
+	.journal-entry-detail { margin: 0.65rem 0; border-left: 3px solid var(--color-accent); padding-left: 0.75rem; color: var(--color-text); white-space: pre-wrap; line-height: 1.5; }
+	.journal-empty-state { border: 1px dashed rgba(87,117,144,0.55); border-radius: var(--radius-md); background: rgba(255,255,255,0.48); padding: 1rem; }
+	.journal-empty-state h3 { margin: 0 0 0.35rem; }
+	.journal-empty-state p { margin: 0.3rem 0; color: var(--color-text-muted); line-height: 1.45; }
 	.journal-tags { list-style: none; display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0; margin: 0.45rem 0; }
 	.journal-tags li { border-radius: 999px; background: var(--color-chip-topic); color: var(--color-nav); padding: 0.18rem 0.5rem; font-size: 0.78rem; font-weight: 760; }
 	.secondary-link-button { border: 0; background: transparent; font: inherit; font-weight: 760; padding: 0; cursor: pointer; }
 	.secondary-link-button.destructive { color: #991b1b; }
+	.journal-pagination { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 1rem; color: var(--color-text-muted); }
+	.journal-pagination a { color: var(--color-nav); font-weight: 760; text-decoration: none; }
+	.journal-pagination a[aria-disabled="true"] { color: var(--color-text-subtle); pointer-events: none; }
+	.journal-pagination a:hover, .journal-pagination a:focus-visible { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
 	@media (max-width: 680px) {
 		.journal-search-form, .journal-grid-two { grid-template-columns: 1fr; }
 		.journal-entry-card { grid-template-columns: 44px minmax(0, 1fr); }

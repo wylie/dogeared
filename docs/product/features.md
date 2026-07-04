@@ -267,9 +267,9 @@ Status: Complete
 
 Reading Journal is private notebook space for "What was I thinking while reading?"
 
-Signed-in readers can create private journal entries from `/journal` with a prominent New Journal Entry action. Entries support an optional title, required body, journal date/time, optional book association, optional reading progress snapshot, optional page number, optional chapter/location, optional mood, and personal tags. The page sorts entries newest first, supports text search, filters by book, recovers a local draft, edits existing entries, and deletes entries after confirmation.
+Signed-in readers can create private journal entries from `/journal` with a prominent New Entry action. Entries support an optional title, required body, journal date/time, optional book association, optional reading progress snapshot, optional page number, optional chapter/location, optional mood, and personal tags. The page shows a newest-first journal timeline, supports text search, filters by book and date, paginates longer journals, recovers a local draft, opens entry detail inline, edits existing entries, and deletes entries after confirmation.
 
-Book pages show a Reading Journal section for signed-in readers who have that exact book on a shelf. Currently Reading books expose a quick create form on the book page, and all owned book pages show recent private entries plus a link to the filtered journal view.
+Book pages show a Reading Journal section for signed-in readers who have that exact book on a shelf. Currently Reading books expose a Write Journal Entry form on the book page, and all owned book pages show recent private entries plus a link to the filtered journal view. After profile reading progress is saved, DogEared offers an optional prompt to create a journal entry with the current book and progress snapshot.
 
 Journal entries do not appear on profiles, shelves, activity feeds, public search, or reading statistics surfaces.
 

@@ -65,7 +65,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
 - Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, timeline history, milestones, and yearly summaries.
-- Private journaling: create, autosave, search, filter, edit, and delete private journal entries from the Reading Journal page, or create book-linked entries from a Currently Reading book page.
+- Private journaling: create, autosave, search, date-filter, book-filter, view, edit, and delete private journal entries from the Reading Journal page; create book-linked entries from a Currently Reading book page or after saving reading progress.
 - Reviews and ratings: rate finished books and optionally save a short finished reflection.
 - Social reading: follow readers, view following activity, like activity, comment on activity, and receive activity notifications.
 - Profile management: update name, avatar, location, birth year, goal text, favorite book, favorite author, blurb, and genres.
@@ -151,9 +151,9 @@ Current limitations: My Reading Life and its timeline depend on recorded DogEare
 
 DogEared supports a private Reading Journal for signed-in readers. A journal entry belongs to one reader and may optionally be linked to a shelved book. Entries store an optional title, required body, journal date/time, optional reading progress snapshot, optional page number, optional chapter/location, optional mood, personal tags, visibility metadata, and last-edited timestamps.
 
-The private `/journal` page provides a prominent New Journal Entry action, newest-first entry list, text search, book filtering, local draft recovery, editing, and delete-with-confirmation controls. Entries created there can be general notes or linked to a book.
+The private `/journal` page provides a prominent New Entry action, newest-first journal timeline, text search, book filtering, date filtering, pagination, local draft recovery, inline entry viewing, editing, and delete-with-confirmation controls. Entries created there can be general notes or linked to a shelved book.
 
-On a book page, the Reading Journal section appears only when the signed-in reader has that exact DogEared book on a shelf. If the book is Currently Reading, the page offers a quick private journal form with autosave draft recovery. The section also shows recent private entries for that book and links to the filtered journal view.
+On a book page, the Reading Journal section appears only when the signed-in reader has that exact DogEared book on a shelf. If the book is Currently Reading, the page offers a Write Journal Entry form with autosave draft recovery. The section also shows recent private entries for that book and links to the filtered journal view. After a reader saves forward progress on their profile, DogEared offers an optional prompt to write down anything worth remembering from that reading session.
 
 Journal entries do not appear on public profiles, recent activity feeds, or public search. The journal is intentionally scoped to private note-taking.
 
@@ -234,7 +234,7 @@ Derived from the current repository structure and implementation:
 - Community discovery providers: 7.
 - Editorial collection publication states: 3 (`draft`, `published`, `archived`).
 - Series ordering modes: book order, publication order, chronological order.
-- Supported social/private interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment, create/edit/delete/search/filter own journal entries.
+- Supported social/private interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment, create/view/edit/delete/search/filter own journal entries.
 - Supported catalog metadata types: editorial collections, series, genres, and topic tags.
 - Supported import source in Settings: Goodreads CSV.
 - Supported data export format in Settings: JSON.

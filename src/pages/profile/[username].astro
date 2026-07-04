@@ -3261,6 +3261,46 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.progress-inline-finish:hover {
 		filter: brightness(0.95);
 	}
+	.progress-journal-prompt {
+		margin-top: 0.55rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.68);
+		padding: 0.65rem;
+	}
+	.progress-journal-prompt p {
+		margin: 0 0 0.45rem;
+		color: var(--color-text);
+		line-height: 1.35;
+	}
+	.progress-journal-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		align-items: center;
+	}
+	.progress-journal-actions a,
+	.progress-journal-actions button {
+		min-height: 34px;
+		border-radius: 8px;
+		padding: 0.42rem 0.65rem;
+		font: inherit;
+		font-size: 0.85rem;
+		font-weight: 760;
+	}
+	.progress-journal-actions a {
+		display: inline-flex;
+		align-items: center;
+		background: var(--color-primary);
+		color: #fff;
+		text-decoration: none;
+	}
+	.progress-journal-actions button {
+		border: var(--border-subtle);
+		background: transparent;
+		color: var(--color-nav);
+		cursor: pointer;
+	}
 	.progress-track {
 		margin-top: 0.25rem;
 		width: min(320px, 100%);
@@ -4752,6 +4792,34 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 	}
 
+	const showJournalProgressPrompt = (card, sourceButton, bookId, currentPage) => {
+		if (!(card instanceof HTMLElement) || !(sourceButton instanceof HTMLElement) || !bookId) return;
+		card.querySelector(".progress-journal-prompt")?.remove();
+		const prompt = document.createElement("div");
+		prompt.className = "progress-journal-prompt";
+		const text = document.createElement("p");
+		text.textContent = "Anything you'd like to remember from today's reading?";
+		const actions = document.createElement("div");
+		actions.className = "progress-journal-actions";
+		const link = document.createElement("a");
+		const params = new URLSearchParams({
+			bookId: String(bookId),
+			progressSnapshot: String(currentPage),
+			pageNumber: String(currentPage)
+		});
+		link.href = `/journal?${params.toString()}#new-entry`;
+		link.textContent = "Write Journal Entry";
+		const dismiss = document.createElement("button");
+		dismiss.type = "button";
+		dismiss.textContent = "Not now";
+		dismiss.addEventListener("click", () => prompt.remove());
+		actions.append(link, dismiss);
+		prompt.append(text, actions);
+		const progressInline = sourceButton.closest(".progress-inline");
+		if (progressInline instanceof HTMLElement) progressInline.insertAdjacentElement("afterend", prompt);
+		else card.append(prompt);
+	};
+
 	document.addEventListener("click", async (event) => {
 		const rawTarget = event.target;
 		const target = rawTarget instanceof Element
@@ -4955,6 +5023,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					const dateNode = card?.querySelector(".activity-date");
 					if (dateNode instanceof HTMLElement) {
 						dateNode.textContent = `Updated ${updatedLabel}`;
+					}
+					if (hasForwardProgress && directBookId > 0) {
+						showJournalProgressPrompt(card, progressSave, directBookId, nextCurrentPage);
 					}
 				} catch (uiError) {
 					console.warn("Progress saved but local UI sync failed.", uiError);
