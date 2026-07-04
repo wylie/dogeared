@@ -33,7 +33,7 @@ API routes live in `src/pages/api/` and are grouped by product area:
 - Auth: magic-link request, verification, current user, logout.
 - Books: search, suggestions, cover proxy.
 - Follow: follow state and mutations.
-- Journal: private journal entry load/search, upsert, and delete.
+- Journal: private journal entry create/search/filter, update, and delete.
 - Profile/public: profile info, username, public shelf/activity/profile.
 - Shelf: shelf entries, ratings, custom shelves, custom shelf books, section ordering.
 - Admin-adjacent/system: health, feedback, notifications count, onboarding status, top lists, reader suggestions.
@@ -63,7 +63,7 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 4. Catalog pages enrich books with optional series and editorial collection metadata when available.
 5. Editorial collection pages load published collection records and ordered collection-book entries with notes, quotes, ratings, and shelf state.
 6. My Reading Life derives private personal summaries from shelf entries, finished dates, ratings, progress events, genres, authors, series, and profile goal data, including timeline and calendar history.
-7. Reading Journal loads private user/book journal entries for owned books, saves through an authenticated API, and searches only the signed-in reader's entries.
+7. Reading Journal loads private entries for the signed-in reader, supports optional book-linked entries for owned books, saves through an authenticated API, and searches/filters only that reader's entries.
 8. Home discovery loads cached aggregate community signals, ranks them through reusable providers, and renders explainable sections.
 9. Client-side scripts enhance the page by calling API routes for mutations or lazy loading.
 10. API routes validate the session, normalize input, mutate Neon, and return JSON.
@@ -83,7 +83,7 @@ My Reading Life lives at `/reading-life` and uses `src/lib/readingLife` for pure
 
 ## Reading Journal
 
-Reading Journal lives at `/journal` and uses `src/lib/readingJournal` for schema readiness, input normalization, permission checks, upserts, deletion, book-level loading, recent-entry loading, and private search. Book detail pages load a journal entry only when the signed-in reader has the exact book on a shelf. The client form autosaves to `/api/journal/entries` and keeps a local draft for recovery. Journal content remains private notebook data and is not rendered on profile or statistics surfaces.
+Reading Journal lives at `/journal` and uses `src/lib/readingJournal` for schema readiness, input normalization, permission checks, entry creation/update, deletion, book-level recent entries, and private search/filtering. The main journal page renders a newest-first entry list, a prominent new-entry form, book filtering, edit/delete controls, and local draft recovery. Book detail pages show recent entries for owned books and offer quick creation when the book is Currently Reading. Journal content remains private notebook data and is not rendered on profiles, public search, activity feeds, or statistics surfaces.
 
 ## Discovery Providers
 

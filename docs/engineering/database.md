@@ -211,17 +211,19 @@ Current limitation:
 
 ## Reading Journal Entries
 
-Entity: `reading_journal_entry`
+Primary entity: `reading_journal_note`
 
-Stores a private reader notebook entry for one user and one book:
+Stores private notebook entries for one reader:
 
-- User and book.
-- Started thoughts.
-- Mid-book notes.
-- Finished thoughts.
-- Favorite quote.
-- Would-reread flag.
-- Recommended-to notes.
+- User.
+- Optional book.
+- Optional entry title.
+- Required body.
+- Journal date/time.
+- Optional reading progress snapshot.
+- Optional page number.
+- Optional chapter/location.
+- Optional mood.
 - Personal tags.
 - Visibility value.
 - Extensible metadata.
@@ -229,13 +231,19 @@ Stores a private reader notebook entry for one user and one book:
 
 Relationships:
 
-- Joins `app_user` and `book`.
-- Requires the reader to have the book on a default shelf before creating or updating the journal entry.
-- Used by the book page Reading Journal section and the private `/journal` search page.
+- Belongs to `app_user`.
+- May reference `book`; if a book is supplied, the reader must already have that book on a default shelf before creating or updating the entry.
+- Book detail pages load recent entries for the signed-in owner.
+- The private `/journal` page searches and filters only the signed-in reader's entries.
 
-Current limitation:
+Compatibility entity: `reading_journal_entry`
 
-- The table supports `private`, `friends`, `public`, and `shared` visibility values for future expansion, but current access policy only exposes entries to the owning reader.
+The older one-entry-per-user/book table is retained for compatibility and legacy data backfill. Its fields are migrated into `reading_journal_note` as private note bodies when the journal schema is prepared.
+
+Current limitations:
+
+- `reading_journal_note` supports `private`, `friends`, `public`, and `shared` visibility values for future expansion, but current access policy only exposes entries to the owning reader.
+- Journal entries do not appear in public profiles, activity feeds, public search, or metrics.
 
 ## Reading Progress Events
 

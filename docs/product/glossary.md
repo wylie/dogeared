@@ -70,7 +70,7 @@ An email sign-in link with a hashed token, expiration, and used timestamp.
 
 ## Journal Entry
 
-A private note record owned by one reader for one shelved book. It can include started thoughts, mid-book notes, finished thoughts, a favorite quote, would-reread intent, recommended-to notes, personal tags, visibility metadata, and timestamps.
+A private note record owned by one reader. It can be linked to a shelved book or kept as a general journal note, and stores an optional title, required body, journal date/time, optional progress snapshot, optional page number, optional chapter/location, optional mood, personal tags, visibility metadata, and timestamps.
 
 ## Momentum Score
 
@@ -102,7 +102,7 @@ A stored forward page movement for a reader and book, with from-page, to-page, p
 
 ## Reading Journal
 
-A private reader-facing notebook for books the reader has added to shelves. The journal is searchable from `/journal` and appears on book pages for owned books.
+A private reader-facing notebook for capturing thoughts while reading. The journal is searchable and filterable from `/journal`, and book-linked entries appear on book pages only for the owning reader.
 
 ## Reading Timeline
 

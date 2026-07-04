@@ -267,9 +267,11 @@ Status: Complete
 
 Reading Journal is private notebook space for "What was I thinking while reading?"
 
-Signed-in readers can keep private journal entries for books they have added to their shelves. Book pages show a Reading Journal section for owned books with fields for started thoughts, mid-book notes, finished thoughts, favorite quote, would-reread intent, recommended-to notes, and personal tags. The writing surface supports Markdown text, autosave, local draft recovery, character count, editing, and deletion.
+Signed-in readers can create private journal entries from `/journal` with a prominent New Journal Entry action. Entries support an optional title, required body, journal date/time, optional book association, optional reading progress snapshot, optional page number, optional chapter/location, optional mood, and personal tags. The page sorts entries newest first, supports text search, filters by book, recovers a local draft, edits existing entries, and deletes entries after confirmation.
 
-The private `/journal` page lets readers search their own journal by book title, author, note body, quote, recommendation, and personal tag. Journal entries do not appear on profiles, shelves, or reading statistics surfaces.
+Book pages show a Reading Journal section for signed-in readers who have that exact book on a shelf. Currently Reading books expose a quick create form on the book page, and all owned book pages show recent private entries plus a link to the filtered journal view.
+
+Journal entries do not appear on profiles, shelves, activity feeds, public search, or reading statistics surfaces.
 
 Limitations: Journal entries are private-only in the current UI. The data model includes future visibility states for friends, public, and shared entries, but the permission policy currently allows only the owner to access entries.
 

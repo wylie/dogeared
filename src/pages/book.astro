@@ -13,7 +13,7 @@ import { googleBooksCoverUrl } from "../lib/bookCovers";
 import { resolveCustomShelfOptions } from "../lib/customShelves";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
 import { loadBookSeriesContext, type BookSeriesContext, type ShelfStatus } from "../lib/series";
-import { loadJournalForBook, type ReadingJournalEntry } from "../lib/readingJournal";
+import { loadJournalEntriesForBook, type JournalSearchResult } from "../lib/readingJournal";
 
 export const prerender = false;
 
@@ -193,7 +193,7 @@ let bookGenres: string[] = [];
 let bookTopics: string[] = [];
 let customShelfOptionsJson = "[]";
 let seriesContext: BookSeriesContext | null = null;
-let journalEntry: ReadingJournalEntry | null = null;
+let journalEntries: JournalSearchResult[] = [];
 let readerOwnsBook = false;
 
 async function fetchGoogleBook() {
@@ -664,9 +664,7 @@ if (book && session?.userId) {
 				viewerShelfStatus = status;
 				viewerRating = Math.max(0, Math.min(5, Number(rows[0]?.rating || 0) || 0));
 			}
-			if (readerOwnsBook) {
-				journalEntry = await loadJournalForBook(sql, session.userId, directBookId);
-			}
+			if (readerOwnsBook) journalEntries = await loadJournalEntriesForBook(sql, session.userId, directBookId, 5);
 		}
 		if (!viewerShelfStatus) {
 			const isbn13 = normalizeText(book.isbn13);
@@ -951,59 +949,79 @@ const bookStructuredDataPayload = bookStructuredData
 						id="reading-journal"
 						data-journal-panel
 						data-book-id={String(book.id)}
-						data-updated-at={journalEntry?.updatedAt || ""}
+						data-current-page={String(viewerShelfStatus === "reading" ? 0 : 0)}
 						aria-labelledby="reading-journal-heading"
 					>
 						<div class="journal-head">
 							<div>
 								<p class="journal-eyebrow">Private notebook</p>
 								<h2 id="reading-journal-heading">Reading Journal</h2>
-								<p class="journal-description">Personal notes for this book. Markdown is supported, and entries stay private.</p>
+								<p class="journal-description">Private entries for this book. They never appear in activity feeds or on public profiles.</p>
 							</div>
-							<a class="journal-all-link" href="/journal">All entries</a>
+							<a class="journal-all-link" href={`/journal?bookId=${encodeURIComponent(String(book.id))}`}>View all journal entries</a>
 						</div>
-						<form class="journal-form" data-journal-form>
-							<label>
-								<span>Started thoughts</span>
-								<textarea name="startedThoughts" rows="4" maxlength="4000" placeholder="What drew you in?">{journalEntry?.startedThoughts || ""}</textarea>
-							</label>
-							<label>
-								<span>Mid-book notes</span>
-								<textarea name="midBookNotes" rows="5" maxlength="4000" placeholder="Questions, connections, passages to revisit...">{journalEntry?.midBookNotes || ""}</textarea>
-							</label>
-							<label>
-								<span>Finished thoughts</span>
-								<textarea name="finishedThoughts" rows="5" maxlength="4000" placeholder="What will you want to remember later?">{journalEntry?.finishedThoughts || ""}</textarea>
-							</label>
-							<div class="journal-grid-two">
+						{viewerShelfStatus === "reading" ? (
+							<form class="journal-form" data-journal-form>
+								<input type="hidden" name="bookId" value={String(book.id)} />
+								<div class="journal-grid-two">
+									<label>
+										<span>Title <em>optional</em></span>
+										<input type="text" name="entryTitle" maxlength="160" placeholder="A thought to remember" />
+									</label>
+									<label>
+										<span>Date and time</span>
+										<input type="datetime-local" name="entryAt" />
+									</label>
+								</div>
 								<label>
-									<span>Favorite quote</span>
-									<textarea name="favoriteQuote" rows="3" maxlength="1200">{journalEntry?.favoriteQuote || ""}</textarea>
+									<span>Body</span>
+									<textarea name="body" rows="6" maxlength="8000" required placeholder="Capture a thought, quote, question, or moment from this reading session."></textarea>
 								</label>
-								<label>
-									<span>Recommended to</span>
-									<textarea name="recommendedTo" rows="3" maxlength="1000" placeholder="A friend, group, or future version of you">{journalEntry?.recommendedTo || ""}</textarea>
-								</label>
-							</div>
-							<div class="journal-grid-two journal-grid-two-bottom">
-								<label>
-									<span>Personal tags</span>
-									<input type="text" name="personalTags" maxlength="400" value={(journalEntry?.personalTags || []).join(", ")} placeholder="quiet, reread, book club" />
-								</label>
-								<label class="journal-checkbox">
-									<input type="checkbox" name="wouldReread" checked={journalEntry?.wouldReread === true} />
-									<span>Would reread</span>
-								</label>
-							</div>
-							<div class="journal-actions">
-								<button type="submit" data-journal-save>Save journal</button>
-								<button type="button" class="secondary" data-journal-delete hidden={!journalEntry}>Delete</button>
-								<p class="journal-status" data-journal-status role="status" aria-live="polite">
-									{journalEntry ? "Saved privately." : "Drafts autosave as you write."}
-								</p>
-								<p class="journal-count" data-journal-count>0 characters</p>
-							</div>
-						</form>
+								<div class="journal-grid-two">
+									<label>
+										<span>Page number <em>optional</em></span>
+										<input type="number" name="pageNumber" min="1" inputmode="numeric" />
+									</label>
+									<label>
+										<span>Chapter or location <em>optional</em></span>
+										<input type="text" name="chapterLocation" maxlength="160" />
+									</label>
+								</div>
+								<div class="journal-grid-two journal-grid-two-bottom">
+									<label>
+										<span>Mood <em>optional</em></span>
+										<input type="text" name="mood" maxlength="80" />
+									</label>
+									<label>
+										<span>Progress snapshot <em>optional</em></span>
+										<input type="number" name="progressSnapshot" min="1" inputmode="numeric" />
+									</label>
+								</div>
+								<div class="journal-actions">
+									<button type="submit" data-journal-save>Save entry</button>
+									<p class="journal-status" data-journal-status role="status" aria-live="polite">Drafts autosave as you write.</p>
+									<p class="journal-count" data-journal-count>0 characters</p>
+								</div>
+							</form>
+						) : (
+							<p class="journal-description">Add this book to Currently Reading to create new journal entries from the book page.</p>
+						)}
+						<div class="journal-recent">
+							<h3>Recent entries</h3>
+							{journalEntries.length === 0 ? (
+								<p class="journal-description">No private entries for this book yet.</p>
+							) : (
+								<ul>
+									{journalEntries.map((entry) => (
+										<li>
+											<strong>{entry.entryTitle || "Journal entry"}</strong>
+											<span>{formatActivityDate(entry.entryAt || entry.updatedAt)}{entry.pageNumber && <> · p. {entry.pageNumber}</>}</span>
+											<p>{String(entry.body || "").replace(/\s+/g, " ").trim().slice(0, 180)}</p>
+										</li>
+									))}
+								</ul>
+							)}
+						</div>
 					</section>
 				)}
 
@@ -1154,36 +1172,34 @@ const bookStructuredDataPayload = bookStructuredData
 			const status = journalPanel.querySelector("[data-journal-status]");
 			const count = journalPanel.querySelector("[data-journal-count]");
 			const saveButton = journalPanel.querySelector("[data-journal-save]");
-			const deleteButton = journalPanel.querySelector("[data-journal-delete]");
 			const bookId = Math.max(0, Number(journalPanel.dataset.bookId || 0) || 0);
 			const draftKey = `dogeared:journal-draft:${bookId}`;
-			let saveTimer = 0;
 			let saving = false;
 
 			const setStatus = (message) => {
 				if (status instanceof HTMLElement) status.textContent = message;
 			};
 			const fields = () => ({
-				startedThoughts: form?.querySelector('[name="startedThoughts"]'),
-				midBookNotes: form?.querySelector('[name="midBookNotes"]'),
-				finishedThoughts: form?.querySelector('[name="finishedThoughts"]'),
-				favoriteQuote: form?.querySelector('[name="favoriteQuote"]'),
-				recommendedTo: form?.querySelector('[name="recommendedTo"]'),
-				personalTags: form?.querySelector('[name="personalTags"]'),
-				wouldReread: form?.querySelector('[name="wouldReread"]')
+				entryTitle: form?.querySelector('[name="entryTitle"]'),
+				entryAt: form?.querySelector('[name="entryAt"]'),
+				body: form?.querySelector('[name="body"]'),
+				pageNumber: form?.querySelector('[name="pageNumber"]'),
+				chapterLocation: form?.querySelector('[name="chapterLocation"]'),
+				mood: form?.querySelector('[name="mood"]'),
+				progressSnapshot: form?.querySelector('[name="progressSnapshot"]')
 			});
 			const readJournalPayload = () => {
 				const currentFields = fields();
 				const readText = (field) => field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement ? field.value : "";
 				return {
 					bookId,
-					startedThoughts: readText(currentFields.startedThoughts),
-					midBookNotes: readText(currentFields.midBookNotes),
-					finishedThoughts: readText(currentFields.finishedThoughts),
-					favoriteQuote: readText(currentFields.favoriteQuote),
-					recommendedTo: readText(currentFields.recommendedTo),
-					personalTags: readText(currentFields.personalTags),
-					wouldReread: currentFields.wouldReread instanceof HTMLInputElement ? currentFields.wouldReread.checked : null,
+					entryTitle: readText(currentFields.entryTitle),
+					entryAt: readText(currentFields.entryAt),
+					body: readText(currentFields.body),
+					pageNumber: readText(currentFields.pageNumber),
+					chapterLocation: readText(currentFields.chapterLocation),
+					mood: readText(currentFields.mood),
+					progressSnapshot: readText(currentFields.progressSnapshot),
 					visibility: "private"
 				};
 			};
@@ -1192,24 +1208,17 @@ const bookStructuredDataPayload = bookStructuredData
 				const writeText = (field, value) => {
 					if (field instanceof HTMLTextAreaElement || field instanceof HTMLInputElement) field.value = String(value || "");
 				};
-				writeText(currentFields.startedThoughts, payload.startedThoughts);
-				writeText(currentFields.midBookNotes, payload.midBookNotes);
-				writeText(currentFields.finishedThoughts, payload.finishedThoughts);
-				writeText(currentFields.favoriteQuote, payload.favoriteQuote);
-				writeText(currentFields.recommendedTo, payload.recommendedTo);
-				writeText(currentFields.personalTags, payload.personalTags);
-				if (currentFields.wouldReread instanceof HTMLInputElement) currentFields.wouldReread.checked = !!payload.wouldReread;
+				writeText(currentFields.entryTitle, payload.entryTitle);
+				writeText(currentFields.entryAt, payload.entryAt);
+				writeText(currentFields.body, payload.body);
+				writeText(currentFields.pageNumber, payload.pageNumber);
+				writeText(currentFields.chapterLocation, payload.chapterLocation);
+				writeText(currentFields.mood, payload.mood);
+				writeText(currentFields.progressSnapshot, payload.progressSnapshot);
 			};
 			const updateCharacterCount = () => {
 				const payload = readJournalPayload();
-				const total = [
-					payload.startedThoughts,
-					payload.midBookNotes,
-					payload.finishedThoughts,
-					payload.favoriteQuote,
-					payload.recommendedTo,
-					payload.personalTags
-				].join("").length;
+				const total = String(payload.body || "").length;
 				if (count instanceof HTMLElement) count.textContent = `${total.toLocaleString()} ${total === 1 ? "character" : "characters"}`;
 			};
 			const rememberDraft = () => {
@@ -1224,9 +1233,7 @@ const bookStructuredDataPayload = bookStructuredData
 					const raw = window.localStorage.getItem(draftKey);
 					if (!raw) return;
 					const draft = JSON.parse(raw);
-					const draftTime = new Date(String(draft?.savedAt || "")).getTime();
-					const serverTime = new Date(String(journalPanel.dataset.updatedAt || "")).getTime();
-					if (Number.isFinite(draftTime) && (!Number.isFinite(serverTime) || draftTime > serverTime)) {
+					if (draft?.payload?.body) {
 						writeJournalPayload(draft?.payload || {});
 						setStatus("Recovered an unsaved local draft.");
 					}
@@ -1236,6 +1243,10 @@ const bookStructuredDataPayload = bookStructuredData
 			};
 			const saveJournal = async () => {
 				if (!bookId || saving) return;
+				if (!String(readJournalPayload().body || "").trim()) {
+					setStatus("Write a body before saving.");
+					return;
+				}
 				saving = true;
 				if (saveButton instanceof HTMLButtonElement) saveButton.disabled = true;
 				setStatus("Saving...");
@@ -1248,10 +1259,10 @@ const bookStructuredDataPayload = bookStructuredData
 					});
 					const data = await response.json().catch(() => ({}));
 					if (!response.ok) throw new Error(String(data?.error || "Failed to save journal."));
-					journalPanel.dataset.updatedAt = String(data?.entry?.updatedAt || new Date().toISOString());
 					try { window.localStorage.removeItem(draftKey); } catch {}
-					if (deleteButton instanceof HTMLButtonElement) deleteButton.hidden = false;
-					setStatus("Saved privately.");
+					writeJournalPayload({});
+					updateCharacterCount();
+					setStatus("Saved privately. Refresh to see the new entry in the list.");
 				} catch (error) {
 					setStatus(error instanceof Error ? error.message : "Failed to save journal.");
 				} finally {
@@ -1263,41 +1274,21 @@ const bookStructuredDataPayload = bookStructuredData
 				rememberDraft();
 				updateCharacterCount();
 				setStatus("Draft saved on this device.");
-				window.clearTimeout(saveTimer);
-				saveTimer = window.setTimeout(saveJournal, 900);
 			};
 
 			recoverDraft();
+			const entryAt = form?.querySelector('[name="entryAt"]');
+			if (entryAt instanceof HTMLInputElement && !entryAt.value) {
+				const now = new Date();
+				const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+				entryAt.value = local.toISOString().slice(0, 16);
+			}
 			updateCharacterCount();
 			if (form instanceof HTMLFormElement) {
 				form.addEventListener("input", queueAutosave);
 				form.addEventListener("submit", (event) => {
 					event.preventDefault();
-					window.clearTimeout(saveTimer);
 					void saveJournal();
-				});
-			}
-			if (deleteButton instanceof HTMLButtonElement) {
-				deleteButton.addEventListener("click", async () => {
-					if (!bookId || !window.confirm("Delete this private journal entry?")) return;
-					deleteButton.disabled = true;
-					try {
-						const response = await fetch(`/api/journal/entries?bookId=${encodeURIComponent(String(bookId))}`, {
-							method: "DELETE",
-							credentials: "same-origin"
-						});
-						const data = await response.json().catch(() => ({}));
-						if (!response.ok) throw new Error(String(data?.error || "Failed to delete journal."));
-						writeJournalPayload({});
-						try { window.localStorage.removeItem(draftKey); } catch {}
-						updateCharacterCount();
-						deleteButton.hidden = true;
-						setStatus("Journal entry deleted.");
-					} catch (error) {
-						setStatus(error instanceof Error ? error.message : "Failed to delete journal.");
-					} finally {
-						deleteButton.disabled = false;
-					}
 				});
 			}
 		}
@@ -1547,8 +1538,15 @@ const bookStructuredDataPayload = bookStructuredData
 		color: var(--color-text);
 		font-weight: 760;
 	}
+	.journal-form label em {
+		color: var(--color-text-muted);
+		font-style: normal;
+		font-weight: 500;
+	}
 	.journal-form textarea,
-	.journal-form input[type="text"] {
+	.journal-form input[type="text"],
+	.journal-form input[type="number"],
+	.journal-form input[type="datetime-local"] {
 		width: 100%;
 		box-sizing: border-box;
 		border: var(--border-subtle);
@@ -1561,7 +1559,9 @@ const bookStructuredDataPayload = bookStructuredData
 		padding: 0.7rem 0.78rem;
 	}
 	.journal-form textarea:focus,
-	.journal-form input[type="text"]:focus {
+	.journal-form input[type="text"]:focus,
+	.journal-form input[type="number"]:focus,
+	.journal-form input[type="datetime-local"]:focus {
 		outline: 2px solid var(--color-accent);
 		outline-offset: 2px;
 	}
@@ -1610,6 +1610,38 @@ const bookStructuredDataPayload = bookStructuredData
 	}
 	.journal-count {
 		margin-left: auto;
+	}
+	.journal-recent {
+		margin-top: 1rem;
+		border-top: var(--border-subtle);
+		padding-top: 0.85rem;
+	}
+	.journal-recent h3 {
+		margin: 0 0 0.55rem;
+	}
+	.journal-recent ul {
+		list-style: none;
+		display: grid;
+		gap: 0.55rem;
+		margin: 0;
+		padding: 0;
+	}
+	.journal-recent li {
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: rgba(255, 255, 255, 0.58);
+		padding: 0.65rem;
+	}
+	.journal-recent strong,
+	.journal-recent span,
+	.journal-recent p {
+		display: block;
+		margin: 0;
+	}
+	.journal-recent span,
+	.journal-recent p {
+		color: var(--color-text-muted);
+		line-height: 1.4;
 	}
 	.series-panel {
 		display: grid;

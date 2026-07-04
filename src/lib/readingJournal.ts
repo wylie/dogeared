@@ -5,8 +5,16 @@ type Sql = ReturnType<typeof getNeonSql>;
 export type JournalVisibility = "private" | "friends" | "public" | "shared";
 
 export type ReadingJournalEntry = {
+	id?: number;
 	userId: string;
-	bookId: number;
+	bookId: number | null;
+	entryTitle?: string;
+	body?: string;
+	entryAt?: string;
+	progressSnapshot?: number | null;
+	pageNumber?: number | null;
+	chapterLocation?: string;
+	mood?: string;
 	startedThoughts: string;
 	midBookNotes: string;
 	finishedThoughts: string;
@@ -20,7 +28,15 @@ export type ReadingJournalEntry = {
 };
 
 export type ReadingJournalInput = {
+	id?: unknown;
 	bookId: unknown;
+	entryTitle?: unknown;
+	body?: unknown;
+	entryAt?: unknown;
+	progressSnapshot?: unknown;
+	pageNumber?: unknown;
+	chapterLocation?: unknown;
+	mood?: unknown;
 	startedThoughts?: unknown;
 	midBookNotes?: unknown;
 	finishedThoughts?: unknown;
@@ -40,8 +56,16 @@ export type JournalSearchResult = ReadingJournalEntry & {
 };
 
 type RawJournalRow = {
+	id?: number | null;
 	user_id: string;
-	book_id: number;
+	book_id: number | null;
+	entry_title?: string | null;
+	body?: string | null;
+	entry_at?: string | null;
+	progress_snapshot?: number | null;
+	page_number?: number | null;
+	chapter_location?: string | null;
+	mood?: string | null;
 	started_thoughts: string | null;
 	mid_book_notes: string | null;
 	finished_thoughts: string | null;
@@ -89,12 +113,22 @@ export function parseJournalTags(value: unknown, maxTags = 16) {
 
 export function normalizeJournalInput(input: ReadingJournalInput) {
 	const bookId = Math.max(0, Number(input.bookId || 0) || 0);
+	const pageNumber = Math.max(0, Math.floor(Number(input.pageNumber || 0) || 0));
+	const progressSnapshot = Math.max(0, Math.floor(Number(input.progressSnapshot || 0) || 0));
 	const wouldRereadRaw = input.wouldReread;
 	const wouldReread = wouldRereadRaw === true || wouldRereadRaw === "true" || wouldRereadRaw === "on"
 		? true
 		: (wouldRereadRaw === false || wouldRereadRaw === "false" ? false : null);
 	return {
+		id: Math.max(0, Number(input.id || 0) || 0),
 		bookId,
+		entryTitle: normalizeJournalText(input.entryTitle, 160),
+		body: normalizeJournalText(input.body, 8000),
+		entryAt: normalizeJournalDateTime(input.entryAt),
+		progressSnapshot: progressSnapshot > 0 ? progressSnapshot : null,
+		pageNumber: pageNumber > 0 ? pageNumber : null,
+		chapterLocation: normalizeJournalText(input.chapterLocation, 160),
+		mood: normalizeJournalText(input.mood, 80),
 		startedThoughts: normalizeJournalText(input.startedThoughts),
 		midBookNotes: normalizeJournalText(input.midBookNotes),
 		finishedThoughts: normalizeJournalText(input.finishedThoughts),
@@ -106,9 +140,17 @@ export function normalizeJournalInput(input: ReadingJournalInput) {
 	};
 }
 
+export function normalizeJournalDateTime(value: unknown) {
+	const raw = String(value || "").trim();
+	if (!raw) return new Date().toISOString();
+	const parsed = new Date(raw);
+	return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : new Date().toISOString();
+}
+
 export function journalHasContent(input: Partial<ReadingJournalEntry> | ReturnType<typeof normalizeJournalInput>) {
 	return Boolean(
 		normalizeJournalText(input.startedThoughts).length > 0
+		|| normalizeJournalText(input.body).length > 0
 		|| normalizeJournalText(input.midBookNotes).length > 0
 		|| normalizeJournalText(input.finishedThoughts).length > 0
 		|| normalizeJournalText(input.favoriteQuote).length > 0
@@ -121,6 +163,7 @@ export function journalHasContent(input: Partial<ReadingJournalEntry> | ReturnTy
 export function journalCharacterCount(input: Partial<ReadingJournalEntry> | ReturnType<typeof normalizeJournalInput>) {
 	const tags = Array.isArray(input.personalTags) ? input.personalTags.join(", ") : "";
 	return [
+		input.body,
 		input.startedThoughts,
 		input.midBookNotes,
 		input.finishedThoughts,
@@ -153,7 +196,15 @@ function parseTagsFromDb(value: RawJournalRow["personal_tags"]) {
 function mapJournalRow(row: RawJournalRow): ReadingJournalEntry {
 	return {
 		userId: String(row.user_id || ""),
-		bookId: Math.max(0, Number(row.book_id || 0) || 0),
+		id: Math.max(0, Number(row.id || 0) || 0),
+		bookId: row.book_id ? Math.max(0, Number(row.book_id || 0) || 0) : null,
+		entryTitle: String(row.entry_title || ""),
+		body: String(row.body || ""),
+		entryAt: String(row.entry_at || ""),
+		progressSnapshot: row.progress_snapshot ? Math.max(0, Number(row.progress_snapshot || 0) || 0) : null,
+		pageNumber: row.page_number ? Math.max(0, Number(row.page_number || 0) || 0) : null,
+		chapterLocation: String(row.chapter_location || ""),
+		mood: String(row.mood || ""),
 		startedThoughts: String(row.started_thoughts || ""),
 		midBookNotes: String(row.mid_book_notes || ""),
 		finishedThoughts: String(row.finished_thoughts || ""),
@@ -180,6 +231,30 @@ function mapSearchRow(row: RawJournalRow): JournalSearchResult {
 
 export async function ensureReadingJournalSchema(sql: Sql) {
 	await sql`
+		create table if not exists reading_journal_note (
+			id bigserial primary key,
+			user_id uuid not null references app_user(id) on delete cascade,
+			book_id bigint references book(id) on delete set null,
+			entry_title text not null default '',
+			body text not null default '',
+			entry_at timestamptz not null default now(),
+			progress_snapshot int,
+			page_number int,
+			chapter_location text not null default '',
+			mood text not null default '',
+			personal_tags text[] not null default '{}',
+			visibility text not null default 'private' check (visibility in ('private', 'friends', 'public', 'shared')),
+			metadata jsonb not null default '{}'::jsonb,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now()
+		)
+	`;
+	await Promise.all([
+		sql`create index if not exists idx_reading_journal_note_user_entry on reading_journal_note(user_id, entry_at desc, updated_at desc)`,
+		sql`create index if not exists idx_reading_journal_note_book on reading_journal_note(user_id, book_id, entry_at desc)`,
+		sql`create index if not exists idx_reading_journal_note_visibility on reading_journal_note(visibility)`
+	]);
+	await sql`
 		create table if not exists reading_journal_entry (
 			user_id uuid not null references app_user(id) on delete cascade,
 			book_id bigint not null references book(id) on delete cascade,
@@ -202,6 +277,54 @@ export async function ensureReadingJournalSchema(sql: Sql) {
 		sql`create index if not exists idx_reading_journal_book on reading_journal_entry(book_id)`,
 		sql`create index if not exists idx_reading_journal_visibility on reading_journal_entry(visibility)`
 	]);
+	await sql`
+		insert into reading_journal_note (
+			user_id,
+			book_id,
+			entry_title,
+			body,
+			entry_at,
+			personal_tags,
+			visibility,
+			created_at,
+			updated_at,
+			metadata
+		)
+		select
+			j.user_id,
+			j.book_id,
+			'',
+			trim(concat_ws(E'\n\n',
+				nullif(concat('Started thoughts', E'\n', nullif(j.started_thoughts, '')), concat('Started thoughts', E'\n')),
+				nullif(concat('Mid-book notes', E'\n', nullif(j.mid_book_notes, '')), concat('Mid-book notes', E'\n')),
+				nullif(concat('Finished thoughts', E'\n', nullif(j.finished_thoughts, '')), concat('Finished thoughts', E'\n')),
+				nullif(concat('Favorite quote', E'\n', nullif(j.favorite_quote, '')), concat('Favorite quote', E'\n')),
+				nullif(concat('Recommended to', E'\n', nullif(j.recommended_to, '')), concat('Recommended to', E'\n'))
+			)),
+			j.updated_at,
+			j.personal_tags,
+			j.visibility,
+			j.created_at,
+			j.updated_at,
+			jsonb_build_object('legacyReadingJournalEntry', true)
+		from reading_journal_entry j
+		where not exists (
+			select 1
+			from reading_journal_note n
+			where n.user_id = j.user_id
+				and n.book_id = j.book_id
+				and n.metadata->>'legacyReadingJournalEntry' = 'true'
+		)
+			and (
+				j.started_thoughts <> ''
+				or j.mid_book_notes <> ''
+				or j.finished_thoughts <> ''
+				or j.favorite_quote <> ''
+				or j.recommended_to <> ''
+				or cardinality(j.personal_tags) > 0
+				or j.would_reread is not null
+			)
+	`;
 }
 
 export async function userOwnsBook(sql: Sql, userId: string, bookId: number) {
@@ -315,21 +438,131 @@ export async function deleteJournalEntry(sql: Sql, userId: string, bookId: numbe
 	return rows.length > 0;
 }
 
-export async function searchJournalEntries(sql: Sql, userId: string, query: string, limit = 24) {
+export async function saveJournalNote(sql: Sql, userId: string, input: ReadingJournalInput) {
+	await ensureReadingJournalSchema(sql);
+	const normalized = normalizeJournalInput(input);
+	if (!userId) throw new Error("You must be logged in to save your journal.");
+	if (!normalized.body) throw new Error("Journal body is required.");
+	if (normalized.bookId > 0 && !await userOwnsBook(sql, userId, normalized.bookId)) {
+		throw new Error("Add this book to your shelf before journaling about it.");
+	}
+	const rows = normalized.id > 0
+		? await sql<RawJournalRow[]>`
+			update reading_journal_note
+			set
+				book_id = ${normalized.bookId > 0 ? normalized.bookId : null},
+				entry_title = ${normalized.entryTitle},
+				body = ${normalized.body},
+				entry_at = ${normalized.entryAt}::timestamptz,
+				progress_snapshot = ${normalized.progressSnapshot},
+				page_number = ${normalized.pageNumber},
+				chapter_location = ${normalized.chapterLocation},
+				mood = ${normalized.mood},
+				personal_tags = ${normalized.personalTags},
+				visibility = 'private',
+				updated_at = now()
+			where id = ${normalized.id}
+				and user_id = ${userId}::uuid
+			returning
+				id,
+				user_id::text as user_id,
+				book_id,
+				entry_title,
+				body,
+				entry_at::text as entry_at,
+				progress_snapshot,
+				page_number,
+				chapter_location,
+				mood,
+				personal_tags,
+				visibility,
+				created_at::text as created_at,
+				updated_at::text as updated_at
+		`
+		: await sql<RawJournalRow[]>`
+			insert into reading_journal_note (
+				user_id,
+				book_id,
+				entry_title,
+				body,
+				entry_at,
+				progress_snapshot,
+				page_number,
+				chapter_location,
+				mood,
+				personal_tags,
+				visibility,
+				updated_at
+			)
+			values (
+				${userId}::uuid,
+				${normalized.bookId > 0 ? normalized.bookId : null},
+				${normalized.entryTitle},
+				${normalized.body},
+				${normalized.entryAt}::timestamptz,
+				${normalized.progressSnapshot},
+				${normalized.pageNumber},
+				${normalized.chapterLocation},
+				${normalized.mood},
+				${normalized.personalTags},
+				'private',
+				now()
+			)
+			returning
+				id,
+				user_id::text as user_id,
+				book_id,
+				entry_title,
+				body,
+				entry_at::text as entry_at,
+				progress_snapshot,
+				page_number,
+				chapter_location,
+				mood,
+				personal_tags,
+				visibility,
+				created_at::text as created_at,
+				updated_at::text as updated_at
+		`;
+	if (!rows[0]) throw new Error("Journal entry not found.");
+	return mapJournalRow(rows[0]);
+}
+
+export async function deleteJournalNote(sql: Sql, userId: string, entryId: number) {
+	await ensureReadingJournalSchema(sql);
+	if (!userId || !entryId) return false;
+	const rows = await sql<Array<{ id: number }>>`
+		delete from reading_journal_note
+		where id = ${entryId}
+			and user_id = ${userId}::uuid
+		returning id
+	`;
+	return rows.length > 0;
+}
+
+export async function searchJournalEntries(sql: Sql, userId: string, query: string, limit = 24, bookId = 0) {
 	await ensureReadingJournalSchema(sql);
 	if (!userId) return [] as JournalSearchResult[];
 	const normalizedQuery = String(query || "").replace(/\s+/g, " ").trim();
 	const pattern = `%${normalizedQuery}%`;
 	const rows = await sql<RawJournalRow[]>`
 		select
+			j.id,
 			j.user_id::text as user_id,
 			j.book_id,
-			j.started_thoughts,
-			j.mid_book_notes,
-			j.finished_thoughts,
-			j.favorite_quote,
-			j.would_reread,
-			j.recommended_to,
+			j.entry_title,
+			j.body,
+			j.entry_at::text as entry_at,
+			j.progress_snapshot,
+			j.page_number,
+			j.chapter_location,
+			j.mood,
+			'' as started_thoughts,
+			'' as mid_book_notes,
+			'' as finished_thoughts,
+			'' as favorite_quote,
+			null::boolean as would_reread,
+			'' as recommended_to,
 			j.personal_tags,
 			j.visibility,
 			j.created_at::text as created_at,
@@ -339,26 +572,26 @@ export async function searchJournalEntries(sql: Sql, userId: string, query: stri
 			b.cover_url,
 			ub.rating,
 			ub.status
-		from reading_journal_entry j
-		join book b on b.id = j.book_id
+		from reading_journal_note j
+		left join book b on b.id = j.book_id
 		left join user_book ub on ub.user_id = j.user_id and ub.book_id = j.book_id
 		where j.user_id = ${userId}::uuid
+			and (${Math.max(0, Number(bookId || 0) || 0)} = 0 or j.book_id = ${Math.max(0, Number(bookId || 0) || 0)})
 			and (
 				${normalizedQuery} = ''
-				or b.title ilike ${pattern}
-				or b.primary_author ilike ${pattern}
-				or j.started_thoughts ilike ${pattern}
-				or j.mid_book_notes ilike ${pattern}
-				or j.finished_thoughts ilike ${pattern}
-				or j.favorite_quote ilike ${pattern}
-				or j.recommended_to ilike ${pattern}
+				or coalesce(b.title, '') ilike ${pattern}
+				or coalesce(b.primary_author, '') ilike ${pattern}
+				or j.entry_title ilike ${pattern}
+				or j.body ilike ${pattern}
+				or j.chapter_location ilike ${pattern}
+				or j.mood ilike ${pattern}
 				or exists (
 					select 1
 					from unnest(j.personal_tags) tag
 					where tag ilike ${pattern}
 				)
 			)
-		order by j.updated_at desc, b.title asc
+		order by j.entry_at desc, j.updated_at desc, coalesce(b.title, '') asc
 		limit ${Math.max(1, Math.min(100, Math.floor(limit)))}
 	`;
 	return rows.map(mapSearchRow);
@@ -366,4 +599,8 @@ export async function searchJournalEntries(sql: Sql, userId: string, query: stri
 
 export async function loadRecentJournalEntries(sql: Sql, userId: string, limit = 5) {
 	return searchJournalEntries(sql, userId, "", limit);
+}
+
+export async function loadJournalEntriesForBook(sql: Sql, userId: string, bookId: number, limit = 5) {
+	return searchJournalEntries(sql, userId, "", limit, bookId);
 }

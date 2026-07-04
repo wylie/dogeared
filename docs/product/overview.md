@@ -41,7 +41,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Editorial Collections: curated book lists with editorial introductions, book ordering, notes, quotes, and shelf controls.
 - Profiles: public reader identity and current reading state, including profile card, notifications for the owner, bio, favorite book/author, concise reading goal summary, shelf summary, current reads, recent activity, and settings access.
 - My Reading Life: private historical reflection across finished books, pages, streaks, goals, ratings, timeline, reading calendar, genre and author history, milestones, fun statistics, and yearly summaries.
-- Reading Journal: private searchable notebook for what a reader was thinking while reading, including entries, notes, quotes, tags, reread intent, and recommendations.
+- Reading Journal: private searchable notebook for what a reader was thinking while reading, including dated entries, optional book context, progress snapshots, page/chapter context, moods, and personal tags.
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
 - Settings: profile/account entry points, magic-link auth, email changes, Goodreads import, preferences, privacy, notifications, data export, shelf clearing, API endpoint references, and sessions.
@@ -65,7 +65,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
 - Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, timeline history, milestones, and yearly summaries.
-- Private journaling: write, autosave, search, edit, and delete private notes for books already on the reader's shelves.
+- Private journaling: create, autosave, search, filter, edit, and delete private journal entries from the Reading Journal page, or create book-linked entries from a Currently Reading book page.
 - Reviews and ratings: rate finished books and optionally save a short finished reflection.
 - Social reading: follow readers, view following activity, like activity, comment on activity, and receive activity notifications.
 - Profile management: update name, avatar, location, birth year, goal text, favorite book, favorite author, blurb, and genres.
@@ -149,11 +149,13 @@ Current limitations: My Reading Life and its timeline depend on recorded DogEare
 
 ### Reading Journal
 
-DogEared supports a private Reading Journal for signed-in readers. A journal entry belongs to one reader and one shelved book. Entries can store started thoughts, mid-book notes, finished thoughts, a favorite quote, whether the reader would reread the book, who they would recommend it to, personal tags, visibility metadata, and last-edited timestamps.
+DogEared supports a private Reading Journal for signed-in readers. A journal entry belongs to one reader and may optionally be linked to a shelved book. Entries store an optional title, required body, journal date/time, optional reading progress snapshot, optional page number, optional chapter/location, optional mood, personal tags, visibility metadata, and last-edited timestamps.
 
-On a book page, the Reading Journal section appears only when the signed-in reader has that exact DogEared book on a shelf. The form supports Markdown text, autosaves through the journal API, keeps a local draft for recovery, shows a character count, and supports deleting the private entry.
+The private `/journal` page provides a prominent New Journal Entry action, newest-first entry list, text search, book filtering, local draft recovery, editing, and delete-with-confirmation controls. Entries created there can be general notes or linked to a book.
 
-The private `/journal` page lets readers search their own journal across book titles, authors, note bodies, quotes, recommendations, and tags. Journal entries do not appear on profiles or in My Reading Life today; the journal is intentionally scoped to private note-taking.
+On a book page, the Reading Journal section appears only when the signed-in reader has that exact DogEared book on a shelf. If the book is Currently Reading, the page offers a quick private journal form with autosave draft recovery. The section also shows recent private entries for that book and links to the filtered journal view.
+
+Journal entries do not appear on public profiles, recent activity feeds, or public search. The journal is intentionally scoped to private note-taking.
 
 Current limitations: journal visibility is stored with future states for friends, public, and shared entries, but the current UI and permission policy keep journal entries private to their owner.
 
@@ -232,7 +234,7 @@ Derived from the current repository structure and implementation:
 - Community discovery providers: 7.
 - Editorial collection publication states: 3 (`draft`, `published`, `archived`).
 - Series ordering modes: book order, publication order, chronological order.
-- Supported social/private interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment, create/edit/delete/search own journal entries.
+- Supported social/private interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment, create/edit/delete/search/filter own journal entries.
 - Supported catalog metadata types: editorial collections, series, genres, and topic tags.
 - Supported import source in Settings: Goodreads CSV.
 - Supported data export format in Settings: JSON.

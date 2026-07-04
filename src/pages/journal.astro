@@ -9,13 +9,31 @@ export const prerender = false;
 const session = await resolveUserBySession(Astro.request);
 const viewerUserId = session?.userId || "";
 const query = String(Astro.url.searchParams.get("q") || "").replace(/\s+/g, " ").trim();
+const filterBookId = Math.max(0, Number(Astro.url.searchParams.get("bookId") || 0) || 0);
 let entries: JournalSearchResult[] = [];
+let ownedBookOptions: Array<{ id: number; title: string; author: string }> = [];
 let loadError = "";
 
 if (viewerUserId) {
 	try {
 		const sql = getNeonSql();
-		entries = await searchJournalEntries(sql, viewerUserId, query, 60);
+		entries = await searchJournalEntries(sql, viewerUserId, query, 80, filterBookId);
+		const rows = await sql<Array<{ id: number; title: string | null; primary_author: string | null }>>`
+			select
+				b.id,
+				b.title,
+				b.primary_author
+			from user_book ub
+			join book b on b.id = ub.book_id
+			where ub.user_id = ${viewerUserId}::uuid
+			order by lower(coalesce(b.title, '')) asc, b.id asc
+			limit 500
+		`;
+		ownedBookOptions = rows.map((row) => ({
+			id: Math.max(0, Number(row.id || 0) || 0),
+			title: String(row.title || "").trim() || "Untitled book",
+			author: String(row.primary_author || "").trim()
+		})).filter((book) => book.id > 0);
 	} catch (error) {
 		loadError = error instanceof Error ? error.message : "Failed to load journal.";
 	}
@@ -27,39 +45,33 @@ function formatDate(value: string) {
 	return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
+function dateTimeInput(value: string) {
+	const date = new Date(String(value || ""));
+	if (!Number.isFinite(date.getTime())) return "";
+	const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+	return local.toISOString().slice(0, 16);
+}
+
 function bookHref(entry: JournalSearchResult) {
-	return `/book?bookId=${encodeURIComponent(String(entry.bookId))}#reading-journal`;
+	return entry.bookId ? `/book?bookId=${encodeURIComponent(String(entry.bookId))}#reading-journal` : "/journal";
 }
 
 function excerptFor(entry: JournalSearchResult) {
-	const text = [
-		entry.finishedThoughts,
-		entry.midBookNotes,
-		entry.startedThoughts,
-		entry.favoriteQuote,
-		entry.recommendedTo
-	].map((part) => String(part || "").replace(/\s+/g, " ").trim()).find(Boolean) || "";
+	const text = String(entry.body || "").replace(/\s+/g, " ").trim();
 	return text.length > 220 ? `${text.slice(0, 217).trim()}...` : text;
 }
 
 const sectionLinks = viewerUserId ? [
+	{ id: "new-entry", label: "New Entry" },
 	{ id: "journal-search", label: "Search" },
 	{ id: "journal-entries", label: "Entries" }
 ] : [];
 ---
 
-<Layout
-	title="Reading Journal"
-	sectionLinks={sectionLinks}
-	metaDescription="Search your private DogEared reading journal."
-	canonicalUrl="/journal"
-	robots="noindex,nofollow"
->
+<Layout title="Reading Journal" sectionLinks={sectionLinks} metaDescription="Search and write your private DogEared reading journal." canonicalUrl="/journal" robots="noindex,nofollow">
 	<div slot="right" class="journal-page">
 		<nav class="breadcrumbs" aria-label="Breadcrumb">
-			<a href="/">Home</a>
-			<span aria-hidden="true">/</span>
-			<span>Reading Journal</span>
+			<a href="/">Home</a><span aria-hidden="true">/</span><span>Reading Journal</span>
 		</nav>
 
 		{!viewerUserId ? (
@@ -73,50 +85,107 @@ const sectionLinks = viewerUserId ? [
 				<section class="journal-hero" id="journal-search">
 					<p class="journal-eyebrow">Private notebook</p>
 					<h1>Reading Journal</h1>
-					<p>Search your own notes, quotes, tags, and book titles. Journal entries are private by default.</p>
+					<p>Capture what you are thinking while you read. Search your own notes, tags, books, and moods. Entries are private and never appear on profiles or activity feeds.</p>
+					<a class="new-entry-button" href="#new-entry" data-action="new-journal-entry">New Journal Entry</a>
 					<form class="journal-search-form" action="/journal" method="get">
 						<label class="visually-hidden" for="journal-query">Search journal</label>
-						<input id="journal-query" type="search" name="q" value={query} placeholder="Search notes, quotes, tags, or books" />
+						<input id="journal-query" type="search" name="q" value={query} placeholder="Search notes, tags, books, or moods" />
+						<label class="visually-hidden" for="journal-book-filter">Filter by book</label>
+						<select id="journal-book-filter" name="bookId">
+							<option value="">All books</option>
+							{ownedBookOptions.map((book) => <option value={String(book.id)} selected={filterBookId === book.id}>{book.title}{book.author ? ` by ${book.author}` : ""}</option>)}
+						</select>
 						<button type="submit">Search</button>
-						{query && <a class="secondary-link" href="/journal">Clear</a>}
+						{(query || filterBookId) && <a class="secondary-link" href="/journal">Clear</a>}
+					</form>
+				</section>
+
+				<section class="journal-editor" id="new-entry" aria-labelledby="journal-editor-title">
+					<div class="journal-results-head">
+						<div>
+							<p class="journal-eyebrow">Private entry</p>
+							<h2 id="journal-editor-title">New Journal Entry</h2>
+						</div>
+						<p data-editor-mode>New entry</p>
+					</div>
+					<form class="journal-entry-form" data-journal-entry-form>
+						<input type="hidden" name="id" value="" />
+						<div class="journal-grid-two">
+							<label><span>Title <em>optional</em></span><input type="text" name="entryTitle" maxlength="160" placeholder="A thought to remember" /></label>
+							<label><span>Date and time</span><input type="datetime-local" name="entryAt" value={dateTimeInput(new Date().toISOString())} /></label>
+						</div>
+						<label><span>Body</span><textarea name="body" rows="8" maxlength="8000" required placeholder="What do you want to remember?"></textarea></label>
+						<div class="journal-grid-two">
+							<label>
+								<span>Book <em>optional</em></span>
+								<select name="bookId">
+									<option value="">General note</option>
+									{ownedBookOptions.map((book) => <option value={String(book.id)}>{book.title}{book.author ? ` by ${book.author}` : ""}</option>)}
+								</select>
+							</label>
+							<label><span>Page number <em>optional</em></span><input type="number" name="pageNumber" min="1" inputmode="numeric" /></label>
+						</div>
+						<div class="journal-grid-two">
+							<label><span>Chapter or location <em>optional</em></span><input type="text" name="chapterLocation" maxlength="160" /></label>
+							<label><span>Mood <em>optional</em></span><input type="text" name="mood" maxlength="80" /></label>
+						</div>
+						<div class="journal-grid-two">
+							<label><span>Progress snapshot <em>optional</em></span><input type="number" name="progressSnapshot" min="1" inputmode="numeric" placeholder="Current page or percent" /></label>
+							<label><span>Personal tags <em>optional</em></span><input type="text" name="personalTags" maxlength="400" placeholder="quiet, quote, book club" /></label>
+						</div>
+						<div class="journal-actions">
+							<button type="submit" data-journal-save>Save entry</button>
+							<button type="button" class="secondary" data-journal-reset>Clear</button>
+							<p class="journal-status" data-journal-status role="status" aria-live="polite">Drafts autosave on this device.</p>
+							<p class="journal-count" data-journal-count>0 characters</p>
+						</div>
 					</form>
 				</section>
 
 				<section class="journal-results" id="journal-entries">
 					<div class="journal-results-head">
-						<h2>{query ? "Search Results" : "Recent Journal Entries"}</h2>
+						<h2>{query || filterBookId ? "Filtered Entries" : "Recent Journal Entries"}</h2>
 						<p>{entries.length.toLocaleString()} {entries.length === 1 ? "entry" : "entries"}</p>
 					</div>
 					{loadError ? (
 						<p class="journal-empty">{loadError}</p>
 					) : entries.length === 0 ? (
-						<p class="journal-empty">
-							{query ? "No journal entries matched that search." : "No journal entries yet. Open a book on your shelf to start writing."}
-						</p>
+						<p class="journal-empty">{query || filterBookId ? "No journal entries matched those filters." : "No journal entries yet. Use New Journal Entry to capture a private thought, quote, page note, or reading moment."}</p>
 					) : (
 						<ul class="journal-entry-list">
 							{entries.map((entry) => (
-								<li class="journal-entry-card">
-									<a class="journal-entry-cover-link" href={bookHref(entry)} aria-label={`Open journal entry for ${entry.title}`}>
-										{entry.coverUrl ? (
-											<img src={entry.coverUrl} alt="" loading="lazy" decoding="async" width="52" height="76" />
-										) : (
-											<span class="journal-cover-placeholder" aria-hidden="true">book</span>
-										)}
+								<li
+									class="journal-entry-card"
+									data-entry-id={String(entry.id || 0)}
+									data-entry-title={entry.entryTitle || ""}
+									data-body={entry.body || ""}
+									data-entry-at={dateTimeInput(entry.entryAt || entry.updatedAt)}
+									data-book-id={String(entry.bookId || "")}
+									data-page-number={String(entry.pageNumber || "")}
+									data-progress-snapshot={String(entry.progressSnapshot || "")}
+									data-chapter-location={entry.chapterLocation || ""}
+									data-mood={entry.mood || ""}
+									data-personal-tags={(entry.personalTags || []).join(", ")}
+								>
+									<a class="journal-entry-cover-link" href={bookHref(entry)} aria-label={entry.title ? `Open ${entry.title}` : "Open journal"}>
+										{entry.coverUrl ? <img src={entry.coverUrl} alt="" loading="lazy" decoding="async" width="52" height="76" /> : <span class="journal-cover-placeholder" aria-hidden="true">book</span>}
 									</a>
 									<div class="journal-entry-main">
-										<h3><a href={bookHref(entry)}>{entry.title}</a></h3>
+										<h3>{entry.entryTitle || entry.title || "Untitled journal entry"}</h3>
 										<p class="journal-entry-meta">
-											{entry.author}
-											{entry.rating > 0 && <> · {entry.rating}/5</>}
-											{formatDate(entry.updatedAt) && <> · Updated {formatDate(entry.updatedAt)}</>}
+											{entry.title ? <a href={bookHref(entry)}>{entry.title}</a> : "General note"}
+											{entry.author && <> by {entry.author}</>}
+											{formatDate(entry.entryAt || entry.updatedAt) && <> · {formatDate(entry.entryAt || entry.updatedAt)}</>}
+											{entry.pageNumber && <> · p. {entry.pageNumber}</>}
+											{entry.chapterLocation && <> · {entry.chapterLocation}</>}
+											{entry.mood && <> · {entry.mood}</>}
 										</p>
 										{excerptFor(entry) && <p class="journal-entry-excerpt">{excerptFor(entry)}</p>}
-										{entry.personalTags.length > 0 && (
-											<ul class="journal-tags" aria-label="Personal tags">
-												{entry.personalTags.map((tag) => <li>{tag}</li>)}
-											</ul>
-										)}
+										{entry.personalTags.length > 0 && <ul class="journal-tags" aria-label="Personal tags">{entry.personalTags.map((tag) => <li>{tag}</li>)}</ul>}
+										<div class="journal-entry-actions">
+											<button type="button" class="secondary-link-button" data-action="edit-journal-entry">Edit</button>
+											<button type="button" class="secondary-link-button destructive" data-action="delete-journal-entry">Delete</button>
+										</div>
 									</div>
 								</li>
 							))}
@@ -128,195 +197,152 @@ const sectionLinks = viewerUserId ? [
 	</div>
 </Layout>
 
+<script>
+	const form = document.querySelector("[data-journal-entry-form]");
+	if (form instanceof HTMLFormElement) {
+		const status = document.querySelector("[data-journal-status]");
+		const count = document.querySelector("[data-journal-count]");
+		const mode = document.querySelector("[data-editor-mode]");
+		const draftKey = "dogeared:journal-page-draft";
+		const fields = ["id", "entryTitle", "entryAt", "body", "bookId", "pageNumber", "chapterLocation", "mood", "progressSnapshot", "personalTags"];
+		const setStatus = (message) => { if (status instanceof HTMLElement) status.textContent = message; };
+		const field = (name) => form.elements.namedItem(name);
+		const readPayload = () => Object.fromEntries(fields.map((name) => {
+			const item = field(name);
+			return [name, item instanceof HTMLInputElement || item instanceof HTMLTextAreaElement || item instanceof HTMLSelectElement ? item.value : ""];
+		}));
+		const writePayload = (payload = {}) => {
+			for (const name of fields) {
+				const item = field(name);
+				if (item instanceof HTMLInputElement || item instanceof HTMLTextAreaElement || item instanceof HTMLSelectElement) item.value = String(payload[name] || "");
+			}
+			if (!String(payload.entryAt || "").trim()) {
+				const entryAt = field("entryAt");
+				if (entryAt instanceof HTMLInputElement) {
+					const now = new Date();
+					const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+					entryAt.value = local.toISOString().slice(0, 16);
+				}
+			}
+		};
+		const updateCount = () => {
+			const body = String(readPayload().body || "");
+			if (count instanceof HTMLElement) count.textContent = `${body.length.toLocaleString()} ${body.length === 1 ? "character" : "characters"}`;
+		};
+		const rememberDraft = () => {
+			try { window.localStorage.setItem(draftKey, JSON.stringify(readPayload())); } catch {}
+			updateCount();
+			setStatus("Draft saved on this device.");
+		};
+		try {
+			const raw = window.localStorage.getItem(draftKey);
+			if (raw) {
+				const draft = JSON.parse(raw);
+				if (draft?.body) {
+					writePayload(draft);
+					setStatus("Recovered an unsaved local draft.");
+				}
+			}
+		} catch {}
+		updateCount();
+		form.addEventListener("input", rememberDraft);
+		form.addEventListener("submit", async (event) => {
+			event.preventDefault();
+			const payload = readPayload();
+			if (!String(payload.body || "").trim()) {
+				setStatus("Write a body before saving.");
+				return;
+			}
+			setStatus("Saving...");
+			const response = await fetch("/api/journal/entries", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "same-origin",
+				body: JSON.stringify(payload)
+			});
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				setStatus(String(data?.error || "Failed to save entry."));
+				return;
+			}
+			try { window.localStorage.removeItem(draftKey); } catch {}
+			setStatus("Saved privately. Refreshing...");
+			window.location.href = "/journal";
+		});
+		document.querySelector("[data-journal-reset]")?.addEventListener("click", () => {
+			writePayload({});
+			try { window.localStorage.removeItem(draftKey); } catch {}
+			if (mode instanceof HTMLElement) mode.textContent = "New entry";
+			setStatus("Cleared.");
+			updateCount();
+		});
+		document.addEventListener("click", async (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			const card = target.closest(".journal-entry-card");
+			if (!(card instanceof HTMLElement)) return;
+			if (target.closest('[data-action="edit-journal-entry"]')) {
+				writePayload(card.dataset);
+				if (mode instanceof HTMLElement) mode.textContent = "Editing entry";
+				document.getElementById("new-entry")?.scrollIntoView({ behavior: "smooth", block: "start" });
+				setStatus("Editing existing entry.");
+				updateCount();
+			}
+			if (target.closest('[data-action="delete-journal-entry"]')) {
+				const id = Number(card.dataset.entryId || 0);
+				if (!id || !window.confirm("Delete this private journal entry?")) return;
+				const response = await fetch(`/api/journal/entries?id=${encodeURIComponent(String(id))}`, { method: "DELETE", credentials: "same-origin" });
+				const data = await response.json().catch(() => ({}));
+				if (!response.ok) {
+					setStatus(String(data?.error || "Failed to delete entry."));
+					return;
+				}
+				card.remove();
+				setStatus("Journal entry deleted.");
+			}
+		});
+	}
+</script>
+
 <style>
-	.journal-page {
-		max-width: 980px;
-	}
-	.breadcrumbs {
-		display: flex;
-		gap: 0.35rem;
-		align-items: center;
-		flex-wrap: wrap;
-		margin: 0 0 0.65rem;
-		font-size: 0.84rem;
-		color: var(--color-text-subtle);
-	}
-	.breadcrumbs a {
-		color: var(--color-nav);
-		text-decoration: none;
-	}
-	.breadcrumbs a:hover,
-	.breadcrumbs a:focus-visible {
-		color: var(--color-nav-hover);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-	}
-	.journal-state-card,
-	.journal-hero,
-	.journal-results {
-		border: var(--border-subtle);
-		border-radius: var(--radius-lg);
-		background: var(--color-surface-raised);
-		padding: 1rem;
-	}
-	.journal-hero,
-	.journal-results {
-		margin-top: 0.95rem;
-	}
-	.journal-eyebrow {
-		margin: 0 0 0.25rem;
-		color: var(--color-text-subtle);
-		font-size: 0.78rem;
-		font-weight: 760;
-		text-transform: uppercase;
-		letter-spacing: 0;
-	}
-	.journal-state-card h1,
-	.journal-hero h1,
-	.journal-results h2 {
-		margin: 0 0 0.45rem;
-	}
-	.journal-state-card p,
-	.journal-hero p,
-	.journal-results-head p,
-	.journal-empty {
-		margin: 0;
-		color: var(--color-text-muted);
-		line-height: 1.45;
-	}
-	.primary-link,
-	.secondary-link {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 42px;
-		margin-top: 0.9rem;
-		color: var(--color-nav);
-		font-weight: 760;
-		text-decoration: none;
-	}
-	.secondary-link {
-		margin-top: 0;
-	}
-	.primary-link:hover,
-	.primary-link:focus-visible,
-	.secondary-link:hover,
-	.secondary-link:focus-visible {
-		color: var(--color-nav-hover);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-	}
-	.journal-search-form {
-		margin-top: 0.95rem;
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto auto;
-		gap: 0.6rem;
-		align-items: center;
-	}
-	.journal-search-form input {
-		width: 100%;
-		min-height: 44px;
-		box-sizing: border-box;
-		border: var(--border-subtle);
-		border-radius: var(--radius-md);
-		background: rgba(255, 255, 255, 0.72);
-		color: var(--color-text);
-		font: inherit;
-		padding: 0.65rem 0.75rem;
-	}
-	.journal-search-form input:focus {
-		outline: 2px solid var(--color-accent);
-		outline-offset: 2px;
-	}
-	.journal-results-head {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 1rem;
-		margin-bottom: 0.8rem;
-	}
-	.journal-entry-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: grid;
-		gap: 0.65rem;
-	}
-	.journal-entry-card {
-		display: grid;
-		grid-template-columns: 52px minmax(0, 1fr);
-		gap: 0.75rem;
-		border: var(--border-subtle);
-		border-radius: var(--radius-md);
-		background: rgba(255, 255, 255, 0.58);
-		padding: 0.65rem;
-	}
-	.journal-entry-cover-link,
-	.journal-entry-cover-link img,
-	.journal-cover-placeholder {
-		width: 52px;
-		height: 76px;
-		border-radius: var(--radius-sm);
-	}
-	.journal-entry-cover-link img {
-		object-fit: cover;
-		border: var(--border-subtle);
-	}
-	.journal-cover-placeholder {
-		display: grid;
-		place-items: center;
-		background: rgba(255, 255, 255, 0.72);
-		border: var(--border-subtle);
-		color: var(--color-text-subtle);
-		font-size: 0.7rem;
-	}
-	.journal-entry-main {
-		min-width: 0;
-	}
-	.journal-entry-main h3 {
-		margin: 0;
-		font-size: 1rem;
-	}
-	.journal-entry-main h3 a {
-		color: var(--color-text);
-		text-decoration: none;
-	}
-	.journal-entry-main h3 a:hover,
-	.journal-entry-main h3 a:focus-visible {
-		color: var(--color-nav-hover);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-	}
-	.journal-entry-meta,
-	.journal-entry-excerpt {
-		margin: 0.25rem 0 0;
-		color: var(--color-text-muted);
-		line-height: 1.45;
-	}
-	.journal-tags {
-		list-style: none;
-		margin: 0.5rem 0 0;
-		padding: 0;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.35rem;
-	}
-	.journal-tags li {
-		border: var(--border-subtle);
-		border-radius: 999px;
-		background: rgba(255, 255, 255, 0.68);
-		color: var(--color-text-muted);
-		font-size: 0.78rem;
-		padding: 0.18rem 0.48rem;
-	}
-	@media (max-width: 620px) {
-		.journal-search-form {
-			grid-template-columns: 1fr;
-		}
-		.journal-results-head {
-			align-items: flex-start;
-			flex-direction: column;
-			gap: 0.25rem;
-		}
+	.journal-page { max-width: 980px; }
+	.breadcrumbs { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; margin: 0 0 0.65rem; font-size: 0.84rem; color: var(--color-text-subtle); }
+	.breadcrumbs a, .secondary-link, .journal-entry-meta a, .secondary-link-button { color: var(--color-nav); text-decoration: none; }
+	.breadcrumbs a:hover, .secondary-link:hover, .journal-entry-meta a:hover, .secondary-link-button:hover { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
+	.journal-state-card, .journal-hero, .journal-editor, .journal-results { border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
+	.journal-hero, .journal-editor, .journal-results { margin-top: 0.95rem; }
+	.journal-eyebrow { margin: 0 0 0.25rem; color: var(--color-text-subtle); font-size: 0.78rem; font-weight: 760; text-transform: uppercase; letter-spacing: 0; }
+	.journal-state-card h1, .journal-hero h1, .journal-editor h2, .journal-results h2 { margin: 0 0 0.45rem; }
+	.journal-state-card p, .journal-hero p, .journal-results-head p, .journal-empty, .journal-status, .journal-count { margin: 0; color: var(--color-text-muted); line-height: 1.45; }
+	.primary-link, .new-entry-button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; margin-top: 0.9rem; font-weight: 760; text-decoration: none; }
+	.new-entry-button { border-radius: 999px; background: var(--color-primary); color: #fff; padding: 0.65rem 1rem; }
+	.journal-search-form { margin-top: 0.95rem; display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 220px) auto auto; gap: 0.6rem; align-items: center; }
+	.journal-search-form input, .journal-search-form select, .journal-entry-form input, .journal-entry-form select, .journal-entry-form textarea { width: 100%; min-height: 44px; box-sizing: border-box; border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255,255,255,0.72); color: var(--color-text); font: inherit; padding: 0.65rem 0.75rem; }
+	.journal-entry-form textarea { resize: vertical; }
+	.journal-search-form input:focus, .journal-search-form select:focus, .journal-entry-form input:focus, .journal-entry-form select:focus, .journal-entry-form textarea:focus { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+	.journal-entry-form { display: grid; gap: 0.75rem; }
+	.journal-entry-form label span { display: block; margin-bottom: 0.25rem; font-weight: 760; }
+	.journal-entry-form label em { color: var(--color-text-muted); font-style: normal; font-weight: 500; }
+	.journal-grid-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+	.journal-results-head, .journal-actions, .journal-entry-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+	.journal-actions { justify-content: flex-start; }
+	.journal-actions button { min-height: 42px; }
+	.journal-actions .secondary { background: transparent; color: var(--color-nav); border: var(--border-subtle); }
+	.journal-entry-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.65rem; }
+	.journal-entry-card { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 0.75rem; border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255,255,255,0.58); padding: 0.65rem; }
+	.journal-entry-cover-link, .journal-entry-cover-link img, .journal-cover-placeholder { width: 52px; height: 76px; border-radius: var(--radius-sm); }
+	.journal-entry-cover-link img { object-fit: cover; border: var(--border-subtle); }
+	.journal-cover-placeholder { display: grid; place-items: center; background: var(--color-chip-topic); color: var(--color-nav); font-family: "Material Icons"; }
+	.journal-entry-main { min-width: 0; }
+	.journal-entry-main h3, .journal-entry-meta, .journal-entry-excerpt { margin: 0 0 0.3rem; }
+	.journal-entry-meta, .journal-entry-excerpt { color: var(--color-text-muted); line-height: 1.4; }
+	.journal-tags { list-style: none; display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0; margin: 0.45rem 0; }
+	.journal-tags li { border-radius: 999px; background: var(--color-chip-topic); color: var(--color-nav); padding: 0.18rem 0.5rem; font-size: 0.78rem; font-weight: 760; }
+	.secondary-link-button { border: 0; background: transparent; font: inherit; font-weight: 760; padding: 0; cursor: pointer; }
+	.secondary-link-button.destructive { color: #991b1b; }
+	@media (max-width: 680px) {
+		.journal-search-form, .journal-grid-two { grid-template-columns: 1fr; }
+		.journal-entry-card { grid-template-columns: 44px minmax(0, 1fr); }
+		.journal-entry-cover-link, .journal-entry-cover-link img, .journal-cover-placeholder { width: 44px; height: 66px; }
 	}
 </style>
