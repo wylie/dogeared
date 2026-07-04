@@ -259,6 +259,16 @@ Signed-in readers can open `/reading-life` from the You navigation to see a priv
 
 Limitations: My Reading Life is derived from recorded DogEared data. Rereads are not tracked separately today because the default shelf model stores one row per reader/book.
 
+### Reading Timeline
+
+Status: Complete
+
+Signed-in readers can open `/reading-timeline` from the You navigation or their profile action menu. The page shows finished books grouped by year and month, with each book displaying cover, title, author, finish date, rating, shelf labels, and a book link. Filters support year, genre, shelf, rating, author, and search query.
+
+Monthly summaries show books finished, pages read, favorite genre, average rating, and reading streak. Milestones highlight reflective moments such as first finished book, 100th book when present, longest book, shortest book, biggest reading month, longest reading streak, and reading goal completion.
+
+Limitations: Timeline entries depend on finished books with finished dates or usable update dates. Future journal entries, quotes, reading notes, photos, and annual recaps are prepared for in structure but not implemented in the page.
+
 ### Reading Journal
 
 Status: Complete

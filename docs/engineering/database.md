@@ -266,6 +266,21 @@ Relationships:
 - The page is scoped to the signed-in `app_user`.
 - Yearly summaries, timeline filters, genre/author insights, and fun statistics are calculated at render time from the reader's recorded data.
 
+## Reading Timeline Data
+
+Reading Timeline does not introduce a new persistence table. It derives its view from existing entities:
+
+- `user_book` for finished books, ratings, page counts, shelf status, finished dates, and update dates.
+- `user_custom_shelf` and `user_custom_shelf_book` for custom shelf labels used in timeline display and shelf filtering.
+- `user_reading_progress_event` for reading streak calculations.
+- `book`, `author`, `book_genre`, and `series_book`/`series` for catalog, author, genre, and series context.
+- `app_user.profile_data.readingGoal` for reading goal completion milestones.
+
+Relationships:
+
+- The page is scoped to the signed-in `app_user`.
+- Year/month groups, monthly summaries, filters, and milestones are calculated at render time from the reader's recorded data.
+
 ## Activity
 
 Entity: `user_activity`

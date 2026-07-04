@@ -41,6 +41,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Editorial Collections: curated book lists with editorial introductions, book ordering, notes, quotes, and shelf controls.
 - Profiles: public reader pages with about information, shelf summary, custom shelves, reading goal, current reads, activity, followers, and following.
 - My Reading Life: private personal reflection across finished books, pages, streaks, goals, ratings, timeline, reading calendar, genres, authors, fun statistics, and yearly summaries.
+- Reading Timeline: private chronological history of finished books grouped by year and month, with filters, monthly summaries, and reflective milestones.
 - Reading Journal: private searchable notebook for a reader's own book notes, quotes, reread intent, recommendations, and tags.
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
@@ -54,7 +55,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Book discovery: browse featured editorial collections, explainable home recommendations, search books with series context, open book pages, browse author pages, or explore related genre/topic/author/book pages.
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
-- Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, and yearly summaries.
+- Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, and yearly summaries; open Reading Timeline to browse finished books by season.
 - Private journaling: write, autosave, search, edit, and delete private notes for books already on the reader's shelves.
 - Reviews and ratings: rate finished books and optionally save a short finished reflection.
 - Social reading: follow readers, view following activity, like activity, comment on activity, and receive activity notifications.
@@ -129,9 +130,19 @@ Profiles support an annual reading goal stored in profile data. The goal card sh
 
 My Reading Life is a private, authenticated page for reflecting on a reader's own history. It is intentionally personal rather than competitive. The page derives its view from existing shelf entries, finished dates, page counts, ratings, reading progress events, genres, authors, series metadata, and the reader's annual goal.
 
-The overview shows books completed this year, pages read, reading streak, reading goal progress, average rating, average pages per day, average book length, reading pace, current books, favorite genre, favorite author, and newest author discovered. The page also includes a finished-book timeline with year/month/search filters, a calendar-style activity heatmap with textual summary, genre insights, author insights, fun statistics, and yearly reading-journey summaries prepared for future Year in Books experiences.
+The overview shows books completed this year, pages read, reading streak, reading goal progress, average rating, average pages per day, average book length, reading pace, current books, favorite genre, favorite author, and newest author discovered. The page also includes a compact finished-book timeline with year/month/search filters, a calendar-style activity heatmap with textual summary, genre insights, author insights, fun statistics, and yearly reading-journey summaries prepared for future Year in Books experiences.
 
 Current limitations: rereads are not tracked separately because DogEared stores one default shelf entry per user/book. My Reading Life only reflects data the reader has recorded in DogEared.
+
+### Reading Timeline
+
+Reading Timeline is a private, authenticated page at `/reading-timeline`. It gives readers a chronological journal-like view of finished books, grouped by year and month. Each entry shows a small cover, title, author, finish date, rating, shelf labels, genre context when available, and a link back to the book.
+
+Readers can filter the timeline by year, genre, shelf, rating, author, and search query. Month sections include optional summaries for books finished, pages read, favorite genre, average rating, and reading streak. The page also highlights reflective milestones such as first finished book, 100th book when present, longest and shortest books, biggest reading month, longest reading streak, and reading goal completion.
+
+The timeline is designed for future additions such as journal entries, quotes, reading notes, photos, and annual recaps, but those additions are not implemented in the current page.
+
+Current limitations: Reading Timeline depends on finished books having usable finished dates or update dates. Rereads are not tracked separately.
 
 ### Reading Journal
 
@@ -207,14 +218,14 @@ Related pages support landing exploration plus specific `kind=genre`, `kind=topi
 
 Derived from the current repository structure and implementation:
 
-- Major non-API page routes: 33 application/content routes plus `robots.txt` and `sitemap.xml`.
+- Major non-API page routes: 34 application/content routes plus `robots.txt` and `sitemap.xml`.
 - API routes: 34 endpoint files.
 - Admin pages: 5 routes.
 - Redirect-only compatibility routes: `/discover`, `/feed`, `/myreads`, `/profile`, `/author`, and `/u/[username]`.
-- User-facing feature areas documented here: 46.
+- User-facing feature areas documented here: 47.
 - Default persisted shelf statuses: 3 (`want_to_read`, `reading`, `finished`).
 - Custom shelf icon options: 16.
-- Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, My Reading Life overview, finished-book timeline, reading calendar, genre/author insights, fun statistics, yearly summaries, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.
+- Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, My Reading Life overview, dedicated Reading Timeline, timeline milestones, monthly timeline summaries, reading calendar, genre/author insights, fun statistics, yearly summaries, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.
 - Community discovery providers: 7.
 - Editorial collection publication states: 3 (`draft`, `published`, `archived`).
 - Series ordering modes: book order, publication order, chronological order.
