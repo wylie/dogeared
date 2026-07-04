@@ -20,7 +20,7 @@ Shared components live in `src/components/`.
 
 - `BookCard` renders repeated book/activity cards.
 - `ShelfDropdown` provides default and custom shelf controls.
-- `RatingControl` handles star ratings.
+- `RatingControl` handles standalone star ratings, while book/profile review editors handle finished-book public recommendations.
 - `Chip` renders metadata chips for genres/topics.
 - `Navigation`, `LeftHand`, `FloatingActions`, `FeedbackWidget`, `GuidedTip`, and widget components provide layout and side surfaces.
 
@@ -35,7 +35,7 @@ API routes live in `src/pages/api/` and are grouped by product area:
 - Follow: follow state and mutations.
 - Journal: private journal entry create/search/filter, update, and delete.
 - Profile/public: profile info, username, public shelf/activity/profile.
-- Shelf: shelf entries, ratings, custom shelves, custom shelf books, section ordering.
+- Shelf/reviews: shelf entries, ratings, finished-book review metadata, custom shelves, custom shelf books, section ordering.
 - Admin-adjacent/system: health, feedback, notifications count, onboarding status, guided first-experience status, top lists, reader suggestions.
 
 Most APIs resolve the current session when mutating or reading private user data.

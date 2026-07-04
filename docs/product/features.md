@@ -215,9 +215,11 @@ Limitations: A book must be on the reader's shelf before it can be rated.
 
 Status: Complete
 
-A review is a finished-book reflection stored on the shelf entry, optionally with a rating.
+Reviews are public finished-book recommendations stored on the shelf entry. When a reader marks a book Read, DogEared offers a simple completion flow: rating, optional review, and finish. Reviews support an optional title, optional body, spoiler flag, editing, deletion, and local draft autosave where the editor is available.
 
-Limitations: Finished reflection text is capped at 280 characters in the shelf API.
+Book pages show average rating, rating count, recent reviews, spoiler labels, collapsed long reviews, and an owner editor for finished books. Profiles include a Reviews section with latest reviews plus sort and spoiler filters.
+
+Limitations: Reviews are public by default. Future privacy settings may add alternate visibility, but current Journal entries remain the private place for notes while reading.
 
 ### Finished Date
 

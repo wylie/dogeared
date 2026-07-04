@@ -67,7 +67,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
 - Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, timeline history, milestones, and yearly summaries.
 - Private journaling: create, autosave, search, date-filter, book-filter, view, edit, and delete private journal entries from the Reading Journal page; create book-linked entries from a Currently Reading book page or after saving reading progress.
-- Reviews and ratings: rate finished books and optionally save a short finished reflection.
+- Reviews and ratings: finish a book through a rating plus optional public review flow, then edit or delete that review later.
 - Social reading: follow readers, view following activity, like activity, comment on activity, and receive activity notifications.
 - Profile management: update name, avatar, location, birth year, goal text, favorite book, favorite author, blurb, and genres.
 - Privacy management: set public/private profile visibility and control location, activity, discovery, and follow availability.
@@ -130,7 +130,7 @@ DNF is referenced in roadmap and filtered from imported Goodreads genre tags, bu
 
 ### Reading Progress
 
-Currently Reading books can store total pages, current page, finished date after completion, and progress events. Forward page progress creates `user_reading_progress_event` rows. Read books can store finished date and a short finished reflection.
+Currently Reading books can store total pages, current page, finished date after completion, and progress events. Forward page progress creates `user_reading_progress_event` rows. Read books can store finished date, rating, and public review metadata.
 
 ### Momentum Score
 
@@ -178,7 +178,9 @@ Activity is created for shelf changes, finished updates, progress updates, and r
 
 ### Reviews
 
-Reviews are represented as finished-book reflections on `user_book`, optionally paired with a star rating. Reviews appear on book detail pages, profile activity, and admin review counts.
+Reviews are public recommendations written after finishing a book. They are represented on `user_book` with optional star rating, optional review title, review body, spoiler flag, and review update timestamp. The finish flow offers rating, optional review, and Finish; reviews are never required.
+
+Book detail pages show aggregate rating context, recent reviews, spoiler labeling, collapsed long reviews, and an editor for the signed-in reader's own finished books. Profiles include a Reviews section with latest reviews, sorting, and spoiler filters. Reviews are distinct from Reading Journal entries: reviews are public recommendations after finishing, while journal entries are private notes while reading.
 
 Recently Reviewed recommendations show a review excerpt, reviewer attribution when a username is available, the reviewer's rating when present, and a direct link to the anchored review card on the book page.
 

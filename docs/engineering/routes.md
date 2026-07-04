@@ -14,7 +14,7 @@ Authentication requirements:
 | `/` | Public | Featured editorial collections, explainable community discovery, onboarding checklist, provider sections, reader suggestions, custom shelf ideas. | `BookCard`, `ShelfDropdown`, `RatingControl`, `collections`, `discoveryProviders`, `homeSections`, reader suggestions API. |
 | `/search` | Public | Search books and add results to shelves, with series labels and editorial collection matches. | `BookCard`, `ShelfDropdown`, `RatingControl`, `/api/books/search`, series metadata, collection results. |
 | `/books` | Public | Browse catalog sections like trending, most shelved, top rated, and recently active. | `BookCard`, `ShelfDropdown`, catalog stats. |
-| `/book` | Public | Book detail by book ID or external/query metadata, including series context and private journal access when available. | `BookCard`, `ShelfDropdown`, `RatingControl`, `Chip`, series section, continue-series callout, recent Reading Journal entries and Write Journal Entry form for owned Currently Reading books, reviews, activity likes/comments. |
+| `/book` | Public | Book detail by book ID or external/query metadata, including series context, private journal access when available, and public reviews. | `BookCard`, `ShelfDropdown`, `RatingControl`, `Chip`, series section, continue-series callout, recent Reading Journal entries and Write Journal Entry form for owned Currently Reading books, Reviews summary/editor/cards, activity likes/comments. |
 | `/authors` | Public | Search, filter, sort, and page through authors. | Author cards, author stats. |
 | `/author/[slug]` | Public | Canonical author detail page with Featured In collections and series-grouped local books. | `BookCard`, `ShelfDropdown`, `RatingControl`, collection links, series grouping, external author books, author metadata. |
 | `/author` | Redirect | Legacy author query route. | Redirects to canonical author path or `/authors`. |
@@ -67,6 +67,7 @@ Authentication requirements:
 | `/api/books/cover` | GET | Public | Proxy allowed Google Books cover URLs. |
 | `/api/shelf/entries` | GET, POST, DELETE | Authenticated | Load, upsert, and remove default shelf entries. |
 | `/api/shelf/rating` | PATCH | Authenticated | Save or clear rating for an existing shelf entry. |
+| `/api/reviews/entry` | POST, DELETE | Authenticated | Save/edit or delete the signed-in reader's public review metadata for a finished shelf entry. |
 | `/api/shelf/custom-shelves` | GET, POST, PATCH, DELETE | Authenticated | Manage custom shelves. |
 | `/api/shelf/custom-shelf-books` | GET, POST, DELETE | Authenticated | Manage custom shelf book assignments. |
 | `/api/shelf/section-order` | GET, POST | Authenticated | Load/save profile shelf section ordering. |

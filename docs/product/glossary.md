@@ -50,7 +50,7 @@ The date a reader finished a book. It is stored on the shelf entry and used by t
 
 ## Finished Reflection
 
-The written review/reflection stored on a finished shelf entry. It is capped at 280 characters by the shelf API.
+The persisted review body stored on a finished shelf entry. It remains the underlying body field for public Reviews v2.
 
 ## Follow
 
@@ -126,7 +126,7 @@ A count of consecutive reading/progress days derived from recorded reading updat
 
 ## Review
 
-DogEared's current review model is a finished-book reflection, optionally paired with a rating.
+A public recommendation written after finishing a book. Reviews can include a star rating, optional title, optional body, spoiler flag, and update timestamp. They are distinct from private Reading Journal entries.
 
 ## Shelf
 
@@ -134,7 +134,7 @@ A collection/state for a reader's books. Implemented default shelf statuses are 
 
 ## Shelf Entry
 
-The user-book relation that stores a reader's status, rating, total pages, current page, finished date, finished reflection, first-added timestamp, and update timestamp.
+The user-book relation that stores a reader's status, rating, total pages, current page, finished date, public review metadata, first-added timestamp, and update timestamp.
 
 ## Series
 

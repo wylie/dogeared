@@ -541,6 +541,8 @@ type ShelfEntryOptions = {
 	updatedAt?: number;
 	addedAt?: number;
 	finishedReflection?: string;
+	reviewTitle?: string;
+	reviewSpoiler?: boolean;
 };
 
 export function buildShelfEntryFromRecord(record: Record<string, unknown>, options: ShelfEntryOptions) {
@@ -574,7 +576,9 @@ export function buildShelfEntryFromRecord(record: Record<string, unknown>, optio
 		totalPages,
 		currentPage: Math.max(0, Number(options.currentPage ?? 0) || 0),
 		finishedDate: String(options.finishedDate || "").trim(),
-		finishedReflection: String(options.finishedReflection || "").trim().slice(0, 280),
+		finishedReflection: String(options.finishedReflection || "").trim().slice(0, 4000),
+		reviewTitle: String(options.reviewTitle || "").trim().slice(0, 160),
+		reviewSpoiler: options.reviewSpoiler === true,
 		coverUrl: payload.coverUrl,
 		format: payload.format,
 		language: payload.language,

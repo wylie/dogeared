@@ -197,7 +197,10 @@ Stores a reader's default shelf state for a book:
 - Rating.
 - Total pages and current page.
 - Finished date.
-- Finished reflection.
+- Review title.
+- Finished reflection/review body.
+- Review spoiler flag.
+- Review updated timestamp.
 - First-added and updated timestamps.
 
 Relationships:
@@ -297,11 +300,21 @@ Relationships:
 
 ## Reviews
 
-Reviews are not a separate table today. They are finished reflections stored on `user_book.finished_reflection`, optionally with `user_book.rating`.
+Reviews are not a separate table today. They are public finished-book recommendations stored on `user_book`.
+
+Fields:
+
+- Optional `rating`.
+- Optional `review_title`.
+- Optional `finished_reflection` review body.
+- `review_spoiler` flag.
+- Optional `review_updated_at`.
 
 Relationships:
 
-- Shown through book-review helpers and profile/activity surfaces.
+- Belong to one user/book shelf entry.
+- Shown through book-review helpers, book detail review cards, profile Reviews, activity surfaces, discovery providers, and admin counts.
+- Deleted reviews clear title/body/spoiler metadata while preserving the shelf entry and rating unless the reader clears the rating separately.
 
 ## Likes
 

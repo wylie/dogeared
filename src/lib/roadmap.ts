@@ -13,7 +13,7 @@ export type RoadmapItem = {
 export const ROADMAP_ITEMS: RoadmapItem[] = [
 	{
 		title: "Better reviews and discussion",
-		description: "Make reviews feel more useful, more personal, and easier to discuss with readers you trust.",
+		description: "Reading Reviews v2 is live; next work is making review discussion more useful with readers you trust.",
 		status: "In Progress",
 		category: "now",
 		priority: "Primary"

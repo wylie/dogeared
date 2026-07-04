@@ -12,6 +12,7 @@ import { ensureCustomShelfSchema } from "../../lib/customShelves";
 import { daysSinceDate, resolveMomentumPrediction } from "../../lib/momentumPrediction";
 import { resolveReadingGoalProgress } from "../../lib/readingGoal";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
+import { ensureReviewSchema } from "../../lib/bookReviews";
 
 export const prerender = false;
 
@@ -324,10 +325,15 @@ let finishedBooks: Array<{
 	isbn13: string;
 	description: string;
 	rating: number;
+	reviewTitle: string;
+	reviewBody: string;
+	reviewSpoiler: boolean;
+	reviewUpdatedAt: string;
 	finishedDate: string;
 	updatedAt: string;
 	genres: string[];
 }> = [];
+let profileReviews: typeof finishedBooks = [];
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let followState = {
 	followersCount: 0,
@@ -396,6 +402,8 @@ const recentPage = Math.max(1, Number(Astro.url.searchParams.get("ra_page") || "
 const readingPage = Math.max(1, Number(Astro.url.searchParams.get("cr_page") || "1") || 1);
 const wantToReadPage = Math.max(1, Number(Astro.url.searchParams.get("wr_page") || "1") || 1);
 const finishedPage = Math.max(1, Number(Astro.url.searchParams.get("rd_page") || "1") || 1);
+const reviewSort = String(Astro.url.searchParams.get("review_sort") || "newest").trim();
+const reviewFilter = String(Astro.url.searchParams.get("review_filter") || "all").trim();
 
 const bundle = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
 if (bundle.status === "not_found") notFound = true;
@@ -500,6 +508,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		const favoriteAuthorId = Number(favoriteAuthorMatch[0]?.id || 0);
 		favoriteAuthorHref = authorHref(profile.favoriteAuthor, favoriteAuthorId);
 	}
+	await ensureReviewSchema(sql);
 	const [summary, updates, readingRows, wantToReadRows, finishedRows, customShelfRows, customShelfBookRows] = await Promise.all([
 		resolvePublicShelfSummary(bundle.targetUserId),
 		bundle.canViewActivity ? resolvePublicRecentActivity(bundle.targetUserId, 500, viewerUserId) : Promise.resolve([]),
@@ -600,6 +609,10 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 				isbn10: string;
 				isbn13: string;
 				rating: number | null;
+				review_title: string | null;
+				finished_reflection: string | null;
+				review_spoiler: boolean | null;
+				review_updated_at: string | null;
 				finished_date: string | null;
 				updated_at: string;
 				genres: string[];
@@ -614,6 +627,10 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 					b.isbn10,
 					b.isbn13,
 					ub.rating,
+					coalesce(ub.review_title, '') as review_title,
+					coalesce(ub.finished_reflection, '') as finished_reflection,
+					coalesce(ub.review_spoiler, false) as review_spoiler,
+					ub.review_updated_at::text as review_updated_at,
 					ub.finished_date::text as finished_date,
 					ub.updated_at::text as updated_at,
 					(
@@ -757,11 +774,28 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		isbn13: String(row.isbn13 || "").trim(),
 		description: "",
 		rating: Math.max(0, Math.min(5, Number(row.rating || 0) || 0)),
+		reviewTitle: String(row.review_title || "").trim(),
+		reviewBody: String(row.finished_reflection || "").trim(),
+		reviewSpoiler: row.review_spoiler === true,
+		reviewUpdatedAt: String(row.review_updated_at || "").trim(),
 		finishedDate: String(row.finished_date || "").trim(),
 		updatedAt: String(row.updated_at || "").trim(),
 		genres: Array.isArray(row.genres) ? row.genres.map((genre) => String(genre || "").trim()).filter(Boolean) : []
 	}));
 	finishedBooks = dedupeByWorkIdentity(finishedBooks);
+	profileReviews = finishedBooks
+		.filter((book) => book.reviewTitle || book.reviewBody)
+		.filter((book) => {
+			if (reviewFilter === "spoilers") return book.reviewSpoiler;
+			if (reviewFilter === "no_spoilers") return !book.reviewSpoiler;
+			return true;
+		})
+		.sort((a, b) => {
+			if (reviewSort === "highest") return b.rating - a.rating || Date.parse(b.reviewUpdatedAt || b.updatedAt || "") - Date.parse(a.reviewUpdatedAt || a.updatedAt || "");
+			if (reviewSort === "oldest") return Date.parse(a.reviewUpdatedAt || a.updatedAt || "") - Date.parse(b.reviewUpdatedAt || b.updatedAt || "");
+			return Date.parse(b.reviewUpdatedAt || b.updatedAt || "") - Date.parse(a.reviewUpdatedAt || a.updatedAt || "");
+		})
+		.slice(0, 24);
 	if (isOwnerViewer) {
 		try {
 			const progressDateRows = await sql<Array<{ activity_day: string }>>`
@@ -1770,6 +1804,56 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				)}
 
 				{(canViewActivity || isOwnerViewer) && (
+					<section id="reviews" class="activity-card activity-card-plain profile-reviews-section">
+						<div class="custom-shelf-heading-row">
+							<h2><span class="material-icons custom-shelf-heading-icon default-shelf-heading-icon" aria-hidden="true">rate_review</span>Reviews</h2>
+						</div>
+						<p class="section-intro">Public recommendations after finishing books. Private thoughts while reading stay in the Reading Journal.</p>
+						<form class="profile-review-controls" method="get" action={Astro.url.pathname}>
+							<label>
+								<span>Sort</span>
+								<select name="review_sort">
+									<option value="newest" selected={reviewSort === "newest"}>Newest</option>
+									<option value="highest" selected={reviewSort === "highest"}>Highest rated</option>
+									<option value="oldest" selected={reviewSort === "oldest"}>Oldest</option>
+								</select>
+							</label>
+							<label>
+								<span>Filter</span>
+								<select name="review_filter">
+									<option value="all" selected={reviewFilter === "all"}>All reviews</option>
+									<option value="no_spoilers" selected={reviewFilter === "no_spoilers"}>No spoilers</option>
+									<option value="spoilers" selected={reviewFilter === "spoilers"}>Spoilers</option>
+								</select>
+							</label>
+							<button type="submit" class="secondary">Apply</button>
+						</form>
+						{profileReviews.length === 0 ? (
+							<div class="profile-review-empty">
+								<p>No reviews yet. Reviews help other readers decide what to read.</p>
+								{isOwnerViewer && <a href="#read">Write your first review</a>}
+							</div>
+						) : (
+							<ul class="profile-review-list">
+								{profileReviews.map((item) => (
+									<li class="profile-review-card">
+										<a class="profile-review-book" href={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}#reviews`}>{item.title}</a>
+										<p class="profile-review-meta">
+											{item.author && <span>{item.author}</span>}
+											{item.rating > 0 && <span>{renderRatingStars(item.rating)} {item.rating}/5</span>}
+											<span>{formatActivityDate(item.reviewUpdatedAt || item.updatedAt)}</span>
+											{item.reviewSpoiler && <span>Spoilers</span>}
+										</p>
+										{item.reviewTitle && <h3>{item.reviewTitle}</h3>}
+										{item.reviewBody && <p>{item.reviewBody.length > 360 ? `${item.reviewBody.slice(0, 360).trim()}...` : item.reviewBody}</p>}
+									</li>
+								))}
+							</ul>
+						)}
+					</section>
+				)}
+
+				{(canViewActivity || isOwnerViewer) && (
 					<section
 						id="currently-reading"
 						class="activity-card activity-card-plain currently-reading-section"
@@ -2588,6 +2672,95 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		color: #52606d;
 		line-height: 1.5;
 	}
+	.section-intro {
+		margin: 0.1rem 0 0.7rem;
+		color: var(--color-text-subtle);
+		font-size: 0.9rem;
+	}
+	.profile-review-controls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: end;
+		gap: 0.55rem;
+		margin-bottom: 0.75rem;
+	}
+	.profile-review-controls label {
+		display: grid;
+		gap: 0.22rem;
+		min-width: 10rem;
+		font-size: 0.82rem;
+		font-weight: 750;
+		color: var(--color-text);
+	}
+	.profile-review-controls select {
+		min-height: 2.35rem;
+		border: var(--border-subtle);
+		border-radius: 10px;
+		background: #fff;
+		color: var(--color-text);
+		font: inherit;
+		padding: 0.42rem 0.6rem;
+	}
+	.profile-review-controls button,
+	.profile-review-empty a {
+		min-height: 2.35rem;
+		border-radius: 999px;
+		border: 1px solid var(--color-border-soft);
+		background: var(--color-nav-surface);
+		color: var(--color-nav);
+		padding: 0.42rem 0.8rem;
+		font: inherit;
+		font-weight: 750;
+		text-decoration: none;
+		cursor: pointer;
+	}
+	.profile-review-list {
+		list-style: none;
+		display: grid;
+		gap: 0.65rem;
+		margin: 0;
+		padding: 0;
+	}
+	.profile-review-card,
+	.profile-review-empty {
+		background: rgba(255, 255, 255, 0.58);
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		padding: 0.75rem;
+	}
+	.profile-review-book {
+		color: var(--color-nav);
+		font-weight: 800;
+		text-decoration: none;
+	}
+	.profile-review-book:hover,
+	.profile-review-book:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.profile-review-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.55rem;
+		margin: 0.28rem 0 0;
+		color: var(--color-text-subtle);
+		font-size: 0.82rem;
+		font-weight: 650;
+	}
+	.profile-review-card h3 {
+		margin: 0.45rem 0 0;
+		font-size: 1rem;
+	}
+	.profile-review-card p:last-child,
+	.profile-review-empty p {
+		margin: 0.4rem 0 0;
+		line-height: 1.45;
+		white-space: pre-wrap;
+	}
+	.profile-review-empty {
+		display: grid;
+		gap: 0.45rem;
+	}
 	.shelf-summary-grid {
 		margin-top: 0.7rem;
 		display: grid;
@@ -3394,11 +3567,28 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		border-color: #8ba7c9;
 		background: #fff;
 	}
+	input.finish-reflection-input {
+		min-height: 0;
+		resize: none;
+	}
 	.finish-reflection-count {
 		margin: 0;
 		font-size: 0.76rem;
 		color: #64748b;
 		text-align: right;
+	}
+	.finish-spoiler-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		margin-top: 0.55rem;
+		font-size: 0.86rem;
+		font-weight: 700;
+		color: #334155;
+	}
+	.finish-spoiler-toggle input {
+		width: 1rem;
+		height: 1rem;
 	}
 	.finish-rating-star {
 		border: none;
@@ -3517,11 +3707,28 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		border-color: #8ba7c9;
 		background: #fff;
 	}
+	:global(input.finish-reflection-input) {
+		min-height: 0;
+		resize: none;
+	}
 	:global(.finish-reflection-count) {
 		margin: 0;
 		font-size: 0.76rem;
 		color: #64748b;
 		text-align: right;
+	}
+	:global(.finish-spoiler-toggle) {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		margin-top: 0.55rem;
+		font-size: 0.86rem;
+		font-weight: 700;
+		color: #334155;
+	}
+	:global(.finish-spoiler-toggle input) {
+		width: 1rem;
+		height: 1rem;
 	}
 	:global(.finish-rating-actions) {
 		display: flex;
@@ -4380,7 +4587,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 
 	function promptForFinishRating(options = {}) {
 		const initialRating = Math.max(0, Math.min(5, Number(options?.initialRating || 0) || 0));
-		const initialReflection = String(options?.initialReflection || "").trim().slice(0, 280);
+		const initialReflection = String(options?.initialReflection || "").trim().slice(0, 4000);
 		const initialError = String(options?.errorMessage || "").trim();
 		const onSubmit = typeof options?.onSubmit === "function" ? options.onSubmit : null;
 		return new Promise((resolve) => {
@@ -4404,7 +4611,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			modal.className = "finish-rating-modal";
 			modal.setAttribute("role", "dialog");
 			modal.setAttribute("aria-modal", "true");
-			modal.setAttribute("aria-label", "Rate this finished book");
+			modal.setAttribute("aria-label", "Finish and review this book");
 			Object.assign(modal.style, {
 				width: "min(460px, 100%)",
 				background: "#fff",
@@ -4419,7 +4626,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 
 			const subtitle = document.createElement("p");
 			subtitle.className = "finish-rating-subtitle";
-			subtitle.textContent = "Add a rating and an optional reflection.";
+			subtitle.textContent = "Add a rating, write an optional public review, then finish. Private notes belong in your Reading Journal.";
 			const errorNode = document.createElement("p");
 			errorNode.className = "finish-rating-error";
 			errorNode.hidden = !initialError;
@@ -4428,26 +4635,45 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const stars = document.createElement("div");
 			stars.className = "finish-rating-stars";
 			stars.setAttribute("aria-label", "Rating stars");
+			const reviewTitleLabel = document.createElement("label");
+			reviewTitleLabel.className = "finish-reflection-label";
+			reviewTitleLabel.textContent = "Review title (optional)";
+
+			const reviewTitleInput = document.createElement("input");
+			reviewTitleInput.className = "finish-reflection-input";
+			reviewTitleInput.maxLength = 160;
+			reviewTitleInput.placeholder = "A short headline";
+
 			const reflectionLabel = document.createElement("label");
 			reflectionLabel.className = "finish-reflection-label";
-			reflectionLabel.textContent = "Reflection (optional)";
+			reflectionLabel.textContent = "Review (optional)";
 
 			const reflectionInput = document.createElement("textarea");
 			reflectionInput.className = "finish-reflection-input";
-			reflectionInput.maxLength = 280;
-			reflectionInput.rows = 3;
-			reflectionInput.placeholder = "What stood out?";
+			reflectionInput.maxLength = 4000;
+			reflectionInput.rows = 5;
+			reflectionInput.placeholder = "Would you recommend this book? What should future readers know?";
 			reflectionInput.value = initialReflection;
 
 			const reflectionCount = document.createElement("p");
 			reflectionCount.className = "finish-reflection-count";
-			reflectionCount.textContent = "0/280";
+			reflectionCount.textContent = `${reflectionInput.value.length}/4000`;
 			reflectionInput.addEventListener("input", () => {
-				reflectionCount.textContent = `${reflectionInput.value.length}/280`;
+				reflectionCount.textContent = `${reflectionInput.value.length}/4000`;
 			});
+			const titleWrap = document.createElement("div");
+			titleWrap.className = "finish-reflection-wrap";
+			titleWrap.append(reviewTitleLabel, reviewTitleInput);
 			const reflectionWrap = document.createElement("div");
 			reflectionWrap.className = "finish-reflection-wrap";
 			reflectionWrap.append(reflectionLabel, reflectionInput, reflectionCount);
+			const spoilerLabel = document.createElement("label");
+			spoilerLabel.className = "finish-spoiler-toggle";
+			const spoilerInput = document.createElement("input");
+			spoilerInput.type = "checkbox";
+			const spoilerText = document.createElement("span");
+			spoilerText.textContent = "This review contains spoilers";
+			spoilerLabel.append(spoilerInput, spoilerText);
 
 			const actions = document.createElement("div");
 			actions.className = "finish-rating-actions";
@@ -4466,12 +4692,12 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			const skipButton = document.createElement("button");
 			skipButton.type = "button";
 			skipButton.className = "finish-rating-skip";
-			skipButton.textContent = "Skip";
+			skipButton.textContent = "Finish without rating";
 
 			const saveButton = document.createElement("button");
 			saveButton.type = "button";
 			saveButton.className = "finish-rating-save";
-			saveButton.textContent = "Save";
+			saveButton.textContent = "Finish";
 			saveButton.disabled = true;
 
 			let selectedRating = initialRating;
@@ -4496,11 +4722,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				skipButton.disabled = busy;
 				saveButton.disabled = busy || selectedRating < 1 || selectedRating > 5;
 				reflectionInput.disabled = busy;
+				reviewTitleInput.disabled = busy;
+				spoilerInput.disabled = busy;
 				for (const button of Array.from(stars.querySelectorAll("button"))) {
 					button.disabled = busy;
 				}
-				saveButton.textContent = busy ? "Saving..." : "Save";
-				skipButton.textContent = busy ? "Saving..." : "Skip";
+				saveButton.textContent = busy ? "Saving..." : "Finish";
+				skipButton.textContent = busy ? "Saving..." : "Finish without rating";
 			};
 
 			for (let i = 1; i <= 5; i += 1) {
@@ -4528,7 +4756,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				stars.append(star);
 			}
 
-			const currentReflection = () => String(reflectionInput.value || "").trim().slice(0, 280);
+			const currentReflection = () => String(reflectionInput.value || "").trim().slice(0, 4000);
+			const currentReviewTitle = () => String(reviewTitleInput.value || "").trim().slice(0, 160);
 			const submitResult = async (payload) => {
 				if (!onSubmit) {
 					close(payload);
@@ -4552,12 +4781,12 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					setBusy(false);
 				}
 			};
-			cancelButton.addEventListener("click", () => close({ cancelled: true, rating: null, reflection: "" }));
+			cancelButton.addEventListener("click", () => close({ cancelled: true, rating: null, title: "", reflection: "", spoiler: false }));
 			skipButton.addEventListener("click", async () => {
-				await submitResult({ cancelled: false, rating: null, reflection: currentReflection() });
+				await submitResult({ cancelled: false, rating: null, title: currentReviewTitle(), reflection: currentReflection(), spoiler: spoilerInput.checked });
 			});
 			saveButton.addEventListener("click", async () => {
-				await submitResult({ cancelled: false, rating: selectedRating, reflection: currentReflection() });
+				await submitResult({ cancelled: false, rating: selectedRating, title: currentReviewTitle(), reflection: currentReflection(), spoiler: spoilerInput.checked });
 			});
 			overlay.addEventListener("click", (event) => {
 				if (event.target === overlay) close({ cancelled: true, rating: null });
@@ -4567,7 +4796,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			}, { once: true });
 
 			actions.append(cancelButton, skipButton, saveButton);
-			modal.append(title, subtitle, errorNode, stars, reflectionWrap, actions);
+			modal.append(title, subtitle, errorNode, stars, titleWrap, reflectionWrap, spoilerLabel, actions);
 			overlay.append(modal);
 			document.body.append(overlay);
 			renderStars();
@@ -4578,7 +4807,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		const result = await promptForFinishRating({
 			onSubmit: async (finishRating) => {
 				entry.rating = finishRating.rating;
-				entry.finishedReflection = String(finishRating.reflection || "").trim().slice(0, 280);
+				entry.reviewTitle = String(finishRating.title || "").trim().slice(0, 160);
+				entry.finishedReflection = String(finishRating.reflection || "").trim().slice(0, 4000);
+				entry.reviewSpoiler = finishRating.spoiler === true;
 				const saveResult = await saveShelfEntryWithRetry(entry);
 				return {
 					ok: !!saveResult?.ok,

@@ -18,6 +18,7 @@ import { normalizeGenreList } from "../../../lib/genres";
 import { normalizeTopicTagList } from "../../../lib/genres";
 import { ensureCustomShelfSchema } from "../../../lib/customShelves";
 import { monitorEvent } from "../../../lib/monitoring";
+import { ensureReviewSchema, normalizeReviewBody, normalizeReviewTitle } from "../../../lib/bookReviews";
 
 export const prerender = false;
 
@@ -46,6 +47,8 @@ type ShelfEntryInput = {
 	sourceUrl?: unknown;
 	googleBooksId?: unknown;
 	finishedReflection?: unknown;
+	reviewTitle?: unknown;
+	reviewSpoiler?: unknown;
 };
 
 const GOOGLE_BOOKS_API_KEY = normalizeCatalogText(import.meta.env.GOOGLE_BOOKS_API_KEY);
@@ -348,8 +351,7 @@ async function inferMetadataForBook(input: {
 
 async function ensureShelfSchema() {
 	const sql = getNeonSql();
-	await sql`alter table user_book add column if not exists rating int`;
-	await sql`alter table user_book add column if not exists finished_reflection text not null default ''`;
+	await ensureReviewSchema(sql);
 	await sql`alter table book add column if not exists synopsis text not null default ''`;
 	await sql`alter table book add column if not exists page_count int not null default 0`;
 	await sql`alter table book add column if not exists publisher text not null default ''`;
@@ -394,6 +396,9 @@ export const GET: APIRoute = async ({ request, url }) => {
 			current_page: number;
 			finished_date: string | null;
 			finished_reflection: string;
+			review_title: string;
+			review_spoiler: boolean;
+			review_updated_at: string | null;
 			first_added_at: string;
 			updated_at: string;
 			progress_updates: number;
@@ -413,6 +418,9 @@ export const GET: APIRoute = async ({ request, url }) => {
 				ub.current_page,
 				ub.finished_date::text as finished_date,
 				coalesce(ub.finished_reflection, '') as finished_reflection,
+				coalesce(ub.review_title, '') as review_title,
+				coalesce(ub.review_spoiler, false) as review_spoiler,
+				ub.review_updated_at::text as review_updated_at,
 				ub.first_added_at::text as first_added_at,
 				ub.updated_at::text as updated_at,
 				coalesce((
@@ -428,7 +436,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			join book b on b.id = ub.book_id
 			left join book_genre bg on bg.book_id = b.id
 			where ub.user_id = ${userId}::uuid
-			group by b.id, ub.user_id, ub.book_id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection
+			group by b.id, ub.user_id, ub.book_id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection, ub.review_title, ub.review_spoiler, ub.review_updated_at
 			order by ub.updated_at desc
 		`;
 
@@ -442,6 +450,9 @@ export const GET: APIRoute = async ({ request, url }) => {
 			currentPage: normalizePositiveInt(row.current_page),
 			finishedDate: row.finished_date || "",
 			finishedReflection: row.finished_reflection || "",
+			reviewTitle: row.review_title || "",
+			reviewSpoiler: !!row.review_spoiler,
+			reviewUpdatedAt: row.review_updated_at || "",
 			addedAt: Date.parse(row.first_added_at || "") || Date.now(),
 			coverUrl: row.cover_url || "",
 			format: "",
@@ -494,8 +505,10 @@ export const POST: APIRoute = async ({ request }) => {
 		const finishedDateRaw = normalizeText(entry.finishedDate);
 		const finishedDate = status === "finished" && finishedDateRaw ? finishedDateRaw : "";
 		const finishedReflection = status === "finished"
-			? normalizeText(entry.finishedReflection).slice(0, 280)
+			? normalizeReviewBody(entry.finishedReflection)
 			: "";
+		const reviewTitle = status === "finished" ? normalizeReviewTitle(entry.reviewTitle) : "";
+		const reviewSpoiler = status === "finished" && entry.reviewSpoiler === true;
 		let coverUrl = bookPayload.coverUrl;
 		let language = bookPayload.language;
 		let synopsis = bookPayload.description;
@@ -580,8 +593,10 @@ export const POST: APIRoute = async ({ request }) => {
 			current_page: number;
 			finished_date: string | null;
 			finished_reflection: string | null;
+			review_title: string | null;
+			review_spoiler: boolean | null;
 		}>>`
-			select status, rating, current_page, finished_date::text as finished_date, coalesce(finished_reflection, '') as finished_reflection
+			select status, rating, current_page, finished_date::text as finished_date, coalesce(finished_reflection, '') as finished_reflection, coalesce(review_title, '') as review_title, coalesce(review_spoiler, false) as review_spoiler
 			from user_book
 			where user_id = ${userId}::uuid
 				and book_id = ${resolvedBookId || 0}
@@ -591,7 +606,9 @@ export const POST: APIRoute = async ({ request }) => {
 		const previousRating = normalizeRating(previousRows[0]?.rating);
 		const previousCurrentPage = normalizePositiveInt(previousRows[0]?.current_page);
 		const previousFinishedDate = String(previousRows[0]?.finished_date || "").trim();
-		const previousFinishedReflection = String(previousRows[0]?.finished_reflection || "").trim().slice(0, 280);
+		const previousFinishedReflection = normalizeReviewBody(previousRows[0]?.finished_reflection);
+		const previousReviewTitle = normalizeReviewTitle(previousRows[0]?.review_title);
+		const previousReviewSpoiler = previousRows[0]?.review_spoiler === true;
 
 		let bookId = resolvedBookId;
 		if (bookId > 0) {
@@ -719,6 +736,9 @@ export const POST: APIRoute = async ({ request }) => {
 				current_page,
 				finished_date,
 				finished_reflection,
+				review_title,
+				review_spoiler,
+				review_updated_at,
 				first_added_at,
 				updated_at
 			)
@@ -731,6 +751,9 @@ export const POST: APIRoute = async ({ request }) => {
 				${currentPage},
 				${finishedDate ? finishedDate : null}::date,
 				${finishedReflection},
+				${reviewTitle},
+				${reviewSpoiler},
+				case when ${reviewTitle} <> '' or ${finishedReflection} <> '' then now() else null end,
 				now(),
 				now()
 			)
@@ -741,6 +764,15 @@ export const POST: APIRoute = async ({ request }) => {
 				current_page = excluded.current_page,
 				finished_date = excluded.finished_date,
 				finished_reflection = excluded.finished_reflection,
+				review_title = excluded.review_title,
+				review_spoiler = excluded.review_spoiler,
+				review_updated_at = case
+					when excluded.review_title <> user_book.review_title
+						or excluded.finished_reflection <> user_book.finished_reflection
+						or excluded.review_spoiler <> user_book.review_spoiler
+					then excluded.review_updated_at
+					else user_book.review_updated_at
+				end,
 				updated_at = now()
 		`;
 		// Single-shelf mode: putting a book on a default shelf removes it from
@@ -771,6 +803,8 @@ export const POST: APIRoute = async ({ request }) => {
 			|| previousRating !== rating
 			|| previousFinishedDate !== finishedDate
 			|| previousFinishedReflection !== finishedReflection
+			|| previousReviewTitle !== reviewTitle
+			|| previousReviewSpoiler !== reviewSpoiler
 		);
 		if (finishedMetadataChanged && previousStatus === "finished") {
 			await sql`
@@ -859,6 +893,9 @@ export const POST: APIRoute = async ({ request }) => {
 			publisher: string | null;
 			synopsis: string;
 			finished_reflection: string;
+			review_title: string;
+			review_spoiler: boolean;
+			review_updated_at: string | null;
 			progress_updates: number;
 		}>>`
 			select
@@ -881,6 +918,9 @@ export const POST: APIRoute = async ({ request }) => {
 				coalesce(b.publisher, '') as publisher,
 				coalesce(b.synopsis, '') as synopsis,
 				coalesce(ub.finished_reflection, '') as finished_reflection,
+				coalesce(ub.review_title, '') as review_title,
+				coalesce(ub.review_spoiler, false) as review_spoiler,
+				ub.review_updated_at::text as review_updated_at,
 				coalesce((
 					select count(*)::int
 					from user_reading_progress_event pe
@@ -892,7 +932,7 @@ export const POST: APIRoute = async ({ request }) => {
 			left join book_genre bg on bg.book_id = b.id
 			where ub.user_id = ${userId}::uuid
 				and ub.book_id = ${bookId}
-			group by b.id, ub.user_id, ub.book_id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection
+			group by b.id, ub.user_id, ub.book_id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection, ub.review_title, ub.review_spoiler, ub.review_updated_at
 			limit 1
 		`;
 		const persisted = persistedRows[0];
@@ -916,6 +956,9 @@ export const POST: APIRoute = async ({ request }) => {
 			publisher: persisted.publisher || "",
 			description: persisted.synopsis || "",
 			finishedReflection: persisted.finished_reflection || "",
+			reviewTitle: persisted.review_title || "",
+			reviewSpoiler: !!persisted.review_spoiler,
+			reviewUpdatedAt: persisted.review_updated_at || "",
 			categories: Array.isArray(persisted.genres) ? persisted.genres : [],
 			progressUpdates: Math.max(0, Number(persisted.progress_updates || 0) || 0),
 			updatedAt: Date.parse(persisted.updated_at || "") || Date.now()
