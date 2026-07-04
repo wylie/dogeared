@@ -1,0 +1,260 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { resolveAdminSession } from "../../lib/admin";
+import { getNeonSql } from "../../lib/neon";
+import {
+	loadAdminCollections,
+	loadCollectionBySlug,
+	parseCollectionBookLines,
+	saveCollection,
+	type CollectionDetail,
+	type CollectionRecord
+} from "../../lib/collections";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const sql = getNeonSql();
+let message = "";
+let errorMessage = "";
+
+if (Astro.request.method === "POST") {
+	try {
+		const formData = await Astro.request.formData();
+		const result = await saveCollection(sql, {
+			id: formData.get("id"),
+			title: formData.get("title"),
+			slug: formData.get("slug"),
+			subtitle: formData.get("subtitle"),
+			description: formData.get("description"),
+			editorialIntroduction: formData.get("editorialIntroduction"),
+			heroImage: formData.get("heroImage"),
+			category: formData.get("category"),
+			featured: formData.get("featured"),
+			publicationState: formData.get("publicationState"),
+			sortOrder: formData.get("sortOrder"),
+			books: parseCollectionBookLines(formData.get("books"))
+		});
+		if (result.ok) {
+			return Astro.redirect(`/admin/collections?id=${encodeURIComponent(String(result.collectionId))}&saved=1`, 303);
+		}
+		errorMessage = result.message;
+	} catch (error) {
+		errorMessage = error instanceof Error ? error.message : "Collection could not be saved.";
+	}
+}
+
+if (Astro.url.searchParams.get("saved") === "1") {
+	message = "Collection saved.";
+}
+
+let collections: CollectionRecord[] = [];
+let selected: CollectionDetail | null = null;
+try {
+	collections = await loadAdminCollections(sql);
+	const selectedId = Number(Astro.url.searchParams.get("id") || 0) || 0;
+	const selectedRow = selectedId > 0 ? collections.find((collection) => collection.id === selectedId) : null;
+	if (selectedRow) {
+		selected = await loadCollectionBySlug(sql, selectedRow.slug, { includeUnpublished: true });
+	}
+} catch (error) {
+	errorMessage = error instanceof Error ? error.message : "Collections could not be loaded.";
+}
+
+const sectionLinks = [
+	{ id: "collection-editor", label: "Editor" },
+	{ id: "collection-list", label: "Collections" }
+];
+
+function booksTextarea(collection: CollectionDetail | null) {
+	return (collection?.books || [])
+		.map((book) => `${book.bookId} | ${book.editorNote} | ${book.featuredQuote} | ${book.sortOrder}`)
+		.join("\n");
+}
+---
+
+<Layout title="Admin Collections" sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="admin-collections-page">
+		<header class="hero">
+			<h1>Editorial Collections</h1>
+			<p>Create, edit, reorder, publish, and archive curated collections.</p>
+		</header>
+
+		{message && <p class="notice" role="status">{message}</p>}
+		{errorMessage && <p class="error" role="alert">{errorMessage}</p>}
+
+		<section id="collection-editor" class="panel">
+			<div class="panel-head">
+				<h2>{selected ? "Edit Collection" : "Create Collection"}</h2>
+				{selected && <a href="/admin/collections">Create new</a>}
+			</div>
+			<form method="post" class="collection-form">
+				<input type="hidden" name="id" value={selected?.id || ""} />
+				<label>Title<input name="title" required maxlength="180" value={selected?.title || ""} /></label>
+				<label>Slug<input name="slug" maxlength="96" value={selected?.slug || ""} placeholder="best-books-under-300-pages" /></label>
+				<label>Subtitle<input name="subtitle" maxlength="220" value={selected?.subtitle || ""} /></label>
+				<label>Category<input name="category" maxlength="120" value={selected?.category || ""} placeholder="Starting Points" /></label>
+				<label>Hero image<input name="heroImage" value={selected?.heroImage || ""} placeholder="https://..." /></label>
+				<label>Sort order<input name="sortOrder" type="number" value={selected?.sortOrder || 0} /></label>
+				<label class="full">Description<textarea name="description" rows="3">{selected?.description || ""}</textarea></label>
+				<label class="full">Editorial introduction<textarea name="editorialIntroduction" rows="5">{selected?.editorialIntroduction || ""}</textarea></label>
+				<label>Publication state
+					<select name="publicationState">
+						{["draft", "published", "archived"].map((state) => (
+							<option value={state} selected={(selected?.publicationState || "draft") === state}>{state}</option>
+						))}
+					</select>
+				</label>
+				<label class="checkbox"><input type="checkbox" name="featured" checked={!!selected?.featured} /> Featured on Home</label>
+				<label class="full">Books
+					<textarea name="books" rows="8" placeholder="bookId | editor note | featured quote | sort order">{booksTextarea(selected)}</textarea>
+					<span>One book per line. Example: <code>123 | A generous place to start. | A quote worth surfacing. | 1</code></span>
+				</label>
+				<div class="form-actions">
+					<button type="submit">Save Collection</button>
+					{selected?.publicationState === "published" && <a href={`/collections/${encodeURIComponent(selected.slug)}`}>View published page</a>}
+				</div>
+			</form>
+		</section>
+
+		<section id="collection-list" class="panel">
+			<div class="panel-head">
+				<h2>Collections</h2>
+				<p>{collections.length.toLocaleString()} total</p>
+			</div>
+			{collections.length === 0 ? (
+				<p>No collections yet.</p>
+			) : (
+				<table>
+					<thead>
+						<tr>
+							<th>Title</th>
+							<th>State</th>
+							<th>Featured</th>
+							<th>Books</th>
+							<th>Order</th>
+							<th>Action</th>
+						</tr>
+					</thead>
+					<tbody>
+						{collections.map((collection) => (
+							<tr>
+								<td>
+									<strong>{collection.title}</strong>
+									<span>{collection.slug}</span>
+								</td>
+								<td>{collection.publicationState}</td>
+								<td>{collection.featured ? "Yes" : "No"}</td>
+								<td>{collection.bookCount.toLocaleString()}</td>
+								<td>{collection.sortOrder.toLocaleString()}</td>
+								<td><a href={`/admin/collections?id=${encodeURIComponent(String(collection.id))}`}>Edit</a></td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			)}
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.admin-collections-page { max-width: 1040px; }
+	.hero h1 { margin: 0; }
+	.hero p { margin: 0.35rem 0 0; color: var(--color-text-muted); }
+	.notice,
+	.error {
+		border-radius: var(--radius-md);
+		padding: 0.65rem 0.75rem;
+	}
+	.notice { background: var(--color-chip-genre); color: var(--color-nav); }
+	.error { background: #fff1f2; color: #991b1b; border: 1px solid #fecdd3; }
+	.panel { margin-top: 1rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
+	.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.8rem; }
+	.panel-head h2,
+	.panel-head p { margin: 0; }
+	.panel-head p { color: var(--color-text-muted); }
+	.collection-form {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.7rem;
+	}
+	label {
+		display: grid;
+		gap: 0.25rem;
+		color: var(--color-text-muted);
+		font-size: 0.84rem;
+		font-weight: 800;
+	}
+	label.full { grid-column: 1 / -1; }
+	label.checkbox {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		align-self: end;
+	}
+	input,
+	select,
+	textarea {
+		width: 100%;
+		box-sizing: border-box;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: #fff;
+		color: var(--color-text);
+		font: inherit;
+		font-weight: 400;
+		padding: 0.5rem 0.6rem;
+	}
+	textarea { resize: vertical; }
+	label span {
+		font-weight: 500;
+		color: var(--color-text-muted);
+	}
+	code { font-size: 0.82rem; }
+	.form-actions {
+		grid-column: 1 / -1;
+		display: flex;
+		gap: 0.65rem;
+		align-items: center;
+	}
+	button {
+		border: 0;
+		border-radius: 999px;
+		background: var(--color-primary);
+		color: #fff;
+		font: inherit;
+		font-weight: 800;
+		padding: 0.55rem 0.95rem;
+		cursor: pointer;
+	}
+	a { color: var(--color-nav); font-weight: 700; text-decoration: none; }
+	a:hover, a:focus-visible { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
+	table {
+		width: 100%;
+		border-collapse: collapse;
+	}
+	th,
+	td {
+		text-align: left;
+		border-top: var(--border-subtle);
+		padding: 0.55rem;
+		vertical-align: top;
+	}
+	th {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+	}
+	td span {
+		display: block;
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+	}
+	@media (max-width: 760px) {
+		.collection-form { grid-template-columns: 1fr; }
+		label.full,
+		.form-actions { grid-column: auto; }
+		table { display: block; overflow-x: auto; }
+	}
+</style>

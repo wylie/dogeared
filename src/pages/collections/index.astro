@@ -1,0 +1,180 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { getNeonSql } from "../../lib/neon";
+import { loadPublishedCollections, type CollectionRecord } from "../../lib/collections";
+
+export const prerender = false;
+
+let collections: CollectionRecord[] = [];
+let errorMessage = "";
+
+try {
+	const sql = getNeonSql();
+	collections = await loadPublishedCollections(sql, 80);
+} catch (error) {
+	errorMessage = error instanceof Error ? error.message : "Collections are temporarily unavailable.";
+}
+
+const categories = Array.from(new Set(collections.map((collection) => collection.category).filter(Boolean)));
+const sectionLinks = categories.slice(0, 8).map((category) => ({
+	id: `category-${category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`,
+	label: category
+}));
+---
+
+<Layout
+	title="Editorial Collections"
+	metaDescription="Browse DogEared editorial collections: thoughtful book lists curated like recommendations from a knowledgeable bookseller."
+	canonicalUrl="/collections"
+	sectionLinks={sectionLinks}
+>
+	<div slot="right" class="collections-page">
+		<header class="collections-hero">
+			<p class="eyebrow">Editorial Collections</p>
+			<h1>Thoughtful paths to your next book.</h1>
+			<p>Browse curated lists built around mood, author, genre, season, and reading moment. These are editorial shelves, not popularity rankings.</p>
+		</header>
+
+		{errorMessage && <p class="error">{errorMessage}</p>}
+		{!errorMessage && collections.length === 0 && (
+			<p class="empty">No published collections yet. Editors can publish collections from Admin.</p>
+		)}
+
+		{collections.length > 0 && (
+			<div class="collection-groups">
+				{(categories.length > 0 ? categories : ["Collections"]).map((category) => {
+					const grouped = categories.length > 0
+						? collections.filter((collection) => collection.category === category)
+						: collections;
+					const id = `category-${category.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+					return (
+						<section id={id} class="collection-group" aria-labelledby={`${id}-title`}>
+							<h2 id={`${id}-title`}>{category}</h2>
+							<ul class="collection-grid">
+								{grouped.map((collection) => (
+									<li class="collection-card">
+										<a href={`/collections/${encodeURIComponent(collection.slug)}`}>
+											{collection.heroImage && <img src={collection.heroImage} alt="" loading="lazy" decoding="async" />}
+											<span class="collection-card-body">
+												{collection.featured && <span class="feature-pill">Featured</span>}
+												<strong>{collection.title}</strong>
+												{collection.subtitle && <span class="subtitle">{collection.subtitle}</span>}
+												<span>{collection.description}</span>
+												<em>{collection.bookCount.toLocaleString()} book{collection.bookCount === 1 ? "" : "s"}</em>
+											</span>
+										</a>
+									</li>
+								))}
+							</ul>
+						</section>
+					);
+				})}
+			</div>
+		)}
+	</div>
+</Layout>
+
+<style>
+	.collections-page { max-width: 1040px; }
+	.collections-hero {
+		margin-bottom: 1.4rem;
+	}
+	.eyebrow {
+		margin: 0 0 0.35rem;
+		color: var(--color-text-muted);
+		font-size: 0.8rem;
+		font-weight: 800;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	.collections-hero h1 {
+		margin: 0;
+		max-width: 760px;
+		font-size: clamp(2.2rem, 5vw, 4.8rem);
+		line-height: 0.98;
+	}
+	.collections-hero p:last-child {
+		margin: 0.85rem 0 0;
+		max-width: 620px;
+		color: var(--color-text-muted);
+		font-size: 1.08rem;
+	}
+	.error,
+	.empty {
+		color: var(--color-text-muted);
+	}
+	.collection-group + .collection-group {
+		margin-top: 1.6rem;
+	}
+	.collection-group h2 {
+		margin: 0 0 0.75rem;
+	}
+	.collection-grid {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1rem;
+	}
+	.collection-card a {
+		display: grid;
+		min-height: 260px;
+		position: relative;
+		overflow: hidden;
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		border: var(--border-subtle);
+		text-decoration: none;
+		color: inherit;
+		box-shadow: var(--shadow-xs);
+	}
+	.collection-card img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		opacity: 0.28;
+	}
+	.collection-card-body {
+		position: relative;
+		z-index: 1;
+		align-self: end;
+		display: grid;
+		gap: 0.35rem;
+		padding: 1rem;
+		background: linear-gradient(to top, rgba(255,255,255,0.95), rgba(255,255,255,0.68));
+	}
+	.collection-card strong {
+		font-size: clamp(1.25rem, 2.4vw, 2rem);
+		line-height: 1.05;
+	}
+	.collection-card span,
+	.collection-card em {
+		color: var(--color-text-muted);
+		font-style: normal;
+	}
+	.collection-card .subtitle {
+		color: var(--color-text);
+		font-weight: 700;
+	}
+	.feature-pill {
+		justify-self: start;
+		border: var(--border-subtle);
+		border-radius: 999px;
+		padding: 0.2rem 0.55rem;
+		background: var(--color-chip-genre);
+		color: var(--color-nav);
+		font-size: 0.78rem;
+		font-weight: 800;
+	}
+	@media (max-width: 760px) {
+		.collection-grid {
+			grid-template-columns: 1fr;
+		}
+		.collection-card a {
+			min-height: 220px;
+		}
+	}
+</style>

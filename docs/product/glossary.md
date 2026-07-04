@@ -28,6 +28,14 @@ A source mapping between a DogEared book and an external source such as Google B
 
 A short response on activity. Comments are stored as activity comments and are limited to 500 characters.
 
+## Editorial Collection
+
+A manually curated set of books with an editorial title, slug, description, introduction, hero image, category, publication state, and ordered books. Collections are meant to feel like bookseller recommendations rather than popularity rankings.
+
+## Collection Entry
+
+The relation between a collection and a book. It stores custom ordering, an optional editor note explaining why the book belongs, and an optional featured quote.
+
 ## Custom Shelf
 
 A user-created shelf with a name, slug, icon, and position. Books are attached through custom shelf-book rows.

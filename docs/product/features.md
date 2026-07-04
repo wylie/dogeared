@@ -89,7 +89,7 @@ Limitations: There is no separate following list route for another user's follow
 
 Status: Complete
 
-Search combines DogEared catalog, Google Books, and Open Library results. Users can add search results to shelves, and catalog matches show series name/book number when available.
+Search combines DogEared catalog, Google Books, and Open Library results. Users can add search results to shelves, catalog matches show series name/book number when available, and matching editorial collections appear above book results.
 
 Limitations: External APIs can fail or return incomplete metadata.
 
@@ -129,7 +129,7 @@ Limitations: Author quality depends on catalog and backfill data.
 
 Status: Complete
 
-Author pages show author metadata, reader/shelf counts, books in DogEared grouped by series where available, standalone books, and shelf controls.
+Author pages show author metadata, reader/shelf counts, editorial collections featuring the author, books in DogEared grouped by series where available, standalone books, and shelf controls.
 
 Limitations: Author bio and photo may be missing.
 
@@ -329,9 +329,19 @@ Limitations: Notification settings exist for browser/release/weekly preferences,
 
 Status: Beta
 
-Home surfaces explainable community discovery sections, discovery jump links, reader suggestions, onboarding checklist, and custom shelf ideas.
+Home surfaces featured editorial collections, explainable community discovery sections, discovery jump links, reader suggestions, onboarding checklist, and custom shelf ideas.
 
 Limitations: Section quality depends on catalog, shelf, rating, review, and activity volume. Some shelf ideas are prompts that create custom shelves.
+
+### Editorial Collections
+
+Status: Complete
+
+Editors can curate collections with title, slug, subtitle, description, editorial introduction, hero image, category, featured flag, publication state, and sort order. Books inside collections support custom order, editor notes, and featured quotes. Readers can browse published collections at `/collections`, open collection detail pages, read why each book belongs, see ratings, and add books to shelves.
+
+Featured collections appear sparingly on Home, author pages show collections that include that author, and Search returns matching published collections.
+
+Limitations: Collections are manually curated by admins. There is no staff profile, guest curator, award, library, or partnership workflow yet beyond the extensible collection metadata and category fields.
 
 ### Community Discovery Providers
 
@@ -538,6 +548,14 @@ Status: Complete
 Admins can view site totals and recent weekly activity.
 
 Limitations: Admin access is username allow-list based.
+
+### Admin Collection Management
+
+Status: Complete
+
+Admins can create, edit, reorder, publish, archive, and feature editorial collections from `/admin/collections`. The editor supports collection metadata plus ordered book lines with optional editor notes and featured quotes.
+
+Limitations: This is a simple admin form. It does not yet include rich media upload, curator profiles, preview workflows, audit logs, or drag-and-drop ordering.
 
 ### Admin Data Health
 

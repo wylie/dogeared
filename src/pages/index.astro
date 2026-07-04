@@ -7,6 +7,7 @@ import RatingControl from '../components/RatingControl.astro';
 import { resolveUserBySession } from '../lib/auth';
 import { getNeonSql } from '../lib/neon';
 import { formatPublishedLabel, resolvePublicHomeSections, type BrowseSection } from "../lib/homeSections";
+import { loadFeaturedCollections, type CollectionDetail } from "../lib/collections";
 
 export const prerender = false;
 const shouldProfileHome = import.meta.env.DEV;
@@ -47,6 +48,7 @@ type ShelfIdea = {
 };
 
 let sections: BrowseSection[] = [];
+let featuredCollections: CollectionDetail[] = [];
 let errorMessage = "";
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let viewerRatingByBookId = new Map<number, number>();
@@ -80,11 +82,18 @@ const shelfIdeas: ShelfIdea[] = [
 
 try {
 	const sql = getNeonSql();
-	sections = await resolvePublicHomeSections({ onTiming: logHomeTiming });
-	if (session?.userId && sections.length > 0) {
+	[sections, featuredCollections] = await Promise.all([
+		resolvePublicHomeSections({ onTiming: logHomeTiming }),
+		loadFeaturedCollections(sql, 2).catch(() => [])
+	]);
+	if (session?.userId && (sections.length > 0 || featuredCollections.length > 0)) {
 		const bookIds = Array.from(new Set(
-			sections
-				.flatMap((section) => section.books)
+			[
+				...sections.flatMap((section) => section.books),
+				...featuredCollections.flatMap((collection) => collection.books).map((book) => ({
+					id: String(book.bookId)
+				}))
+			]
 				.map((book) => Number(String(book.id || "").replace(/^book_/, "")))
 				.filter((value) => Number.isFinite(value) && value > 0)
 		));
@@ -193,6 +202,60 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			<p class="empty">
 				We do not have enough personalized data yet. Start by searching for a favorite book, add it to a shelf, and rate one finished read.
 			</p>
+		)}
+
+		{featuredCollections.length > 0 && (
+			<section id="featured-collections" class="browse-section featured-collections-section" aria-labelledby="featured-collections-title">
+				<div class="section-head">
+					<div>
+						<h2 id="featured-collections-title">Featured Collections</h2>
+						<p class="section-explanation">Editorial shelves curated for a reading mood, genre, or starting point.</p>
+					</div>
+					<a class="section-head-link" href="/collections">Browse all</a>
+				</div>
+				<ul class="featured-collection-grid">
+					{featuredCollections.map((collection) => (
+						<li class="featured-collection-card">
+							<a class="featured-collection-link" href={`/collections/${encodeURIComponent(collection.slug)}`}>
+								{collection.heroImage && <img src={collection.heroImage} alt="" loading="lazy" decoding="async" />}
+								<span class="featured-collection-copy">
+									<span class="eyebrow">{collection.category || "Editorial Collection"}</span>
+									<strong>{collection.title}</strong>
+									{collection.subtitle && <span class="featured-subtitle">{collection.subtitle}</span>}
+									<span>{collection.description}</span>
+									<em>{collection.bookCount.toLocaleString()} book{collection.bookCount === 1 ? "" : "s"}</em>
+								</span>
+							</a>
+							{collection.books.length > 0 && (
+								<ul class="featured-collection-books" aria-label={`Books in ${collection.title}`}>
+									{collection.books.slice(0, 3).map((book) => (
+										<li>
+											<a href={`/book?bookId=${encodeURIComponent(String(book.bookId))}`}>
+												{book.coverUrl ? <img src={book.coverUrl} alt="" loading="lazy" decoding="async" /> : <span class="mini-cover-placeholder" aria-hidden="true">menu_book</span>}
+												<span>{book.title}</span>
+											</a>
+											<ShelfDropdown attrs={{
+												"data-book-id": String(book.bookId),
+												"data-initial-status": viewerStatusByBookId.get(book.bookId) || "",
+												"data-title": book.title,
+												"data-author": book.author,
+												"data-cover": book.coverUrl,
+												"data-description": book.synopsis,
+												"data-pages": String(book.pageCount || 0),
+												"data-language": book.language,
+												"data-isbn10": book.isbn10,
+												"data-isbn13": book.isbn13,
+												"data-google-books-id": book.googleBooksId,
+												"data-hide-label": "true"
+											}} />
+										</li>
+									))}
+								</ul>
+							)}
+						</li>
+					))}
+				</ul>
+			</section>
 		)}
 
 		{!errorMessage && sections.length > 0 && (
@@ -500,6 +563,108 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.95rem;
+	}
+
+	.featured-collections-section {
+		margin-top: 1.3rem;
+	}
+	.featured-collection-grid,
+	.featured-collection-books {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.featured-collection-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1rem;
+	}
+	.featured-collection-card {
+		background: var(--color-surface-raised);
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		overflow: visible;
+		box-shadow: var(--shadow-xs);
+	}
+	.featured-collection-link {
+		display: grid;
+		min-height: 230px;
+		position: relative;
+		overflow: hidden;
+		border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+		text-decoration: none;
+		color: inherit;
+		background: rgba(255, 255, 255, 0.62);
+	}
+	.featured-collection-link > img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		opacity: 0.3;
+	}
+	.featured-collection-copy {
+		position: relative;
+		z-index: 1;
+		align-self: end;
+		display: grid;
+		gap: 0.32rem;
+		padding: 1rem;
+		background: linear-gradient(to top, rgba(255,255,255,0.96), rgba(255,255,255,0.68));
+	}
+	.featured-collection-copy strong {
+		font-size: clamp(1.35rem, 2.6vw, 2.15rem);
+		line-height: 1.02;
+	}
+	.featured-collection-copy span,
+	.featured-collection-copy em {
+		color: var(--color-text-muted);
+		font-style: normal;
+	}
+	.featured-collection-copy .featured-subtitle {
+		color: var(--color-text);
+		font-weight: 700;
+	}
+	.featured-collection-books {
+		display: grid;
+		gap: 0.45rem;
+		padding: 0.75rem;
+	}
+	.featured-collection-books li {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 0.55rem;
+		align-items: center;
+	}
+	.featured-collection-books a {
+		display: grid;
+		grid-template-columns: 34px minmax(0, 1fr);
+		gap: 0.55rem;
+		align-items: center;
+		color: var(--color-nav);
+		text-decoration: none;
+		font-weight: 700;
+	}
+	.featured-collection-books a:hover,
+	.featured-collection-books a:focus-visible {
+		color: var(--color-nav-hover);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.featured-collection-books img,
+	.mini-cover-placeholder {
+		width: 34px;
+		aspect-ratio: 2 / 3;
+		border-radius: 5px;
+		object-fit: cover;
+		background: var(--color-chip-topic);
+	}
+	.mini-cover-placeholder {
+		display: inline-grid;
+		place-items: center;
+		font-family: "Material Icons";
+		color: var(--color-nav);
 	}
 
 	.community-discovery-section {
@@ -810,7 +975,8 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		}
 		.subhead { font-size: 0.95rem; line-height: 1.45; max-width: 36ch; }
 
-		.book-grid {
+		.book-grid,
+		.featured-collection-grid {
 			grid-template-columns: 1fr;
 		}
 		.community-suggestion-grid {

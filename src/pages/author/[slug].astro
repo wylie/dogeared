@@ -11,6 +11,7 @@ import { fetchExternalAuthorBooks, type ExternalAuthorBook } from "../../lib/ext
 import { authorCanonicalPath } from "../../lib/indexing";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
 import { ensureSeriesSchema, groupAuthorBooksBySeries } from "../../lib/series";
+import { loadCollectionsForAuthor, type CollectionRecord } from "../../lib/collections";
 
 export const prerender = false;
 
@@ -60,6 +61,7 @@ let shelvesCount = 0;
 let readersCount = 0;
 let externalBooks: ExternalAuthorBook[] = [];
 let authorId = 0;
+let featuredInCollections: CollectionRecord[] = [];
 
 function renderAverageStars(value: number) {
 	const rounded = Math.max(0, Math.min(5, Math.round((Number(value || 0) + Number.EPSILON) * 2) / 2));
@@ -211,6 +213,7 @@ try {
 			authorPhotoUrl = openLibrary.photoUrl;
 		}
 	}
+	featuredInCollections = await loadCollectionsForAuthor(sql, { authorId, authorName }, 4);
 } catch (error) {
 	errorMessage = error instanceof Error ? error.message : "Failed to load author page.";
 }
@@ -281,6 +284,28 @@ const authorStructuredData = displayName
 				)}
 			</div>
 		</section>
+
+			{featuredInCollections.length > 0 && (
+				<section class="featured-in-section" aria-labelledby="featured-in-title">
+					<div class="section-head">
+						<h2 id="featured-in-title">Featured In</h2>
+					</div>
+					<ul class="featured-in-grid">
+						{featuredInCollections.map((collection) => (
+							<li>
+								<a href={`/collections/${encodeURIComponent(collection.slug)}`}>
+									{collection.heroImage && <img src={collection.heroImage} alt="" loading="lazy" decoding="async" />}
+									<span>
+										<strong>{collection.title}</strong>
+										{collection.subtitle && <small>{collection.subtitle}</small>}
+										<small>{collection.bookCount.toLocaleString()} book{collection.bookCount === 1 ? "" : "s"}</small>
+									</span>
+								</a>
+							</li>
+						))}
+					</ul>
+				</section>
+			)}
 
 			<section class="books-section">
 				<h2>Books In DogEared</h2>
@@ -498,6 +523,51 @@ const authorStructuredData = displayName
 	.author-meta h1 { margin: 0; }
 	.meta { margin: 0.2rem 0; color: var(--color-text-muted); }
 	.bio { margin-top: 0.6rem; line-height: 1.5; }
+	.featured-in-section { margin-top: 1rem; }
+	.section-head h2 { margin: 0 0 0.6rem; }
+	.featured-in-grid {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.75rem;
+	}
+	.featured-in-grid a {
+		position: relative;
+		overflow: hidden;
+		min-height: 160px;
+		display: grid;
+		align-items: end;
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		color: inherit;
+		text-decoration: none;
+	}
+	.featured-in-grid img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		opacity: 0.25;
+	}
+	.featured-in-grid span {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		gap: 0.24rem;
+		padding: 0.8rem;
+		background: linear-gradient(to top, rgba(255,255,255,0.96), rgba(255,255,255,0.66));
+	}
+	.featured-in-grid strong {
+		font-size: 1.2rem;
+		line-height: 1.1;
+	}
+	.featured-in-grid small {
+		color: var(--color-text-muted);
+	}
 	.books-section { margin-top: 0.95rem; }
 	.books-section h2 { margin: 0 0 0.6rem; }
 	.author-book-groups {
@@ -526,7 +596,8 @@ const authorStructuredData = displayName
 	.rating-meta { color: var(--color-text-muted); font-weight: 400; }
 	.error { color: #991b1b; }
 	@media (max-width: 860px) {
-		.book-grid { grid-template-columns: 1fr; }
+		.book-grid,
+		.featured-in-grid { grid-template-columns: 1fr; }
 	}
 	@media (max-width: 640px) {
 		.author-head { grid-template-columns: 1fr; }

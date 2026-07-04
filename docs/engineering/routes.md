@@ -11,13 +11,15 @@ Authentication requirements:
 
 | Route | Auth | Purpose | Major components/data |
 | --- | --- | --- | --- |
-| `/` | Public | Explainable community discovery, onboarding checklist, provider sections, reader suggestions, custom shelf ideas. | `BookCard`, `ShelfDropdown`, `RatingControl`, `discoveryProviders`, `homeSections`, reader suggestions API. |
-| `/search` | Public | Search books and add results to shelves, with series labels for catalog matches. | `BookCard`, `ShelfDropdown`, `RatingControl`, `/api/books/search`, series metadata. |
+| `/` | Public | Featured editorial collections, explainable community discovery, onboarding checklist, provider sections, reader suggestions, custom shelf ideas. | `BookCard`, `ShelfDropdown`, `RatingControl`, `collections`, `discoveryProviders`, `homeSections`, reader suggestions API. |
+| `/search` | Public | Search books and add results to shelves, with series labels and editorial collection matches. | `BookCard`, `ShelfDropdown`, `RatingControl`, `/api/books/search`, series metadata, collection results. |
 | `/books` | Public | Browse catalog sections like trending, most shelved, top rated, and recently active. | `BookCard`, `ShelfDropdown`, catalog stats. |
 | `/book` | Public | Book detail by book ID or external/query metadata, including series context when available. | `BookCard`, `ShelfDropdown`, `RatingControl`, `Chip`, series section, continue-series callout, reviews, activity likes/comments. |
 | `/authors` | Public | Search, filter, sort, and page through authors. | Author cards, author stats. |
-| `/author/[slug]` | Public | Canonical author detail page with series-grouped local books. | `BookCard`, `ShelfDropdown`, `RatingControl`, series grouping, external author books, author metadata. |
+| `/author/[slug]` | Public | Canonical author detail page with Featured In collections and series-grouped local books. | `BookCard`, `ShelfDropdown`, `RatingControl`, collection links, series grouping, external author books, author metadata. |
 | `/author` | Redirect | Legacy author query route. | Redirects to canonical author path or `/authors`. |
+| `/collections` | Public | Browse published editorial collections by category. | `collections` helper, collection cards, published collection metadata. |
+| `/collections/[slug]` | Public | Editorial collection detail page with introduction, ordered books, notes, quotes, ratings, and shelf controls. | `BookCard`, `ShelfDropdown`, `RatingControl`, `collections` helper. |
 | `/related` | Public | Landing and related pages for genres, topics, authors, and books. | `BookCard`, `ShelfDropdown`, genre/topic/author/book queries. |
 | `/profile/[username]` | Public with privacy checks | Public reader profile; owner can edit profile and manage shelves. | Profile bundle, shelf summary, custom shelves, reading goal, momentum, notifications, activity likes/comments. |
 | `/profile/[username]/followers` | Public with privacy checks | Paginated followers list for a profile. | Public profile bundle, follower search/sort. |
@@ -37,6 +39,7 @@ Authentication requirements:
 | `/support` | Public | Support project context. | Static Astro page. |
 | `/discover` | Redirect | Legacy discovery route. | Redirects to `/`. |
 | `/admin` | Admin | Admin overview and site statistics. | `resolveAdminSession`, `loadAdminOverviewStats`. |
+| `/admin/collections` | Admin | Create, edit, reorder, publish, archive, and feature editorial collections. | `collections` helper, collection form, collection list. |
 | `/admin/data-health` | Admin | Metadata, import, duplicate, backfill, page count, and publisher health. | Neon diagnostic queries. |
 | `/admin/users` | Admin | Search users and delete users from list. | `searchAdminUsers`, `deleteAdminUser`. |
 | `/admin/users/[username]` | Admin | User detail counts and delete-user flow. | `loadAdminUserDetail`, `deleteAdminUser`. |
@@ -57,7 +60,7 @@ Authentication requirements:
 | `/api/account/export` | GET | Authenticated | Export account profile and shelved books as JSON. |
 | `/api/account/clear-shelf` | POST | Authenticated | Delete all default shelf entries for current user. |
 | `/api/account/delete` | POST | Authenticated | Delete current user account and clear session. Not exposed by Settings UI. |
-| `/api/books/search` | GET | Public | Search DogEared catalog, Google Books, and Open Library; attaches local series metadata when available. |
+| `/api/books/search` | GET | Public | Search DogEared catalog, Google Books, Open Library, and published editorial collections; attaches local series metadata when available. |
 | `/api/books/suggest` | GET | Public | Return Google Books suggestions for query text. |
 | `/api/books/cover` | GET | Public | Proxy allowed Google Books cover URLs. |
 | `/api/shelf/entries` | GET, POST, DELETE | Authenticated | Load, upsert, and remove default shelf entries. |

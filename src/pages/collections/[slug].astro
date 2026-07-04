@@ -1,0 +1,359 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import BookCard from "../../components/BookCard.astro";
+import RatingControl from "../../components/RatingControl.astro";
+import ShelfDropdown from "../../components/ShelfDropdown.astro";
+import { authorHref } from "../../lib/author";
+import { resolveUserBySession } from "../../lib/auth";
+import { getNeonSql } from "../../lib/neon";
+import { loadCollectionBySlug, type CollectionDetail } from "../../lib/collections";
+
+export const prerender = false;
+
+const slug = String(Astro.params.slug || "").trim();
+const session = await resolveUserBySession(Astro.request);
+const viewerUserId = String(session?.userId || "");
+let collection: CollectionDetail | null = null;
+let errorMessage = "";
+let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
+let viewerRatingByBookId = new Map<number, number>();
+
+try {
+	const sql = getNeonSql();
+	collection = await loadCollectionBySlug(sql, slug);
+	if (viewerUserId && collection?.books.length) {
+		const bookIds = collection.books.map((book) => book.bookId).filter((id) => id > 0);
+		const statusRows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
+			select book_id, status, rating
+			from user_book
+			where user_id = ${viewerUserId}::uuid
+				and book_id = any(${bookIds}::bigint[])
+		`;
+		viewerStatusByBookId = new Map(statusRows.map((row) => [Number(row.book_id || 0), row.status]));
+		viewerRatingByBookId = new Map(statusRows.map((row) => [Number(row.book_id || 0), Math.max(0, Math.min(5, Number(row.rating || 0) || 0))]));
+	}
+} catch (error) {
+	errorMessage = error instanceof Error ? error.message : "Collection is temporarily unavailable.";
+}
+
+if (!collection && !errorMessage) {
+	return Astro.redirect("/collections", 302);
+}
+
+const title = collection?.title || "Collection";
+const sectionLinks = collection?.books.length ? [
+	{ id: "introduction", label: "Introduction" },
+	{ id: "books", label: "Books" }
+] : [];
+---
+
+<Layout
+	title={title}
+	metaDescription={collection?.description || "A DogEared editorial collection."}
+	canonicalUrl={collection ? `/collections/${collection.slug}` : "/collections"}
+	socialImage={collection?.heroImage || "/og-image.png"}
+	socialImageAlt={collection ? `${collection.title} on DogEared` : "DogEared editorial collections"}
+	sectionLinks={sectionLinks}
+>
+	<div slot="right" class="collection-page" data-authenticated={String(!!viewerUserId)}>
+		{errorMessage && <p class="error">{errorMessage}</p>}
+		{collection && (
+			<>
+				<header class="collection-hero">
+					{collection.heroImage && <img src={collection.heroImage} alt="" loading="lazy" decoding="async" />}
+					<div class="collection-hero-copy">
+						<p class="eyebrow">{collection.category || "Editorial Collection"}</p>
+						<h1>{collection.title}</h1>
+						{collection.subtitle && <p class="subtitle">{collection.subtitle}</p>}
+						<p>{collection.description}</p>
+					</div>
+				</header>
+
+				<section id="introduction" class="intro-section" aria-labelledby="intro-title">
+					<h2 id="intro-title">Editor's note</h2>
+					<p>{collection.editorialIntroduction || collection.description || "A thoughtful collection from DogEared editors."}</p>
+				</section>
+
+				<section id="books" class="collection-books" aria-labelledby="books-title">
+					<div class="section-head">
+						<h2 id="books-title">Books in this collection</h2>
+						<p>{collection.books.length.toLocaleString()} book{collection.books.length === 1 ? "" : "s"}</p>
+					</div>
+					{collection.books.length === 0 ? (
+						<p class="empty">This collection does not have books yet.</p>
+					) : (
+						<ol class="collection-book-list">
+							{collection.books.map((book, index) => {
+								const viewerStatus = viewerStatusByBookId.get(book.bookId) || "";
+								const viewerRating = viewerRatingByBookId.get(book.bookId) || 0;
+								return (
+									<BookCard
+										title={book.title}
+										titleHref={`/book?bookId=${encodeURIComponent(String(book.bookId))}`}
+										author={book.author}
+										authorHref={book.author ? authorHref(book.author, book.authorId) : ""}
+										thumbnail={book.coverUrl}
+										description={book.editorNote || book.synopsis || "Selected for this collection."}
+										readers={-1}
+										shelfEntries={-1}
+										showCommunityStats={false}
+										publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
+										pageCount={book.pageCount}
+										averageRating={book.averageRating}
+									>
+										<p slot="preTitle" class="collection-rank">#{index + 1}</p>
+										{book.featuredQuote && <p slot="preMeta" class="featured-quote">“{book.featuredQuote}”</p>}
+										<div slot="meta">
+											{viewerStatus === "finished" && (
+												<RatingControl bookId={String(book.bookId)} rating={viewerRating} editable={true} />
+											)}
+											{book.editorNote && <p class="editor-note"><strong>Why it belongs:</strong> {book.editorNote}</p>}
+										</div>
+										<div slot="actions">
+											<ShelfDropdown attrs={{
+												"data-book-id": String(book.bookId),
+												"data-initial-status": viewerStatus,
+												"data-title": book.title,
+												"data-author": book.author,
+												"data-cover": book.coverUrl,
+												"data-description": book.synopsis,
+												"data-pages": String(book.pageCount || 0),
+												"data-language": book.language,
+												"data-isbn10": book.isbn10,
+												"data-isbn13": book.isbn13,
+												"data-google-books-id": book.googleBooksId
+											}} />
+										</div>
+									</BookCard>
+								);
+							})}
+						</ol>
+					)}
+				</section>
+			</>
+		)}
+	</div>
+</Layout>
+
+<script>
+	import {
+		buildShelfEntryFromRecord,
+		closeShelfMenus,
+		promptForShelfLogin,
+		removeBookFromAllShelvesOnServer,
+		resolveShelfRemoveMessage,
+		setDropdownLabel,
+		setShelvedState,
+		showShelfFeedback,
+		statusLabel,
+		saveShelfEntryWithRetry,
+		toggleShelfMenu,
+		initRatingControls
+	} from "../../lib/shelfClient.ts";
+
+	const page = document.querySelector(".collection-page");
+	const isAuthenticated = page?.dataset.authenticated === "true";
+	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
+	const feedbackTimers = new WeakMap();
+	initRatingControls();
+
+	function buildEntry(dropdown, status) {
+		const totalPages = Math.max(0, Number(dropdown.dataset.pages || 0) || 0);
+		return buildShelfEntryFromRecord({
+			bookId: dropdown.dataset.bookId,
+			title: String(dropdown.dataset.title || "").trim(),
+			author: String(dropdown.dataset.author || "").trim(),
+			description: String(dropdown.dataset.description || "").trim(),
+			pageCount: totalPages,
+			coverUrl: String(dropdown.dataset.cover || ""),
+			format: "Book",
+			language: String(dropdown.dataset.language || ""),
+			isbn10: String(dropdown.dataset.isbn10 || ""),
+			isbn13: String(dropdown.dataset.isbn13 || ""),
+			googleBooksId: String(dropdown.dataset.googleBooksId || "")
+		}, {
+			status,
+			totalPages,
+			currentPage: status === "finished" ? totalPages : (status === "reading" ? Math.min(1, totalPages || 1) : 0),
+			finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : ""
+		});
+	}
+
+	document.addEventListener("click", async (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+
+		const toggle = target.closest('[data-action="toggle-shelf"]');
+		if (toggle instanceof HTMLButtonElement) {
+			const dropdown = toggle.closest(".shelf-dropdown");
+			if (dropdown instanceof HTMLElement) toggleShelfMenu(dropdown, shelfDropdowns);
+			return;
+		}
+
+		const option = target.closest('[data-action="set-shelf"]');
+		if (option instanceof HTMLButtonElement) {
+			const dropdown = option.closest(".shelf-dropdown");
+			if (!(dropdown instanceof HTMLElement)) return;
+			if (!isAuthenticated) {
+				promptForShelfLogin();
+				closeShelfMenus(shelfDropdowns);
+				return;
+			}
+			const status = String(option.dataset.status || "want_to_read");
+			const result = await saveShelfEntryWithRetry(buildEntry(dropdown, status));
+			if (result.ok) {
+				setDropdownLabel(dropdown, status);
+				setShelvedState(dropdown, true);
+				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
+			} else {
+				showShelfFeedback(dropdown, result.message || "Failed to save shelf.", feedbackTimers);
+			}
+			closeShelfMenus(shelfDropdowns);
+			return;
+		}
+
+		const remove = target.closest('[data-action="remove-from-shelves"]');
+		if (remove instanceof HTMLButtonElement) {
+			const dropdown = remove.closest(".shelf-dropdown");
+			if (!(dropdown instanceof HTMLElement)) return;
+			if (!isAuthenticated) {
+				promptForShelfLogin();
+				closeShelfMenus(shelfDropdowns);
+				return;
+			}
+			const result = await removeBookFromAllShelvesOnServer(dropdown.dataset.bookId || "", buildEntry(dropdown, "want_to_read"));
+			if (result.ok) {
+				setDropdownLabel(dropdown, "");
+				setShelvedState(dropdown, false);
+			}
+			showShelfFeedback(dropdown, resolveShelfRemoveMessage(result), feedbackTimers);
+			closeShelfMenus(shelfDropdowns);
+			return;
+		}
+
+		if (!target.closest(".shelf-dropdown")) closeShelfMenus(shelfDropdowns);
+	});
+</script>
+
+<style>
+	.collection-page {
+		max-width: 1040px;
+	}
+	.error,
+	.empty {
+		color: var(--color-text-muted);
+	}
+	.collection-hero {
+		position: relative;
+		min-height: clamp(340px, 54vw, 520px);
+		display: grid;
+		align-items: end;
+		overflow: hidden;
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.54);
+		border: var(--border-subtle);
+		box-shadow: var(--shadow-xs);
+	}
+	.collection-hero > img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		opacity: 0.42;
+	}
+	.collection-hero-copy {
+		position: relative;
+		z-index: 1;
+		padding: clamp(1rem, 3.5vw, 2rem);
+		background: linear-gradient(to top, rgba(255,255,255,0.98), rgba(255,255,255,0.72), rgba(255,255,255,0));
+	}
+	.eyebrow {
+		margin: 0 0 0.4rem;
+		color: var(--color-text-muted);
+		font-size: 0.8rem;
+		font-weight: 800;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	.collection-hero h1 {
+		margin: 0;
+		max-width: 860px;
+		font-size: clamp(2.35rem, 6vw, 5.6rem);
+		line-height: 0.95;
+	}
+	.collection-hero .subtitle {
+		margin: 0.75rem 0 0;
+		max-width: 680px;
+		color: var(--color-text);
+		font-size: clamp(1.05rem, 2vw, 1.45rem);
+		font-weight: 700;
+	}
+	.collection-hero-copy > p:last-child {
+		max-width: 680px;
+		margin: 0.55rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 1.05rem;
+	}
+	.intro-section {
+		margin: 1.3rem 0;
+		max-width: 760px;
+	}
+	.intro-section h2,
+	.intro-section p {
+		margin: 0;
+	}
+	.intro-section p {
+		margin-top: 0.45rem;
+		color: var(--color-text);
+		font-size: 1.1rem;
+		line-height: 1.62;
+	}
+	.section-head {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		align-items: end;
+		margin-bottom: 0.75rem;
+	}
+	.section-head h2,
+	.section-head p {
+		margin: 0;
+	}
+	.section-head p {
+		color: var(--color-text-muted);
+		font-weight: 700;
+	}
+	.collection-book-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1rem;
+	}
+	.collection-rank {
+		margin: 0 0 0.25rem;
+		color: var(--color-nav);
+		font-weight: 900;
+	}
+	.featured-quote {
+		margin: 0.35rem 0;
+		color: var(--color-text);
+		font-weight: 700;
+	}
+	.editor-note {
+		margin: 0.45rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.92rem;
+	}
+	@media (max-width: 860px) {
+		.collection-book-list {
+			grid-template-columns: 1fr;
+		}
+		.section-head {
+			align-items: start;
+			flex-direction: column;
+		}
+	}
+</style>

@@ -17,11 +17,12 @@ Current limitation:
 Admin routes:
 
 - `/admin`: overview.
+- `/admin/collections`: editorial collection management.
 - `/admin/data-health`: data health.
 - `/admin/users`: user search and management.
 - `/admin/users/[username]`: user detail and delete flow.
 
-The Admin Overview quick-links also point admins to Metrics and Roadmap.
+The Admin Overview quick-links also point admins to Collections, Metrics, and Roadmap.
 
 ## Current Dashboard
 
@@ -42,6 +43,32 @@ Shows:
 - Reviews added this week.
 
 Data comes from `loadAdminOverviewStats`.
+
+## Collection Management
+
+Route: `/admin/collections`
+
+Admins can:
+
+- Create editorial collections.
+- Edit title, slug, subtitle, description, editorial introduction, hero image, category, and sort order.
+- Add ordered books by book ID.
+- Add optional editor notes and featured quotes per book.
+- Publish collections.
+- Archive collections.
+- Mark published collections as featured for Home.
+
+Publication states:
+
+- `draft`: editable and hidden from public readers.
+- `published`: visible on collection pages, Home when featured, Search, and author pages.
+- `archived`: retained for admin history but hidden from public readers.
+
+Current limitations:
+
+- The editor is a simple form, not a rich CMS.
+- Book ordering uses line-based input rather than drag-and-drop.
+- There are no curator profiles, preview approvals, media uploads, partnership fields, or audit logs yet.
 
 ## Metadata Health
 
@@ -166,5 +193,6 @@ Reasonable future admin expansions based on current structure:
 - Notification moderation.
 - Feedback management dashboard.
 - Review/comment moderation.
+- Rich editorial collection CMS with curator profiles, seasonal scheduling, and audit history.
 - Catalog merge tools for duplicate books.
 - Safer self-service account deletion parity with admin deletion semantics.

@@ -66,7 +66,7 @@ Stores local catalog records:
 Relationships:
 
 - May reference `author`.
-- Has zero or more source records, genres, topic tags, shelf entries, activity rows, and progress events.
+- Has zero or more source records, genres, topic tags, collection entries, shelf entries, activity rows, and progress events.
 
 ## Authors
 
@@ -138,6 +138,38 @@ Relationships:
 - A series has many series-book entries.
 - A series-book entry may reference a catalog `book`, or may represent a missing/not-yet-cataloged title.
 - Reader progress for series is derived from `user_book` statuses joined through `series_book`, so profiles can later support series-completed and series-in-progress views without a separate progress table.
+
+## Editorial Collections
+
+Entities: `collection`, `collection_book`
+
+Collection records store editorial curation metadata:
+
+- Title and unique slug.
+- Optional subtitle.
+- Description.
+- Editorial introduction.
+- Hero image.
+- Category.
+- Featured flag.
+- Publication state: `draft`, `published`, or `archived`.
+- Sort order.
+- Extensible JSON metadata for future staff picks, seasonal collections, guest curators, library collections, award winners, and bookstore partnerships.
+
+Collection-book records store:
+
+- Collection.
+- Book.
+- Custom sort order.
+- Optional editor note explaining why the book belongs.
+- Optional featured quote.
+
+Relationships:
+
+- A collection has many ordered collection-book entries.
+- A collection-book entry belongs to a catalog `book`.
+- Published collections can surface on Home, Search, collection pages, and author pages.
+- Draft and archived collections remain admin-managed and are not shown to public readers.
 
 ## Topic Tags
 

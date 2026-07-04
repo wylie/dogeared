@@ -32,12 +32,13 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 
 ## Major Application Sections
 
-- Home: transparent community discovery sections, onboarding checklist, discovery jump links, reader suggestions, and custom shelf ideas.
-- Search: book search backed by DogEared catalog results plus Google Books and Open Library, with series labels when available.
+- Home: featured editorial collections, transparent community discovery sections, onboarding checklist, discovery jump links, reader suggestions, and custom shelf ideas.
+- Search: book search backed by DogEared catalog results plus Google Books and Open Library, with series labels and editorial collection matches when available.
 - Books: curated catalog views such as trending, most shelved, top rated, and recently active.
 - Book detail: metadata, series context, synopsis, genres, topics, shelf controls, ratings, reviews, and related activity.
 - Authors: searchable and sortable author index.
-- Author detail: author profile, author books grouped by series where available, standalone books, and external author-book context.
+- Author detail: author profile, editorial collections featuring the author, author books grouped by series where available, standalone books, and external author-book context.
+- Editorial Collections: curated book lists with editorial introductions, book ordering, notes, quotes, and shelf controls.
 - Profiles: public reader pages with about information, shelf summary, custom shelves, reading goal, current reads, activity, followers, and following.
 - My Reading Life: private personal reflection across finished books, pages, streaks, goals, ratings, timeline, reading calendar, genres, authors, fun statistics, and yearly summaries.
 - Following: reader suggestions, current follows, and activity from followed readers.
@@ -49,7 +50,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 ## Major Workflows
 
 - Account setup: request a magic link, verify it, set a username, then manage profile and settings.
-- Book discovery: browse explainable home recommendations, search books with series context, open book pages, browse author pages, or explore related genre/topic/author/book pages.
+- Book discovery: browse featured editorial collections, explainable home recommendations, search books with series context, open book pages, browse author pages, or explore related genre/topic/author/book pages.
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
 - Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, and yearly summaries.
@@ -84,9 +85,17 @@ Home discovery is generated from transparent community activity, not an AI recom
 
 If DogEared does not have enough data for a provider, that provider is hidden. If no provider has enough data, Home falls back to a simple Popular With Readers section when shelf activity exists, or a friendly empty state when it does not.
 
+### Editorial Collections
+
+DogEared supports first-class editorial collections for curated discovery that does not depend on popularity. Collections have title, slug, subtitle, description, editorial introduction, hero image, category, featured flag, publication state, sort order, and extensible metadata. Books inside collections have custom order, optional editor note, and optional featured quote.
+
+Published collections appear on `/collections` and detail pages at `/collections/[slug]`. Collection pages use larger editorial presentation, a short editor's note, and book cards with covers, title, author, ratings, Add to Shelf controls, and the reason each book belongs. Home shows at most two featured collections so the page stays calm. Author pages show a Featured In section when published collections include that author, and Search returns matching published collections above book results.
+
+Admins manage collections from `/admin/collections`, where they can create, edit, reorder, publish, archive, and feature collections.
+
 ### Authors
 
-Authors have an index page, canonical author detail routes, optional bio/photo/source fields, reader and shelf counts, and book lists. A legacy author query route redirects to the canonical author route.
+Authors have an index page, canonical author detail routes, optional bio/photo/source fields, reader and shelf counts, editorial collection references, and book lists. A legacy author query route redirects to the canonical author route.
 
 ### Profiles
 
@@ -174,7 +183,7 @@ The Roadmap page groups product direction into Now, Next, Later, and recently co
 
 ### Search
 
-Search queries DogEared catalog records first, then Google Books, then Open Library. Results are scored and deduplicated, and known catalog matches attach local book, author, and series metadata when available.
+Search queries DogEared catalog records first, then Google Books, then Open Library. Results are scored and deduplicated, and known catalog matches attach local book, author, and series metadata when available. Matching published editorial collections appear as a separate result group.
 
 ### Genre And Related Pages
 
@@ -184,17 +193,18 @@ Related pages support landing exploration plus specific `kind=genre`, `kind=topi
 
 Derived from the current repository structure and implementation:
 
-- Major non-API page routes: 29 application/content routes plus `robots.txt` and `sitemap.xml`.
+- Major non-API page routes: 32 application/content routes plus `robots.txt` and `sitemap.xml`.
 - API routes: 33 endpoint files.
-- Admin pages: 4 routes.
+- Admin pages: 5 routes.
 - Redirect-only compatibility routes: `/discover`, `/feed`, `/myreads`, `/profile`, `/author`, and `/u/[username]`.
-- User-facing feature areas documented here: 44.
+- User-facing feature areas documented here: 45.
 - Default persisted shelf statuses: 3 (`want_to_read`, `reading`, `finished`).
 - Custom shelf icon options: 16.
 - Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, My Reading Life overview, finished-book timeline, reading calendar, genre/author insights, fun statistics, yearly summaries, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.
 - Community discovery providers: 7.
+- Editorial collection publication states: 3 (`draft`, `published`, `archived`).
 - Series ordering modes: book order, publication order, chronological order.
 - Supported social interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment.
-- Supported catalog metadata types: series, genres, and topic tags.
+- Supported catalog metadata types: editorial collections, series, genres, and topic tags.
 - Supported import source in Settings: Goodreads CSV.
 - Supported data export format in Settings: JSON.

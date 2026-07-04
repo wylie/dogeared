@@ -53,8 +53,20 @@ type SearchResult = {
 	}>;
 };
 
+type CollectionSearchResult = {
+	title: string;
+	slug: string;
+	subtitle: string;
+	description: string;
+	heroImage: string;
+	category: string;
+	bookCount: number;
+	featured: boolean;
+};
+
 const query = Astro.url.searchParams.get("q")?.trim() ?? "";
 let results: SearchResult[] = [];
+let collectionResults: CollectionSearchResult[] = [];
 let errorMessage = "";
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let viewerRatingByBookId = new Map<number, number>();
@@ -89,6 +101,7 @@ if (query) {
 		} else {
 			const payload = await response.json();
 			results = Array.isArray(payload?.results) ? payload.results : [];
+			collectionResults = Array.isArray(payload?.collectionResults) ? payload.collectionResults : [];
 			if (session?.userId && results.length > 0) {
 				const bookIds = Array.from(new Set(results.map((result) => Number(result.bookId || 0)).filter((value) => value > 0)));
 				if (bookIds.length > 0) {
@@ -147,8 +160,30 @@ if (session?.userId) {
 		<h1>Search</h1>
 		{!query && <p>Search for a favorite title, then add it to Want to Read, Currently Reading, or Read to build recommendations.</p>}
 		{query && errorMessage && <p>Search failed: {errorMessage}</p>}
-		{query && !errorMessage && results.length === 0 && <p>No results for "{query}". Try a broader title, an author name, or fewer keywords.</p>}
-		{query && !errorMessage && results.length > 0 && <p>Results for "{query}". Use the shelf dropdown to save to <a href="/settings#account-settings">Profile</a>.</p>}
+		{query && !errorMessage && results.length === 0 && collectionResults.length === 0 && <p>No results for "{query}". Try a broader title, an author name, or fewer keywords.</p>}
+		{query && !errorMessage && (results.length > 0 || collectionResults.length > 0) && <p>Results for "{query}". Use the shelf dropdown to save books to <a href="/settings#account-settings">Profile</a>.</p>}
+
+		{query && !errorMessage && collectionResults.length > 0 && (
+			<section class="collection-search-section" aria-labelledby="collection-search-title">
+				<h2 id="collection-search-title">Editorial Collections</h2>
+				<ul class="collection-search-results">
+					{collectionResults.map((collection) => (
+						<li>
+							<a href={`/collections/${encodeURIComponent(collection.slug)}`}>
+								{collection.heroImage && <img src={collection.heroImage} alt="" loading="lazy" decoding="async" />}
+								<span>
+									{collection.category && <em>{collection.category}</em>}
+									<strong>{collection.title}</strong>
+									{collection.subtitle && <small>{collection.subtitle}</small>}
+									<small>{collection.description}</small>
+									<small>{collection.bookCount.toLocaleString()} book{collection.bookCount === 1 ? "" : "s"}</small>
+								</span>
+							</a>
+						</li>
+					))}
+				</ul>
+			</section>
+		)}
 
 		<ul class="search-results" id="search-results">
 			{results.map((result) => (
@@ -231,6 +266,58 @@ if (session?.userId) {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.75rem;
+	}
+
+	.collection-search-section {
+		margin-top: 1rem;
+	}
+	.collection-search-section h2 {
+		margin: 0 0 0.65rem;
+	}
+	.collection-search-results {
+		list-style: none;
+		margin: 0 0 1rem;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.75rem;
+	}
+	.collection-search-results a {
+		position: relative;
+		overflow: hidden;
+		min-height: 190px;
+		display: grid;
+		align-items: end;
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		color: inherit;
+		text-decoration: none;
+	}
+	.collection-search-results img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		opacity: 0.26;
+	}
+	.collection-search-results span {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		gap: 0.22rem;
+		padding: 0.85rem;
+		background: linear-gradient(to top, rgba(255,255,255,0.96), rgba(255,255,255,0.68));
+	}
+	.collection-search-results strong {
+		font-size: 1.25rem;
+		line-height: 1.1;
+	}
+	.collection-search-results small,
+	.collection-search-results em {
+		color: var(--color-text-muted);
+		font-style: normal;
 	}
 
 	#search-sentinel-wrap {
@@ -385,7 +472,8 @@ if (session?.userId) {
 	}
 
 	@media (max-width: 860px) {
-		.search-results {
+		.search-results,
+		.collection-search-results {
 			grid-template-columns: 1fr;
 		}
 	}

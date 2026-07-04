@@ -148,6 +148,34 @@ create table if not exists series_book (
 	check (book_id is not null or trim(title_override) <> '')
 );
 
+create table if not exists collection (
+	id bigserial primary key,
+	title text not null,
+	slug text not null unique,
+	subtitle text not null default '',
+	description text not null default '',
+	editorial_introduction text not null default '',
+	hero_image text not null default '',
+	category text not null default '',
+	featured boolean not null default false,
+	publication_state text not null default 'draft' check (publication_state in ('draft', 'published', 'archived')),
+	sort_order int not null default 0,
+	metadata jsonb not null default '{}'::jsonb,
+	created_at timestamptz not null default now(),
+	updated_at timestamptz not null default now()
+);
+
+create table if not exists collection_book (
+	collection_id bigint not null references collection(id) on delete cascade,
+	book_id bigint not null references book(id) on delete cascade,
+	sort_order int not null default 0,
+	editor_note text not null default '',
+	featured_quote text not null default '',
+	created_at timestamptz not null default now(),
+	updated_at timestamptz not null default now(),
+	primary key (collection_id, book_id)
+);
+
 create table if not exists user_book (
 	user_id uuid not null references app_user(id) on delete cascade,
 	book_id bigint not null references book(id) on delete cascade,
@@ -183,6 +211,10 @@ create index if not exists idx_book_source_source on book_source(source, source_
 create index if not exists idx_series_book_series_order on series_book(series_id, book_order, publication_order, chronological_order);
 create index if not exists idx_series_book_book on series_book(book_id) where book_id is not null;
 create unique index if not exists idx_series_book_unique_book on series_book(series_id, book_id) where book_id is not null;
+create index if not exists idx_collection_public on collection(publication_state, featured, sort_order, title);
+create index if not exists idx_collection_slug on collection(slug);
+create index if not exists idx_collection_book_collection_order on collection_book(collection_id, sort_order, book_id);
+create index if not exists idx_collection_book_book on collection_book(book_id);
 create index if not exists idx_user_activity_user_created on user_activity(user_id, created_at desc);
 create index if not exists idx_user_book_status_updated on user_book(status, updated_at desc);
 create index if not exists idx_user_book_book on user_book(book_id);

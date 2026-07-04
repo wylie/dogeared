@@ -9,6 +9,7 @@ const isProfilePage = currentNormalized === "/profile" || currentNormalized.star
 const isReadingLifePage = currentNormalized === "/reading-life";
 const isHomePage = currentNormalized === "/";
 const isAdminDashboardPage = currentNormalized === "/admin";
+const isAdminCollectionsPage = currentNormalized === "/admin/collections";
 const isAdminUsersPage = currentNormalized === "/admin/users" || currentNormalized.startsWith("/admin/users/");
 const query = Astro.url.searchParams.get("q") ?? "";
 ---
@@ -109,6 +110,16 @@ const query = Astro.url.searchParams.get("q") ?? "";
               </ul>
             )}
           </li>
+          <li>
+            <a href={isActive('/collections') ? undefined : '/collections'} class={isActive('/collections') || currentNormalized.startsWith('/collections/') ? 'active' : 'hover'} aria-current={isActive('/collections') || currentNormalized.startsWith('/collections/') ? 'page' : undefined}>Collections</a>
+            {(isActive('/collections') || currentNormalized.startsWith('/collections/')) && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
         </ul>
       </section>
 
@@ -155,6 +166,16 @@ const query = Astro.url.searchParams.get("q") ?? "";
             <li>
               <a href={isAdminDashboardPage ? undefined : '/admin'} class={isAdminDashboardPage ? 'active' : 'hover'} aria-current={isAdminDashboardPage ? 'page' : undefined}>Dashboard</a>
               {isAdminDashboardPage && sectionLinks.length > 0 && (
+                <ul class="section-links-nested">
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+            <li>
+              <a href={isAdminCollectionsPage ? undefined : '/admin/collections'} class={isAdminCollectionsPage ? 'active' : 'hover'} aria-current={isAdminCollectionsPage ? 'page' : undefined}>Collections</a>
+              {isAdminCollectionsPage && sectionLinks.length > 0 && (
                 <ul class="section-links-nested">
                   {sectionLinks.map((link) => (
                     <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>

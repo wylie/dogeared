@@ -3,6 +3,7 @@ import { googleBooksCoverUrl } from "../../../lib/bookCovers";
 import { getNeonSql } from "../../../lib/neon";
 import { createPublicCacheControl, withRuntimeCache } from "../../../lib/runtimeCache";
 import { ensureSeriesSchema } from "../../../lib/series";
+import { searchCollections } from "../../../lib/collections";
 
 export const prerender = false;
 
@@ -45,6 +46,17 @@ type SearchResult = {
 		optionLabel: string;
 		detailLabel: string;
 	}>;
+};
+
+type CollectionSearchResult = {
+	title: string;
+	slug: string;
+	subtitle: string;
+	description: string;
+	heroImage: string;
+	category: string;
+	bookCount: number;
+	featured: boolean;
 };
 
 function normalizeText(value: string) {
@@ -324,6 +336,18 @@ export const GET: APIRoute = async ({ url }) => {
 		const sql = getNeonSql();
 		await sql`alter table book add column if not exists publisher text not null default ''`;
 		await ensureSeriesSchema(sql);
+		const collectionResultsPromise = page === 1
+			? searchCollections(sql, query, 4).then((collections): CollectionSearchResult[] => collections.map((collection) => ({
+				title: collection.title,
+				slug: collection.slug,
+				subtitle: collection.subtitle,
+				description: collection.description,
+				heroImage: collection.heroImage,
+				category: collection.category,
+				bookCount: collection.bookCount,
+				featured: collection.featured
+			}))).catch(() => [])
+			: Promise.resolve([] as CollectionSearchResult[]);
 		const queryLike = `%${query}%`;
 		const queryDigits = query.replace(/[^0-9Xx]/g, "").toUpperCase();
 		const dbdRows = await withRuntimeCache(
@@ -596,8 +620,9 @@ export const GET: APIRoute = async ({ url }) => {
 			};
 		});
 		const results = dedupeVariants(mappedWithIds, query);
+		const collectionResults = await collectionResultsPromise;
 		const hasMore = dbdRows.length >= pageSize || items.length >= pageSize || openItems.length >= pageSize;
-		return new Response(JSON.stringify({ results, hasMore, page }), {
+		return new Response(JSON.stringify({ results, collectionResults, hasMore, page }), {
 			status: 200,
 			headers: {
 				"Content-Type": "application/json",
