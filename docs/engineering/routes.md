@@ -24,6 +24,7 @@ Authentication requirements:
 | `/profile` | Redirect | Sends the signed-in user to their profile or settings. | Session and username lookup. |
 | `/u/[username]` | Redirect | Legacy profile alias. | Redirects to `/profile/[username]`. |
 | `/following` | Authenticated | Manage followed readers and view following activity. | Reader suggestions, following readers, `BookCard`, likes/comments, follow API. |
+| `/reading-life` | Authenticated | Private reflection on the signed-in reader's reading history, timeline, calendar, genres, authors, fun statistics, and yearly summaries. | `readingLife` helper, shelf entries, progress events, genres, authors, series metadata, reading goal data. |
 | `/feed` | Redirect | Legacy route for feed. | Redirects to `/following`. |
 | `/myreads` | Redirect | Legacy reader library route. | Redirects signed-in users to their profile; otherwise settings. |
 | `/settings` | Authenticated | Account, auth, email change, privacy, import, export, API references, sessions, preferences. | Settings scripts, Goodreads import helpers, account APIs, shelf APIs. |

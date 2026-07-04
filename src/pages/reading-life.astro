@@ -1,0 +1,985 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { resolveUserBySession } from "../lib/auth";
+import { getNeonSql } from "../lib/neon";
+import {
+	buildReadingLifeSummary,
+	filterReadingTimeline,
+	type ReadingLifeCurrentBook,
+	type ReadingLifeFinishedBook,
+	type ReadingLifeGenre,
+	type ReadingLifeProgressEvent
+} from "../lib/readingLife.ts";
+
+export const prerender = false;
+
+type RawFinishedBookRow = {
+	id: number;
+	title: string;
+	primary_author: string;
+	author_id: number | null;
+	cover_url: string;
+	page_count: number;
+	published_year: number | null;
+	finished_date: string | null;
+	updated_at: string | null;
+	rating: number | null;
+	genres: ReadingLifeGenre[] | string | null;
+	series_id: number | null;
+	series_name: string | null;
+};
+
+type RawCurrentBookRow = {
+	id: number;
+	title: string;
+	primary_author: string;
+	cover_url: string;
+	current_page: number;
+	total_pages: number;
+	updated_at: string | null;
+};
+
+type RawProgressRow = {
+	book_id: number;
+	date: string;
+	page_delta: number;
+};
+
+function parseGenres(value: RawFinishedBookRow["genres"]): ReadingLifeGenre[] {
+	const raw = typeof value === "string" ? JSON.parse(value || "[]") : value;
+	if (!Array.isArray(raw)) return [];
+	return raw
+		.map((item) => ({
+			slug: String((item as ReadingLifeGenre)?.slug || "").trim(),
+			name: String((item as ReadingLifeGenre)?.name || "").trim()
+		}))
+		.filter((genre) => genre.name);
+}
+
+function formatDate(value: string) {
+	if (!value) return "Date unavailable";
+	const date = new Date(`${value}T00:00:00Z`);
+	if (!Number.isFinite(date.getTime())) return value;
+	return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(date);
+}
+
+function formatMonthName(month: number) {
+	return new Intl.DateTimeFormat("en", { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2026, month - 1, 1)));
+}
+
+function formatRating(value: number | null | undefined) {
+	const rating = Number(value || 0);
+	return rating > 0 ? `${rating}/5` : "Unrated";
+}
+
+function ratingStars(value: number | null | undefined) {
+	const rating = Math.max(0, Math.min(5, Math.round(Number(value || 0))));
+	return rating > 0 ? Array.from({ length: 5 }, (_, index) => index < rating ? "★" : "☆").join("") : "";
+}
+
+function bookHref(id: number) {
+	return `/book?bookId=${encodeURIComponent(String(id))}`;
+}
+
+function authorHref(id: number | null | undefined, name: string) {
+	return id ? `/author/${encodeURIComponent(String(id))}` : `/author?name=${encodeURIComponent(name)}`;
+}
+
+function bookTitle(book: ReadingLifeFinishedBook | null) {
+	return book?.title || "Not enough data yet";
+}
+
+function bookMeta(book: ReadingLifeFinishedBook | null, suffix = "") {
+	if (!book) return "";
+	const parts = [book.author];
+	if (book.pageCount && book.pageCount > 0) parts.push(`${book.pageCount.toLocaleString()} pages`);
+	if (book.publishedYear) parts.push(String(book.publishedYear));
+	if (suffix) parts.push(suffix);
+	return parts.filter(Boolean).join(" · ");
+}
+
+async function ensureReadingLifeSchema(sql: ReturnType<typeof getNeonSql>) {
+	await Promise.all([
+		sql`alter table user_book add column if not exists rating int`,
+		sql`alter table user_book add column if not exists finished_reflection text not null default ''`,
+		sql`
+			create table if not exists user_reading_progress_event (
+				id bigserial primary key,
+				user_id uuid not null references app_user(id) on delete cascade,
+				book_id bigint not null references book(id) on delete cascade,
+				from_page int not null default 0,
+				to_page int not null default 0,
+				page_delta int not null default 0,
+				recorded_at timestamptz not null default now()
+			)
+		`
+	]);
+}
+
+const session = await resolveUserBySession(Astro.request);
+const viewerUserId = session?.userId || "";
+const now = new Date();
+const currentYear = now.getUTCFullYear();
+const selectedYear = Number(Astro.url.searchParams.get("year") || currentYear) || currentYear;
+const selectedMonth = Number(Astro.url.searchParams.get("month") || 0) || 0;
+const timelineQuery = String(Astro.url.searchParams.get("q") || "").trim();
+const sectionLinks = [
+	{ id: "overview", label: "Overview" },
+	{ id: "timeline", label: "Timeline" },
+	{ id: "calendar", label: "Calendar" },
+	{ id: "genres", label: "Genres" },
+	{ id: "authors", label: "Authors" },
+	{ id: "fun-statistics", label: "Fun Stats" },
+	{ id: "journey", label: "Journey" }
+];
+
+let finishedBooks: ReadingLifeFinishedBook[] = [];
+let currentBooks: ReadingLifeCurrentBook[] = [];
+let progressEvents: ReadingLifeProgressEvent[] = [];
+let annualGoal = "";
+let loadError = "";
+
+if (viewerUserId) {
+	try {
+		const sql = getNeonSql();
+		await ensureReadingLifeSchema(sql);
+		const [profileRows, finishedRows, currentRows, progressRows] = await Promise.all([
+			sql<Array<{ profile_data: unknown }>>`
+				select profile_data
+				from app_user
+				where id = ${viewerUserId}::uuid
+				limit 1
+			`,
+			sql<RawFinishedBookRow[]>`
+				select
+					b.id,
+					b.title,
+					b.primary_author,
+					b.author_id,
+					b.cover_url,
+					b.page_count,
+					b.published_year,
+					ub.finished_date::text as finished_date,
+					ub.updated_at::text as updated_at,
+					ub.rating,
+					coalesce(
+						json_agg(distinct jsonb_build_object('slug', bg.genre_slug, 'name', bg.genre_name))
+							filter (where bg.genre_slug is not null),
+						'[]'::json
+					) as genres,
+					s.id as series_id,
+					s.name as series_name
+				from user_book ub
+				join book b on b.id = ub.book_id
+				left join book_genre bg on bg.book_id = b.id
+				left join series_book sb on sb.book_id = b.id
+				left join series s on s.id = sb.series_id
+				where ub.user_id = ${viewerUserId}::uuid
+					and ub.status = 'finished'
+				group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.page_count, b.published_year, ub.finished_date, ub.updated_at, ub.rating, s.id, s.name
+				order by coalesce(ub.finished_date, ub.updated_at::date) desc, b.title asc
+			`,
+			sql<RawCurrentBookRow[]>`
+				select
+					b.id,
+					b.title,
+					b.primary_author,
+					b.cover_url,
+					ub.current_page,
+					ub.total_pages,
+					ub.updated_at::text as updated_at
+				from user_book ub
+				join book b on b.id = ub.book_id
+				where ub.user_id = ${viewerUserId}::uuid
+					and ub.status = 'reading'
+				order by ub.updated_at desc, b.title asc
+				limit 8
+			`,
+			sql<RawProgressRow[]>`
+				select
+					book_id,
+					recorded_at::date::text as date,
+					page_delta
+				from user_reading_progress_event
+				where user_id = ${viewerUserId}::uuid
+				order by recorded_at desc
+			`
+		]);
+
+		const profileData = profileRows[0]?.profile_data && typeof profileRows[0].profile_data === "object"
+			? profileRows[0].profile_data as Record<string, unknown>
+			: {};
+		annualGoal = String(profileData.readingGoal || "");
+		finishedBooks = finishedRows.map((row) => ({
+			id: Number(row.id || 0),
+			title: String(row.title || "Untitled"),
+			author: String(row.primary_author || "Unknown Author"),
+			authorId: row.author_id ? Number(row.author_id) : null,
+			coverUrl: String(row.cover_url || ""),
+			pageCount: Number(row.page_count || 0),
+			publishedYear: row.published_year ? Number(row.published_year) : null,
+			finishedDate: String(row.finished_date || ""),
+			updatedAt: String(row.updated_at || ""),
+			rating: row.rating ? Number(row.rating) : null,
+			genres: parseGenres(row.genres),
+			seriesId: row.series_id ? Number(row.series_id) : null,
+			seriesName: String(row.series_name || "")
+		}));
+		currentBooks = currentRows.map((row) => ({
+			id: Number(row.id || 0),
+			title: String(row.title || "Untitled"),
+			author: String(row.primary_author || "Unknown Author"),
+			coverUrl: String(row.cover_url || ""),
+			currentPage: Number(row.current_page || 0),
+			totalPages: Number(row.total_pages || 0),
+			updatedAt: String(row.updated_at || "")
+		}));
+		progressEvents = progressRows.map((row) => ({
+			bookId: Number(row.book_id || 0),
+			date: String(row.date || ""),
+			pageDelta: Number(row.page_delta || 0)
+		}));
+	} catch (error) {
+		loadError = error instanceof Error ? error.message : "Unable to load your reading life.";
+	}
+}
+
+const readingLife = buildReadingLifeSummary({
+	finishedBooks,
+	currentBooks,
+	progressEvents,
+	annualGoal,
+	now
+});
+const timelineItems = filterReadingTimeline(readingLife.timeline, {
+	year: selectedYear,
+	month: selectedMonth,
+	query: timelineQuery
+});
+const calendarDays = readingLife.calendarDays;
+const calendarSummary = {
+	activeDays: calendarDays.filter((day) => day.level > 0).length,
+	pages: calendarDays.reduce((sum, day) => sum + day.pages, 0),
+	completions: calendarDays.reduce((sum, day) => sum + day.completions, 0)
+};
+const yearOptions = readingLife.availableYears.length > 0 ? readingLife.availableYears : [currentYear];
+const months = Array.from({ length: 12 }, (_, index) => index + 1);
+---
+
+<Layout
+	title="My Reading Life"
+	metaDescription="A private reflection on your reading history, pace, genres, authors, and finished-book timeline."
+	robots="noindex,nofollow"
+	sectionLinks={sectionLinks}
+>
+	<div slot="right" class="reading-life-page">
+		<header class="reading-life-hero">
+			<p class="eyebrow">Personal reading reflection</p>
+			<h1>My Reading Life</h1>
+			<p class="hero-copy">A calm look at what you have finished, where your attention has gone, and how your reading has changed over time.</p>
+			{loadError && <p class="note" role="status">Reading life is temporarily unavailable. {loadError}</p>}
+			{!viewerUserId && (
+				<div class="sign-in-panel">
+					<h2>Log in to see your reading life.</h2>
+					<p>This page is built from your shelves, finished dates, ratings, progress updates, authors, genres, and series.</p>
+					<a class="button-link" href="/?next=/reading-life">Log in</a>
+				</div>
+			)}
+		</header>
+
+		{viewerUserId && (
+			<>
+				<section id="overview" class="panel overview-panel" aria-labelledby="overview-title">
+					<div class="section-head">
+						<div>
+							<p class="eyebrow">This year</p>
+							<h2 id="overview-title">A year in motion</h2>
+						</div>
+						<p>{readingLife.overview.readingPaceLabel}</p>
+					</div>
+					<div class="overview-grid">
+						<article class="memory-card featured">
+							<p>Books completed</p>
+							<strong>{readingLife.overview.booksCompletedThisYear.toLocaleString()}</strong>
+							<span>{readingLife.overview.goalProgress.detailLabel}</span>
+						</article>
+						<article class="memory-card">
+							<p>Pages read</p>
+							<strong>{readingLife.overview.pagesReadThisYear.toLocaleString()}</strong>
+							<span>{readingLife.overview.averagePagesPerDay.toLocaleString()} pages per day</span>
+						</article>
+						<article class="memory-card">
+							<p>Reading streak</p>
+							<strong>{readingLife.overview.readingStreakDays.toLocaleString()}</strong>
+							<span>{readingLife.overview.readingStreakDays === 1 ? "day" : "days"}</span>
+						</article>
+						<article class="memory-card">
+							<p>Average rating</p>
+							<strong>{readingLife.overview.averageRating > 0 ? readingLife.overview.averageRating.toFixed(2) : "—"}</strong>
+							<span>{readingLife.overview.averageRating > 0 ? "across rated books" : "Rate finished books to see this"}</span>
+						</article>
+						<article class="memory-card">
+							<p>Average book length</p>
+							<strong>{readingLife.overview.averageBookLength > 0 ? readingLife.overview.averageBookLength.toLocaleString() : "—"}</strong>
+							<span>pages</span>
+						</article>
+						<article class="memory-card">
+							<p>Current books</p>
+							<strong>{readingLife.overview.currentBooks.toLocaleString()}</strong>
+							<span>{readingLife.overview.currentBooks === 1 ? "book in progress" : "books in progress"}</span>
+						</article>
+						<article class="memory-card">
+							<p>Favorite genre</p>
+							<strong>{readingLife.overview.favoriteGenre}</strong>
+							<span>by finished books</span>
+						</article>
+						<article class="memory-card">
+							<p>Favorite author</p>
+							<strong>{readingLife.overview.favoriteAuthor}</strong>
+							<span>by finished books</span>
+						</article>
+						<article class="memory-card">
+							<p>Newest author discovered</p>
+							<strong>{readingLife.overview.newestAuthorDiscovered}</strong>
+							<span>from your finish history</span>
+						</article>
+					</div>
+					<div class="goal-strip">
+						<div>
+							<p>Reading goal progress</p>
+							<strong>
+								{readingLife.overview.goalProgress.goal > 0
+									? `${readingLife.overview.goalProgress.percent.toLocaleString()}% complete`
+									: "No yearly goal set"}
+							</strong>
+							<span>{readingLife.overview.goalProgress.paceLabel}</span>
+						</div>
+						<div
+							class="goal-bar"
+							role="progressbar"
+							aria-label="Reading goal progress"
+							aria-valuemin="0"
+							aria-valuemax="100"
+							aria-valuenow={String(readingLife.overview.goalProgress.barPercent)}
+						>
+							<span style={`width:${readingLife.overview.goalProgress.barPercent}%`}></span>
+						</div>
+					</div>
+					{currentBooks.length > 0 && (
+						<div class="current-books">
+							<h3>Current books</h3>
+							<ul>
+								{currentBooks.map((book) => {
+									const progress = book.totalPages && book.totalPages > 0
+										? Math.min(100, Math.round(((book.currentPage || 0) / book.totalPages) * 100))
+										: 0;
+									return (
+										<li>
+											<a href={bookHref(book.id)}>
+												{book.coverUrl ? <img src={book.coverUrl} alt="" loading="lazy" /> : <span class="cover-placeholder" aria-hidden="true">menu_book</span>}
+												<span>
+													<strong>{book.title}</strong>
+													<small>{book.author}{progress > 0 ? ` · ${progress}%` : ""}</small>
+												</span>
+											</a>
+										</li>
+									);
+								})}
+							</ul>
+						</div>
+					)}
+				</section>
+
+				<section id="timeline" class="panel" aria-labelledby="timeline-title">
+					<div class="section-head">
+						<div>
+							<p class="eyebrow">Finished books</p>
+							<h2 id="timeline-title">Reading timeline</h2>
+						</div>
+						<p>{timelineItems.length.toLocaleString()} book{timelineItems.length === 1 ? "" : "s"} shown</p>
+					</div>
+					<form class="timeline-filters" method="get" action="/reading-life">
+						<label>
+							<span>Year</span>
+							<select name="year">
+								{yearOptions.map((year) => <option value={year} selected={year === selectedYear}>{year}</option>)}
+							</select>
+						</label>
+						<label>
+							<span>Month</span>
+							<select name="month">
+								<option value="" selected={selectedMonth === 0}>All months</option>
+								{months.map((month) => <option value={month} selected={month === selectedMonth}>{formatMonthName(month)}</option>)}
+							</select>
+						</label>
+						<label class="search-filter">
+							<span>Search</span>
+							<input type="search" name="q" value={timelineQuery} placeholder="Title, author, or genre" />
+						</label>
+						<button type="submit">Apply</button>
+					</form>
+					{timelineItems.length === 0 ? (
+						<p class="empty-state">No finished books match these filters yet.</p>
+					) : (
+						<ol class="timeline-list">
+							{timelineItems.map((book) => (
+								<li>
+									<a class="timeline-cover" href={bookHref(book.id)}>
+										{book.coverUrl ? <img src={book.coverUrl} alt="" loading="lazy" /> : <span class="cover-placeholder" aria-hidden="true">menu_book</span>}
+									</a>
+									<div>
+										<p class="timeline-date">{formatDate(book.dateKey)}</p>
+										<h3><a href={bookHref(book.id)}>{book.title}</a></h3>
+										<p class="meta">
+											<a href={authorHref(book.authorId, book.author)}>{book.author}</a>
+											{book.seriesName ? ` · ${book.seriesName}` : ""}
+										</p>
+										<p class="rating-line">{ratingStars(book.rating)} {formatRating(book.rating)}</p>
+									</div>
+								</li>
+							))}
+						</ol>
+					)}
+				</section>
+
+				<section id="calendar" class="panel" aria-labelledby="calendar-title">
+					<div class="section-head">
+						<div>
+							<p class="eyebrow">{currentYear}</p>
+							<h2 id="calendar-title">Reading calendar</h2>
+						</div>
+						<p>{calendarSummary.activeDays.toLocaleString()} active days · {calendarSummary.completions.toLocaleString()} finishes</p>
+					</div>
+					<p class="text-alt">Calendar summary: {calendarSummary.pages.toLocaleString()} pages recorded across {calendarSummary.activeDays.toLocaleString()} active days in {currentYear}.</p>
+					<div class="calendar-grid" role="img" aria-label={`Reading activity heatmap for ${currentYear}. ${calendarSummary.activeDays} active days, ${calendarSummary.pages} pages recorded, ${calendarSummary.completions} finished books.`}>
+						{calendarDays.map((day) => (
+							<span
+								class={`calendar-day level-${day.level}`}
+								title={`${formatDate(day.date)}: ${day.pages.toLocaleString()} pages, ${day.completions.toLocaleString()} finished`}
+								aria-hidden="true"
+							></span>
+						))}
+					</div>
+					<div class="calendar-legend" aria-hidden="true">
+						<span>Less</span>
+						<i class="level-0"></i>
+						<i class="level-1"></i>
+						<i class="level-2"></i>
+						<i class="level-3"></i>
+						<i class="level-4"></i>
+						<span>More</span>
+					</div>
+				</section>
+
+				<section id="genres" class="panel" aria-labelledby="genres-title">
+					<div class="section-head">
+						<div>
+							<p class="eyebrow">Taste over time</p>
+							<h2 id="genres-title">Genre insights</h2>
+						</div>
+					</div>
+					{readingLife.genreInsights.length === 0 ? (
+						<p class="empty-state">Finish books with genre metadata to see genre insights.</p>
+					) : (
+						<div class="insight-columns">
+							<div>
+								<h3>Favorite genres</h3>
+								<ul class="ranked-list">
+									{readingLife.genreInsights.slice(0, 8).map((genre) => (
+										<li>
+											<span><strong>{genre.label}</strong><small>{genre.books.toLocaleString()} books · {genre.pages.toLocaleString()} pages</small></span>
+											<em>{genre.averageRating > 0 ? `${genre.averageRating.toFixed(2)}/5` : "Unrated"}</em>
+										</li>
+									))}
+								</ul>
+							</div>
+							<div>
+								<h3>Genre trend</h3>
+								<ul class="trend-list">
+									{readingLife.genreTrend.slice(0, 10).map((row) => (
+										<li><span>{row.year}</span><strong>{row.label}</strong><em>{row.books} book{row.books === 1 ? "" : "s"}</em></li>
+									))}
+								</ul>
+							</div>
+						</div>
+					)}
+				</section>
+
+				<section id="authors" class="panel" aria-labelledby="authors-title">
+					<div class="section-head">
+						<div>
+							<p class="eyebrow">Companions on the shelf</p>
+							<h2 id="authors-title">Author insights</h2>
+						</div>
+					</div>
+					{readingLife.authorInsights.mostRead.length === 0 ? (
+						<p class="empty-state">Finish a book to begin building author insights.</p>
+					) : (
+						<div class="insight-columns three">
+							<div>
+								<h3>Most read</h3>
+								<ul class="ranked-list compact">
+									{readingLife.authorInsights.mostRead.slice(0, 6).map((author) => (
+										<li><span><strong>{author.label}</strong><small>{author.books} book{author.books === 1 ? "" : "s"}</small></span><em>{author.pages.toLocaleString()} pages</em></li>
+									))}
+								</ul>
+							</div>
+							<div>
+								<h3>Highest rated</h3>
+								<ul class="ranked-list compact">
+									{readingLife.authorInsights.highestRated.slice(0, 6).map((author) => (
+										<li><span><strong>{author.label}</strong><small>{author.books} book{author.books === 1 ? "" : "s"}</small></span><em>{author.averageRating.toFixed(2)}/5</em></li>
+									))}
+								</ul>
+							</div>
+							<div>
+								<h3>New authors discovered</h3>
+								<ul class="ranked-list compact">
+									{readingLife.authorInsights.newAuthors.slice(0, 6).map((author) => (
+										<li><span><strong>{author.label}</strong><small>{author.firstFinishedDate ? formatDate(author.firstFinishedDate) : ""}</small></span><em>new</em></li>
+									))}
+								</ul>
+							</div>
+						</div>
+					)}
+				</section>
+
+				<section id="fun-statistics" class="panel" aria-labelledby="fun-stats-title">
+					<div class="section-head">
+						<div>
+							<p class="eyebrow">Small discoveries</p>
+							<h2 id="fun-stats-title">Fun statistics</h2>
+						</div>
+					</div>
+					<div class="fun-grid">
+						<article><p>Longest book</p><strong>{bookTitle(readingLife.funStats.longestBook)}</strong><span>{bookMeta(readingLife.funStats.longestBook)}</span></article>
+						<article><p>Shortest book</p><strong>{bookTitle(readingLife.funStats.shortestBook)}</strong><span>{bookMeta(readingLife.funStats.shortestBook)}</span></article>
+						<article><p>Oldest publication</p><strong>{bookTitle(readingLife.funStats.oldestPublication)}</strong><span>{bookMeta(readingLife.funStats.oldestPublication)}</span></article>
+						<article><p>Newest publication</p><strong>{bookTitle(readingLife.funStats.newestPublication)}</strong><span>{bookMeta(readingLife.funStats.newestPublication)}</span></article>
+						<article><p>Highest-rated</p><strong>{bookTitle(readingLife.funStats.highestRated)}</strong><span>{bookMeta(readingLife.funStats.highestRated, formatRating(readingLife.funStats.highestRated?.rating))}</span></article>
+						<article><p>Lowest-rated</p><strong>{bookTitle(readingLife.funStats.lowestRated)}</strong><span>{bookMeta(readingLife.funStats.lowestRated, formatRating(readingLife.funStats.lowestRated?.rating))}</span></article>
+						<article><p>Most re-read</p><strong>{readingLife.funStats.mostRereadLabel}</strong><span>DogEared stores one shelf entry per book today</span></article>
+						<article><p>Most common decade</p><strong>{readingLife.funStats.mostCommonDecade}</strong><span>by publication year</span></article>
+						<article><p>Average publication year</p><strong>{readingLife.funStats.averagePublicationYear > 0 ? readingLife.funStats.averagePublicationYear : "—"}</strong><span>across dated books</span></article>
+					</div>
+				</section>
+
+				<section id="journey" class="panel" aria-labelledby="journey-title">
+					<div class="section-head">
+						<div>
+							<p class="eyebrow">Built for Year in Books</p>
+							<h2 id="journey-title">Reading journey</h2>
+						</div>
+					</div>
+					{readingLife.yearSummaries.length === 0 ? (
+						<p class="empty-state">Your yearly summaries will appear as you finish books.</p>
+					) : (
+						<ol class="year-list">
+							{readingLife.yearSummaries.map((year) => (
+								<li>
+									<strong>{year.year}</strong>
+									<span>{year.books.toLocaleString()} books</span>
+									<span>{year.pages.toLocaleString()} pages</span>
+									<span>{year.genres.toLocaleString()} genres</span>
+									<span>{year.authors.toLocaleString()} authors</span>
+									<span>{year.series.toLocaleString()} series</span>
+									<span>{year.averageRating > 0 ? `${year.averageRating.toFixed(2)}/5 average` : "unrated"}</span>
+									<em>{year.topGenre}</em>
+								</li>
+							))}
+						</ol>
+					)}
+				</section>
+			</>
+		)}
+	</div>
+</Layout>
+
+<style>
+	.reading-life-page {
+		max-width: 1040px;
+	}
+	.reading-life-hero {
+		margin-bottom: 1rem;
+	}
+	.eyebrow {
+		margin: 0 0 0.25rem;
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+		font-weight: 800;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	h1 {
+		margin: 0;
+		font-size: clamp(2rem, 4vw, 3.75rem);
+		line-height: 1.04;
+	}
+	.hero-copy {
+		max-width: 680px;
+		margin: 0.6rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 1.05rem;
+	}
+	.note,
+	.empty-state,
+	.text-alt {
+		color: var(--color-text-muted);
+	}
+	.sign-in-panel,
+	.panel {
+		background: var(--color-surface-raised);
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-xs);
+		padding: 1rem;
+	}
+	.sign-in-panel {
+		margin-top: 1rem;
+	}
+	.sign-in-panel h2 {
+		margin: 0 0 0.35rem;
+	}
+	.button-link,
+	.timeline-filters button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border: 0;
+		border-radius: 999px;
+		background: var(--color-primary);
+		color: #fff;
+		font-weight: 800;
+		text-decoration: none;
+		padding: 0.55rem 0.95rem;
+		cursor: pointer;
+	}
+	.panel + .panel {
+		margin-top: 1rem;
+	}
+	.section-head {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		align-items: start;
+		margin-bottom: 0.85rem;
+	}
+	.section-head h2,
+	.section-head p {
+		margin: 0;
+	}
+	.section-head > p {
+		color: var(--color-text-muted);
+		font-weight: 700;
+	}
+	.overview-grid,
+	.fun-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+		gap: 0.7rem;
+	}
+	.memory-card,
+	.fun-grid article {
+		background: rgba(255, 255, 255, 0.68);
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		padding: 0.8rem;
+		min-width: 0;
+	}
+	.memory-card.featured {
+		background: var(--color-chip-genre);
+	}
+	.memory-card p,
+	.fun-grid p {
+		margin: 0 0 0.25rem;
+		color: var(--color-text-muted);
+		font-size: 0.84rem;
+		font-weight: 800;
+	}
+	.memory-card strong,
+	.fun-grid strong {
+		display: block;
+		overflow-wrap: anywhere;
+		color: var(--color-text);
+		font-size: 1.45rem;
+		line-height: 1.08;
+	}
+	.fun-grid strong {
+		font-size: 1rem;
+	}
+	.memory-card span,
+	.fun-grid span,
+	.current-books small {
+		display: block;
+		margin-top: 0.25rem;
+		color: var(--color-text-muted);
+		font-size: 0.86rem;
+	}
+	.goal-strip {
+		display: grid;
+		grid-template-columns: minmax(0, 240px) 1fr;
+		gap: 1rem;
+		align-items: center;
+		margin-top: 0.8rem;
+		padding: 0.75rem;
+		border-radius: var(--radius-sm);
+		background: rgba(255, 255, 255, 0.56);
+	}
+	.goal-strip p,
+	.goal-strip strong,
+	.goal-strip span {
+		display: block;
+		margin: 0;
+	}
+	.goal-strip p {
+		color: var(--color-text-muted);
+		font-size: 0.84rem;
+		font-weight: 800;
+	}
+	.goal-bar {
+		height: 0.8rem;
+		border-radius: 999px;
+		background: rgba(87, 117, 144, 0.18);
+		overflow: hidden;
+	}
+	.goal-bar span {
+		display: block;
+		height: 100%;
+		background: var(--color-primary);
+	}
+	.current-books {
+		margin-top: 1rem;
+	}
+	.current-books h3 {
+		margin: 0 0 0.55rem;
+	}
+	.current-books ul,
+	.ranked-list,
+	.trend-list,
+	.year-list,
+	.timeline-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.current-books ul {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+		gap: 0.6rem;
+	}
+	.current-books a {
+		display: grid;
+		grid-template-columns: 44px minmax(0, 1fr);
+		gap: 0.65rem;
+		align-items: center;
+		color: inherit;
+		text-decoration: none;
+		background: rgba(255, 255, 255, 0.7);
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		padding: 0.5rem;
+	}
+	.current-books img,
+	.timeline-cover img,
+	.cover-placeholder {
+		width: 44px;
+		aspect-ratio: 2 / 3;
+		border-radius: 6px;
+		object-fit: cover;
+		background: var(--color-chip-topic);
+	}
+	.cover-placeholder {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		font-family: "Material Icons";
+		color: var(--color-nav);
+	}
+	.timeline-filters {
+		display: grid;
+		grid-template-columns: minmax(120px, 0.5fr) minmax(140px, 0.6fr) minmax(180px, 1fr) auto;
+		gap: 0.65rem;
+		align-items: end;
+		margin-bottom: 1rem;
+	}
+	.timeline-filters label span {
+		display: block;
+		margin-bottom: 0.25rem;
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-weight: 800;
+	}
+	.timeline-filters select,
+	.timeline-filters input {
+		width: 100%;
+		box-sizing: border-box;
+		border: var(--border-subtle);
+		border-radius: 8px;
+		background: #fff;
+		color: var(--color-text);
+		font: inherit;
+		padding: 0.52rem 0.62rem;
+	}
+	.timeline-list {
+		display: grid;
+		gap: 0.7rem;
+	}
+	.timeline-list li {
+		display: grid;
+		grid-template-columns: 56px minmax(0, 1fr);
+		gap: 0.75rem;
+		align-items: start;
+		padding: 0.7rem 0;
+		border-top: var(--border-subtle);
+	}
+	.timeline-list li:first-child {
+		border-top: 0;
+	}
+	.timeline-cover img,
+	.timeline-cover .cover-placeholder {
+		width: 56px;
+	}
+	.timeline-date,
+	.meta,
+	.rating-line {
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: 0.88rem;
+	}
+	.timeline-list h3 {
+		margin: 0.08rem 0;
+		font-size: 1rem;
+	}
+	.timeline-list a,
+	.meta a {
+		color: var(--color-nav);
+		text-decoration: none;
+	}
+	.timeline-list a:hover,
+	.meta a:hover,
+	.timeline-list a:focus-visible,
+	.meta a:focus-visible {
+		color: var(--color-nav-hover);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.rating-line {
+		color: var(--color-rating);
+		font-weight: 700;
+	}
+	.calendar-grid {
+		display: grid;
+		grid-template-rows: repeat(7, 1fr);
+		grid-auto-flow: column;
+		grid-auto-columns: minmax(8px, 1fr);
+		gap: 3px;
+		max-width: 100%;
+		overflow-x: auto;
+		padding-bottom: 0.25rem;
+	}
+	.calendar-day {
+		width: 100%;
+		min-width: 8px;
+		aspect-ratio: 1;
+		border-radius: 3px;
+		background: rgba(87, 117, 144, 0.14);
+	}
+	.level-0 { background: rgba(87, 117, 144, 0.14); }
+	.level-1 { background: #d9ead2; }
+	.level-2 { background: #bfd9ab; }
+	.level-3 { background: #75bd9f; }
+	.level-4 { background: #277da1; }
+	.calendar-legend {
+		display: flex;
+		gap: 0.3rem;
+		align-items: center;
+		justify-content: flex-end;
+		margin-top: 0.55rem;
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+	}
+	.calendar-legend i {
+		width: 0.72rem;
+		height: 0.72rem;
+		border-radius: 3px;
+	}
+	.insight-columns {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1rem;
+	}
+	.insight-columns.three {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	.insight-columns h3 {
+		margin: 0 0 0.5rem;
+	}
+	.ranked-list,
+	.trend-list {
+		display: grid;
+		gap: 0.5rem;
+	}
+	.ranked-list li,
+	.trend-list li,
+	.year-list li {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.75rem;
+		align-items: center;
+		border: var(--border-subtle);
+		background: rgba(255, 255, 255, 0.64);
+		border-radius: var(--radius-sm);
+		padding: 0.55rem 0.65rem;
+	}
+	.ranked-list strong,
+	.ranked-list small {
+		display: block;
+	}
+	.ranked-list small,
+	.trend-list span,
+	.trend-list em,
+	.year-list span,
+	.year-list em {
+		color: var(--color-text-muted);
+		font-size: 0.84rem;
+		font-style: normal;
+	}
+	.ranked-list em {
+		color: var(--color-rating);
+		font-style: normal;
+		font-weight: 800;
+		white-space: nowrap;
+	}
+	.year-list {
+		display: grid;
+		gap: 0.6rem;
+	}
+	.year-list li {
+		display: grid;
+		grid-template-columns: 70px repeat(6, minmax(0, 1fr)) minmax(120px, 1fr);
+	}
+	.year-list strong {
+		font-size: 1.1rem;
+	}
+	@media (max-width: 820px) {
+		.section-head,
+		.goal-strip {
+			grid-template-columns: 1fr;
+			display: grid;
+		}
+		.timeline-filters,
+		.insight-columns,
+		.insight-columns.three {
+			grid-template-columns: 1fr;
+		}
+		.timeline-filters button {
+			width: 100%;
+		}
+		.year-list li {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+		.year-list strong {
+			grid-column: 1 / -1;
+		}
+	}
+</style>

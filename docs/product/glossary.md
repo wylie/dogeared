@@ -64,6 +64,10 @@ An email sign-in link with a hashed token, expiration, and used timestamp.
 
 A profile signal for Currently Reading books based on page progress, recency, elapsed days, and progress update count. It avoids predictions when confidence is low.
 
+## My Reading Life
+
+A private reader-facing page that reflects a signed-in reader's finished books, pages, streaks, goal progress, timeline, reading calendar, genres, authors, fun statistics, and yearly summaries.
+
 ## Notification
 
 A record created when another reader likes or comments on a user's activity. Current notification types are `activity_like` and `activity_comment`.
@@ -79,6 +83,10 @@ A DogEared user with an account and, usually, a username/profile.
 ## Reading Progress Event
 
 A stored forward page movement for a reader and book, with from-page, to-page, page delta, and recorded time.
+
+## Reading Timeline
+
+The chronological list of finished books in My Reading Life. It can be filtered by year, month, and search query.
 
 ## Reading Streak
 

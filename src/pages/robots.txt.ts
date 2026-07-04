@@ -21,6 +21,7 @@ export const GET: APIRoute = async ({ request }) => {
 		"Disallow: /search",
 		"Disallow: /settings",
 		"Disallow: /following",
+		"Disallow: /reading-life",
 		"Disallow: /myreads",
 		"Disallow: /feed",
 		"Disallow: /metrics",

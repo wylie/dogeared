@@ -39,6 +39,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Authors: searchable and sortable author index.
 - Author detail: author profile, author books grouped by series where available, standalone books, and external author-book context.
 - Profiles: public reader pages with about information, shelf summary, custom shelves, reading goal, current reads, activity, followers, and following.
+- My Reading Life: private personal reflection across finished books, pages, streaks, goals, ratings, timeline, reading calendar, genres, authors, fun statistics, and yearly summaries.
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
 - Settings: profile/account entry points, magic-link auth, email changes, Goodreads import, preferences, privacy, notifications, data export, shelf clearing, API endpoint references, and sessions.
@@ -51,6 +52,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Book discovery: browse explainable home recommendations, search books with series context, open book pages, browse author pages, or explore related genre/topic/author/book pages.
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
+- Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, and yearly summaries.
 - Reviews and ratings: rate finished books and optionally save a short finished reflection.
 - Social reading: follow readers, view following activity, like activity, comment on activity, and receive activity notifications.
 - Profile management: update name, avatar, location, birth year, goal text, favorite book, favorite author, blurb, and genres.
@@ -111,6 +113,14 @@ Profiles and metrics calculate reading streaks from recent reading/progress date
 ### Reading Goal
 
 Profiles support an annual reading goal stored in profile data. The goal card shows completed books this year, percentage progress, remaining/beyond-goal count, and pace context.
+
+### My Reading Life
+
+My Reading Life is a private, authenticated page for reflecting on a reader's own history. It is intentionally personal rather than competitive. The page derives its view from existing shelf entries, finished dates, page counts, ratings, reading progress events, genres, authors, series metadata, and the reader's annual goal.
+
+The overview shows books completed this year, pages read, reading streak, reading goal progress, average rating, average pages per day, average book length, reading pace, current books, favorite genre, favorite author, and newest author discovered. The page also includes a finished-book timeline with year/month/search filters, a calendar-style activity heatmap with textual summary, genre insights, author insights, fun statistics, and yearly reading-journey summaries prepared for future Year in Books experiences.
+
+Current limitations: rereads are not tracked separately because DogEared stores one default shelf entry per user/book. My Reading Life only reflects data the reader has recorded in DogEared.
 
 ### Reading Challenge
 
@@ -174,14 +184,14 @@ Related pages support landing exploration plus specific `kind=genre`, `kind=topi
 
 Derived from the current repository structure and implementation:
 
-- Major non-API page routes: 28 application/content routes plus `robots.txt` and `sitemap.xml`.
+- Major non-API page routes: 29 application/content routes plus `robots.txt` and `sitemap.xml`.
 - API routes: 33 endpoint files.
 - Admin pages: 4 routes.
 - Redirect-only compatibility routes: `/discover`, `/feed`, `/myreads`, `/profile`, `/author`, and `/u/[username]`.
-- User-facing feature areas documented here: 43.
+- User-facing feature areas documented here: 44.
 - Default persisted shelf statuses: 3 (`want_to_read`, `reading`, `finished`).
 - Custom shelf icon options: 16.
-- Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.
+- Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, My Reading Life overview, finished-book timeline, reading calendar, genre/author insights, fun statistics, yearly summaries, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.
 - Community discovery providers: 7.
 - Series ordering modes: book order, publication order, chronological order.
 - Supported social interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment.

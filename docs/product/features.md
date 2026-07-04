@@ -249,6 +249,14 @@ Readers can set an annual goal in profile data and see completed count, progress
 
 Limitations: Goal input is stored as profile text, with numeric parsing applied in the reading goal helper.
 
+### My Reading Life
+
+Status: Complete
+
+Signed-in readers can open `/reading-life` from the You navigation to see a private reflection on their reading history. The page shows books completed this year, pages read, reading streak, goal progress, average rating, average pages per day, average book length, reading pace, current books, favorite genre, favorite author, and newest author discovered. It also includes a finished-book timeline with year/month/search filters, a calendar heatmap with textual alternative, genre insights, author insights, fun statistics, and yearly reading-journey summaries.
+
+Limitations: My Reading Life is derived from recorded DogEared data. Rereads are not tracked separately today because the default shelf model stores one row per reader/book.
+
 ### Reading Challenge
 
 Status: Planned

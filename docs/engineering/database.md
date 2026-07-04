@@ -190,7 +190,21 @@ Created lazily by shelf/admin code. Stores forward reading movement:
 Relationships:
 
 - Belongs to `app_user` and `book`.
-- Used by profile momentum/streak and metrics.
+- Used by profile momentum/streak, metrics, and My Reading Life calendar/streak summaries.
+
+## My Reading Life Data
+
+My Reading Life does not introduce a new persistence table. It derives its summaries from existing entities:
+
+- `user_book` for finished books, current books, ratings, pages, finished dates, and reflections.
+- `user_reading_progress_event` for reading activity dates and page movement.
+- `book`, `author`, `book_genre`, and `series_book`/`series` for catalog, author, genre, and series context.
+- `app_user.profile_data.readingGoal` for annual goal progress.
+
+Relationships:
+
+- The page is scoped to the signed-in `app_user`.
+- Yearly summaries, timeline filters, genre/author insights, and fun statistics are calculated at render time from the reader's recorded data.
 
 ## Activity
 
