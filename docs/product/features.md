@@ -355,9 +355,11 @@ Limitations: Section quality depends on catalog, shelf, rating, review, and acti
 
 Status: Complete
 
-Signed-in readers can receive contextual first-time tips instead of a traditional onboarding wizard. Tips are lightweight callouts that point at relevant areas, include a title, explanation, optional icon, primary action, and dismiss control, and are keyboard accessible. The current tip set covers Home, Search, first book added, Currently Reading progress, first progress update, Reading Journal privacy, first finished book, and Reviews versus private Journal Entries.
+Signed-in readers can receive contextual first-time tips instead of a traditional onboarding wizard. Tips are lightweight callouts that point at relevant areas, include a title, explanation, optional icon, primary action, and dismiss control, and are keyboard accessible. The current tip set covers Home, Search, book detail shelf controls, first book added, Currently Reading progress, first progress update, Reading Journal privacy, first finished book, Reviews versus private Journal Entries, and Settings Learning controls.
 
 DogEared chooses tips from transparent reader state: shelf count, Currently Reading count, finished books, reviews, progress updates, and journal entries. Only one tip appears at a time. Completed or dismissed tips are stored per user and do not reappear. Settings includes Learning controls to turn helpful tips on or off and reset the guided tour.
+
+Journal-specific tips appear only on the Journal route or after a progress update. The broader guidance path stays focused on learning DogEared as a whole: finding a book, saving it, tracking reading, finishing, reviewing, and managing preferences.
 
 Limitations: Guided tips are state-based and contextual, not a multi-step wizard. They currently cover first-use learning moments only.
 

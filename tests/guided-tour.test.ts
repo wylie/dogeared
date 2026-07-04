@@ -12,6 +12,8 @@ test("guided tip ids are normalized and unknown ids are rejected", () => {
 	assert.equal(normalizeGuidedTipId("home-welcome"), "home-welcome");
 	assert.equal(normalizeGuidedTipId("unknown-tip"), "");
 	assert.equal(GUIDED_TIP_IDS.includes("reading-journal-private"), true);
+	assert.equal(GUIDED_TIP_IDS.includes("book-detail-shelves"), true);
+	assert.equal(GUIDED_TIP_IDS.includes("settings-learning"), true);
 });
 
 test("guided tour settings dedupe completed and dismissed tips", () => {
@@ -39,15 +41,26 @@ test("guided tip component keeps one ordered catalog with contextual rules", () 
 	const source = readFileSync("src/components/GuidedTip.astro", "utf8");
 	const homeIndex = source.indexOf('id: "home-welcome"');
 	const searchIndex = source.indexOf('id: "search-add-book"');
+	const bookDetailIndex = source.indexOf('id: "book-detail-shelves"');
 	const bookAddedIndex = source.indexOf('id: "first-book-added"');
 	const journalIndex = source.indexOf('id: "reading-journal-private"');
+	const settingsIndex = source.indexOf('id: "settings-learning"');
 	assert.equal(homeIndex >= 0, true);
 	assert.equal(searchIndex > homeIndex, true);
-	assert.equal(bookAddedIndex > searchIndex, true);
+	assert.equal(bookDetailIndex > searchIndex, true);
+	assert.equal(bookAddedIndex > bookDetailIndex, true);
 	assert.equal(journalIndex > bookAddedIndex, true);
-	assert.equal(source.includes("const tip = TIPS.find"), true);
+	assert.equal(settingsIndex > journalIndex, true);
+	assert.equal(source.includes("const availableTips = TIPS.filter"), true);
+	assert.equal(source.includes("candidate.path || candidate.pathPrefix"), true);
 	assert.equal(source.includes("completed.includes(tip.id) || dismissed.includes(tip.id)"), true);
 	assert.equal(source.includes("dogeared:reading-data-changed"), true);
+});
+
+test("journal guidance is constrained to journal context or a progress update", () => {
+	const source = readFileSync("src/components/GuidedTip.astro", "utf8");
+	assert.match(source, /id: "reading-journal-private"[\s\S]+path: "\/journal"/);
+	assert.match(source, /id: "first-progress-update"[\s\S]+stats\.progressEvents > 0 && stats\.journalEntries === 0/);
 });
 
 test("guided tour API stores per-user settings under profile settings", () => {
@@ -74,4 +87,13 @@ test("guided tour anchors are present on primary surfaces", () => {
 	assert.equal(readFileSync("src/pages/search.astro", "utf8").includes('data-guided-anchor="search-page"'), true);
 	assert.equal(readFileSync("src/pages/journal.astro", "utf8").includes('data-guided-anchor="journal-entry-form"'), true);
 	assert.equal(readFileSync("src/pages/book.astro", "utf8").includes('data-guided-anchor="reviews"'), true);
+});
+
+test("journal page uses consistent local button classes", () => {
+	const source = readFileSync("src/pages/journal.astro", "utf8");
+	assert.equal(source.includes("journal-button-primary"), true);
+	assert.equal(source.includes("journal-button-secondary"), true);
+	assert.equal(source.includes("journal-button-danger"), true);
+	assert.equal(source.includes("new-entry-button"), false);
+	assert.equal(source.includes("secondary-link-button"), false);
 });

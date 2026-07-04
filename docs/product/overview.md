@@ -100,9 +100,11 @@ If DogEared does not have enough data for a provider, that provider is hidden. I
 
 ### Guided First Experience
 
-DogEared includes contextual first-time guidance for signed-in readers. Instead of a full-screen onboarding wizard, the application shows lightweight callouts near relevant interface areas. Current tips cover the reading home, Search, first book added, Currently Reading progress, first progress update, Reading Journal privacy, first finished book, and the difference between public reviews and private journal entries.
+DogEared includes site-wide contextual first-time guidance for signed-in readers. Instead of a full-screen onboarding wizard, the application shows lightweight callouts near relevant interface areas across the first reader journey: Home, Search, book detail shelf controls, adding a first book, Currently Reading progress, the first progress update, Reading Journal, Reviews, and Settings.
 
-Tips are shown only when the reader's current state makes them useful. DogEared shows at most one active tip, and each tip can be dismissed or completed. Progress is stored per user in Settings data so completed or dismissed tips do not reappear. Settings includes a Learning section with a Show helpful tips checkbox and Reset Guided Tour action.
+Tips are shown only when the reader's current route and state make them useful. DogEared shows at most one active tip, and each tip can be dismissed or completed. Progress is stored per user in Settings data so completed or dismissed tips do not reappear. Settings includes a Learning section with a Show helpful tips checkbox and Reset Guided Tour action.
+
+Journal-specific guidance is intentionally narrow. It appears on the Reading Journal page itself or after a reader has saved progress and may want to remember something from that reading session.
 
 ### Editorial Collections
 

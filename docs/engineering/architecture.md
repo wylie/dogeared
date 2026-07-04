@@ -102,7 +102,9 @@ Current providers:
 
 ## Guided First Experience
 
-Guided first-experience logic lives in `src/lib/guidedTour`, `src/components/GuidedTip.astro`, and `/api/guidance/status`. The helper defines canonical tip IDs, normalizes settings, deduplicates completed/dismissed tips, and derives the signed-in reader state used by contextual rules. The component owns the tip catalog, route/state conditions, accessible callout rendering, placement, and primary/dismiss actions.
+Guided first-experience logic lives in `src/lib/guidedTour`, `src/components/GuidedTip.astro`, and `/api/guidance/status`. The helper defines canonical tip IDs, normalizes settings, deduplicates completed/dismissed tips, and derives the signed-in reader state used by contextual rules. The component owns the site-wide tip catalog, route/state conditions, accessible callout rendering, placement, and primary/dismiss actions.
+
+Current guided surfaces are Home, Search, book detail shelf controls, first book added, Profile/Currently Reading progress, post-progress Journal suggestion, Reading Journal, Reviews, and Settings Learning controls. Journal-specific tips are constrained to the Journal route or post-progress context so the first experience remains about learning DogEared as a whole.
 
 To add a tip, add a canonical ID in `src/lib/guidedTour.ts`, add the tip definition in `GuidedTip.astro`, and include tests for the new ID and trigger rule. The API stores progress under `app_user.profile_data.settings.guidedTour`, so adding a tip does not require a new table.
 

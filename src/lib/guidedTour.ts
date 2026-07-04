@@ -6,12 +6,14 @@ type Sql = ReturnType<typeof getNeonSql>;
 export const GUIDED_TIP_IDS = [
 	"home-welcome",
 	"search-add-book",
+	"book-detail-shelves",
 	"first-book-added",
 	"currently-reading-progress",
 	"first-progress-update",
 	"reading-journal-private",
 	"first-finished-book",
-	"reviews-vs-journal"
+	"reviews-vs-journal",
+	"settings-learning"
 ] as const;
 
 export type GuidedTipId = typeof GUIDED_TIP_IDS[number];

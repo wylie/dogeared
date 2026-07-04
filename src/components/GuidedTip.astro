@@ -42,6 +42,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 				icon: "local_library",
 				primaryLabel: "Search Books",
 				primaryHref: "/search",
+				placement: "below",
 				when: (stats) => stats.totalBooks === 0
 			},
 			{
@@ -53,11 +54,24 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 				icon: "search",
 				primaryLabel: "Search Books",
 				primaryHref: "#search-page",
+				placement: "below",
+				when: (stats) => stats.totalBooks === 0
+			},
+			{
+				id: "book-detail-shelves",
+				pathPrefix: "/book",
+				anchor: ".book-head .shelf-dropdown, .book-head",
+				title: "Save books as you browse",
+				description: "Use the shelf button to save this book to Want to Read, Currently Reading, or Read.",
+				icon: "bookmark_add",
+				primaryLabel: "Shelf Button",
+				primaryHref: "#main-content",
+				placement: "left",
 				when: (stats) => stats.totalBooks === 0
 			},
 			{
 				id: "first-book-added",
-				anchor: ".shelf-dropdown, [data-shelf-dropdown], #currently-reading, main",
+				anchor: ".shelf-dropdown.is-shelved, .shelf-dropdown, #currently-reading, main",
 				title: "You added your first book",
 				description: "Books can move between shelves as your reading changes. DogEared keeps that history with your account.",
 				icon: "celebration",
@@ -74,6 +88,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 				icon: "trending_up",
 				primaryLabel: "Update Progress",
 				primaryHref: "#currently-reading",
+				placement: "below",
 				when: (stats) => stats.readingBooks > 0 && stats.progressEvents === 0
 			},
 			{
@@ -95,16 +110,19 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 				icon: "lock",
 				primaryLabel: "New Entry",
 				primaryHref: "#new-entry",
+				placement: "above",
 				when: (stats) => stats.journalEntries === 0
 			},
 			{
 				id: "first-finished-book",
+				pathPrefix: "/profile",
 				anchor: "#read, main",
 				title: "You finished a book",
 				description: "A short review can help future readers understand whether this book is right for them.",
 				icon: "task_alt",
 				primaryLabel: "Find Finished Books",
 				primaryHref: "/profile#read",
+				placement: "below",
 				when: (stats) => stats.finishedBooks > 0 && stats.reviews === 0
 			},
 			{
@@ -116,7 +134,20 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 				icon: "rate_review",
 				primaryLabel: "Review Section",
 				primaryHref: "#reviews",
+				placement: "above",
 				when: (stats) => stats.finishedBooks > 0
+			},
+			{
+				id: "settings-learning",
+				path: "/settings",
+				anchor: "#learning-settings",
+				title: "Choose how much guidance you want",
+				description: "Helpful tips can be turned off here, and Reset Guided Tour brings dismissed tips back.",
+				icon: "settings",
+				primaryLabel: "Learning Settings",
+				primaryHref: "#learning-settings",
+				placement: "below",
+				when: () => true
 			}
 		];
 
@@ -144,6 +175,18 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			return document.querySelector("main");
 		}
 
+		function resolvePlacement(tip, rect, width) {
+			const preferred = String(tip?.placement || "").trim();
+			const canBelow = rect.bottom + 14 + 170 < window.innerHeight;
+			const canAbove = rect.top - 14 - 170 > 16;
+			if (preferred === "below" && canBelow) return "below";
+			if (preferred === "above" && canAbove) return "above";
+			if (preferred === "left" && rect.left - width - 14 > 16) return "left";
+			if (preferred === "right" && rect.right + width + 14 < window.innerWidth - 16) return "right";
+			if (rect.width > 420 || rect.left < width + 32) return canBelow ? "below" : (canAbove ? "above" : "right");
+			return rect.right + width + 14 < window.innerWidth - 16 ? "right" : (rect.left - width - 14 > 16 ? "left" : "below");
+		}
+
 		function positionTip(anchor) {
 			if (!(anchor instanceof HTMLElement)) return;
 			if (window.matchMedia("(max-width: 720px)").matches) {
@@ -158,18 +201,17 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			const rect = anchor.getBoundingClientRect();
 			const gap = 14;
 			const width = Math.min(360, Math.max(280, window.innerWidth - 32));
-			let left = rect.right + gap;
-			let placement = "right";
-			if (left + width > window.innerWidth - 16) {
-				left = rect.left - width - gap;
-				placement = "left";
-			}
-			if (left < 16) {
-				left = Math.min(Math.max(rect.left, 16), window.innerWidth - width - 16);
-				placement = "top";
-			}
 			const measuredHeight = root.offsetHeight || 180;
-			const top = Math.min(Math.max(rect.top, 16), window.innerHeight - measuredHeight - 16);
+			const placement = resolvePlacement(activeTip, rect, width);
+			let left = rect.right + gap;
+			let top = rect.top;
+			if (placement === "left") {
+				left = rect.left - width - gap;
+			} else if (placement === "below" || placement === "above") {
+				left = Math.min(Math.max(rect.left + rect.width / 2 - width / 2, 16), window.innerWidth - width - 16);
+				top = placement === "below" ? rect.bottom + gap : rect.top - measuredHeight - gap;
+			}
+			top = Math.min(Math.max(top, 16), window.innerHeight - measuredHeight - 16);
 			root.style.left = `${left}px`;
 			root.style.right = "auto";
 			root.style.bottom = "auto";
@@ -177,8 +219,15 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			root.style.maxWidth = `${width}px`;
 			root.dataset.placement = placement;
 			if (arrowEl instanceof HTMLElement) {
-				const arrowTop = Math.min(Math.max(rect.top + rect.height / 2 - top - 8, 18), measuredHeight - 28);
-				arrowEl.style.top = `${arrowTop}px`;
+				if (placement === "below" || placement === "above") {
+					const arrowLeft = Math.min(Math.max(rect.left + rect.width / 2 - left - 8, 18), width - 28);
+					arrowEl.style.left = `${arrowLeft}px`;
+					arrowEl.style.top = "";
+				} else {
+					const arrowTop = Math.min(Math.max(rect.top + rect.height / 2 - top - 8, 18), measuredHeight - 28);
+					arrowEl.style.top = `${arrowTop}px`;
+					arrowEl.style.left = "";
+				}
 			}
 		}
 
@@ -220,7 +269,8 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 
 		function renderNextTip() {
 			if (!activeSettings || !activeStats) return hideTip();
-			const tip = TIPS.find((candidate) => isTipAvailable(candidate, activeSettings, activeStats));
+			const availableTips = TIPS.filter((candidate) => isTipAvailable(candidate, activeSettings, activeStats));
+			const tip = availableTips.find((candidate) => candidate.path || candidate.pathPrefix) || availableTips[0];
 			if (tip) showTip(tip);
 			else hideTip();
 		}
@@ -287,14 +337,14 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		z-index: 12000;
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);
-		gap: 0.7rem;
+		gap: 0.75rem;
 		width: calc(100vw - 2rem);
 		max-width: 360px;
-		padding: 0.9rem;
-		border: 1px solid rgba(47, 83, 69, 0.28);
+		padding: 0.95rem;
+		border: var(--border-strong);
 		border-radius: var(--radius-md);
-		background: rgba(255, 255, 255, 0.98);
-		box-shadow: 0 18px 46px rgba(17, 24, 39, 0.18);
+		background: rgba(255, 255, 255, 0.97);
+		box-shadow: var(--shadow-popover);
 		color: var(--color-text);
 	}
 	.guided-tip[hidden] {
@@ -317,9 +367,10 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		margin: 0;
 		font-size: 1rem;
 		line-height: 1.25;
+		font-weight: 760;
 	}
 	.guided-tip p {
-		margin: 0.35rem 0 0;
+		margin: 0.4rem 0 0;
 		color: var(--color-text-muted);
 		line-height: 1.45;
 	}
@@ -327,16 +378,17 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.45rem;
-		margin-top: 0.8rem;
+		gap: 0.5rem;
+		margin-top: 0.85rem;
 	}
 	.guided-tip-primary,
 	.guided-tip-dismiss {
-		min-height: 40px;
+		min-height: 42px;
 		border-radius: var(--radius-sm);
-		padding: 0.55rem 0.75rem;
+		padding: 0.58rem 0.85rem;
 		font: inherit;
 		font-weight: 700;
+		line-height: 1.1;
 	}
 	.guided-tip-primary {
 		display: inline-flex;
@@ -345,12 +397,23 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		background: var(--color-primary);
 		color: #fff;
 		text-decoration: none;
+		border: 1px solid var(--color-primary);
+	}
+	.guided-tip-primary:hover,
+	.guided-tip-primary:focus-visible {
+		background: var(--color-primary-hover);
+		border-color: var(--color-primary-hover);
 	}
 	.guided-tip-dismiss {
 		border: var(--border-subtle);
-		background: rgba(255, 255, 255, 0.76);
+		background: rgba(255, 255, 255, 0.78);
 		color: var(--color-text);
 		cursor: pointer;
+	}
+	.guided-tip-dismiss:hover,
+	.guided-tip-dismiss:focus-visible {
+		background: #fff;
+		color: var(--color-nav-hover);
 	}
 	.guided-tip-primary:focus-visible,
 	.guided-tip-dismiss:focus-visible {
@@ -362,8 +425,8 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		width: 14px;
 		height: 14px;
 		background: inherit;
-		border-left: 1px solid rgba(47, 83, 69, 0.28);
-		border-bottom: 1px solid rgba(47, 83, 69, 0.28);
+		border-left: var(--border-strong);
+		border-bottom: var(--border-strong);
 		transform: rotate(45deg);
 	}
 	.guided-tip[data-placement="right"] .guided-tip-arrow {
@@ -374,7 +437,16 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		transform: rotate(225deg);
 	}
 	.guided-tip[data-placement="top"] .guided-tip-arrow {
-		display: none;
+		bottom: -8px;
+		transform: rotate(-45deg);
+	}
+	.guided-tip[data-placement="below"] .guided-tip-arrow {
+		top: -8px;
+		transform: rotate(135deg);
+	}
+	.guided-tip[data-placement="above"] .guided-tip-arrow {
+		bottom: -8px;
+		transform: rotate(-45deg);
 	}
 	.guided-tip[data-placement="bottom"] .guided-tip-arrow {
 		display: none;
@@ -382,7 +454,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 	@media (max-width: 720px) {
 		.guided-tip {
 			grid-template-columns: minmax(0, 1fr);
-			padding: 0.85rem;
+			padding: 0.9rem;
 		}
 		.guided-tip-icon {
 			display: none;

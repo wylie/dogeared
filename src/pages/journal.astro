@@ -104,10 +104,14 @@ const sectionLinks = viewerUserId ? [
 		) : (
 			<>
 				<section class="journal-hero" id="journal-search">
-					<p class="journal-eyebrow">Private notebook</p>
-					<h1>Reading Journal</h1>
-					<p>Capture what you are thinking while you read. Search your own notes, tags, books, dates, and moods. Entries are private and never appear on profiles or activity feeds.</p>
-					<a class="new-entry-button" href="#new-entry" data-action="new-journal-entry">New Entry</a>
+					<div class="journal-hero-head">
+						<div>
+							<p class="journal-eyebrow">Private notebook</p>
+							<h1>Reading Journal</h1>
+							<p>Capture what you are thinking while you read. Search your own notes, tags, books, dates, and moods. Entries are private and never appear on profiles or activity feeds.</p>
+						</div>
+						<a class="journal-button journal-button-primary journal-button-compact" href="#new-entry" data-action="new-journal-entry">New Entry</a>
+					</div>
 					<form class="journal-search-form" action="/journal" method="get">
 						<label class="visually-hidden" for="journal-query">Search journal</label>
 						<input id="journal-query" type="search" name="q" value={query} placeholder="Search notes, tags, books, or moods" />
@@ -118,8 +122,8 @@ const sectionLinks = viewerUserId ? [
 						</select>
 						<label class="visually-hidden" for="journal-date-filter">Filter by date</label>
 						<input id="journal-date-filter" type="date" name="date" value={filterDate} aria-label="Filter journal entries by date" />
-						<button type="submit">Search</button>
-						{(query || filterBookId || filterDate) && <a class="secondary-link" href="/journal">Clear</a>}
+						<button type="submit" class="journal-button journal-button-primary journal-button-compact">Search</button>
+						{(query || filterBookId || filterDate) && <a class="journal-button journal-button-secondary journal-button-compact" href="/journal">Clear</a>}
 					</form>
 				</section>
 
@@ -157,10 +161,14 @@ const sectionLinks = viewerUserId ? [
 							<label><span>Personal tags <em>optional</em></span><input type="text" name="personalTags" maxlength="400" placeholder="quiet, quote, book club" /></label>
 						</div>
 						<div class="journal-actions">
-							<button type="submit" data-journal-save>Save entry</button>
-							<button type="button" class="secondary" data-journal-reset>Clear</button>
-							<p class="journal-status" data-journal-status role="status" aria-live="polite">Drafts autosave on this device.</p>
-							<p class="journal-count" data-journal-count>0 characters</p>
+							<div class="journal-action-buttons">
+								<button type="submit" class="journal-button journal-button-primary" data-journal-save>Save entry</button>
+								<button type="button" class="journal-button journal-button-secondary" data-journal-reset>Clear</button>
+							</div>
+							<div class="journal-form-meta">
+								<p class="journal-status" data-journal-status role="status" aria-live="polite">Drafts autosave on this device.</p>
+								<p class="journal-count" data-journal-count>0 characters</p>
+							</div>
 						</div>
 					</form>
 				</section>
@@ -177,7 +185,7 @@ const sectionLinks = viewerUserId ? [
 							<h3>{query || filterBookId || filterDate ? "No journal entries matched those filters." : "Start a private record of your reading life."}</h3>
 							<p>{query || filterBookId || filterDate ? "Try clearing the filters or searching for a different phrase." : "Use the Reading Journal to remember reactions, questions, favorite lines, page notes, and the small moments that do not belong in a public review."}</p>
 							<p>{query || filterBookId || filterDate ? "Your journal remains private even when filtered." : "Entries are private by default and never appear on public profiles, comments, feeds, or recent activity."}</p>
-							<a class="new-entry-button" href="#new-entry">Create your first journal entry</a>
+							<a class="journal-button journal-button-primary journal-button-compact" href="#new-entry">Create your first journal entry</a>
 						</div>
 					) : (
 						<>
@@ -216,9 +224,9 @@ const sectionLinks = viewerUserId ? [
 											</div>
 											{entry.personalTags.length > 0 && <ul class="journal-tags" aria-label="Personal tags">{entry.personalTags.map((tag) => <li>{tag}</li>)}</ul>}
 											<div class="journal-entry-actions">
-												<button type="button" class="secondary-link-button" data-action="view-journal-entry" aria-expanded="false">View</button>
-												<button type="button" class="secondary-link-button" data-action="edit-journal-entry">Edit</button>
-												<button type="button" class="secondary-link-button destructive" data-action="delete-journal-entry">Delete</button>
+												<button type="button" class="journal-button journal-button-secondary journal-button-small" data-action="view-journal-entry" aria-expanded="false">View</button>
+												<button type="button" class="journal-button journal-button-secondary journal-button-small" data-action="edit-journal-entry">Edit</button>
+												<button type="button" class="journal-button journal-button-danger journal-button-small" data-action="delete-journal-entry">Delete</button>
 											</div>
 										</div>
 									</li>
@@ -357,29 +365,39 @@ const sectionLinks = viewerUserId ? [
 <style>
 	.journal-page { max-width: 980px; }
 	.breadcrumbs { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; margin: 0 0 0.65rem; font-size: 0.84rem; color: var(--color-text-subtle); }
-	.breadcrumbs a, .secondary-link, .journal-entry-meta a, .secondary-link-button { color: var(--color-nav); text-decoration: none; }
-	.breadcrumbs a:hover, .secondary-link:hover, .journal-entry-meta a:hover, .secondary-link-button:hover { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
-	.journal-state-card, .journal-hero, .journal-editor, .journal-results { border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
-	.journal-hero, .journal-editor, .journal-results { margin-top: 0.95rem; }
+	.breadcrumbs a, .journal-entry-meta a { color: var(--color-nav); text-decoration: none; }
+	.breadcrumbs a:hover, .journal-entry-meta a:hover { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
+	.journal-state-card, .journal-hero, .journal-editor, .journal-results { border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: clamp(0.9rem, 2vw, 1.2rem); }
+	.journal-hero, .journal-editor, .journal-results { margin-top: 1rem; }
+	.journal-hero-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: start; }
 	.journal-eyebrow { margin: 0 0 0.25rem; color: var(--color-text-subtle); font-size: 0.78rem; font-weight: 760; text-transform: uppercase; letter-spacing: 0; }
 	.journal-state-card h1, .journal-hero h1, .journal-editor h2, .journal-results h2 { margin: 0 0 0.45rem; }
 	.journal-state-card p, .journal-hero p, .journal-results-head p, .journal-empty, .journal-status, .journal-count { margin: 0; color: var(--color-text-muted); line-height: 1.45; }
-	.primary-link, .new-entry-button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; margin-top: 0.9rem; font-weight: 760; text-decoration: none; }
-	.new-entry-button { border-radius: 999px; background: var(--color-primary); color: #fff; padding: 0.65rem 1rem; }
-	.journal-search-form { margin-top: 0.95rem; display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 220px) minmax(140px, 170px) auto auto; gap: 0.6rem; align-items: center; }
-	.journal-search-form input, .journal-search-form select, .journal-entry-form input, .journal-entry-form select, .journal-entry-form textarea { width: 100%; min-height: 44px; box-sizing: border-box; border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255,255,255,0.72); color: var(--color-text); font: inherit; padding: 0.65rem 0.75rem; }
+	.primary-link, .journal-button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; border-radius: var(--radius-sm); padding: 0.58rem 0.9rem; font: inherit; font-weight: 760; line-height: 1.1; text-decoration: none; cursor: pointer; box-sizing: border-box; }
+	.primary-link { border: 1px solid var(--color-primary); background: var(--color-primary); color: #fff; margin-top: 0.9rem; }
+	.primary-link:hover, .primary-link:focus-visible { background: var(--color-primary-hover); border-color: var(--color-primary-hover); color: #fff; }
+	.journal-button-primary { border: 1px solid var(--color-primary); background: var(--color-primary); color: #fff; }
+	.journal-button-primary:hover, .journal-button-primary:focus-visible { background: var(--color-primary-hover); border-color: var(--color-primary-hover); color: #fff; }
+	.journal-button-secondary { border: var(--border-subtle); background: rgba(255,255,255,0.72); color: var(--color-nav); }
+	.journal-button-secondary:hover, .journal-button-secondary:focus-visible { background: #fff; color: var(--color-nav-hover); }
+	.journal-button-danger { border: 1px solid rgba(153, 27, 27, 0.28); background: rgba(255,255,255,0.72); color: #991b1b; }
+	.journal-button-danger:hover, .journal-button-danger:focus-visible { background: #fef2f2; color: #7f1d1d; }
+	.journal-button-compact { min-height: 40px; padding: 0.55rem 0.85rem; white-space: nowrap; }
+	.journal-button-small { min-height: 34px; padding: 0.42rem 0.68rem; font-size: 0.88rem; }
+	.journal-search-form { margin-top: 1rem; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, 230px) minmax(145px, 175px) auto auto; gap: 0.55rem; align-items: center; }
+	.journal-search-form input, .journal-search-form select, .journal-entry-form input, .journal-entry-form select, .journal-entry-form textarea { width: 100%; min-height: 42px; box-sizing: border-box; border: var(--border-subtle); border-radius: var(--radius-sm); background: rgba(255,255,255,0.78); color: var(--color-text); font: inherit; padding: 0.6rem 0.72rem; }
 	.journal-entry-form textarea { resize: vertical; }
 	.journal-search-form input:focus, .journal-search-form select:focus, .journal-entry-form input:focus, .journal-entry-form select:focus, .journal-entry-form textarea:focus { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-	.journal-entry-form { display: grid; gap: 0.75rem; }
-	.journal-entry-form label span { display: block; margin-bottom: 0.25rem; font-weight: 760; }
+	.journal-entry-form { display: grid; gap: 0.8rem; }
+	.journal-entry-form label span { display: block; margin-bottom: 0.28rem; font-weight: 760; }
 	.journal-entry-form label em { color: var(--color-text-muted); font-style: normal; font-weight: 500; }
 	.journal-grid-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
 	.journal-results-head, .journal-actions, .journal-entry-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
-	.journal-actions { justify-content: flex-start; }
-	.journal-actions button { min-height: 42px; }
-	.journal-actions .secondary { background: transparent; color: var(--color-nav); border: var(--border-subtle); }
-	.journal-entry-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.65rem; }
-	.journal-entry-card { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 0.75rem; border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255,255,255,0.58); padding: 0.65rem; }
+	.journal-actions { justify-content: space-between; align-items: center; padding-top: 0.15rem; }
+	.journal-action-buttons { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+	.journal-form-meta { display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap; font-size: 0.9rem; }
+	.journal-entry-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.7rem; }
+	.journal-entry-card { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 0.75rem; border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255,255,255,0.58); padding: 0.75rem; }
 	.journal-entry-cover-link, .journal-entry-cover-link img, .journal-cover-placeholder { width: 52px; height: 76px; border-radius: var(--radius-sm); }
 	.journal-entry-cover-link img { object-fit: cover; border: var(--border-subtle); }
 	.journal-cover-placeholder { display: grid; place-items: center; background: var(--color-chip-topic); color: var(--color-nav); font-family: "Material Icons"; }
@@ -392,14 +410,18 @@ const sectionLinks = viewerUserId ? [
 	.journal-empty-state p { margin: 0.3rem 0; color: var(--color-text-muted); line-height: 1.45; }
 	.journal-tags { list-style: none; display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0; margin: 0.45rem 0; }
 	.journal-tags li { border-radius: 999px; background: var(--color-chip-topic); color: var(--color-nav); padding: 0.18rem 0.5rem; font-size: 0.78rem; font-weight: 760; }
-	.secondary-link-button { border: 0; background: transparent; font: inherit; font-weight: 760; padding: 0; cursor: pointer; }
-	.secondary-link-button.destructive { color: #991b1b; }
 	.journal-pagination { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 1rem; color: var(--color-text-muted); }
 	.journal-pagination a { color: var(--color-nav); font-weight: 760; text-decoration: none; }
 	.journal-pagination a[aria-disabled="true"] { color: var(--color-text-subtle); pointer-events: none; }
 	.journal-pagination a:hover, .journal-pagination a:focus-visible { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
 	@media (max-width: 680px) {
+		.journal-hero-head { grid-template-columns: 1fr; gap: 0.7rem; }
 		.journal-search-form, .journal-grid-two { grid-template-columns: 1fr; }
+		.journal-search-form .journal-button, .journal-hero-head .journal-button { width: 100%; }
+		.journal-actions, .journal-action-buttons, .journal-form-meta { align-items: stretch; flex-direction: column; }
+		.journal-actions { gap: 0.65rem; }
+		.journal-action-buttons .journal-button { width: 100%; }
+		.journal-form-meta { align-items: flex-start; gap: 0.25rem; }
 		.journal-entry-card { grid-template-columns: 44px minmax(0, 1fr); }
 		.journal-entry-cover-link, .journal-entry-cover-link img, .journal-cover-placeholder { width: 44px; height: 66px; }
 	}
