@@ -351,6 +351,16 @@ Home surfaces featured editorial collections, explainable community discovery se
 
 Limitations: Section quality depends on catalog, shelf, rating, review, and activity volume. Some shelf ideas are prompts that create custom shelves.
 
+### Guided First Experience
+
+Status: Complete
+
+Signed-in readers can receive contextual first-time tips instead of a traditional onboarding wizard. Tips are lightweight callouts that point at relevant areas, include a title, explanation, optional icon, primary action, and dismiss control, and are keyboard accessible. The current tip set covers Home, Search, first book added, Currently Reading progress, first progress update, Reading Journal privacy, first finished book, and Reviews versus private Journal Entries.
+
+DogEared chooses tips from transparent reader state: shelf count, Currently Reading count, finished books, reviews, progress updates, and journal entries. Only one tip appears at a time. Completed or dismissed tips are stored per user and do not reappear. Settings includes Learning controls to turn helpful tips on or off and reset the guided tour.
+
+Limitations: Guided tips are state-based and contextual, not a multi-step wizard. They currently cover first-use learning moments only.
+
 ### Editorial Collections
 
 Status: Complete
@@ -513,7 +523,7 @@ Limitations: The current clear-shelf API deletes `user_book` rows; custom shelf-
 
 Status: Complete
 
-Settings saves privacy, reading defaults, notification preferences, data controls, import controls, and personalization preferences.
+Settings saves privacy, reading defaults, notification preferences, Learning/guided-tour preferences, data controls, import controls, and personalization preferences.
 
 Limitations: Some preferences are forward-looking and not all have visible effects across the product yet.
 

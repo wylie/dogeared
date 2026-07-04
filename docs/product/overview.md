@@ -32,7 +32,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 
 ## Major Application Sections
 
-- Home: featured editorial collections, transparent community discovery sections, onboarding checklist, discovery jump links, reader suggestions, and custom shelf ideas.
+- Home: featured editorial collections, transparent community discovery sections, onboarding checklist, guided first-experience tips, discovery jump links, reader suggestions, and custom shelf ideas.
 - Search: book search backed by DogEared catalog results plus Google Books and Open Library, with series labels and editorial collection matches when available.
 - Books: curated catalog views such as trending, most shelved, top rated, and recently active.
 - Book detail: metadata, series context, synopsis, genres, topics, shelf controls, ratings, private journal entry controls for shelved books, reviews, and related activity.
@@ -44,7 +44,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Reading Journal: private searchable notebook for what a reader was thinking while reading, including dated entries, optional book context, progress snapshots, page/chapter context, moods, and personal tags.
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
-- Settings: profile/account entry points, magic-link auth, email changes, Goodreads import, preferences, privacy, notifications, data export, shelf clearing, API endpoint references, and sessions.
+- Settings: profile/account entry points, magic-link auth, email changes, Goodreads import, preferences, privacy, notifications, Learning controls for helpful tips, data export, shelf clearing, API endpoint references, and sessions.
 - Admin: operational overview, data health, user search, user detail, and admin delete-user tools.
 - Mission, Roadmap, Privacy, Support: public product context and project direction.
 
@@ -62,6 +62,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 
 - Account setup: request a magic link, verify it, set a username, then manage profile and settings.
 - Book discovery: browse featured editorial collections, explainable home recommendations, search books with series context, open book pages, browse author pages, or explore related genre/topic/author/book pages.
+- Guided first experience: signed-in readers see one contextual, dismissible tip at a time when it is relevant, such as searching for a first book, updating reading progress, opening the private journal, or understanding public reviews versus private journal entries.
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
 - Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, timeline history, milestones, and yearly summaries.
@@ -96,6 +97,12 @@ Author pages group books by series when metadata exists and keep standalone book
 Home discovery is generated from transparent community activity, not an AI recommendation engine. A discovery service runs reusable providers for sections such as Community Favorites, Most Added This Week, Most Finished This Week, Trending Up, Hidden Gems, Recently Reviewed, and New Releases Readers Love. Each section explains why it exists, and each book card shows a concrete reason such as rating count, unique readers, recent finishes, activity growth, review length/reactions, or recent publication with strong activity.
 
 If DogEared does not have enough data for a provider, that provider is hidden. If no provider has enough data, Home falls back to a simple Popular With Readers section when shelf activity exists, or a friendly empty state when it does not.
+
+### Guided First Experience
+
+DogEared includes contextual first-time guidance for signed-in readers. Instead of a full-screen onboarding wizard, the application shows lightweight callouts near relevant interface areas. Current tips cover the reading home, Search, first book added, Currently Reading progress, first progress update, Reading Journal privacy, first finished book, and the difference between public reviews and private journal entries.
+
+Tips are shown only when the reader's current state makes them useful. DogEared shows at most one active tip, and each tip can be dismissed or completed. Progress is stored per user in Settings data so completed or dismissed tips do not reappear. Settings includes a Learning section with a Show helpful tips checkbox and Reset Guided Tour action.
 
 ### Editorial Collections
 
@@ -195,7 +202,7 @@ Admins are recognized by username through `ADMIN_USERNAMES`. Admin pages include
 
 ### Settings
 
-Settings includes profile/account links, email change, magic-link auth, notifications preferences, privacy preferences, reading defaults, personalization preferences, Goodreads import, import controls, API endpoint references, JSON export, shelf clearing, and security/session controls. Self-service delete account is not exposed in Settings, even though a backend endpoint exists.
+Settings includes profile/account links, email change, magic-link auth, notifications preferences, Learning controls for guided tips, privacy preferences, reading defaults, personalization preferences, Goodreads import, import controls, API endpoint references, JSON export, shelf clearing, and security/session controls. Self-service delete account is not exposed in Settings, even though a backend endpoint exists.
 
 ### Metrics
 
@@ -224,17 +231,17 @@ Related pages support landing exploration plus specific `kind=genre`, `kind=topi
 Derived from the current repository structure and implementation:
 
 - Major non-API page routes: 34 application/content routes plus `robots.txt` and `sitemap.xml`.
-- API routes: 34 endpoint files.
+- API routes: 35 endpoint files.
 - Admin pages: 5 routes.
 - Redirect-only compatibility routes: `/discover`, `/feed`, `/myreads`, `/profile`, `/author`, `/reading-timeline`, and `/u/[username]`.
-- Feature entries in `docs/product/features.md`: 68.
+- Feature entries in `docs/product/features.md`: 69.
 - Default persisted shelf statuses: 3 (`want_to_read`, `reading`, `finished`).
 - Custom shelf icon options: 16.
 - Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, My Reading Life overview, timeline history, timeline milestones, monthly timeline summaries, reading calendar, genre/author insights, fun statistics, yearly summaries, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.
 - Community discovery providers: 7.
 - Editorial collection publication states: 3 (`draft`, `published`, `archived`).
 - Series ordering modes: book order, publication order, chronological order.
-- Supported social/private interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment, create/view/edit/delete/search/filter own journal entries.
+- Supported social/private interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment, create/view/edit/delete/search/filter own journal entries, dismiss/complete/reset guided tips.
 - Supported catalog metadata types: editorial collections, series, genres, and topic tags.
 - Supported import source in Settings: Goodreads CSV.
 - Supported data export format in Settings: JSON.

@@ -60,6 +60,14 @@ A relationship where one reader follows another reader. Following powers follow 
 
 Catalog metadata stored in `book_genre`. Genre pages are implemented through `/related?kind=genre&value=...`.
 
+## Guided First Experience
+
+Contextual, dismissible guidance for signed-in readers. It uses reader state to show one useful tip at a time instead of a traditional onboarding wizard.
+
+## Guided Tip
+
+A reusable callout with a title, explanation, optional icon, primary action, and dismiss control. Completion and dismissal are stored per user.
+
 ## Like
 
 A reaction on activity. Readers cannot like their own activity. Likes can create notifications.
@@ -90,7 +98,7 @@ Reader-defined tags on private journal entries. They are searchable by the ownin
 
 ## Profile Data
 
-JSON stored on `app_user.profile_data`. It contains profile fields and settings such as privacy, reading defaults, notification preferences, import controls, and personalization.
+JSON stored on `app_user.profile_data`. It contains profile fields and settings such as privacy, reading defaults, notification preferences, guided-tour progress, import controls, and personalization.
 
 ## Reader
 

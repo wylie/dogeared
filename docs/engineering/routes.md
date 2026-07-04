@@ -31,7 +31,7 @@ Authentication requirements:
 | `/journal` | Authenticated | Private reading journal for creating, viewing, searching, filtering, editing, and deleting the signed-in reader's own notes. | `readingJournal` helper, newest-first paginated timeline, search, book/date filters, new-entry form, inline detail view, edit/delete controls, local draft recovery, book links to `#reading-journal`. |
 | `/feed` | Redirect | Legacy route for feed. | Redirects to `/following`. |
 | `/myreads` | Redirect | Legacy reader library route. | Redirects signed-in users to their profile; otherwise settings. |
-| `/settings` | Authenticated | Account, auth, email change, privacy, import, export, API references, sessions, preferences. | Settings scripts, Goodreads import helpers, account APIs, shelf APIs. |
+| `/settings` | Authenticated | Account, auth, email change, helpful-tip controls, privacy, import, export, API references, sessions, preferences. | Settings scripts, Goodreads import helpers, guided tour settings, account APIs, shelf APIs. |
 | `/welcome` | Authenticated | New-reader username setup. | Username validation/save API. |
 | `/account/email/verify` | Public token route | Verifies pending email changes. | Account email-change table, email notices. |
 | `/metrics` | Public with personal sections when signed in | Personal/community reading metrics, taste graph, charts, drill-down, comparison views. | ECharts, Neon aggregate queries, sample fallback. |
@@ -77,6 +77,7 @@ Authentication requirements:
 | `/api/follow` | GET, POST, DELETE | Mixed | Read follow state; follow/unfollow when authenticated. |
 | `/api/notifications/count` | GET | Session-aware | Return unread notification count for signed-in user, otherwise zero. |
 | `/api/onboarding/status` | GET | Authenticated | Return onboarding completion state from shelf/rating/review counts. |
+| `/api/guidance/status` | GET, POST | Authenticated | Load guided first-experience settings and reader-state counts; dismiss, complete, disable, or reset guided tips. |
 | `/api/profile/info` | GET, POST | Mixed | Read public/current profile info and save current user's profile info. |
 | `/api/profile/username` | GET, POST | Authenticated | Validate and save username. |
 | `/api/public/profile` | GET | Public/session-aware | Return public profile bundle by username. |

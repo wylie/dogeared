@@ -412,6 +412,12 @@ Settings are stored inside `app_user.profile_data.settings`, not as standalone t
 - Data controls.
 - Import controls.
 - Personalization.
+- Guided tour settings:
+  - `showHelpfulTips`.
+  - `dismissedTips`.
+  - `completedTips`.
+
+Guided tour progress is per user and intentionally stored with settings because tips are interface preferences, not community activity. Resetting the guided tour clears dismissed/completed tip IDs without deleting reading data.
 
 ## Discovery Signals
 

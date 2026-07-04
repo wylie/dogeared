@@ -156,7 +156,7 @@ if (session?.userId) {
 	metaDescription="Search DogEared for books and add them to your shelves."
 	canonicalUrl="/search"
 >
-		<div slot="right" class="search-page" id="search-page" data-query={query} data-authenticated={String(isAuthenticated)}>
+		<div slot="right" class="search-page" id="search-page" data-guided-anchor="search-page" data-query={query} data-authenticated={String(isAuthenticated)}>
 		<h1>Search</h1>
 		{!query && <p>Search for a favorite title, then add it to Want to Read, Currently Reading, or Read to build recommendations.</p>}
 		{query && errorMessage && <p>Search failed: {errorMessage}</p>}

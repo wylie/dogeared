@@ -22,7 +22,7 @@ Shared components live in `src/components/`.
 - `ShelfDropdown` provides default and custom shelf controls.
 - `RatingControl` handles star ratings.
 - `Chip` renders metadata chips for genres/topics.
-- `Navigation`, `LeftHand`, `FloatingActions`, `FeedbackWidget`, and widget components provide layout and side surfaces.
+- `Navigation`, `LeftHand`, `FloatingActions`, `FeedbackWidget`, `GuidedTip`, and widget components provide layout and side surfaces.
 
 ## API Layers
 
@@ -36,7 +36,7 @@ API routes live in `src/pages/api/` and are grouped by product area:
 - Journal: private journal entry create/search/filter, update, and delete.
 - Profile/public: profile info, username, public shelf/activity/profile.
 - Shelf: shelf entries, ratings, custom shelves, custom shelf books, section ordering.
-- Admin-adjacent/system: health, feedback, notifications count, onboarding status, top lists, reader suggestions.
+- Admin-adjacent/system: health, feedback, notifications count, onboarding status, guided first-experience status, top lists, reader suggestions.
 
 Most APIs resolve the current session when mutating or reading private user data.
 
@@ -46,7 +46,7 @@ Shared product/data logic lives in `src/lib/`.
 
 - Authentication and account helpers: `auth`, `authHardening`, `emailChange`, `email`.
 - Catalog and metadata helpers: `catalog`, `bookPayload`, `bookCovers`, `catalogKeys`, `author`, `authorEnrichment`, `externalAuthorBooks`, `genres`, `metadataAssets`, `series`, `collections`.
-- Reader/product logic: `shelfClient`, `shelfStorage`, `customShelves`, `readingGoal`, `readingLife`, `readingJournal`, `momentumPrediction`, `goodreadsImport`, `bookReviews`.
+- Reader/product logic: `shelfClient`, `shelfStorage`, `customShelves`, `readingGoal`, `readingLife`, `readingJournal`, `guidedTour`, `momentumPrediction`, `goodreadsImport`, `bookReviews`.
 - Discovery logic: `discoveryProviders` exposes the discovery service and reusable Home providers; `homeSections` loads cached aggregate signals and maps provider output to book cards.
 - Community and privacy: `feed`, `publicProfile`, `privacy`, `followPolicy`, `demoVisibility`.
 - Operations: `admin`, `adminData`, `monitoring`, `feedback`, `runtimeCache`, `indexing`, `seo`, `roadmap`, `homeSections`.
@@ -65,9 +65,10 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 6. My Reading Life derives private personal summaries from shelf entries, finished dates, ratings, progress events, genres, authors, series, and profile goal data, including timeline and calendar history.
 7. Reading Journal loads private entries for the signed-in reader, supports optional book-linked entries for owned books, saves through an authenticated API, and searches/filters only that reader's entries.
 8. Home discovery loads cached aggregate community signals, ranks them through reusable providers, and renders explainable sections.
-9. Client-side scripts enhance the page by calling API routes for mutations or lazy loading.
-10. API routes validate the session, normalize input, mutate Neon, and return JSON.
-11. Client-side UI updates the current card/section and often refreshes shelf/activity state from APIs.
+9. Guided first-experience tips load per-user progress from Settings data, evaluate the current route and reader state, and render at most one contextual callout.
+10. Client-side scripts enhance the page by calling API routes for mutations or lazy loading.
+11. API routes validate the session, normalize input, mutate Neon, and return JSON.
+12. Client-side UI updates the current card/section and often refreshes shelf/activity state from APIs.
 
 ## Series Support
 
@@ -98,6 +99,12 @@ Current providers:
 - `HiddenGemsProvider`.
 - `RecentlyReviewedProvider`.
 - `NewReleaseProvider`.
+
+## Guided First Experience
+
+Guided first-experience logic lives in `src/lib/guidedTour`, `src/components/GuidedTip.astro`, and `/api/guidance/status`. The helper defines canonical tip IDs, normalizes settings, deduplicates completed/dismissed tips, and derives the signed-in reader state used by contextual rules. The component owns the tip catalog, route/state conditions, accessible callout rendering, placement, and primary/dismiss actions.
+
+To add a tip, add a canonical ID in `src/lib/guidedTour.ts`, add the tip definition in `GuidedTip.astro`, and include tests for the new ID and trigger rule. The API stores progress under `app_user.profile_data.settings.guidedTour`, so adding a tip does not require a new table.
 
 ## Persistence
 

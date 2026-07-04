@@ -13,6 +13,7 @@ const sectionLinks = [
 	{ id: "profile-settings", label: "Profile" },
 	{ id: "account-settings", label: "Account" },
 	{ id: "notifications-settings", label: "Notifications" },
+	{ id: "learning-settings", label: "Learning" },
 	{ id: "privacy-settings", label: "Privacy" },
 	{ id: "reading-defaults", label: "Reading Defaults" },
 	{ id: "personalization-settings", label: "Personalization" },
@@ -158,6 +159,19 @@ const sectionLinks = [
 					<span>Email me a weekly reading summary</span>
 				</label>
 			</div>
+		</section>
+
+		<section class="settings-section" id="learning-settings" aria-labelledby="learning-settings-title">
+			<h2 id="learning-settings-title">Learning</h2>
+			<p class="section-copy">Control the contextual tips that help you find your way around DogEared.</p>
+			<div class="danger-form">
+				<label class="checkbox-row">
+					<input type="checkbox" id="show-helpful-tips" checked />
+					<span>Show helpful tips</span>
+				</label>
+				<button type="button" id="reset-guided-tour-button" class="secondary">Reset Guided Tour</button>
+			</div>
+			<p id="learning-feedback" class="feedback" hidden></p>
 		</section>
 
 		<section class="settings-section" id="danger-zone-settings" aria-labelledby="danger-zone-settings-title">
@@ -352,16 +366,17 @@ const sectionLinks = [
 	#profile-settings { order: 2; }
 	#account-settings { order: 3; }
 	#notifications-settings { order: 4; }
-	#auth-settings { order: 5; }
-	#privacy-settings { order: 6; }
-	#reading-defaults { order: 7; }
-	#personalization-settings { order: 8; }
-	#goodreads-import { order: 9; }
-	#import-controls { order: 10; }
-	#data-export { order: 11; }
-	#api-settings { order: 12; }
-	#security-settings { order: 13; }
-	#danger-zone-settings { order: 14; }
+	#learning-settings { order: 5; }
+	#auth-settings { order: 6; }
+	#privacy-settings { order: 7; }
+	#reading-defaults { order: 8; }
+	#personalization-settings { order: 9; }
+	#goodreads-import { order: 10; }
+	#import-controls { order: 11; }
+	#data-export { order: 12; }
+	#api-settings { order: 13; }
+	#security-settings { order: 14; }
+	#danger-zone-settings { order: 15; }
 
 	.settings-section {
 		border: var(--border-subtle);
@@ -700,6 +715,9 @@ const sectionLinks = [
 	const browserNotificationsEnabled = document.getElementById("browser-notifications-enabled");
 	const releaseEmailEnabled = document.getElementById("release-email-enabled");
 	const weeklySummaryEnabled = document.getElementById("weekly-summary-enabled");
+	const showHelpfulTipsCheckbox = document.getElementById("show-helpful-tips");
+	const resetGuidedTourButton = document.getElementById("reset-guided-tour-button");
+	const learningFeedback = document.getElementById("learning-feedback");
 	const defaultShelfSelect = document.getElementById("default-shelf");
 	const homeSortSelect = document.getElementById("home-sort");
 	const favoriteGenresInput = document.getElementById("favorite-genres-input");
@@ -710,6 +728,11 @@ const sectionLinks = [
 	const recentActivityList = document.getElementById("recent-activity-list");
 	const securityFeedback = document.getElementById("security-feedback");
 	const copyButtons = Array.from(document.querySelectorAll(".copy-button"));
+	let guidedTourState = {
+		showHelpfulTips: true,
+		dismissedTips: [],
+		completedTips: []
+	};
 
 	function showFeedback(message, isError = false) {
 		feedback.textContent = message;
@@ -769,6 +792,13 @@ const sectionLinks = [
 		importControlsFeedback.textContent = message;
 		importControlsFeedback.hidden = !message;
 		importControlsFeedback.classList.toggle("error", isError);
+	}
+
+	function showLearningFeedback(message, isError = false) {
+		if (!(learningFeedback instanceof HTMLElement)) return;
+		learningFeedback.textContent = message;
+		learningFeedback.hidden = !message;
+		learningFeedback.classList.toggle("error", isError);
 	}
 
 	function showSecurityFeedback(message, isError = false) {
@@ -1104,6 +1134,11 @@ const sectionLinks = [
 				favoriteGenres: parseGenreList(favoriteGenresInput instanceof HTMLInputElement ? favoriteGenresInput.value : ""),
 				excludedGenres: parseGenreList(excludedGenresInput instanceof HTMLInputElement ? excludedGenresInput.value : ""),
 				preferredLanguage: "en"
+			},
+			guidedTour: {
+				showHelpfulTips: !!(showHelpfulTipsCheckbox instanceof HTMLInputElement && showHelpfulTipsCheckbox.checked),
+				dismissedTips: Array.isArray(guidedTourState.dismissedTips) ? guidedTourState.dismissedTips : [],
+				completedTips: Array.isArray(guidedTourState.completedTips) ? guidedTourState.completedTips : []
 			}
 		};
 	}
@@ -1136,6 +1171,13 @@ const sectionLinks = [
 		if (favoriteGenresInput instanceof HTMLInputElement) favoriteGenresInput.value = formatGenreList(personalization.favoriteGenres);
 		if (excludedGenresInput instanceof HTMLInputElement) excludedGenresInput.value = formatGenreList(personalization.excludedGenres);
 
+		const guidedTour = preferences?.guidedTour || {};
+		guidedTourState = {
+			showHelpfulTips: guidedTour.showHelpfulTips !== false,
+			dismissedTips: Array.isArray(guidedTour.dismissedTips) ? guidedTour.dismissedTips : [],
+			completedTips: Array.isArray(guidedTour.completedTips) ? guidedTour.completedTips : []
+		};
+		if (showHelpfulTipsCheckbox instanceof HTMLInputElement) showHelpfulTipsCheckbox.checked = guidedTourState.showHelpfulTips;
 	}
 
 	async function loadPreferences() {
@@ -1162,6 +1204,24 @@ const sectionLinks = [
 		}
 		const data = await response.json().catch(() => ({}));
 		applyPreferences(data?.preferences || payload);
+	}
+
+	async function resetGuidedTour() {
+		showLearningFeedback("Resetting guided tips...");
+		const response = await fetch("/api/guidance/status", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "reset" })
+		});
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok) throw new Error(String(data?.error || "Failed to reset guided tips."));
+		guidedTourState = data?.settings || {
+			showHelpfulTips: true,
+			dismissedTips: [],
+			completedTips: []
+		};
+		if (showHelpfulTipsCheckbox instanceof HTMLInputElement) showHelpfulTipsCheckbox.checked = guidedTourState.showHelpfulTips !== false;
+		showLearningFeedback("Guided tips have been reset. They will appear again when relevant.");
 	}
 
 	function populateApiEndpoints() {
@@ -1701,6 +1761,18 @@ const sectionLinks = [
 			showPreferencesFeedback("Preferences saved.");
 		} catch (error) {
 			showPreferencesFeedback(error instanceof Error ? error.message : "Failed to save preferences.", true);
+		} finally {
+			if (button) button.disabled = false;
+		}
+	});
+
+	resetGuidedTourButton?.addEventListener("click", async () => {
+		const button = resetGuidedTourButton instanceof HTMLButtonElement ? resetGuidedTourButton : null;
+		if (button) button.disabled = true;
+		try {
+			await resetGuidedTour();
+		} catch (error) {
+			showLearningFeedback(error instanceof Error ? error.message : "Failed to reset guided tips.", true);
 		} finally {
 			if (button) button.disabled = false;
 		}

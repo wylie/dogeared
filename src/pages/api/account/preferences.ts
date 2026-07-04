@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { resolveUserBySession } from "../../../lib/auth";
+import { normalizeGuidedTourSettings, type GuidedTourSettings } from "../../../lib/guidedTour";
 import { getNeonSql } from "../../../lib/neon";
 
 export const prerender = false;
@@ -36,6 +37,7 @@ type Preferences = {
 	connectedAccounts: {
 		goodreadsConnected: boolean;
 	};
+	guidedTour: GuidedTourSettings;
 };
 
 const DEFAULT_PREFERENCES: Preferences = {
@@ -69,7 +71,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 	},
 	connectedAccounts: {
 		goodreadsConnected: false
-	}
+	},
+	guidedTour: normalizeGuidedTourSettings({})
 };
 
 function normalizeText(value: unknown) {
@@ -144,7 +147,8 @@ function normalizePreferences(input: unknown): Preferences {
 		},
 		connectedAccounts: {
 			goodreadsConnected: toBool(connectedAccounts.goodreadsConnected, false)
-		}
+		},
+		guidedTour: normalizeGuidedTourSettings(source.guidedTour)
 	};
 }
 

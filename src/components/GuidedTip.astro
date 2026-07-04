@@ -1,0 +1,395 @@
+---
+const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean };
+---
+
+{isAuthenticated && (
+	<aside class="guided-tip" data-guided-tip hidden role="dialog" aria-live="polite" aria-labelledby="guided-tip-title" aria-describedby="guided-tip-description">
+		<div class="guided-tip-arrow" data-guided-tip-arrow aria-hidden="true"></div>
+		<div class="guided-tip-icon" data-guided-tip-icon aria-hidden="true">auto_stories</div>
+		<div class="guided-tip-body">
+			<h2 id="guided-tip-title" data-guided-tip-title></h2>
+			<p id="guided-tip-description" data-guided-tip-description></p>
+			<div class="guided-tip-actions">
+				<a class="guided-tip-primary" data-guided-tip-primary href="/search">Search Books</a>
+				<button type="button" class="guided-tip-dismiss" data-guided-tip-dismiss>Dismiss</button>
+			</div>
+		</div>
+	</aside>
+)}
+
+{isAuthenticated && (
+	<script is:inline>
+	(() => {
+		const root = document.querySelector("[data-guided-tip]");
+		if (!(root instanceof HTMLElement)) return;
+
+		const titleEl = root.querySelector("[data-guided-tip-title]");
+		const descriptionEl = root.querySelector("[data-guided-tip-description]");
+		const iconEl = root.querySelector("[data-guided-tip-icon]");
+		const primaryEl = root.querySelector("[data-guided-tip-primary]");
+		const dismissEl = root.querySelector("[data-guided-tip-dismiss]");
+		const arrowEl = root.querySelector("[data-guided-tip-arrow]");
+		if (!(titleEl instanceof HTMLElement) || !(descriptionEl instanceof HTMLElement) || !(primaryEl instanceof HTMLAnchorElement) || !(dismissEl instanceof HTMLButtonElement)) return;
+
+		const path = window.location.pathname.replace(/\/+$/, "") || "/";
+		const TIPS = [
+			{
+				id: "home-welcome",
+				path: "/",
+				anchor: "[data-guided-anchor='home-intro'], .intro",
+				title: "Welcome to DogEared",
+				description: "This is your reading home. Start by searching for a book you love and adding it to a shelf.",
+				icon: "local_library",
+				primaryLabel: "Search Books",
+				primaryHref: "/search",
+				when: (stats) => stats.totalBooks === 0
+			},
+			{
+				id: "search-add-book",
+				path: "/search",
+				anchor: "[data-guided-anchor='search-page'], #search-page",
+				title: "Search and shelve",
+				description: "Search for any book and add it to Want to Read, Currently Reading, or Read as your plans change.",
+				icon: "search",
+				primaryLabel: "Search Books",
+				primaryHref: "#search-page",
+				when: (stats) => stats.totalBooks === 0
+			},
+			{
+				id: "first-book-added",
+				anchor: ".shelf-dropdown, [data-shelf-dropdown], #currently-reading, main",
+				title: "You added your first book",
+				description: "Books can move between shelves as your reading changes. DogEared keeps that history with your account.",
+				icon: "celebration",
+				primaryLabel: "Open Profile",
+				primaryHref: "/profile",
+				when: (stats) => stats.totalBooks > 0 && stats.progressEvents === 0
+			},
+			{
+				id: "currently-reading-progress",
+				pathPrefix: "/profile",
+				anchor: "#currently-reading [data-action='save-reading-progress'], #currently-reading",
+				title: "Track your current read",
+				description: "Update reading progress after a session so your profile reflects where you are right now.",
+				icon: "trending_up",
+				primaryLabel: "Update Progress",
+				primaryHref: "#currently-reading",
+				when: (stats) => stats.readingBooks > 0 && stats.progressEvents === 0
+			},
+			{
+				id: "first-progress-update",
+				anchor: "main",
+				title: "A note for later",
+				description: "After a progress update, you can write a private journal entry to remember what stood out today.",
+				icon: "edit_note",
+				primaryLabel: "Open Journal",
+				primaryHref: "/journal#new-entry",
+				when: (stats) => stats.progressEvents > 0 && stats.journalEntries === 0
+			},
+			{
+				id: "reading-journal-private",
+				path: "/journal",
+				anchor: "[data-guided-anchor='journal-entry-form'], #new-entry",
+				title: "Your private notebook",
+				description: "Capture thoughts, quotes, reactions, and predictions here. Journal entries are never public.",
+				icon: "lock",
+				primaryLabel: "New Entry",
+				primaryHref: "#new-entry",
+				when: (stats) => stats.journalEntries === 0
+			},
+			{
+				id: "first-finished-book",
+				anchor: "#read, main",
+				title: "You finished a book",
+				description: "A short review can help future readers understand whether this book is right for them.",
+				icon: "task_alt",
+				primaryLabel: "Find Finished Books",
+				primaryHref: "/profile#read",
+				when: (stats) => stats.finishedBooks > 0 && stats.reviews === 0
+			},
+			{
+				id: "reviews-vs-journal",
+				pathPrefix: "/book",
+				anchor: "[data-guided-anchor='reviews'], .reviews-panel",
+				title: "Public review or private note",
+				description: "Reviews help other readers and are public. Journal entries are private notes just for you.",
+				icon: "rate_review",
+				primaryLabel: "Review Section",
+				primaryHref: "#reviews",
+				when: (stats) => stats.finishedBooks > 0
+			}
+		];
+
+		let activeTip = null;
+		let activeSettings = null;
+		let activeStats = null;
+		let refreshTimer = 0;
+
+		function isTipAvailable(tip, settings, stats) {
+			if (!settings?.showHelpfulTips) return false;
+			const completed = Array.isArray(settings.completedTips) ? settings.completedTips : [];
+			const dismissed = Array.isArray(settings.dismissedTips) ? settings.dismissedTips : [];
+			if (completed.includes(tip.id) || dismissed.includes(tip.id)) return false;
+			if (tip.path && tip.path !== path) return false;
+			if (tip.pathPrefix && !path.startsWith(tip.pathPrefix)) return false;
+			return typeof tip.when === "function" ? tip.when(stats || {}) : true;
+		}
+
+		function findAnchor(tip) {
+			const selectors = String(tip.anchor || "main").split(",").map((item) => item.trim()).filter(Boolean);
+			for (const selector of selectors) {
+				const node = document.querySelector(selector);
+				if (node instanceof HTMLElement) return node;
+			}
+			return document.querySelector("main");
+		}
+
+		function positionTip(anchor) {
+			if (!(anchor instanceof HTMLElement)) return;
+			if (window.matchMedia("(max-width: 720px)").matches) {
+				root.style.left = "0.75rem";
+				root.style.right = "0.75rem";
+				root.style.top = "auto";
+				root.style.bottom = "0.75rem";
+				root.style.maxWidth = "none";
+				root.dataset.placement = "bottom";
+				return;
+			}
+			const rect = anchor.getBoundingClientRect();
+			const gap = 14;
+			const width = Math.min(360, Math.max(280, window.innerWidth - 32));
+			let left = rect.right + gap;
+			let placement = "right";
+			if (left + width > window.innerWidth - 16) {
+				left = rect.left - width - gap;
+				placement = "left";
+			}
+			if (left < 16) {
+				left = Math.min(Math.max(rect.left, 16), window.innerWidth - width - 16);
+				placement = "top";
+			}
+			const measuredHeight = root.offsetHeight || 180;
+			const top = Math.min(Math.max(rect.top, 16), window.innerHeight - measuredHeight - 16);
+			root.style.left = `${left}px`;
+			root.style.right = "auto";
+			root.style.bottom = "auto";
+			root.style.top = `${top}px`;
+			root.style.maxWidth = `${width}px`;
+			root.dataset.placement = placement;
+			if (arrowEl instanceof HTMLElement) {
+				const arrowTop = Math.min(Math.max(rect.top + rect.height / 2 - top - 8, 18), measuredHeight - 28);
+				arrowEl.style.top = `${arrowTop}px`;
+			}
+		}
+
+		function showTip(tip) {
+			const anchor = findAnchor(tip);
+			if (!(anchor instanceof HTMLElement)) return hideTip();
+			activeTip = tip;
+			titleEl.textContent = tip.title;
+			descriptionEl.textContent = tip.description;
+			if (iconEl instanceof HTMLElement) iconEl.textContent = tip.icon || "auto_stories";
+			primaryEl.textContent = tip.primaryLabel || "Continue";
+			primaryEl.href = tip.primaryHref || "#";
+			root.hidden = false;
+			window.requestAnimationFrame(() => positionTip(anchor));
+		}
+
+		function hideTip() {
+			activeTip = null;
+			root.hidden = true;
+		}
+
+		async function postAction(action, tipId = activeTip?.id) {
+			if (!tipId) return;
+			try {
+				const response = await fetch("/api/guidance/status", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ action, tipId })
+				});
+				if (response.ok) {
+					const data = await response.json().catch(() => ({}));
+					activeSettings = data?.settings || activeSettings;
+					activeStats = data?.stats || activeStats;
+				}
+			} catch {
+				// Guidance should never block reading workflows.
+			}
+		}
+
+		function renderNextTip() {
+			if (!activeSettings || !activeStats) return hideTip();
+			const tip = TIPS.find((candidate) => isTipAvailable(candidate, activeSettings, activeStats));
+			if (tip) showTip(tip);
+			else hideTip();
+		}
+
+		async function refreshStatus() {
+			try {
+				const response = await fetch("/api/guidance/status", { headers: { Accept: "application/json" } });
+				if (!response.ok) return hideTip();
+				const data = await response.json().catch(() => ({}));
+				activeSettings = data?.settings || null;
+				activeStats = data?.stats || null;
+				renderNextTip();
+			} catch {
+				hideTip();
+			}
+		}
+
+		dismissEl.addEventListener("click", async () => {
+			await postAction("dismiss");
+			hideTip();
+			renderNextTip();
+		});
+
+		primaryEl.addEventListener("click", async (event) => {
+			const href = primaryEl.getAttribute("href") || "";
+			event.preventDefault();
+			await postAction("complete");
+			if (href.startsWith("#")) {
+				document.querySelector(href)?.scrollIntoView({ behavior: "smooth", block: "start" });
+				const target = document.querySelector(href);
+				if (target instanceof HTMLElement) target.focus?.();
+				hideTip();
+				renderNextTip();
+				return;
+			}
+			window.location.href = href || "/";
+		});
+
+		document.addEventListener("keydown", (event) => {
+			if (event.key !== "Escape" || root.hidden) return;
+			void postAction("dismiss");
+			hideTip();
+		});
+
+		window.addEventListener("resize", () => {
+			if (!activeTip || root.hidden) return;
+			const anchor = findAnchor(activeTip);
+			if (anchor instanceof HTMLElement) positionTip(anchor);
+		});
+
+		window.addEventListener("dogeared:reading-data-changed", () => {
+			window.clearTimeout(refreshTimer);
+			refreshTimer = window.setTimeout(refreshStatus, 600);
+		});
+
+		void refreshStatus();
+	})();
+	</script>
+)}
+
+<style>
+	.guided-tip {
+		position: fixed;
+		z-index: 12000;
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 0.7rem;
+		width: calc(100vw - 2rem);
+		max-width: 360px;
+		padding: 0.9rem;
+		border: 1px solid rgba(47, 83, 69, 0.28);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.98);
+		box-shadow: 0 18px 46px rgba(17, 24, 39, 0.18);
+		color: var(--color-text);
+	}
+	.guided-tip[hidden] {
+		display: none;
+	}
+	.guided-tip-icon {
+		width: 2.1rem;
+		height: 2.1rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 999px;
+		background: rgba(47, 83, 69, 0.1);
+		color: var(--color-primary);
+		font-family: "Material Icons";
+		font-size: 1.25rem;
+		line-height: 1;
+	}
+	.guided-tip h2 {
+		margin: 0;
+		font-size: 1rem;
+		line-height: 1.25;
+	}
+	.guided-tip p {
+		margin: 0.35rem 0 0;
+		color: var(--color-text-muted);
+		line-height: 1.45;
+	}
+	.guided-tip-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.45rem;
+		margin-top: 0.8rem;
+	}
+	.guided-tip-primary,
+	.guided-tip-dismiss {
+		min-height: 40px;
+		border-radius: var(--radius-sm);
+		padding: 0.55rem 0.75rem;
+		font: inherit;
+		font-weight: 700;
+	}
+	.guided-tip-primary {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--color-primary);
+		color: #fff;
+		text-decoration: none;
+	}
+	.guided-tip-dismiss {
+		border: var(--border-subtle);
+		background: rgba(255, 255, 255, 0.76);
+		color: var(--color-text);
+		cursor: pointer;
+	}
+	.guided-tip-primary:focus-visible,
+	.guided-tip-dismiss:focus-visible {
+		outline: 3px solid rgba(47, 83, 69, 0.3);
+		outline-offset: 2px;
+	}
+	.guided-tip-arrow {
+		position: absolute;
+		width: 14px;
+		height: 14px;
+		background: inherit;
+		border-left: 1px solid rgba(47, 83, 69, 0.28);
+		border-bottom: 1px solid rgba(47, 83, 69, 0.28);
+		transform: rotate(45deg);
+	}
+	.guided-tip[data-placement="right"] .guided-tip-arrow {
+		left: -8px;
+	}
+	.guided-tip[data-placement="left"] .guided-tip-arrow {
+		right: -8px;
+		transform: rotate(225deg);
+	}
+	.guided-tip[data-placement="top"] .guided-tip-arrow {
+		display: none;
+	}
+	.guided-tip[data-placement="bottom"] .guided-tip-arrow {
+		display: none;
+	}
+	@media (max-width: 720px) {
+		.guided-tip {
+			grid-template-columns: minmax(0, 1fr);
+			padding: 0.85rem;
+		}
+		.guided-tip-icon {
+			display: none;
+		}
+		.guided-tip-actions {
+			display: grid;
+			grid-template-columns: 1fr auto;
+		}
+	}
+</style>

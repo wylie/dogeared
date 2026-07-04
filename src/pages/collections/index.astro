@@ -37,7 +37,7 @@ const sectionLinks = categories.slice(0, 8).map((category) => ({
 
 		{errorMessage && <p class="error">{errorMessage}</p>}
 		{!errorMessage && collections.length === 0 && (
-			<p class="empty">No published collections yet. Editors can publish collections from Admin.</p>
+			<p class="empty">No published collections yet. Check back after editors publish the first curated reading list.</p>
 		)}
 
 		{collections.length > 0 && (

@@ -173,6 +173,12 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
 		category: "completed"
 	},
 	{
+		title: "Guided first experience",
+		description: "Added contextual, dismissible first-time tips with per-user progress and Settings controls.",
+		status: "Completed",
+		category: "completed"
+	},
+	{
 		title: "Community discovery providers",
 		description: "Added explainable Home discovery sections powered by transparent community activity rather than black-box recommendations.",
 		status: "Completed",

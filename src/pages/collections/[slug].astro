@@ -80,7 +80,7 @@ const sectionLinks = collection?.books.length ? [
 						<p>{collection.books.length.toLocaleString()} book{collection.books.length === 1 ? "" : "s"}</p>
 					</div>
 					{collection.books.length === 0 ? (
-						<p class="empty">This collection does not have books yet.</p>
+						<p class="empty">This collection does not have books yet. Browse published collections or search for a book while editors finish it.</p>
 					) : (
 						<ol class="collection-book-list">
 							{collection.books.map((book, index) => {
