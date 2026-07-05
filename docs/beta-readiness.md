@@ -19,7 +19,7 @@
 
 ## Recommended Next Features
 1. Server-persisted onboarding checklist dismissal and completion UX.
-2. Reader-facing recommendation controls beyond Interesting and Hide recommendation, such as "save for later" or "show me less like this."
+2. Reader-facing recommendation controls beyond Interesting and Hide, such as "save for later" or "show me less like this."
 3. Notification quality pass for actionable events only.
 4. Additional launch telemetry around failed imports, abandoned sign-up, and first shelf save errors.
 

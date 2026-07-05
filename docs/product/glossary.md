@@ -2,7 +2,7 @@
 
 ## Activity
 
-A historical event tied to a reader and book. Implemented activity types include Want to Read, Currently Reading, Finished, and Rating.
+A historical event tied to a reader and book. Implemented activity types include Want to Read, Started Reading, Finished, and Rating. Routine reading progress updates are stored separately as progress events and do not create feed activity.
 
 ## Admin
 
@@ -11,6 +11,10 @@ A signed-in user whose username appears in `ADMIN_USERNAMES`. Admins can access 
 ## Annual Reading Goal
 
 A reader's target number of finished books for the current year. DogEared calculates progress from finished books with finished dates in that year.
+
+## Canonical Work
+
+The catalog identity DogEared uses to resolve and upsert books safely. Source and ISBN data may preserve edition-specific identity, while reader-facing discovery and recommendation lists also use a display-work grouping based on normalized title and author to avoid showing duplicate editions as separate recommendations.
 
 ## Author
 
@@ -110,7 +114,7 @@ A DogEared user with an account and, usually, a username/profile.
 
 ## Recommendation Feedback
 
-A private signal a signed-in reader gives on a recommended book. Current UI actions are Interesting and Hide recommendation. Hiding stores `not_interested` feedback and removes the book from future personal recommendation results.
+A private signal a signed-in reader gives on a recommended book. Current UI actions are Interesting and Hide. Hiding stores `not_interested` feedback and removes the book from future personal recommendation results.
 
 ## Recommended For You
 

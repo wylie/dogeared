@@ -820,22 +820,6 @@ export const POST: APIRoute = async ({ request }) => {
 				)
 			`;
 		}
-		const progressChanged = nextCurrentPage !== previousCurrentPage;
-		if (previousStatus === status && status === "reading" && progressChanged) {
-			await sql`
-				insert into user_activity (
-					user_id,
-					book_id,
-					event_type
-				)
-				values (
-					${userId}::uuid,
-					${bookId},
-					'reading'
-				)
-			`;
-		}
-
 		if (rating !== null && previousRating !== rating) {
 			await sql`
 				insert into user_activity (

@@ -13,12 +13,30 @@ export type ReadingGoalProgress = {
 	detailLabel: string;
 };
 
+export type ReadingGoalFinishedBook = {
+	finishedDate?: unknown;
+};
+
 export function parseAnnualReadingGoal(value: unknown) {
 	const text = String(value || "").replace(/,/g, "").trim();
 	if (!text) return 0;
 	const parsed = Number.parseInt(text, 10);
 	if (!Number.isFinite(parsed) || parsed <= 0) return 0;
 	return Math.min(10000, parsed);
+}
+
+export function readingGoalYear(now = new Date()) {
+	return now.getUTCFullYear();
+}
+
+export function isCompletedInReadingGoalYear(book: ReadingGoalFinishedBook, now = new Date()) {
+	const year = readingGoalYear(now);
+	const parsed = new Date(String(book.finishedDate || "").trim());
+	return Number.isFinite(parsed.getTime()) && parsed.getUTCFullYear() === year;
+}
+
+export function filterBooksCompletedForReadingGoal<T extends ReadingGoalFinishedBook>(books: T[], now = new Date()) {
+	return books.filter((book) => isCompletedInReadingGoalYear(book, now));
 }
 
 function daysInYear(year: number) {

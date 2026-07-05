@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
 	canonicalCatalogWorkKey,
+	canonicalCatalogDisplayWorkKey,
 	canonicalizeCatalogAuthor,
 	canonicalizeCatalogTitle,
+	dedupeCatalogItemsByDisplayWork,
 	getCatalogSourceKey,
 	getCatalogSourceKeys,
 	normalizeCatalogIsbn
@@ -29,6 +31,23 @@ test("canonicalCatalogWorkKey prefers ISBN identifiers over title and author", (
 		}),
 		"isbn10:0618346252"
 	);
+});
+
+test("display work keys and UI dedupe collapse duplicate editions", () => {
+	assert.equal(
+		canonicalCatalogDisplayWorkKey({
+			title: "Project Hail Mary (Kindle Edition)",
+			author: "Andy Weir"
+		}),
+		"title_author:project hail mary|andy weir"
+	);
+	const deduped = dedupeCatalogItemsByDisplayWork([
+		{ title: "Project Hail Mary", authors: ["Andy Weir"], shelfCount: 3, thumbnail: "" },
+		{ title: "Project Hail Mary: Deluxe Edition", authors: ["Andy Weir"], shelfCount: 12, thumbnail: "cover.jpg" },
+		{ title: "The Martian", authors: ["Andy Weir"], shelfCount: 8 }
+	]);
+	assert.equal(deduped.length, 2);
+	assert.equal(deduped[0]?.title, "Project Hail Mary: Deluxe Edition");
 });
 
 test("canonical title and author collapse common formatting differences", () => {

@@ -41,6 +41,9 @@ test("recommendation UI is wired into home, discover, and book detail", () => {
 	assert.match(home, /recommended-for-you-title/);
 	assert.match(home, /loadRecommendedForUser/);
 	assert.match(home, /data-action="recommendation-feedback"/);
+	assert.match(home, /data-feedback="interesting"[\s\S]+>Interesting<\/button>/);
+	assert.match(home, /button\[data-feedback="interesting"\]/);
+	assert.doesNotMatch(home, /👍 Interesting/);
 	assert.match(home, /Add another book/);
 	assert.match(discover, /title="Discover"/);
 	assert.match(discover, /Every recommendation explains why it appears/);

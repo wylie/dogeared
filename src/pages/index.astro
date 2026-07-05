@@ -242,6 +242,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 									publishedLabel={book.publishedDate ? formatPublishedLabel(book.publishedDate) : ""}
 									pageCount={book.pageCount}
 									averageRating={book.averageRating || viewerRating}
+									seriesLabel={book.seriesLabel}
 								>
 									<p slot="preTitle" class="discovery-reason">{book.recommendationReason}</p>
 									<div slot="meta">
@@ -268,7 +269,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 											'data-source-url': book.sourceUrl ?? ""
 										}} />
 										<div class="recommendation-feedback" aria-label={`Recommendation feedback for ${book.title}`}>
-											<button type="button" data-action="recommendation-feedback" data-feedback="interesting" data-book-id={String(numericBookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>👍 Interesting</button>
+											<button type="button" data-action="recommendation-feedback" data-feedback="interesting" data-book-id={String(numericBookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>Interesting</button>
 											<button type="button" data-action="recommendation-feedback" data-feedback="not_interested" data-book-id={String(numericBookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>Hide</button>
 										</div>
 									</div>
@@ -370,6 +371,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 										publishedLabel={book.publishedDate ? formatPublishedLabel(book.publishedDate) : ""}
 										pageCount={book.pageCount}
 										averageRating={displayAverageRating}
+										seriesLabel={book.seriesLabel}
 									>
 										{book.discoveryReason && (
 											<p slot="preTitle" class="discovery-reason">{book.discoveryReason}</p>
@@ -670,26 +672,36 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 	.recommendation-feedback {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.18rem;
-		margin-top: 0.2rem;
+		gap: 0.32rem;
+		margin-top: 0.28rem;
 		align-items: center;
 	}
 	.recommendation-feedback button {
-		border-radius: var(--radius-pill);
-		border: none;
-		background: transparent;
+		min-height: 32px;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border-soft);
+		background: var(--color-surface);
 		color: var(--color-text-muted);
-		padding: 0.08rem 0.28rem;
+		padding: 0.32rem 0.58rem;
 		font: inherit;
-		font-size: 0.74rem;
+		font-size: 0.78rem;
 		font-weight: 700;
 		line-height: 1.2;
 		text-decoration: none;
 		cursor: pointer;
 	}
+	.recommendation-feedback button[data-feedback="interesting"] {
+		border-color: rgba(175, 124, 39, 0.32);
+		background: rgba(255, 244, 214, 0.78);
+		color: #70501f;
+	}
+	.recommendation-feedback button[data-feedback="not_interested"] {
+		background: rgba(245, 244, 240, 0.88);
+		color: var(--color-text-muted);
+	}
 	.recommendation-feedback button:hover,
 	.recommendation-feedback button:focus-visible {
-		background: rgba(87, 117, 144, 0.1);
+		border-color: var(--color-border);
 		color: var(--color-nav-hover);
 	}
 	.recommendation-empty a:hover,

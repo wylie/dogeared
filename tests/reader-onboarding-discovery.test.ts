@@ -108,6 +108,8 @@ test("profile progress saves refresh all derived reading UI without reload", () 
 	assert.equal(source.includes('card.dataset.momentumProgressUpdates = String(persistedProgressUpdates > 0'), true);
 	assert.equal(apiSource.includes("progress_updates"), true);
 	assert.equal(apiSource.includes("progressUpdates"), true);
+	assert.equal(apiSource.includes("user_reading_progress_event"), true);
+	assert.equal(apiSource.includes("previousStatus === status && status === \"reading\""), false);
 });
 
 test("profile defaults to currently reading, recent activity, then other shelves", () => {

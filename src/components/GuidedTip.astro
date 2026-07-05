@@ -126,18 +126,6 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 				when: (stats) => stats.finishedBooks > 0 && stats.reviews === 0
 			},
 			{
-				id: "reviews-vs-journal",
-				pathPrefix: "/book",
-				anchor: "[data-guided-anchor='reviews'], .reviews-panel",
-				title: "Choose the right place",
-				description: "Use Reviews for public recommendations after finishing. Use Journal for private notes while reading.",
-				icon: "rate_review",
-				primaryLabel: "Review Section",
-				primaryHref: "#reviews",
-				placement: "above",
-				when: (stats) => stats.finishedBooks > 0
-			},
-			{
 				id: "settings-learning",
 				path: "/settings",
 				anchor: "#learning-settings",

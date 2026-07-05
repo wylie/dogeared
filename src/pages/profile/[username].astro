@@ -10,7 +10,7 @@ import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicS
 import { authorHref } from "../../lib/author";
 import { ensureCustomShelfSchema } from "../../lib/customShelves";
 import { daysSinceDate, resolveMomentumPrediction } from "../../lib/momentumPrediction";
-import { resolveReadingGoalProgress } from "../../lib/readingGoal";
+import { filterBooksCompletedForReadingGoal, readingGoalYear, resolveReadingGoalProgress } from "../../lib/readingGoal";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
 import { ensureReviewSchema } from "../../lib/bookReviews";
 
@@ -905,7 +905,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 
 function activityHeading(eventType: string) {
 	const type = String(eventType || "").trim().toLowerCase();
-	if (type === "reading") return { prefix: "Added to", shelf: "Currently Reading" };
+	if (type === "reading") return { prefix: "Started Reading", shelf: "" };
 	if (type === "finished") return { prefix: "Finished Reading", shelf: "" };
 	if (type === "want_to_read") return { prefix: "Added to", shelf: "Want to Read" };
 	if (type === "rating") return { prefix: "Rated this book", shelf: "" };
@@ -1099,12 +1099,8 @@ const pagedRecent = paginate(recentActivity, recentPage, PAGE_SIZE);
 const pagedReading = paginate(currentlyReading, readingPage, PAGE_SIZE);
 const pagedWantToRead = paginate(wantToReadBooks, wantToReadPage, PAGE_SIZE);
 const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
-const currentGoalYear = new Date().getFullYear();
-const booksCompletedThisYear = finishedBooks
-	.filter((book) => {
-		const parsed = new Date(String(book.finishedDate || "").trim());
-		return Number.isFinite(parsed.getTime()) && parsed.getUTCFullYear() === currentGoalYear;
-	})
+const currentGoalYear = readingGoalYear();
+const booksCompletedThisYear = filterBooksCompletedForReadingGoal(finishedBooks)
 	.sort((a, b) => finishedDateTimestamp(b.finishedDate) - finishedDateTimestamp(a.finishedDate));
 const readingGoal = resolveReadingGoalProgress({
 	goal: profile.readingGoal,

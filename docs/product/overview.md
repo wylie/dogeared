@@ -66,7 +66,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Guided first experience: signed-in readers see one contextual, dismissible tip at a time when it is relevant, starting on Home for fresh users and continuing through Search, book shelves, reading progress, reviews, Settings, and Journal moments.
 - Beta first-time path: new readers move from landing guidance to account creation, username setup, import or manual book search, first shelf save, progress update, recommendation feedback, first review, and return visits through Profile, Home, and Discover.
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
-- Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
+- Reading progress: update pages read for Currently Reading books, mark a book Read, and record private progress events for metrics without noisy feed posts.
 - Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, timeline history, milestones, and yearly summaries.
 - Private journaling: create, autosave, search, date-filter, book-filter, view, edit, and delete private journal entries from the Reading Journal page; create book-linked entries from a Currently Reading book page or after saving reading progress.
 - Reviews and ratings: finish a book through a rating plus optional public review flow, then edit or delete that review later.
@@ -92,7 +92,7 @@ DogEared supports first-class series metadata. A series can have a name, descrip
 
 When a book belongs to a series, the book page shows a dedicated Series section with the current book highlighted, ordered entries, completion state from the signed-in reader's shelves, and direct links to available books. If the signed-in reader has finished the current book and the next available book exists, DogEared shows a calm Continue the series callout with a one-click Add to Want to Read action unless the next book is already on a shelf.
 
-Author pages group books by series when metadata exists and keep standalone books in a separate section. Search results show series labels such as series name and book number for catalog matches.
+Author pages group books by series when metadata exists and keep standalone books in a separate section. Search results, discovery cards, recommendation cards, author cards, and book detail cards show concise series labels such as series name and book number when that metadata is available.
 
 ### Community Discovery
 
@@ -104,13 +104,13 @@ If DogEared does not have enough data for a provider, that provider is hidden. I
 
 DogEared supports explainable Recommendations & Discovery v1. Home shows Recommended For You above broader community sections. Signed-in recommendations use the reader's shelves, ratings, finished books, favorite genres, enjoyed authors, similar books, and community ratings. If personal data is limited, DogEared falls back to popular books and explains that adding, rating, and reviewing books improves recommendations.
 
-Recommendation cards always explain why a book appears, with reasons such as "Because you enjoyed..." or "Popular with Fantasy readers." Feedback controls are intentionally compact inline actions: readers can mark recommendations Interesting or Hide them without the controls competing with the book card. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal recommendations.
+Recommendation cards always explain why a book appears, with reasons such as "Because you enjoyed..." or "Popular with Fantasy readers." Feedback controls are small rectangular secondary buttons: Interesting uses a subtle amber treatment, Hide uses neutral gray, and Add To Shelf remains the primary green action. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal recommendations.
 
-The `/discover` page collects Recommended For You plus community sections such as Trending Up, New Releases Readers Love, Hidden Gems, Most Finished, and Community Favorites. Book detail pages include Readers Also Enjoyed, based on shared readers, genres, and authors. Recommendation feedback and future review sentiment are modeled as extension points, but the current system remains transparent and non-AI.
+The `/discover` page collects Recommended For You plus community sections such as Trending Up, New Releases Readers Love, Hidden Gems, Most Finished, and Community Favorites. Book detail pages include Readers Also Enjoyed, based on shared readers, genres, and authors. Recommendation and discovery lists collapse duplicate editions by display work where practical so readers normally see one logical book unless they intentionally browse editions. Recommendation feedback and future review sentiment are modeled as extension points, but the current system remains transparent and non-AI.
 
 ### Guided First Experience
 
-DogEared includes site-wide contextual first-time guidance for signed-in readers. Instead of a full-screen onboarding wizard, the application shows lightweight callouts near relevant interface areas across the first reader journey. Fresh users begin on Home, then guidance can appear for Search, book detail shelf controls, adding a first book, Currently Reading progress, the first progress update, Reading Journal, Reviews, and Settings.
+DogEared includes site-wide contextual first-time guidance for signed-in readers. Instead of a full-screen onboarding wizard, the application shows lightweight callouts near relevant interface areas across the first reader journey. Fresh users begin on Home, then guidance can appear for Search, book detail shelf controls, adding a first book, Currently Reading progress, the first progress update, Reading Journal, the first finished book review suggestion, and Settings.
 
 Tips are shown only when the reader's current route and state make them useful. DogEared shows at most one active tip, and each tip can be dismissed or completed. Progress is stored per user in Settings data so completed or dismissed tips do not reappear. Settings includes a Learning section with a Show helpful tips checkbox and Reset Guided Tour action.
 
@@ -148,7 +148,7 @@ DNF is referenced in roadmap and filtered from imported Goodreads genre tags, bu
 
 ### Reading Progress
 
-Currently Reading books can store total pages, current page, finished date after completion, and progress events. The profile progress control uses a compact grouped selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time plus value, Save, and complete actions; persisted progress remains page-based, with percentages converted when total pages are known. Forward page progress creates `user_reading_progress_event` rows. Read books can store finished date, rating, and public review metadata.
+Currently Reading books can store total pages, current page, finished date after completion, and progress events. The profile progress control uses a compact grouped selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time plus value, Save, and complete actions; persisted progress remains page-based, with percentages converted when total pages are known. Forward page progress creates `user_reading_progress_event` rows for streaks, Reading Life, and momentum, but it does not create another Recent Activity shelf event. Read books can store finished date, rating, and public review metadata.
 
 ### Momentum Score
 
@@ -160,7 +160,7 @@ Profiles and metrics calculate reading streaks from recent reading/progress date
 
 ### Reading Goal
 
-Profiles support an annual reading goal stored in profile data. The goal card shows completed books this year, percentage progress, remaining/beyond-goal count, and pace context.
+Profiles support an annual reading goal stored in profile data. Profile and My Reading Life use the same reading-goal helper to count finished books with finished dates in the current year, then show percentage progress, remaining/beyond-goal count, and pace context from that shared source.
 
 ### My Reading Life
 
@@ -192,7 +192,7 @@ Public reading challenges are roadmap/future work. No active challenge workflow 
 
 ### Recent Activity
 
-Activity is created for shelf changes, finished updates, progress updates, and rating events. Activity appears on profiles, following feeds, book pages, settings security summaries, and public activity APIs when privacy allows.
+Activity is created for meaningful public reading events: adding a book to Want to Read, starting a book, finishing a book, rating a book, and writing or updating a public review. Routine progress updates are stored as reading progress events for private metrics and do not create repeated "Started Reading" or "Added to Currently Reading" feed entries. Activity appears on profiles, following feeds, book pages, settings security summaries, and public activity APIs when privacy allows.
 
 ### Reviews
 

@@ -1,4 +1,6 @@
 import { toBook, type BrowseBook } from "./homeSections";
+import { dedupeCatalogItemsByDisplayWork } from "./catalog";
+import { ensureSeriesSchema } from "./series";
 
 export type RecommendationBook = BrowseBook & {
 	recommendationReason: string;
@@ -22,6 +24,7 @@ function firstSentence(value: string) {
 }
 
 export async function ensureRecommendationSchema(sql: any) {
+	await ensureSeriesSchema(sql);
 	await sql`
 		create table if not exists user_recommendation_feedback (
 			user_id uuid not null references app_user(id) on delete cascade,
@@ -79,6 +82,8 @@ export async function loadRecommendedForUser(sql: any, userId: string, limit = 8
 			matched_genre: string | null;
 			enjoyed_author: boolean | null;
 			seed_title: string | null;
+			series_name: string | null;
+			series_book_order: number | null;
 	}>>`
 			with viewer_books as (
 				select ub.book_id, ub.rating, ub.status, b.title, b.primary_author, b.author_id
@@ -129,6 +134,8 @@ export async function loadRecommendedForUser(sql: any, userId: string, limit = 8
 					coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 					round(avg(ub.rating)::numeric, 2) as average_rating,
 					count(*) filter (where ub.rating is not null)::int as rating_count,
+					series_info.series_name,
+					series_info.series_book_order,
 					(
 						select fg.genre_name
 						from favorite_genres fg
@@ -151,6 +158,16 @@ export async function loadRecommendedForUser(sql: any, userId: string, limit = 8
 					) as seed_title
 				from book b
 				left join user_book ub on ub.book_id = b.id
+				left join lateral (
+					select
+						s.name as series_name,
+						sb.book_order as series_book_order
+					from series_book sb
+					join series s on s.id = sb.series_id
+					where sb.book_id = b.id
+					order by sb.book_order nulls last, s.name asc
+					limit 1
+				) series_info on true
 				where not exists (
 					select 1 from viewer_books vb where vb.book_id = b.id
 				)
@@ -160,7 +177,7 @@ export async function loadRecommendedForUser(sql: any, userId: string, limit = 8
 							and rf.book_id = b.id
 							and rf.feedback = 'not_interested'
 					)
-				group by b.id
+				group by b.id, series_info.series_name, series_info.series_book_order
 			)
 			select *
 			from candidate_stats
@@ -182,12 +199,12 @@ export async function loadRecommendedForUser(sql: any, userId: string, limit = 8
 		title: "Recommended For You",
 		subtitle: "Explainable suggestions based on your shelves, ratings, finished books, favorite genres, and authors.",
 		emptyState: "The more books you add, rate, and review, the better your recommendations become.",
-		books: rows.map((row) => ({
+		books: dedupeCatalogItemsByDisplayWork(rows.map((row) => ({
 			...toBook(row),
 			recommendationReason: reasonFor(row),
 			recommendationSource: "personal" as const,
 			discoveryReason: reasonFor(row)
-		}))
+		})))
 	};
 }
 
@@ -209,6 +226,8 @@ export async function loadPopularFallbackRecommendations(sql: any, limit = 8): P
 		page_count: number;
 		average_rating: number | null;
 		rating_count: number;
+		series_name: string | null;
+		series_book_order: number | null;
 	}>>`
 		select
 			b.id as book_id,
@@ -225,10 +244,22 @@ export async function loadPopularFallbackRecommendations(sql: any, limit = 8): P
 			b.google_books_id,
 			coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 			round(avg(ub.rating)::numeric, 2) as average_rating,
-			count(*) filter (where ub.rating is not null)::int as rating_count
+			count(*) filter (where ub.rating is not null)::int as rating_count,
+			series_info.series_name,
+			series_info.series_book_order
 		from book b
 		join user_book ub on ub.book_id = b.id
-		group by b.id
+		left join lateral (
+			select
+				s.name as series_name,
+				sb.book_order as series_book_order
+			from series_book sb
+			join series s on s.id = sb.series_id
+			where sb.book_id = b.id
+			order by sb.book_order nulls last, s.name asc
+			limit 1
+		) series_info on true
+		group by b.id, series_info.series_name, series_info.series_book_order
 		order by count(distinct ub.user_id) desc, coalesce(avg(ub.rating), 0) desc, b.title asc
 		limit ${Math.max(1, Math.min(24, limit))}
 	`;
@@ -237,7 +268,7 @@ export async function loadPopularFallbackRecommendations(sql: any, limit = 8): P
 		title: "Recommended For You",
 		subtitle: "Start here while DogEared learns your taste. These books are popular with active readers.",
 		emptyState: "The more books you add, rate, and review, the better your recommendations become.",
-		books: rows.map((row) => {
+		books: dedupeCatalogItemsByDisplayWork(rows.map((row) => {
 			const reason = `${Number(row.shelf_count || 0).toLocaleString()} shelf entries from DogEared readers.`;
 			return {
 				...toBook(row),
@@ -245,7 +276,7 @@ export async function loadPopularFallbackRecommendations(sql: any, limit = 8): P
 				recommendationSource: "popular" as const,
 				discoveryReason: reason
 			};
-		})
+		}))
 	};
 }
 
@@ -273,6 +304,8 @@ export async function loadReadersAlsoEnjoyed(sql: any, bookId: number, userId = 
 		shared_readers: number;
 		shared_genre: string | null;
 		same_author: boolean;
+		series_name: string | null;
+		series_book_order: number | null;
 	}>>`
 		with source_book as (
 			select id, primary_author from book where id = ${id}
@@ -300,6 +333,8 @@ export async function loadReadersAlsoEnjoyed(sql: any, bookId: number, userId = 
 			round(avg(ub.rating)::numeric, 2) as average_rating,
 			count(*) filter (where ub.rating is not null)::int as rating_count,
 			count(distinct sr.user_id)::int as shared_readers,
+			series_info.series_name,
+			series_info.series_book_order,
 			(
 				select sg.genre_name
 				from source_genres sg
@@ -315,13 +350,23 @@ export async function loadReadersAlsoEnjoyed(sql: any, bookId: number, userId = 
 		from book b
 		left join user_book ub on ub.book_id = b.id
 		left join source_readers sr on sr.user_id = ub.user_id
+		left join lateral (
+			select
+				s.name as series_name,
+				sb.book_order as series_book_order
+			from series_book sb
+			join series s on s.id = sb.series_id
+			where sb.book_id = b.id
+			order by sb.book_order nulls last, s.name asc
+			limit 1
+		) series_info on true
 		where b.id <> ${id}
 			and not (${normalizedUserId} <> '' and exists (
 				select 1 from user_book viewer
 				where viewer.user_id = ${normalizedUserId || "00000000-0000-0000-0000-000000000000"}::uuid
 					and viewer.book_id = b.id
 			))
-		group by b.id
+		group by b.id, series_info.series_name, series_info.series_book_order
 		having count(distinct ub.user_id) > 0
 		order by
 			count(distinct sr.user_id) desc,
@@ -336,7 +381,7 @@ export async function loadReadersAlsoEnjoyed(sql: any, bookId: number, userId = 
 		title: "Readers Also Enjoyed",
 		subtitle: "Books connected through shared readers, genres, and authors.",
 		emptyState: "No related reader recommendations yet.",
-		books: rows.map((row) => {
+		books: dedupeCatalogItemsByDisplayWork(rows.map((row) => {
 			const reason = Number(row.shared_readers || 0) > 0
 				? `${Number(row.shared_readers || 0).toLocaleString()} reader${Number(row.shared_readers || 0) === 1 ? "" : "s"} also shelved this.`
 				: (row.same_author ? "Same author as this book." : (row.shared_genre ? `Shares ${row.shared_genre} with this book.` : "Popular with DogEared readers."));
@@ -346,6 +391,6 @@ export async function loadReadersAlsoEnjoyed(sql: any, bookId: number, userId = 
 				recommendationSource: "similar" as const,
 				discoveryReason: reason
 			};
-		})
+		}))
 	};
 }

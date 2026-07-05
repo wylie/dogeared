@@ -1,4 +1,4 @@
-import { resolveReadingGoalProgress, type ReadingGoalProgress } from "./readingGoal.ts";
+import { filterBooksCompletedForReadingGoal, resolveReadingGoalProgress, type ReadingGoalProgress } from "./readingGoal.ts";
 
 export type ReadingLifeGenre = {
 	slug: string;
@@ -444,7 +444,7 @@ export function buildReadingLifeSummary(input: {
 	const now = input.now && Number.isFinite(input.now.getTime()) ? input.now : new Date();
 	const year = now.getUTCFullYear();
 	const timeline = buildReadingTimeline(input.finishedBooks);
-	const thisYearBooks = timeline.filter((book) => book.year === year);
+	const thisYearBooks = filterBooksCompletedForReadingGoal(timeline, now);
 	const pagesReadThisYear = thisYearBooks.reduce((sum, book) => sum + Math.max(0, Math.round(toNumber(book.pageCount))), 0);
 	const ratings = input.finishedBooks.map((book) => clampRating(book.rating)).filter((rating) => rating > 0);
 	const genreInsights = buildGenreInsights(input.finishedBooks);

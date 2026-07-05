@@ -100,7 +100,7 @@ function formatActivityDate(value: string) {
 
 function activityHeading(eventType: string) {
 	const type = normalizeText(eventType).toLowerCase();
-	if (type === "reading") return { prefix: "Added to", shelf: "Currently Reading" };
+	if (type === "reading") return { prefix: "Started Reading", shelf: "" };
 	if (type === "finished") return { prefix: "Finished Reading", shelf: "" };
 	if (type === "want_to_read") return { prefix: "Added to", shelf: "Want to Read" };
 	if (type === "rating") return { prefix: "Rated this book", shelf: "" };
@@ -823,6 +823,7 @@ const bookStructuredDataPayload = bookStructuredData
 							publishedLabel={book.publishedLabel}
 							pageCount={book.pageCount}
 							averageRating={book.averageRating}
+							seriesLabel={seriesContext?.currentBook ? `${seriesContext.series.name}${seriesContext.currentBook.bookOrder > 0 ? ` · Book ${seriesContext.currentBook.bookOrder}` : ""}` : ""}
 						>
 							<div slot="meta">
 								{book.ratingCount > 0 && (
@@ -1072,6 +1073,7 @@ const bookStructuredDataPayload = bookStructuredData
 										publishedLabel={recommendation.publishedDate ? formatPublishedLabel(recommendation.publishedDate) : ""}
 										pageCount={recommendation.pageCount}
 										averageRating={recommendation.averageRating}
+										seriesLabel={recommendation.seriesLabel}
 									>
 										<p slot="preTitle" class="recommendation-reason">{recommendation.recommendationReason}</p>
 										<div slot="actions">
@@ -1095,7 +1097,7 @@ const bookStructuredDataPayload = bookStructuredData
 					</section>
 				)}
 
-				<section class="panel reviews-panel" id="reviews" data-guided-anchor="reviews">
+				<section class="panel reviews-panel" id="reviews">
 					<div class="reviews-heading">
 						<div>
 							<h2>Reviews</h2>

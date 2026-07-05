@@ -93,7 +93,7 @@ Status: Complete
 
 Home shows personalized, explainable recommendations. Signed-in recommendations use saved shelves, ratings, completed books, favorite genres, enjoyed authors, similar-book genre overlap, and community ratings. If DogEared has limited personal data, the section falls back to popular books.
 
-Every recommendation includes a visible reason. Readers can mark recommendations Interesting or Hide them through compact inline feedback actions. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal results.
+Every recommendation includes a visible reason. Readers can mark recommendations Interesting or Hide them through small rectangular secondary buttons; Interesting uses a subtle amber treatment, Hide uses neutral gray, and Add To Shelf remains the primary green action. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal results.
 
 Limitations: Review sentiment is future-ready but not currently scored. Recommendations are transparent heuristics, not an AI engine.
 
@@ -125,7 +125,7 @@ Limitations: If a book is not in DogEared, the page may resolve from Google Book
 
 Status: Complete
 
-DogEared stores first-class series records with name, optional description, optional cover, total-book count, ordered book entries, publication order, chronological order, and extensible metadata. Book pages show a Series section with the current book highlighted, reader completion state, missing-title placeholders, and links to available books. Finished readers see a Continue the series callout for the next available book, including one-click Add to Want to Read when it is not already shelved.
+DogEared stores first-class series records with name, optional description, optional cover, total-book count, ordered book entries, publication order, chronological order, and extensible metadata. Book pages show a Series section with the current book highlighted, reader completion state, missing-title placeholders, and links to available books. Finished readers see a Continue the series callout for the next available book, including one-click Add to Want to Read when it is not already shelved. Search results, discovery cards, recommendation cards, author cards, and book detail cards display concise series labels where metadata exists.
 
 Limitations: Series metadata must exist in DogEared; the app does not currently auto-import or infer series membership from external catalogs.
 
@@ -209,7 +209,7 @@ Limitations: DNF imports map to Want to Read unless a different implemented stat
 
 Status: Complete
 
-Currently Reading books can store total pages and current page. The profile update control uses a compact grouped selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time so the interaction matches journal reading positions without overflowing book cards. Forward progress creates reading progress events and activity.
+Currently Reading books can store total pages and current page. The profile update control uses a compact grouped selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time so the interaction matches journal reading positions without overflowing book cards. Forward progress creates reading progress events for metrics and streaks, but it does not create repeated Recent Activity shelf events.
 
 Limitations: Persisted progress tracking remains page-based. Percentage updates are converted to pages when total pages are known; chapter, location, and audiobook inputs remain lightweight entry aids rather than a full alternate progress model.
 
@@ -267,7 +267,7 @@ Limitations: Streak calculation depends on recorded updates and visible shelf st
 
 Status: Complete
 
-Readers can set an annual goal in profile data and see completed count, progress bar, percentage, remaining/beyond-goal count, and pace label.
+Readers can set an annual goal in profile data and see completed count, progress bar, percentage, remaining/beyond-goal count, and pace label. Profile and My Reading Life derive annual goal progress from the same helper, counting books with finished dates in the current year.
 
 Limitations: Goal input is stored as profile text, with numeric parsing applied in the reading goal helper.
 
@@ -309,7 +309,7 @@ Limitations: No challenge join, tracking, or challenge page workflow is currentl
 
 Status: Complete
 
-DogEared records shelf additions, finished updates, progress updates, and ratings as activity. Activity appears on profiles, book pages, following feed, and settings security summaries.
+DogEared records meaningful public reading events as activity: adding to Want to Read, starting a book, finishing a book, rating a book, and writing or updating a public review. Routine page, percentage, chapter, audiobook time, or location updates are stored as reading progress events and do not create repeated feed entries. Activity appears on profiles, book pages, following feed, and settings security summaries.
 
 Limitations: Activity visibility is controlled by profile privacy and activity sharing.
 
@@ -375,7 +375,7 @@ Limitations: Section quality depends on catalog, shelf, rating, review, and acti
 
 Status: Complete
 
-Signed-in readers can receive contextual first-time tips instead of a traditional onboarding wizard. Tips are lightweight callouts that point at relevant areas, include a title, explanation, optional icon, primary action, and dismiss control, and are keyboard accessible. Fresh-user guidance starts on Home. The current tip set covers Home, Search, book detail shelf controls, first book added, Currently Reading progress, first progress update, Reading Journal privacy, first finished book, Reviews versus private Journal Entries, and Settings Learning controls.
+Signed-in readers can receive contextual first-time tips instead of a traditional onboarding wizard. Tips are lightweight callouts that point at relevant areas, include a title, explanation, optional icon, primary action, and dismiss control, and are keyboard accessible. Fresh-user guidance starts on Home. The current tip set covers Home, Search, book detail shelf controls, first book added, Currently Reading progress, first progress update, Reading Journal privacy, first finished book review guidance, and Settings Learning controls.
 
 DogEared chooses tips from transparent reader state: shelf count, Currently Reading count, finished books, reviews, progress updates, and journal entries. Only one tip appears at a time. Completed or dismissed tips are stored per user and do not reappear. Settings includes Learning controls to turn helpful tips on or off and reset the guided tour.
 

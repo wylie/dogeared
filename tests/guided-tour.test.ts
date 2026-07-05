@@ -86,7 +86,8 @@ test("guided tour anchors are present on primary surfaces", () => {
 	assert.equal(readFileSync("src/pages/index.astro", "utf8").includes('data-guided-anchor="home-intro"'), true);
 	assert.equal(readFileSync("src/pages/search.astro", "utf8").includes('data-guided-anchor="search-page"'), true);
 	assert.equal(readFileSync("src/pages/journal.astro", "utf8").includes('data-guided-anchor="journal-entry-form"'), true);
-	assert.equal(readFileSync("src/pages/book.astro", "utf8").includes('data-guided-anchor="reviews"'), true);
+	assert.equal(readFileSync("src/pages/book.astro", "utf8").includes('data-guided-anchor="reviews"'), false);
+	assert.equal(readFileSync("src/components/GuidedTip.astro", "utf8").includes("Choose the right place"), false);
 });
 
 test("fresh-user home guidance is mounted and starts from Home", () => {

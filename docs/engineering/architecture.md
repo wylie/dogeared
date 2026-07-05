@@ -60,9 +60,9 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 1. A page renders from Astro on the server.
 2. Server code resolves session state when needed.
 3. Pages query Neon directly or through library helpers.
-4. Catalog pages enrich books with optional series and editorial collection metadata when available.
+4. Catalog pages enrich books with optional series and editorial collection metadata when available. Reader-facing recommendation/discovery lists dedupe by display work so ISBN-specific editions do not normally appear as duplicate books.
 5. Editorial collection pages load published collection records and ordered collection-book entries with notes, quotes, ratings, and shelf state.
-6. My Reading Life derives private personal summaries from shelf entries, finished dates, ratings, progress events, genres, authors, series, and profile goal data, including timeline and calendar history.
+6. My Reading Life derives private personal summaries from shelf entries, finished dates, ratings, progress events, genres, authors, series, and profile goal data, including timeline and calendar history. Annual reading goal progress uses the same `readingGoal` helper as Profile.
 7. Reading Journal loads private entries for the signed-in reader, supports optional book-linked entries for owned books, saves through an authenticated API, and searches/filters only that reader's entries.
 8. Home discovery loads cached aggregate community signals, ranks them through reusable providers, and renders explainable sections.
 9. Guided first-experience tips load per-user progress from Settings data, evaluate the current route and reader state, and render at most one contextual callout.
@@ -72,7 +72,7 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 
 ## Series Support
 
-Series support lives in `src/lib/series`. The helper owns schema readiness, series-book ordering, current-book detection, next-book continuation logic, and author-page grouping. Book detail pages load a series context when a book belongs to a series. Search attaches series labels to catalog results, and author pages group books by series while keeping standalone books separate.
+Series support lives in `src/lib/series`. The helper owns schema readiness, series-book ordering, current-book detection, next-book continuation logic, and author-page grouping. Book detail pages load a series context when a book belongs to a series. Search attaches series labels to catalog results, BookCard can render concise series labels, recommendation/discovery queries attach series metadata where available, and author pages group books by series while keeping standalone books separate.
 
 ## Editorial Collections
 
@@ -92,9 +92,9 @@ Home discovery is provider-based. The discovery service runs pure ranking provid
 
 ## Recommendations
 
-Recommendations live in `src/lib/recommendations`. The service builds explainable personal recommendations from shelf entries, ratings, finished books, genre overlap, enjoyed authors, similar books, and aggregate community ratings. It falls back to popular books when personalization data is thin. It also powers book detail Readers Also Enjoyed through shared readers, genres, and authors.
+Recommendations live in `src/lib/recommendations`. The service builds explainable personal recommendations from shelf entries, ratings, finished books, genre overlap, enjoyed authors, similar books, and aggregate community ratings. It falls back to popular books when personalization data is thin. It also powers book detail Readers Also Enjoyed through shared readers, genres, and authors. Recommendation rows attach series labels and collapse display-level duplicate editions through `dedupeCatalogItemsByDisplayWork`.
 
-Recommendation feedback is stored through `/api/recommendations/feedback`; the Hide recommendation action stores `not_interested` feedback, which is excluded from future personal results. User-specific recommendations are recomputed on request so feedback takes effect without waiting for a shared cache.
+Recommendation feedback is stored through `/api/recommendations/feedback`; the Hide recommendation action stores `not_interested` feedback, which is excluded from future personal results. User-specific recommendations are recomputed on request so feedback takes effect without waiting for a shared cache. The UI renders feedback as lightweight rectangular secondary actions, leaving Add To Shelf as the primary action.
 
 Current providers:
 
@@ -110,7 +110,7 @@ Current providers:
 
 Guided first-experience logic lives in `src/lib/guidedTour`, `src/components/GuidedTip.astro`, and `/api/guidance/status`. The helper defines canonical tip IDs, normalizes settings, deduplicates completed/dismissed tips, and derives the signed-in reader state used by contextual rules. The component owns the site-wide tip catalog, route/state conditions, accessible callout rendering, placement, and primary/dismiss actions.
 
-Current guided surfaces are Home, Search, book detail shelf controls, first book added, Profile/Currently Reading progress, post-progress Journal suggestion, Reading Journal, Reviews, and Settings Learning controls. Journal-specific tips are constrained to the Journal route or post-progress context so the first experience remains about learning DogEared as a whole.
+Current guided surfaces are Home, Search, book detail shelf controls, first book added, Profile/Currently Reading progress, post-progress Journal suggestion, Reading Journal, first finished book review guidance, and Settings Learning controls. Journal-specific tips are constrained to the Journal route or post-progress context so the first experience remains about learning DogEared as a whole. Orphaned review-vs-journal tooltips are intentionally not mounted on Book Detail.
 
 To add a tip, add a canonical ID in `src/lib/guidedTour.ts`, add the tip definition in `GuidedTip.astro`, and include tests for the new ID and trigger rule. The API stores progress under `app_user.profile_data.settings.guidedTour`, so adding a tip does not require a new table.
 

@@ -10,8 +10,10 @@ import {
 
 export {
 	canonicalCatalogWorkKey,
+	canonicalCatalogDisplayWorkKey,
 	canonicalizeCatalogAuthor,
 	canonicalizeCatalogTitle,
+	dedupeCatalogItemsByDisplayWork,
 	getCatalogSourceKey,
 	getCatalogSourceKeys,
 	normalizeCatalogIsbn,

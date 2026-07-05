@@ -12,7 +12,6 @@ export const GUIDED_TIP_IDS = [
 	"first-progress-update",
 	"reading-journal-private",
 	"first-finished-book",
-	"reviews-vs-journal",
 	"settings-learning"
 ] as const;
 

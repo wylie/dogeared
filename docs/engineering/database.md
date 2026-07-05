@@ -56,7 +56,7 @@ Entity: `book`
 
 Stores local catalog records:
 
-- Canonical work key.
+- Canonical work key, which may be source/ISBN-specific for lookup and upsert safety.
 - Title and primary author text.
 - Optional `author_id`.
 - ISBN-13, ISBN-10, Google Books ID.
@@ -67,6 +67,8 @@ Relationships:
 
 - May reference `author`.
 - Has zero or more source records, genres, topic tags, collection entries, shelf entries, reading journal entries, activity rows, and progress events.
+
+Reader-facing lists use a display-work helper based on normalized title and author to collapse duplicate editions where practical. This keeps source/ISBN-specific catalog lookup intact while preventing duplicate editions from crowding recommendations, discovery, author, and related book surfaces.
 
 ## Authors
 
@@ -291,6 +293,15 @@ Stores reader-book events:
 - Event type: `want_to_read`, `reading`, `finished`, or `rating`.
 - Optional rating.
 - Created timestamp.
+
+Event semantics:
+
+- `want_to_read`: reader added the book to Want to Read.
+- `reading`: reader started the book by moving it to Currently Reading.
+- `finished`: reader marked the book Read or updated finished-book review metadata.
+- `rating`: reader changed the public star rating.
+
+Routine reading progress updates are not stored as `user_activity` rows. They are stored in `user_reading_progress_event` so Reading Life, streaks, momentum, and guided first-experience state can use progress data without creating repeated feed items.
 
 Relationships:
 

@@ -330,6 +330,7 @@ const authorStructuredData = displayName
 										publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
 										pageCount={book.pageCount}
 										averageRating={book.averageRating}
+										seriesLabel={book.seriesName ? `${book.seriesName}${book.bookOrder > 0 ? ` · Book ${book.bookOrder}` : ""}` : ""}
 										genres={book.genres}
 									>
 										<div slot="preTitle">

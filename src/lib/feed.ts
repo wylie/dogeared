@@ -72,7 +72,7 @@ export type FollowingReader = PublicReaderSuggestion & {
 
 export function activityHeading(eventType: string) {
 	const type = normalizeText(eventType).toLowerCase();
-	if (type === "reading") return { prefix: "Added to", shelf: "Currently Reading" };
+	if (type === "reading") return { prefix: "Started Reading", shelf: "" };
 	if (type === "finished") return { prefix: "Finished Reading", shelf: "" };
 	if (type === "want_to_read") return { prefix: "Added to", shelf: "Want to Read" };
 	return { prefix: "Added to", shelf: "Shelf" };

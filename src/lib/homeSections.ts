@@ -1,9 +1,11 @@
 import { authorHref } from "./author";
+import { dedupeCatalogItemsByDisplayWork } from "./catalog";
 import {
 	createDiscoveryService,
 	type CommunityDiscoverySignal
 } from "./discoveryProviders";
 import { getNeonSql } from "./neon";
+import { ensureSeriesSchema } from "./series";
 import { withRuntimeCache } from "./runtimeCache";
 
 export type BrowseBook = {
@@ -29,6 +31,9 @@ export type BrowseBook = {
 	reviewerName?: string;
 	reviewerHref?: string;
 	reviewRating?: number;
+	seriesName?: string;
+	seriesBookOrder?: number;
+	seriesLabel?: string;
 	source: "google_books" | "open_library" | "nyt";
 	sourceWorkId?: string;
 	sourceEditionId?: string;
@@ -102,10 +107,14 @@ export function toBook(row: {
 	source_work_id?: string | null;
 	source_edition_id?: string | null;
 	source_url?: string | null;
+	series_name?: string | null;
+	series_book_order?: number | null;
 }): BrowseBook {
 	const author = String(row.primary_author || "").trim();
 	const source = row.source || (row.google_books_id ? "google_books" : "open_library");
 	const googleBooksId = String(row.google_books_id || "").trim();
+	const seriesName = String(row.series_name || "").trim();
+	const seriesBookOrder = Math.max(0, Number(row.series_book_order || 0) || 0);
 	return {
 		id: `book_${row.book_id}`,
 		title: String(row.title || "").trim(),
@@ -123,6 +132,9 @@ export function toBook(row: {
 		isbn13: String(row.isbn13 || "").trim(),
 		averageRating: Number(row.average_rating || 0),
 		ratingCount: Number(row.rating_count || 0),
+		seriesName,
+		seriesBookOrder,
+		seriesLabel: seriesName ? `${seriesName}${seriesBookOrder > 0 ? ` · Book ${seriesBookOrder}` : ""}` : "",
 		source,
 		sourceWorkId: String(row.source_work_id || googleBooksId || "").trim(),
 		sourceEditionId: String(row.source_edition_id || "").trim(),
@@ -150,6 +162,7 @@ function ensureDiscoverySupportSchema() {
 		discoverySupportSchemaReady = Promise.all([
 			sql`alter table user_book add column if not exists rating int`,
 			sql`alter table user_book add column if not exists finished_reflection text not null default ''`,
+			ensureSeriesSchema(sql),
 			sql`
 				create table if not exists user_activity_like (
 					activity_id bigint not null references user_activity(id) on delete cascade,
@@ -220,6 +233,8 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 		source_work_id: string | null;
 		source_edition_id: string | null;
 		source_url: string | null;
+		series_name: string | null;
+		series_book_order: number | null;
 	}>>`
 		with shelf_stats as (
 			select
@@ -333,7 +348,9 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 			bs.source,
 			bs.source_work_id,
 			bs.source_edition_id,
-			bs.source_url
+			bs.source_url,
+			series_info.series_name,
+			series_info.series_book_order
 		from book b
 		join shelf_stats ss on ss.book_id = b.id
 		left join activity_stats ast on ast.book_id = b.id
@@ -389,6 +406,16 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 				id asc
 			limit 1
 		) bs on true
+		left join lateral (
+			select
+				s.name as series_name,
+				sb.book_order as series_book_order
+			from series_book sb
+			join series s on s.id = sb.series_id
+			where sb.book_id = b.id
+			order by sb.book_order nulls last, s.name asc
+			limit 1
+		) series_info on true
 		where coalesce(ss.shelf_count, 0) > 0
 		order by greatest(
 			coalesce(ast.current_activity_14d, 0),
@@ -445,7 +472,7 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 			subtitle: section.description,
 			priority: section.priority,
 			emptyState: section.emptyState,
-			books: section.books
+			books: dedupeCatalogItemsByDisplayWork(section.books
 				.map((result) => {
 					const row = rowsByBookId.get(result.bookId);
 					if (!row) return null;
@@ -459,7 +486,7 @@ async function loadPublicHomeSections(reporter?: TimingReporter): Promise<Browse
 						reviewRating: result.reviewRating
 					};
 				})
-				.filter((book): book is BrowseBook => !!book)
+				.filter((book): book is BrowseBook => !!book))
 		}))
 		.filter((section) => section.books.length > 0);
 	if (sections.length === 0) return resolveFallbackHomeSections(reporter);
@@ -484,6 +511,8 @@ async function resolveFallbackHomeSections(reporter?: TimingReporter): Promise<B
 		page_count: number;
 		average_rating: number | null;
 		rating_count: number;
+		series_name: string | null;
+		series_book_order: number | null;
 	}>>`
 		select
 			b.id as book_id,
@@ -500,7 +529,9 @@ async function resolveFallbackHomeSections(reporter?: TimingReporter): Promise<B
 			b.google_books_id,
 			coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 			coalesce(ra.average_rating, 0) as average_rating,
-			coalesce(ra.rating_count, 0)::int as rating_count
+			coalesce(ra.rating_count, 0)::int as rating_count,
+			series_info.series_name,
+			series_info.series_book_order
 		from book b
 		left join lateral (
 			select count(*)::int as shelf_count
@@ -514,6 +545,16 @@ async function resolveFallbackHomeSections(reporter?: TimingReporter): Promise<B
 			from user_book ub
 			where ub.book_id = b.id
 		) ra on true
+		left join lateral (
+			select
+				s.name as series_name,
+				sb.book_order as series_book_order
+			from series_book sb
+			join series s on s.id = sb.series_id
+			where sb.book_id = b.id
+			order by sb.book_order nulls last, s.name asc
+			limit 1
+		) series_info on true
 		where coalesce(sc.shelf_count, 0) > 0
 		order by coalesce(sc.shelf_count, 0) desc, coalesce(ra.average_rating, 0) desc
 		limit 16
@@ -525,16 +566,16 @@ async function resolveFallbackHomeSections(reporter?: TimingReporter): Promise<B
 		title: "Popular With Readers",
 		subtitle: "Start here while DogEared learns your taste. These books are popular with active readers.",
 		priority: 999,
-		books: fallbackRows.map((row) => ({
+		books: dedupeCatalogItemsByDisplayWork(fallbackRows.map((row) => ({
 			...toBook(row),
 			discoveryReason: `${Number(row.shelf_count || 0).toLocaleString()} shelf entries from DogEared readers.`
-		}))
+		})))
 	}];
 }
 
 export async function resolvePublicHomeSections(options: { onTiming?: TimingReporter } = {}) {
 	return timed("provider:public-home-sections", options.onTiming, () => withRuntimeCache(
-		"home:public-sections:v3",
+		"home:public-sections:v4",
 		HOME_RECOMMENDATION_CACHE_MS,
 		() => loadPublicHomeSections(options.onTiming)
 	));

@@ -13,6 +13,7 @@ type Props = {
 	publishedLabel?: string;
 	pageCount?: number;
 	averageRating?: number;
+	seriesLabel?: string;
 	genres?: string[];
 	topics?: string[];
 	showCommunityStats?: boolean;
@@ -31,6 +32,7 @@ const {
 	publishedLabel = "",
 	pageCount = 0,
 	averageRating = 0,
+	seriesLabel = "",
 	genres = [],
 	topics = [],
 	showCommunityStats = true,
@@ -45,6 +47,7 @@ const normalizedReaders = Number(readers);
 const normalizedShelves = Number(shelfEntries);
 const normalizedPages = Number(pageCount);
 const normalizedRating = Math.max(0, Math.min(5, Number(averageRating) || 0));
+const normalizedSeriesLabel = String(seriesLabel || "").trim();
 const normalizedThumbnail = normalizeBookCoverUrl(thumbnail);
 const displayThumbnail = displayBookCoverUrl(normalizedThumbnail);
 const normalizedGenres = Array.from(new Set((Array.isArray(genres) ? genres : []).map((genre) => String(genre || "").trim()).filter(Boolean))).slice(0, 4);
@@ -99,6 +102,9 @@ function renderAverageStars(value: number) {
 					? <a class="author-link" href={authorHref}>{author}</a>
 					: author}
 			</p>
+		)}
+		{normalizedSeriesLabel && (
+			<p class="meta series-meta">{normalizedSeriesLabel}</p>
 		)}
 		{showCommunityStats && <p class="meta">Readers: {Number.isFinite(normalizedReaders) && normalizedReaders >= 0 ? normalizedReaders.toLocaleString() : "—"} · Shelf entries: {Number.isFinite(normalizedShelves) && normalizedShelves >= 0 ? normalizedShelves.toLocaleString() : "—"}</p>}
 		{String(publishedLabel || "").trim() && (
@@ -292,6 +298,10 @@ function renderAverageStars(value: number) {
 	}
 	:global(.book-card .meta + .meta) {
 		margin-top: 0.1rem;
+	}
+	.series-meta {
+		color: var(--color-nav);
+		font-weight: 720;
 	}
 	.meta :global(a.author-link) {
 		display: inline-flex;

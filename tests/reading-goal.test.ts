@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parseAnnualReadingGoal, resolveReadingGoalProgress } from "../src/lib/readingGoal.ts";
+import {
+	filterBooksCompletedForReadingGoal,
+	parseAnnualReadingGoal,
+	readingGoalYear,
+	resolveReadingGoalProgress
+} from "../src/lib/readingGoal.ts";
 
 test("parseAnnualReadingGoal accepts positive numeric goals", () => {
 	assert.equal(parseAnnualReadingGoal("100"), 100);
@@ -43,6 +48,18 @@ test("resolveReadingGoalProgress handles achieved and unset goals", () => {
 	assert.equal(unset.detailLabel, "3 books finished this year");
 });
 
+test("reading goal completion helper uses finished dates as the shared annual source", () => {
+	const now = new Date("2026-07-05T12:00:00Z");
+	const completed = filterBooksCompletedForReadingGoal([
+		{ title: "Finished", finishedDate: "2026-01-10" },
+		{ title: "No date", finishedDate: "" },
+		{ title: "Prior year", finishedDate: "2025-12-31" }
+	], now);
+	assert.equal(readingGoalYear(now), 2026);
+	assert.equal(completed.length, 1);
+	assert.equal((completed[0] as any).title, "Finished");
+});
+
 test("profile page renders reading goal between profile card and shelf summary", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	const aboutIndex = source.indexOf('<section id="about" class="profile-card">');
@@ -53,6 +70,7 @@ test("profile page renders reading goal between profile card and shelf summary",
 	assert.ok(summaryIndex > goalIndex);
 	assert.equal(source.includes("<strong>Reading goal:</strong>"), false);
 	assert.equal(source.includes("booksCompletedThisYear"), true);
+	assert.equal(source.includes("filterBooksCompletedForReadingGoal"), true);
 	assert.equal(source.includes("resolveReadingGoalProgress"), true);
 	assert.equal(source.includes('aria-label="Reading goal progress"'), true);
 });

@@ -216,10 +216,10 @@ if (session?.userId) {
 					publishedLabel={publishedYearOnly(result.publishedDate)}
 					pageCount={result.pageCount || 0}
 					averageRating={averageRating}
+					seriesLabel={result.seriesLabel}
 					genres={result.categories}
 				>
 						<div slot="meta">
-							{result.seriesLabel && <p class="meta series-meta">{result.seriesLabel}</p>}
 							{result.publisher && <p class="meta">Publisher: {result.publisher}</p>}
 							{Number(result.bookId || 0) > 0 && viewerStatusByBookId.get(Number(result.bookId || 0)) === "finished" && (
 								<RatingControl
