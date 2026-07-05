@@ -29,7 +29,7 @@ const sectionLinks = [
 <Layout title="Settings" sectionLinks={sectionLinks} robots="noindex,nofollow">
 	<div slot="right" class="settings-page">
 		<h1>Settings</h1>
-		<p class="subhead">Manage imports and account preferences.</p>
+		<p class="subhead">Manage account setup, privacy, imports, and preferences.</p>
 
 		<section class="settings-section" id="profile-settings" aria-labelledby="profile-settings-title">
 			<h2 id="profile-settings-title">Profile</h2>
@@ -79,12 +79,12 @@ const sectionLinks = [
 		<section class="settings-section" id="goodreads-import" aria-labelledby="goodreads-import-title">
 			<h2 id="goodreads-import-title">Import Goodreads Data</h2>
 			<p class="section-copy">
-				Upload your Goodreads library export CSV to import shelves into DogEared.
+				Upload your Goodreads library export CSV to bring your existing shelves into DogEared. If you are starting fresh, you can skip import and add books from Search.
 			</p>
 			<ol class="steps">
 				<li>In Goodreads, go to My Books and export your library as CSV.</li>
 				<li>Upload that CSV file here.</li>
-				<li>Review the import summary and open your <a href="/settings#auth-settings">Profile</a>.</li>
+				<li>Review the import summary, then open your <a href="/profile">Profile</a> to see your shelves.</li>
 			</ol>
 
 			<form id="goodreads-import-form" class="import-form">
@@ -1477,7 +1477,7 @@ const sectionLinks = [
 		}
 		const mode = importModeSelect instanceof HTMLSelectElement && importModeSelect.value === "replace" ? "replace" : "merge";
 		const dryRunFirst = importDryRunFirst instanceof HTMLInputElement ? importDryRunFirst.checked : false;
-		showFeedback("Importing Goodreads data...");
+			showFeedback(dryRunFirst ? "Checking your Goodreads CSV before importing..." : "Importing Goodreads data...");
 		try {
 			if (dryRunFirst) {
 				const preview = await importGoodreadsCsv(file, { mode, dryRun: true });
@@ -1494,7 +1494,7 @@ const sectionLinks = [
 				});
 				const proceed = window.confirm(`Preview found ${preview.totalPreview} importable books. Continue with ${mode === "replace" ? "replace" : "merge"} import?`);
 				if (!proceed) {
-					showFeedback("Import canceled after preview.");
+					showFeedback("Import canceled. Your shelves were not changed.");
 					return;
 				}
 			}
@@ -1505,18 +1505,18 @@ const sectionLinks = [
 				`${result.skipped} skipped`
 			];
 			if (result.localCache === "failed") {
-				showFeedback(`Import complete (${statusParts.join(", ")}), but browser storage is full. Data was synced to server; reload Profile to confirm.`, true);
+				showFeedback(`Import complete (${statusParts.join(", ")}), but browser storage is full. Your books were synced to DogEared; open Profile to confirm.`, true);
 			} else if (result.localCache === "trimmed") {
-				showFeedback(`Import complete (${statusParts.join(", ")}). Local cache was trimmed due to browser storage limits.`);
+				showFeedback(`Import complete (${statusParts.join(", ")}). Open Profile to review your imported shelves.`);
 			} else if (result.syncFailed > 0) {
-				showFeedback(`Import complete (${statusParts.join(", ")}), but ${result.syncFailed} items failed to sync to server.`, true);
+				showFeedback(`Import mostly completed (${statusParts.join(", ")}), but ${result.syncFailed} books could not sync. Try importing again in merge mode.`, true);
 			} else {
-				showFeedback(`Import complete: ${statusParts.join(", ")}.`);
+				showFeedback(`Import complete: ${statusParts.join(", ")}. Open Profile to review your shelves.`);
 			}
 			showSummary(result);
 			importForm.reset();
 		} catch (error) {
-			showFeedback(error instanceof Error ? error.message : "Import failed.", true);
+			showFeedback(error instanceof Error ? error.message : "Unable to import this CSV. Confirm it is a Goodreads export, then try again.", true);
 		}
 	});
 
@@ -1543,7 +1543,7 @@ const sectionLinks = [
 			});
 			showImportControlsFeedback(`Preview ready: ${preview.totalPreview} importable books detected.`);
 		} catch (error) {
-			showImportControlsFeedback(error instanceof Error ? error.message : "Preview failed.", true);
+			showImportControlsFeedback(error instanceof Error ? error.message : "Unable to preview this CSV. Confirm it is a Goodreads export, then try again.", true);
 		}
 	});
 
@@ -1668,7 +1668,7 @@ const sectionLinks = [
 			});
 			const data = await response.json().catch(() => ({}));
 			if (!response.ok) {
-				showAccountFeedback(String(data?.error || "Failed to send magic link."), true);
+				showAccountFeedback(String(data?.error || "Unable to send a magic link. Please try again."), true);
 				return;
 			}
 			const preview = String(data?.previewUrl || "").trim();
@@ -1678,7 +1678,7 @@ const sectionLinks = [
 			}
 			showAccountFeedback("Check your email for a DogEared sign-in link.");
 		} catch {
-			showAccountFeedback("Failed to send magic link.", true);
+			showAccountFeedback("Unable to send a magic link. Please check your email address and try again.", true);
 		}
 	});
 
@@ -1709,7 +1709,7 @@ const sectionLinks = [
 			const response = await fetch("/api/account/export");
 			const data = await response.json().catch(() => ({}));
 			if (!response.ok) {
-				showExportFeedback(String(data?.error || "Failed to generate export."), true);
+				showExportFeedback(String(data?.error || "Unable to prepare your export. Please try again."), true);
 				return;
 			}
 			const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
@@ -1724,7 +1724,7 @@ const sectionLinks = [
 			URL.revokeObjectURL(url);
 			showExportFeedback("Export downloaded.");
 		} catch {
-			showExportFeedback("Failed to generate export.", true);
+			showExportFeedback("Unable to prepare your export. Please try again.", true);
 		} finally {
 			if (button) button.disabled = false;
 		}

@@ -64,6 +64,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Account setup: request a magic link, verify it, set a username, then manage profile and settings.
 - Book discovery: browse Recommended For You, Discover, featured editorial collections, explainable home recommendations, search books with series context, open book pages, browse author pages, or explore related genre/topic/author/book pages.
 - Guided first experience: signed-in readers see one contextual, dismissible tip at a time when it is relevant, starting on Home for fresh users and continuing through Search, book shelves, reading progress, reviews, Settings, and Journal moments.
+- Beta first-time path: new readers move from landing guidance to account creation, username setup, import or manual book search, first shelf save, progress update, recommendation feedback, first review, and return visits through Profile, Home, and Discover.
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and create progress activity.
 - Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, timeline history, milestones, and yearly summaries.
@@ -114,6 +115,14 @@ DogEared includes site-wide contextual first-time guidance for signed-in readers
 Tips are shown only when the reader's current route and state make them useful. DogEared shows at most one active tip, and each tip can be dismissed or completed. Progress is stored per user in Settings data so completed or dismissed tips do not reappear. Settings includes a Learning section with a Show helpful tips checkbox and Reset Guided Tour action.
 
 Journal-specific guidance is intentionally narrow. It appears on the Reading Journal page itself or after a reader has saved progress and may want to remember something from that reading session.
+
+### Beta Launch Readiness
+
+DogEared is prepared for a limited beta cohort with launch-readiness polish focused on reducing confusion rather than adding major functionality. First-time surfaces use clear language and recoverable error states across username setup, Search, Goodreads import, shelf saves, progress updates, recommendation feedback, reviews, and return visits.
+
+Empty states are expected to answer "What should I do next?" Owner views on Profile shelves, Recent Activity, Reading Goal, Search, and recommendation areas include direct CTAs such as adding a book, searching again, finding a book to start, or reviewing shelves after import. Success messages stay plain and calm, such as saved shelf, saved rating, progress saved, import complete, preferences saved, and export downloaded. Error messages avoid bare "Error" language and should tell readers what to retry or where to continue.
+
+The launch-readiness stance is documented in `docs/beta-readiness.md`. Remaining beta risks are mostly operational: real-device mobile QA, assistive-technology review, centralized monitoring, and server-persisted onboarding checklist dismissal.
 
 ### Editorial Collections
 
@@ -247,7 +256,7 @@ Derived from the current repository structure and implementation:
 - API routes: 36 endpoint files.
 - Admin pages: 5 routes.
 - Redirect-only compatibility routes: `/feed`, `/myreads`, `/profile`, `/author`, `/reading-timeline`, and `/u/[username]`.
-- Feature entries in `docs/product/features.md`: 71.
+- Feature entries in `docs/product/features.md`: 72.
 - Default persisted shelf statuses: 3 (`want_to_read`, `reading`, `finished`).
 - Custom shelf icon options: 16.
 - Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, My Reading Life overview, timeline history, timeline milestones, monthly timeline summaries, reading calendar, genre/author insights, fun statistics, yearly summaries, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.

@@ -383,6 +383,16 @@ Journal-specific tips appear only on the Journal route or after a progress updat
 
 Limitations: Guided tips are state-based and contextual, not a multi-step wizard. They currently cover first-use learning moments only.
 
+### Beta Launch Readiness UX
+
+Status: Complete
+
+DogEared includes a limited-beta readiness pass focused on reducing confusion in the first reader journey. Username setup, Search, Goodreads import, Profile shelves, Recent Activity, Reading Goal, recommendations, progress updates, and review prompts use clearer next-step language. Owner-facing empty states include CTAs such as searching for books, finding a book to start, adding a finished book, searching again, and reviewing shelves after import.
+
+Success and error messages are intentionally plain and recoverable. Examples include import completion with a Profile next step, magic-link retry guidance, export retry guidance, and signed-out shelf prompts that explain why account creation matters.
+
+Limitations: The beta readiness pass improves existing flows but does not add centralized telemetry, a device-lab QA matrix, server-persisted onboarding checklist dismissal, or a full assistive-technology audit.
+
 ### Editorial Collections
 
 Status: Complete

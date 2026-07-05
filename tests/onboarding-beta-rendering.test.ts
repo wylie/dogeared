@@ -26,6 +26,32 @@ test("search page empty states are actionable", () => {
 	const source = readFileSync("src/pages/search.astro", "utf8");
 	assert.equal(source.includes("Search for a favorite title"), true);
 	assert.equal(source.includes("Try a broader title, an author name, or fewer keywords."), true);
+	assert.equal(source.includes("Search again"), true);
+	assert.equal(source.includes("Unable to search right now. Please try again in a moment."), true);
+});
+
+test("welcome setup copy uses reader-first launch wording", () => {
+	const source = readFileSync("src/pages/welcome.astro", "utf8");
+	assert.equal(source.includes("Choose your reader name."), true);
+	assert.equal(source.includes("This creates your DogEared profile URL"), true);
+	assert.equal(source.includes("Unable to save your reader name. Please try again."), true);
+});
+
+test("profile empty states include clear first actions", () => {
+	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
+	assert.equal(source.includes("profile-empty-state"), true);
+	assert.equal(source.includes("Once you begin reading, your activity will appear here."), true);
+	assert.equal(source.includes("Find a book to start"), true);
+	assert.equal(source.includes("Search for books"), true);
+	assert.equal(source.includes("Add a finished book"), true);
+	assert.equal(source.includes("grid.replaceWith(empty)"), true);
+});
+
+test("settings import flow points beta readers to their profile", () => {
+	const source = readFileSync("src/pages/settings.astro", "utf8");
+	assert.equal(source.includes("If you are starting fresh, you can skip import and add books from Search."), true);
+	assert.equal(source.includes("Open Profile to review your shelves."), true);
+	assert.equal(source.includes("Import canceled. Your shelves were not changed."), true);
 });
 
 test("following page empty states explain next steps", () => {
@@ -38,6 +64,8 @@ test("shelf removal client surfaces specific API errors", () => {
 	const source = readFileSync("src/lib/shelfClient.ts", "utf8");
 	assert.equal(source.includes("resolveShelfRemoveMessage"), true);
 	assert.equal(source.includes("This book is already off your shelves."), true);
+	assert.equal(source.includes("Log in or create an account to save books"), true);
+	assert.equal(source.includes("okButton.textContent = \"Continue\""), true);
 });
 
 test("profile momentum messaging is onboarding-friendly and supportive", () => {

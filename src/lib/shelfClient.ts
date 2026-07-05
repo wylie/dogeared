@@ -35,7 +35,7 @@ export function promptForShelfLogin(redirectPath = "/settings#account-settings")
 	dialog.setAttribute("aria-modal", "true");
 
 	const message = document.createElement("p");
-	message.textContent = "Log in or sign up to save books to your shelf. Go there now?";
+	message.textContent = "Log in or create an account to save books, build shelves, and get personal recommendations.";
 
 	const actions = document.createElement("div");
 	actions.className = "login-confirm-actions";
@@ -48,7 +48,7 @@ export function promptForShelfLogin(redirectPath = "/settings#account-settings")
 	const okButton = document.createElement("button");
 	okButton.type = "button";
 	okButton.className = "confirm";
-	okButton.textContent = "OK";
+	okButton.textContent = "Continue";
 
 	const close = () => overlay.remove();
 

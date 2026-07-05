@@ -28,8 +28,8 @@ if (existingUsername) {
 		<section class="welcome-card">
 			<p class="step">Step 1 of 1</p>
 			<p class="eyebrow">Welcome</p>
-			<h1>Set your username to finish account setup.</h1>
-			<p class="copy">Choose a public username for your profile URL. You can only set it once, so pick carefully.</p>
+			<h1>Choose your reader name.</h1>
+			<p class="copy">This creates your DogEared profile URL so you can save books and come back to your reading life. Usernames can only be set once.</p>
 			<form id="welcome-username-form" class="welcome-form">
 				<label for="welcome-username">Username</label>
 				<input id="welcome-username" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" minlength="3" maxlength="40" required placeholder="readername" />
@@ -222,7 +222,7 @@ if (existingUsername) {
 			showFeedback("Choose an available username first.", true);
 			return;
 		}
-		showFeedback("Saving username...");
+			showFeedback("Saving your reader name...");
 		if (submitButton instanceof HTMLButtonElement) submitButton.disabled = true;
 		try {
 			const response = await fetch("/api/profile/username", {
@@ -232,18 +232,18 @@ if (existingUsername) {
 			});
 			const data = await response.json().catch(() => ({}));
 			if (!response.ok) {
-				showFeedback(String(data?.error || "Failed to save username."), true);
+				showFeedback(String(data?.error || "Unable to save your reader name. Please try again."), true);
 				return;
 			}
 			const savedUsername = String(data?.username || "").trim();
 			if (!savedUsername) {
-				showFeedback("Username saved, but profile routing failed. Open Settings.", true);
+				showFeedback("Your reader name was saved, but DogEared could not open your profile. Open Settings and try Profile again.", true);
 				if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
 				return;
 			}
 			window.location.href = `/profile/${encodeURIComponent(savedUsername)}?welcome=1`;
 		} catch {
-			showFeedback("Failed to save username.", true);
+			showFeedback("Unable to save your reader name. Please try again.", true);
 			if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
 		}
 	});

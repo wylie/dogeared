@@ -1499,9 +1499,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 								))}
 							</ul>
 						) : (
-							<p class="reading-goal-empty">
-								No books finished this year yet. When books are marked Read with a finish date, they will appear here.
-							</p>
+							<div class="profile-empty-state profile-empty-state-compact">
+								<p>No books finished this year yet. When books are marked Read with a finish date, they will appear here.</p>
+								{isOwnerViewer && <a href="/search">Add your first book</a>}
+							</div>
 						)}
 					</div>
 				</section>
@@ -1629,7 +1630,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 							</div>
 						</div>
 						{(customShelfBooksByShelfId.get(shelf.id) || []).length === 0 ? (
-							<p class="meta">No books on this shelf yet. Search for a title and add it here.</p>
+							<div class="profile-empty-state">
+								<p>This shelf is ready when you are. Search for a title and add it here.</p>
+								{isOwnerViewer && <a href="/search">Find books for this shelf</a>}
+							</div>
 						) : (
 							<ul class="activity-grid">
 								{(customShelfBooksByShelfId.get(shelf.id) || []).map((item) => (
@@ -1704,7 +1708,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 							)}
 						</div>
 						{pagedRecent.items.length === 0 ? (
-							<p>No recent activity yet. Add a book, rate a finished read, or update progress to get started.</p>
+							<div class="profile-empty-state">
+								<p>Once you begin reading, your activity will appear here.</p>
+								{isOwnerViewer && <a href="/search">Add a book</a>}
+							</div>
 						) : (
 							<ul class="activity-grid">
 								{pagedRecent.items.map((item) => (
@@ -1908,7 +1915,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 							</div>
 						)}
 						{pagedReading.items.length === 0 ? (
-							<p>No books are currently marked as reading. Move a book to Currently Reading to track progress.</p>
+							<div class="profile-empty-state">
+								<p>No books are currently marked as Currently Reading. Move a book here to track progress after each reading session.</p>
+								{isOwnerViewer && <a href="/search">Find a book to start</a>}
+							</div>
 						) : (
 							<ul class="activity-grid currently-reading-grid">
 								{pagedReading.items.map((item) => (
@@ -2071,7 +2081,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 							)}
 						</div>
 						{pagedWantToRead.items.length === 0 ? (
-							<p>No books in Want to Read yet. Save a few titles to build your reading queue.</p>
+							<div class="profile-empty-state">
+								<p>Your Want to Read shelf is where future books wait. Save a few titles to build your reading queue.</p>
+								{isOwnerViewer && <a href="/search">Search for books</a>}
+							</div>
 						) : (
 							<ul class="activity-grid">
 								{pagedWantToRead.items.map((item) => (
@@ -2141,7 +2154,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 							)}
 						</div>
 						{pagedFinished.items.length === 0 ? (
-							<p>No finished books yet. Mark a completed book as Read and add a rating.</p>
+							<div class="profile-empty-state">
+								<p>No books marked Read yet. Finish a book, add a rating, and DogEared will start building your reading history.</p>
+								{isOwnerViewer && <a href="/search">Add a finished book</a>}
+							</div>
 						) : (
 							<ul class="activity-grid">
 								{pagedFinished.items.map((item) => (
@@ -2671,6 +2687,36 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		margin: 0.55rem 0 0;
 		color: #52606d;
 		line-height: 1.5;
+	}
+	.profile-empty-state {
+		display: grid;
+		gap: 0.5rem;
+		margin-top: 0.65rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.58);
+		padding: 0.85rem;
+	}
+	.profile-empty-state-compact {
+		margin-top: 0.55rem;
+	}
+	.profile-empty-state p {
+		margin: 0;
+		color: var(--color-text-muted);
+		line-height: 1.45;
+	}
+	.profile-empty-state a {
+		justify-self: start;
+		border-radius: var(--radius-pill);
+		background: var(--color-primary);
+		color: #fff;
+		padding: 0.42rem 0.75rem;
+		font-weight: 750;
+		text-decoration: none;
+	}
+	.profile-empty-state a:hover,
+	.profile-empty-state a:focus-visible {
+		background: var(--color-primary-hover);
 	}
 	.section-intro {
 		margin: 0.1rem 0 0.7rem;
@@ -4906,10 +4952,30 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 
 		if (!(grid instanceof HTMLElement)) return;
 		if (grid.querySelector(".book-card")) return;
-		const emptyText = sectionId === "currently-reading"
-			? "No books are currently marked as reading. Move a book to Currently Reading to track progress."
-			: (sectionId === "want-to-read" ? "No books in Want to Read yet. Save a few titles to build your reading queue." : "No finished books yet. Mark a completed book as Read and add a rating.");
-		grid.outerHTML = `<p>${emptyText}</p>`;
+		const emptyState = sectionId === "currently-reading"
+			? {
+				text: "No books are currently marked as Currently Reading. Move a book here to track progress after each reading session.",
+				href: "/search",
+				label: "Find a book to start"
+			}
+			: (sectionId === "want-to-read" ? {
+				text: "Your Want to Read shelf is where future books wait. Save a few titles to build your reading queue.",
+				href: "/search",
+				label: "Search for books"
+			} : {
+				text: "No books marked Read yet. Finish a book, add a rating, and DogEared will start building your reading history.",
+				href: "/search",
+				label: "Add a finished book"
+			});
+		const empty = document.createElement("div");
+		empty.className = "profile-empty-state";
+		const text = document.createElement("p");
+		text.textContent = emptyState.text;
+		const link = document.createElement("a");
+		link.href = emptyState.href;
+		link.textContent = emptyState.label;
+		empty.append(text, link);
+		grid.replaceWith(empty);
 	}
 
 	followToggle?.addEventListener("click", async () => {
