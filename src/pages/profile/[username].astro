@@ -2766,13 +2766,14 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		color: var(--color-text);
 	}
 	.profile-review-controls select {
-		min-height: 2.35rem;
+		min-height: 2.5rem;
 		border: var(--border-subtle);
-		border-radius: 10px;
-		background: #fff;
+		border-radius: var(--radius-sm);
+		background-color: #fff;
 		color: var(--color-text);
 		font: inherit;
-		padding: 0.42rem 0.6rem;
+		padding-top: 0.55rem;
+		padding-bottom: 0.55rem;
 	}
 	.profile-review-controls button,
 	.profile-review-empty a {
@@ -2948,11 +2949,15 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.create-shelf-modal-card input,
 	.create-shelf-modal-card select {
-		height: 38px;
+		min-height: 40px;
 		border: var(--border-strong);
 		border-radius: var(--radius-sm);
-		padding: 0 0.55rem;
+		padding: 0.5rem 0.65rem;
 		font: inherit;
+		box-sizing: border-box;
+	}
+	.create-shelf-modal-card select {
+		padding-right: 2rem;
 	}
 	.create-shelf-modal-actions {
 		display: flex;
@@ -3452,37 +3457,49 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.progress-inline-controls {
 		display: grid;
-		grid-template-columns: minmax(128px, 0.85fr) minmax(88px, 0.65fr) auto auto;
-		gap: 0.38rem;
+		grid-template-columns: minmax(0, 1.1fr) minmax(72px, 0.7fr) minmax(56px, auto) 36px;
+		gap: 0.3rem;
 		align-items: center;
 		width: 100%;
 		max-width: 100%;
+		padding: 0.25rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: rgba(255, 255, 255, 0.56);
+		box-sizing: border-box;
 	}
 	.progress-inline-type,
 	.progress-inline-input {
 		width: 100%;
 		min-width: 0;
-		height: 36px;
-		border: var(--border-strong);
+		height: 34px;
+		min-height: 34px;
+		border: var(--border-subtle);
 		border-radius: var(--radius-sm);
-		padding: 0 0.45rem;
-		font-size: 0.85rem;
+		font-size: 0.82rem;
 		font-family: inherit;
 		color: var(--color-text);
-		background: #fff;
+		background-color: #fff;
 		box-sizing: border-box;
+	}
+	.progress-inline-type {
+		padding-top: 0.34rem;
+		padding-bottom: 0.34rem;
+	}
+	.progress-inline-input {
+		padding: 0 0.48rem;
 	}
 	.progress-inline-save,
 	.progress-inline-finish {
 		border: none;
 		border-radius: 8px;
-		height: 36px;
-		min-width: 88px;
-		padding: 0 0.7rem;
+		height: 34px;
+		min-width: 0;
+		padding: 0 0.58rem;
 		background: var(--color-primary);
 		color: #fff;
 		font-weight: 700;
-		font-size: 0.85rem;
+		font-size: 0.82rem;
 		cursor: pointer;
 		box-sizing: border-box;
 		display: inline-flex;
@@ -3491,15 +3508,15 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		flex: 0 0 auto;
 	}
 	.progress-inline-save {
-		min-width: 76px;
+		width: 100%;
 	}
 	.progress-inline-save:disabled {
 		opacity: 0.75;
 		cursor: default;
 	}
 	.progress-inline-finish {
-		min-width: 0;
-		padding: 0 0.55rem;
+		width: 34px;
+		padding: 0;
 		background: var(--palette-4);
 	}
 	.progress-inline-finish .material-icons {
@@ -3880,7 +3897,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 		.progress-inline-controls {
 			display: grid;
-			grid-template-columns: minmax(0, 1fr) minmax(86px, 0.75fr) auto auto;
+			grid-template-columns: minmax(0, 1fr) minmax(82px, 0.68fr) minmax(54px, auto) 34px;
 			align-items: center;
 		}
 		.progress-inline-type,
@@ -3889,19 +3906,27 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			min-width: 0;
 		}
 		.progress-inline-save {
-			min-width: 74px;
-			padding: 0 0.55rem;
+			padding: 0 0.5rem;
 		}
 		.progress-inline-finish {
-			padding: 0 0.45rem;
+			padding: 0;
 		}
 	}
 	@media (max-width: 520px) {
 		.progress-inline-controls {
-			grid-template-columns: 1fr 1fr;
+			grid-template-columns: minmax(0, 1fr) minmax(84px, 0.7fr) minmax(64px, 0.75fr) 34px;
 		}
-		.progress-inline-save,
+	}
+	@media (max-width: 390px) {
+		.progress-inline-controls {
+			grid-template-columns: minmax(0, 1fr) minmax(82px, 0.75fr);
+		}
+		.progress-inline-save {
+			grid-column: 1 / 2;
+		}
 		.progress-inline-finish {
+			grid-column: 2 / 3;
+			justify-self: stretch;
 			width: 100%;
 		}
 	}

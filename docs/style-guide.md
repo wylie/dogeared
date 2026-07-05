@@ -101,6 +101,13 @@ Genres and topics are separate metadata types. Do not render them with page-spec
   - clear Save/Finish controls
   - inline progress update controls in currently-reading contexts
 
+## Form Controls
+
+- Text inputs, date inputs, textareas, and selects should share the same height rhythm, border radius, typography, focus ring, and disabled treatment.
+- Select menus use the global select appearance: subtle border, `--radius-sm`, right-aligned chevron, input-like padding, and the same hover/focus behavior as text fields.
+- Group related form controls into a single grid or input group when they belong to one action, such as reading progress type, value, Save, and complete.
+- Avoid placing visually unrelated form controls on the same row unless their labels and field heights align.
+
 ## Activity Feed Standards
 
 Expected activity behavior:

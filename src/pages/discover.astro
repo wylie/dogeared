@@ -110,7 +110,7 @@ function numericBookId(book: BrowseBook) {
 										}} />
 										<div class="recommendation-feedback" aria-label={`Recommendation feedback for ${book.title}`}>
 											<button type="button" data-action="recommendation-feedback" data-feedback="interesting" data-book-id={String(bookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>👍 Interesting</button>
-											<button type="button" data-action="recommendation-feedback" data-feedback="not_interested" data-book-id={String(bookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>Hide recommendation</button>
+											<button type="button" data-action="recommendation-feedback" data-feedback="not_interested" data-book-id={String(bookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>Hide</button>
 										</div>
 									</div>
 								</BookCard>
@@ -259,8 +259,8 @@ function numericBookId(book: BrowseBook) {
 	.recommendation-feedback {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.25rem;
-		margin-top: 0.32rem;
+		gap: 0.18rem;
+		margin-top: 0.2rem;
 		align-items: center;
 	}
 	.recommendation-feedback button {
@@ -268,10 +268,11 @@ function numericBookId(book: BrowseBook) {
 		border: none;
 		background: transparent;
 		color: var(--color-text-muted);
-		padding: 0.18rem 0.42rem;
+		padding: 0.08rem 0.28rem;
 		font: inherit;
-		font-size: 0.78rem;
+		font-size: 0.74rem;
 		font-weight: 750;
+		line-height: 1.2;
 		cursor: pointer;
 	}
 	.recommendation-feedback button:hover,

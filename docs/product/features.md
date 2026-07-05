@@ -93,7 +93,7 @@ Status: Complete
 
 Home shows personalized, explainable recommendations. Signed-in recommendations use saved shelves, ratings, completed books, favorite genres, enjoyed authors, similar-book genre overlap, and community ratings. If DogEared has limited personal data, the section falls back to popular books.
 
-Every recommendation includes a visible reason. Readers can mark recommendations Interesting or hide them. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal results.
+Every recommendation includes a visible reason. Readers can mark recommendations Interesting or Hide them through compact inline feedback actions. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal results.
 
 Limitations: Review sentiment is future-ready but not currently scored. Recommendations are transparent heuristics, not an AI engine.
 
@@ -209,7 +209,7 @@ Limitations: DNF imports map to Want to Read unless a different implemented stat
 
 Status: Complete
 
-Currently Reading books can store total pages and current page. The profile update control uses a typed selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time so the interaction matches journal reading positions. Forward progress creates reading progress events and activity.
+Currently Reading books can store total pages and current page. The profile update control uses a compact grouped selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time so the interaction matches journal reading positions without overflowing book cards. Forward progress creates reading progress events and activity.
 
 Limitations: Persisted progress tracking remains page-based. Percentage updates are converted to pages when total pages are known; chapter, location, and audiobook inputs remain lightweight entry aids rather than a full alternate progress model.
 

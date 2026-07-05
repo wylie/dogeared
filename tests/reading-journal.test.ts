@@ -150,10 +150,11 @@ test("journal UI is wired into book, private journal page, navigation, and autos
 	assert.match(journalPage, /Search your own notes/);
 	assert.match(journalPage, /New Entry/);
 	assert.match(journalPage, /data-journal-entry-form/);
-	assert.match(journalPage, /Filter by book/);
+	assert.match(journalPage, /Search journal/);
+	assert.match(journalPage, /<span>Book<\/span>/);
 	assert.match(journalPage, /journal-owned-books/);
 	assert.match(journalPage, /data-book-picker/);
-	assert.match(journalPage, /Filter journal entries by date/);
+	assert.match(journalPage, /<span>Date<\/span>/);
 	assert.match(journalPage, /Reading position/);
 	assert.match(journalPage, /readingPositionType/);
 	assert.match(journalPage, /readingPositionValue/);

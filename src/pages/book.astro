@@ -1821,7 +1821,7 @@ const bookStructuredDataPayload = bookStructuredData
 		box-sizing: border-box;
 		border: var(--border-subtle);
 		border-radius: var(--radius-sm);
-		background: rgba(255, 255, 255, 0.78);
+		background-color: rgba(255, 255, 255, 0.78);
 		color: var(--color-text);
 		font: inherit;
 		font-weight: 400;
@@ -1836,10 +1836,13 @@ const bookStructuredDataPayload = bookStructuredData
 		outline: 2px solid var(--color-accent);
 		outline-offset: 2px;
 	}
+	.journal-form select {
+		padding-right: 2rem;
+	}
 	.journal-position-row {
 		display: grid;
-		grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr);
-		gap: 0.5rem;
+		grid-template-columns: minmax(150px, 0.42fr) minmax(0, 1fr);
+		gap: 0.55rem;
 	}
 	.journal-grid-two {
 		display: grid;

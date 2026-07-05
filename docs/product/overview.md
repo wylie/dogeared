@@ -104,7 +104,7 @@ If DogEared does not have enough data for a provider, that provider is hidden. I
 
 DogEared supports explainable Recommendations & Discovery v1. Home shows Recommended For You above broader community sections. Signed-in recommendations use the reader's shelves, ratings, finished books, favorite genres, enjoyed authors, similar books, and community ratings. If personal data is limited, DogEared falls back to popular books and explains that adding, rating, and reviewing books improves recommendations.
 
-Recommendation cards always explain why a book appears, with reasons such as "Because you enjoyed..." or "Popular with Fantasy readers." Readers can mark recommendations Interesting or hide a recommendation. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal recommendations.
+Recommendation cards always explain why a book appears, with reasons such as "Because you enjoyed..." or "Popular with Fantasy readers." Feedback controls are intentionally compact inline actions: readers can mark recommendations Interesting or Hide them without the controls competing with the book card. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal recommendations.
 
 The `/discover` page collects Recommended For You plus community sections such as Trending Up, New Releases Readers Love, Hidden Gems, Most Finished, and Community Favorites. Book detail pages include Readers Also Enjoyed, based on shared readers, genres, and authors. Recommendation feedback and future review sentiment are modeled as extension points, but the current system remains transparent and non-AI.
 
@@ -148,7 +148,7 @@ DNF is referenced in roadmap and filtered from imported Goodreads genre tags, bu
 
 ### Reading Progress
 
-Currently Reading books can store total pages, current page, finished date after completion, and progress events. The profile progress control uses a reading-position style selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time; persisted progress remains page-based, with percentages converted when total pages are known. Forward page progress creates `user_reading_progress_event` rows. Read books can store finished date, rating, and public review metadata.
+Currently Reading books can store total pages, current page, finished date after completion, and progress events. The profile progress control uses a compact grouped selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time plus value, Save, and complete actions; persisted progress remains page-based, with percentages converted when total pages are known. Forward page progress creates `user_reading_progress_event` rows. Read books can store finished date, rating, and public review metadata.
 
 ### Momentum Score
 
