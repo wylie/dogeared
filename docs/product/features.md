@@ -87,6 +87,24 @@ Limitations: There is no separate following list route for another user's follow
 
 ## Books And Catalog
 
+### Recommended For You
+
+Status: Complete
+
+Home shows personalized, explainable recommendations. Signed-in recommendations use saved shelves, ratings, completed books, favorite genres, enjoyed authors, similar-book genre overlap, and community ratings. If DogEared has limited personal data, the section falls back to popular books.
+
+Every recommendation includes a visible reason. Readers can mark recommendations Interesting or Not Interested; Not Interested feedback is stored per user and excluded from future personal results.
+
+Limitations: Review sentiment is future-ready but not currently scored. Recommendations are transparent heuristics, not an AI engine.
+
+### Discover Page
+
+Status: Complete
+
+`/discover` gathers Recommended For You and community discovery sections such as Trending Up, New Releases Readers Love, Hidden Gems, Most Finished, and Community Favorites.
+
+Limitations: Award winners and staff picks are future extension points through editorial collections or additional providers; they are not fabricated when no data exists.
+
 ### Book Search
 
 Status: Complete

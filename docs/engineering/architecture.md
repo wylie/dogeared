@@ -46,7 +46,7 @@ Shared product/data logic lives in `src/lib/`.
 
 - Authentication and account helpers: `auth`, `authHardening`, `emailChange`, `email`.
 - Catalog and metadata helpers: `catalog`, `bookPayload`, `bookCovers`, `catalogKeys`, `author`, `authorEnrichment`, `externalAuthorBooks`, `genres`, `metadataAssets`, `series`, `collections`.
-- Reader/product logic: `shelfClient`, `shelfStorage`, `customShelves`, `readingGoal`, `readingLife`, `readingJournal`, `guidedTour`, `momentumPrediction`, `goodreadsImport`, `bookReviews`.
+- Reader/product logic: `shelfClient`, `shelfStorage`, `customShelves`, `readingGoal`, `readingLife`, `readingJournal`, `guidedTour`, `momentumPrediction`, `goodreadsImport`, `bookReviews`, `recommendations`.
 - Discovery logic: `discoveryProviders` exposes the discovery service and reusable Home providers; `homeSections` loads cached aggregate signals and maps provider output to book cards.
 - Community and privacy: `feed`, `publicProfile`, `privacy`, `followPolicy`, `demoVisibility`.
 - Operations: `admin`, `adminData`, `monitoring`, `feedback`, `runtimeCache`, `indexing`, `seo`, `roadmap`, `homeSections`.
@@ -89,6 +89,12 @@ Reading Journal lives at `/journal` and uses `src/lib/readingJournal` for schema
 ## Discovery Providers
 
 Home discovery is provider-based. The discovery service runs pure ranking providers that receive aggregate community signals and return section metadata plus ranked book IDs, reasons, and optional review metadata. The SQL layer gathers activity, ratings, reviews, reviewer usernames, reactions, publication year, and shelf counts in one cached aggregate pass to avoid N+1 discovery queries.
+
+## Recommendations
+
+Recommendations live in `src/lib/recommendations`. The service builds explainable personal recommendations from shelf entries, ratings, finished books, genre overlap, enjoyed authors, similar books, and aggregate community ratings. It falls back to popular books when personalization data is thin. It also powers book detail Readers Also Enjoyed through shared readers, genres, and authors.
+
+Recommendation feedback is stored through `/api/recommendations/feedback`; Not Interested feedback is excluded from future personal results. User-specific recommendations are recomputed on request so feedback takes effect without waiting for a shared cache.
 
 Current providers:
 

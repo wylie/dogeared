@@ -82,7 +82,7 @@ export function sanitizeDescription(value: string, maxLength = 220) {
 	return `${text.slice(0, maxLength).trimEnd()}…`;
 }
 
-function toBook(row: {
+export function toBook(row: {
 	book_id: number;
 	title: string;
 	primary_author: string;

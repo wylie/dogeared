@@ -11,10 +11,11 @@ Authentication requirements:
 
 | Route | Auth | Purpose | Major components/data |
 | --- | --- | --- | --- |
-| `/` | Public | Featured editorial collections, explainable community discovery, onboarding checklist, provider sections, reader suggestions, custom shelf ideas. | `BookCard`, `ShelfDropdown`, `RatingControl`, `collections`, `discoveryProviders`, `homeSections`, reader suggestions API. |
+| `/` | Public | Recommended For You, featured editorial collections, explainable community discovery, onboarding checklist, provider sections, reader suggestions, custom shelf ideas. | `BookCard`, `ShelfDropdown`, `RatingControl`, `collections`, `recommendations`, `discoveryProviders`, `homeSections`, reader suggestions API. |
+| `/discover` | Public | Explainable personalized and community discovery hub. | `BookCard`, `ShelfDropdown`, `RatingControl`, `recommendations`, `homeSections`, community discovery providers. |
 | `/search` | Public | Search books and add results to shelves, with series labels and editorial collection matches. | `BookCard`, `ShelfDropdown`, `RatingControl`, `/api/books/search`, series metadata, collection results. |
 | `/books` | Public | Browse catalog sections like trending, most shelved, top rated, and recently active. | `BookCard`, `ShelfDropdown`, catalog stats. |
-| `/book` | Public | Book detail by book ID or external/query metadata, including series context, private journal access when available, and public reviews. | `BookCard`, `ShelfDropdown`, `RatingControl`, `Chip`, series section, continue-series callout, recent Reading Journal entries and Write Journal Entry form for owned Currently Reading books, Reviews summary/editor/cards, activity likes/comments. |
+| `/book` | Public | Book detail by book ID or external/query metadata, including series context, Readers Also Enjoyed, private journal access when available, and public reviews. | `BookCard`, `ShelfDropdown`, `RatingControl`, `Chip`, series section, recommendations, continue-series callout, recent Reading Journal entries and Write Journal Entry form for owned Currently Reading books, Reviews summary/editor/cards, activity likes/comments. |
 | `/authors` | Public | Search, filter, sort, and page through authors. | Author cards, author stats. |
 | `/author/[slug]` | Public | Canonical author detail page with Featured In collections and series-grouped local books. | `BookCard`, `ShelfDropdown`, `RatingControl`, collection links, series grouping, external author books, author metadata. |
 | `/author` | Redirect | Legacy author query route. | Redirects to canonical author path or `/authors`. |
@@ -39,7 +40,6 @@ Authentication requirements:
 | `/roadmap` | Public | Current, next, later, and completed roadmap items. | `src/lib/roadmap`. |
 | `/privacy` | Public | Privacy explanation. | Static Astro page. |
 | `/support` | Public | Support project context. | Static Astro page. |
-| `/discover` | Redirect | Legacy discovery route. | Redirects to `/`. |
 | `/admin` | Admin | Admin overview and site statistics. | `resolveAdminSession`, `loadAdminOverviewStats`. |
 | `/admin/collections` | Admin | Create, edit, reorder, publish, archive, and feature editorial collections. | `collections` helper, collection form, collection list. |
 | `/admin/data-health` | Admin | Metadata, import, duplicate, backfill, page count, and publisher health. | Neon diagnostic queries. |
@@ -68,6 +68,7 @@ Authentication requirements:
 | `/api/shelf/entries` | GET, POST, DELETE | Authenticated | Load, upsert, and remove default shelf entries. |
 | `/api/shelf/rating` | PATCH | Authenticated | Save or clear rating for an existing shelf entry. |
 | `/api/reviews/entry` | POST, DELETE | Authenticated | Save/edit or delete the signed-in reader's public review metadata for a finished shelf entry. |
+| `/api/recommendations/feedback` | POST | Authenticated | Store Interesting or Not Interested feedback for a recommended book. |
 | `/api/shelf/custom-shelves` | GET, POST, PATCH, DELETE | Authenticated | Manage custom shelves. |
 | `/api/shelf/custom-shelf-books` | GET, POST, DELETE | Authenticated | Manage custom shelf book assignments. |
 | `/api/shelf/section-order` | GET, POST | Authenticated | Load/save profile shelf section ordering. |

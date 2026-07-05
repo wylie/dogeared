@@ -55,7 +55,7 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
 	},
 	{
 		title: "Discovery refinements",
-		description: "Deepen transparent community discovery and editorial browsing without opaque engagement algorithms.",
+		description: "Recommendations & Discovery v1 is live; next work is deeper providers such as awards, staff picks, and richer preference tuning.",
 		status: "Planning",
 		category: "next",
 		priority: "High"

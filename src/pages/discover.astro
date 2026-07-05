@@ -1,4 +1,356 @@
 ---
+import Layout from "../layouts/Layout.astro";
+import BookCard from "../components/BookCard.astro";
+import ShelfDropdown from "../components/ShelfDropdown.astro";
+import { resolveUserBySession } from "../lib/auth";
+import { getNeonSql } from "../lib/neon";
+import { formatPublishedLabel, resolvePublicHomeSections, type BrowseBook, type BrowseSection } from "../lib/homeSections";
+import { loadRecommendedForUser, loadPopularFallbackRecommendations, type RecommendationSection } from "../lib/recommendations";
+import { resolveViewerStatusByBookId } from "../lib/feed";
+
 export const prerender = false;
-return Astro.redirect("/", 301);
+
+const session = await resolveUserBySession(Astro.request);
+const viewerUserId = String(session?.userId || "");
+const sql = getNeonSql();
+let recommendationSection: RecommendationSection | null = null;
+let communitySections: BrowseSection[] = [];
+let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
+let errorMessage = "";
+
+try {
+	[recommendationSection, communitySections] = await Promise.all([
+		viewerUserId ? loadRecommendedForUser(sql, viewerUserId, 10) : loadPopularFallbackRecommendations(sql, 10),
+		resolvePublicHomeSections()
+	]);
+	const bookIds = Array.from(new Set([
+		...(recommendationSection?.books || []),
+		...communitySections.flatMap((section) => section.books)
+	].map((book) => Number(String(book.id || "").replace(/^book_/, ""))).filter((value) => Number.isFinite(value) && value > 0)));
+	viewerStatusByBookId = viewerUserId && bookIds.length > 0
+		? await resolveViewerStatusByBookId(viewerUserId, bookIds)
+		: new Map();
+} catch (error) {
+	console.error("Discover page failed to load.", error);
+	errorMessage = "Discover is temporarily unavailable.";
+}
+
+const sectionLinks = [
+	{ id: "recommended-for-you", label: "For You" },
+	{ id: "trending-up", label: "Trending" },
+	{ id: "new-releases-readers-love", label: "New Releases" },
+	{ id: "hidden-gems", label: "Hidden Gems" }
+];
+
+function numericBookId(book: BrowseBook) {
+	return Number(String(book.id || "").replace(/^book_/, ""));
+}
+
 ---
+
+<Layout title="Discover" sectionLinks={sectionLinks} metaDescription="Discover explainable book recommendations and community-powered reading sections on DogEared." canonicalUrl="/discover">
+	<div slot="right" class="discover-page" data-authenticated={String(!!viewerUserId)}>
+		<nav class="breadcrumbs" aria-label="Breadcrumb">
+			<a href="/">Home</a><span aria-hidden="true">/</span><span>Discover</span>
+		</nav>
+		<header class="discover-intro">
+			<h1>Discover</h1>
+			<p>Find what to read next through your reading history and transparent community activity. Every recommendation explains why it appears.</p>
+		</header>
+		{errorMessage && <p class="error">{errorMessage}</p>}
+		{!errorMessage && recommendationSection && (
+			<section id="recommended-for-you" class="discover-section">
+				<div class="section-head">
+					<div>
+						<h2>{recommendationSection.title}</h2>
+						<p>{recommendationSection.subtitle}</p>
+					</div>
+				</div>
+				{recommendationSection.books.length === 0 ? (
+					<div class="discover-empty">
+						<p>{recommendationSection.emptyState}</p>
+						<a href="/search">Add another book</a>
+					</div>
+				) : (
+					<ul class="discover-grid">
+						{recommendationSection.books.map((book) => {
+							const bookId = numericBookId(book);
+							return (
+								<BookCard
+									title={book.title}
+									titleHref={`/book?bookId=${encodeURIComponent(String(bookId))}`}
+									author={book.authors.join(", ") || "Unknown author"}
+									authorHref={book.authorHref}
+									thumbnail={book.thumbnail}
+									description={book.description || "Synopsis unavailable for this edition."}
+									readers={book.shelfCount}
+									shelfEntries={book.shelfCount}
+									publishedLabel={book.publishedDate ? formatPublishedLabel(book.publishedDate) : ""}
+									pageCount={book.pageCount}
+									averageRating={book.averageRating}
+								>
+									<p slot="preTitle" class="recommendation-reason">{book.recommendationReason}</p>
+									<div slot="actions">
+										<ShelfDropdown attrs={{
+											"data-book-id": String(bookId),
+											"data-initial-status": viewerStatusByBookId.get(bookId) || "",
+											"data-title": book.title,
+											"data-author": book.authors[0] || "",
+											"data-description": book.description,
+											"data-pages": String(book.pageCount || 0),
+											"data-cover": book.thumbnail,
+											"data-format": book.format,
+											"data-language": book.language,
+											"data-isbn10": book.isbn10 || "",
+											"data-isbn13": book.isbn13 || "",
+											"data-source": book.source,
+											"data-source-work-id": book.sourceWorkId || "",
+											"data-source-edition-id": book.sourceEditionId || "",
+											"data-source-url": book.sourceUrl || ""
+										}} />
+										<div class="recommendation-feedback" aria-label={`Recommendation feedback for ${book.title}`}>
+											<button type="button" data-action="recommendation-feedback" data-feedback="interesting" data-book-id={String(bookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>👍 Interesting</button>
+											<button type="button" data-action="recommendation-feedback" data-feedback="not_interested" data-book-id={String(bookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>👎 Not Interested</button>
+										</div>
+									</div>
+								</BookCard>
+							);
+						})}
+					</ul>
+				)}
+			</section>
+		)}
+		{communitySections
+			.filter((section) => ["trending-up", "new-releases-readers-love", "hidden-gems", "most-finished", "community-favorites"].includes(section.id))
+			.map((section) => (
+				<section id={section.id} class="discover-section">
+					<div class="section-head">
+						<div>
+							<h2>{section.title}</h2>
+							<p>{section.subtitle}</p>
+						</div>
+					</div>
+					{section.books.length === 0 ? (
+						<p class="discover-empty">{section.emptyState || "This section will appear when DogEared has enough reader activity."}</p>
+					) : (
+						<ul class="discover-grid">
+							{section.books.slice(0, 10).map((book) => {
+								const bookId = numericBookId(book);
+								return (
+									<BookCard
+										title={book.title}
+										titleHref={book.titleHref || `/book?bookId=${encodeURIComponent(String(bookId))}`}
+										author={book.authors.join(", ") || "Unknown author"}
+										authorHref={book.authorHref}
+										thumbnail={book.thumbnail}
+										description={book.reviewSnippet ? `“${book.reviewSnippet}”` : (book.description || "Synopsis unavailable for this edition.")}
+										readers={book.shelfCount}
+										shelfEntries={book.shelfCount}
+										publishedLabel={book.publishedDate ? formatPublishedLabel(book.publishedDate) : ""}
+										pageCount={book.pageCount}
+										averageRating={book.averageRating}
+									>
+										{book.discoveryReason && <p slot="preTitle" class="recommendation-reason">{book.discoveryReason}</p>}
+										<div slot="actions">
+											<ShelfDropdown attrs={{
+												"data-book-id": String(bookId),
+												"data-initial-status": viewerStatusByBookId.get(bookId) || "",
+												"data-title": book.title,
+												"data-author": book.authors[0] || "",
+												"data-description": book.description,
+												"data-pages": String(book.pageCount || 0),
+												"data-cover": book.thumbnail,
+												"data-format": book.format,
+												"data-language": book.language,
+												"data-isbn10": book.isbn10 || "",
+												"data-isbn13": book.isbn13 || "",
+												"data-source": book.source,
+												"data-source-work-id": book.sourceWorkId || "",
+												"data-source-edition-id": book.sourceEditionId || "",
+												"data-source-url": book.sourceUrl || ""
+											}} />
+										</div>
+									</BookCard>
+								);
+							})}
+						</ul>
+					)}
+				</section>
+			))}
+	</div>
+</Layout>
+
+<style>
+	.discover-page {
+		max-width: 1040px;
+		display: grid;
+		gap: 1rem;
+	}
+	.breadcrumbs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		color: var(--color-text-subtle);
+		font-size: 0.88rem;
+	}
+	.breadcrumbs a {
+		color: var(--color-nav);
+		text-decoration: none;
+	}
+	.discover-intro {
+		display: grid;
+		gap: 0.35rem;
+	}
+	.discover-intro h1 {
+		margin: 0;
+	}
+	.discover-intro p,
+	.section-head p {
+		margin: 0;
+		color: var(--color-text-muted);
+		line-height: 1.5;
+	}
+	.discover-section {
+		display: grid;
+		gap: 0.7rem;
+	}
+	.section-head {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.section-head h2 {
+		margin: 0;
+	}
+	.discover-grid {
+		list-style: none;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.95rem;
+		margin: 0;
+		padding: 0;
+	}
+	.recommendation-reason {
+		margin: 0 0 0.35rem;
+		color: var(--color-nav);
+		font-size: 0.82rem;
+		font-weight: 800;
+	}
+	.discover-empty {
+		display: grid;
+		gap: 0.45rem;
+		background: var(--color-surface-raised);
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		padding: 0.85rem;
+	}
+	.discover-empty p {
+		margin: 0;
+	}
+	.discover-empty a {
+		justify-self: start;
+		border-radius: var(--radius-pill);
+		background: var(--color-primary);
+		color: #fff;
+		padding: 0.42rem 0.75rem;
+		font-weight: 750;
+		text-decoration: none;
+	}
+	.recommendation-feedback {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin-top: 0.45rem;
+	}
+	.recommendation-feedback button {
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--color-border-soft);
+		background: var(--color-nav-surface);
+		color: var(--color-nav);
+		padding: 0.38rem 0.68rem;
+		font: inherit;
+		font-size: 0.82rem;
+		font-weight: 750;
+		cursor: pointer;
+	}
+	.recommendation-feedback button:disabled {
+		opacity: 0.7;
+		cursor: wait;
+	}
+	.recommendation-feedback-status {
+		flex-basis: 100%;
+		margin: 0;
+		font-size: 0.8rem;
+		font-weight: 700;
+		color: var(--color-primary);
+	}
+	@media (max-width: 760px) {
+		.discover-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>
+
+<script>
+	import { promptForShelfLogin } from "../lib/shelfClient.ts";
+
+	const discoverPage = document.querySelector(".discover-page");
+	const isAuthenticated = discoverPage?.dataset.authenticated === "true";
+
+	function setRecommendationFeedbackStatus(button, message) {
+		const wrap = button.closest(".recommendation-feedback");
+		if (!(wrap instanceof HTMLElement)) return;
+		let status = wrap.querySelector("[data-recommendation-feedback-status]");
+		if (!(status instanceof HTMLElement)) {
+			status = document.createElement("p");
+			status.className = "recommendation-feedback-status";
+			status.dataset.recommendationFeedbackStatus = "true";
+			status.setAttribute("role", "status");
+			status.setAttribute("aria-live", "polite");
+			wrap.append(status);
+		}
+		status.textContent = message;
+	}
+
+	document.addEventListener("click", (event) => {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		const button = target.closest('[data-action="recommendation-feedback"]');
+		if (!(button instanceof HTMLButtonElement)) return;
+		event.preventDefault();
+		if (!isAuthenticated) {
+			promptForShelfLogin(window.location.pathname);
+			return;
+		}
+		const wrap = button.closest(".recommendation-feedback");
+		const buttons = Array.from(wrap?.querySelectorAll("button") || []);
+		for (const item of buttons) if (item instanceof HTMLButtonElement) item.disabled = true;
+		setRecommendationFeedbackStatus(button, "Saving feedback...");
+		void (async () => {
+			try {
+				const response = await fetch("/api/recommendations/feedback", {
+					method: "POST",
+					credentials: "same-origin",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						bookId: Number(button.dataset.bookId || 0),
+						feedback: button.dataset.feedback || "",
+						source: button.dataset.source || "",
+						reason: button.dataset.reason || ""
+					})
+				});
+				const data = await response.json().catch(() => ({}));
+				if (!response.ok || data?.error) throw new Error(String(data?.error || "Failed to save feedback."));
+				const isNotInterested = button.dataset.feedback === "not_interested";
+				setRecommendationFeedbackStatus(button, isNotInterested ? "Removed from future recommendations." : "Marked interesting.");
+				if (isNotInterested) {
+					const card = button.closest(".book-card");
+					if (card instanceof HTMLElement) card.remove();
+				}
+			} catch (error) {
+				for (const item of buttons) if (item instanceof HTMLButtonElement) item.disabled = false;
+				setRecommendationFeedbackStatus(button, error instanceof Error ? error.message : "Failed to save feedback.");
+			}
+		})();
+	});
+</script>

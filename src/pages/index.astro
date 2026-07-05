@@ -8,6 +8,7 @@ import { resolveUserBySession } from '../lib/auth';
 import { getNeonSql } from '../lib/neon';
 import { formatPublishedLabel, resolvePublicHomeSections, type BrowseSection } from "../lib/homeSections";
 import { loadFeaturedCollections, type CollectionDetail } from "../lib/collections";
+import { loadRecommendedForUser, loadPopularFallbackRecommendations, type RecommendationSection } from "../lib/recommendations";
 
 export const prerender = false;
 const shouldProfileHome = import.meta.env.DEV;
@@ -49,6 +50,7 @@ type ShelfIdea = {
 
 let sections: BrowseSection[] = [];
 let featuredCollections: CollectionDetail[] = [];
+let recommendedSection: RecommendationSection | null = null;
 let errorMessage = "";
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let viewerRatingByBookId = new Map<number, number>();
@@ -82,13 +84,17 @@ const shelfIdeas: ShelfIdea[] = [
 
 try {
 	const sql = getNeonSql();
-	[sections, featuredCollections] = await Promise.all([
+	[sections, featuredCollections, recommendedSection] = await Promise.all([
 		resolvePublicHomeSections({ onTiming: logHomeTiming }),
-		loadFeaturedCollections(sql, 2).catch(() => [])
+		loadFeaturedCollections(sql, 2).catch(() => []),
+		session?.userId
+			? loadRecommendedForUser(sql, session.userId, 8).catch(() => null)
+			: loadPopularFallbackRecommendations(sql, 8).catch(() => null)
 	]);
-	if (session?.userId && (sections.length > 0 || featuredCollections.length > 0)) {
+	if (session?.userId && (sections.length > 0 || featuredCollections.length > 0 || (recommendedSection?.books.length || 0) > 0)) {
 		const bookIds = Array.from(new Set(
 			[
+				...(recommendedSection?.books || []),
 				...sections.flatMap((section) => section.books),
 				...featuredCollections.flatMap((collection) => collection.books).map((book) => ({
 					id: String(book.bookId)
@@ -202,6 +208,76 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			<p class="empty">
 				We do not have enough personalized data yet. Start by searching for a favorite book, add it to a shelf, and rate one finished read.
 			</p>
+		)}
+
+		{recommendedSection && (
+			<section id="recommended-for-you" class="browse-section recommended-section" aria-labelledby="recommended-for-you-title">
+				<div class="section-head">
+					<div>
+						<h2 id="recommended-for-you-title">{recommendedSection.title}</h2>
+						<p class="section-explanation">{recommendedSection.subtitle}</p>
+					</div>
+					<a class="section-head-link" href="/discover">Open Discover</a>
+				</div>
+				{recommendedSection.books.length === 0 ? (
+					<div class="recommendation-empty">
+						<p>{recommendedSection.emptyState}</p>
+						<a href="/search">Add another book</a>
+					</div>
+				) : (
+					<ul class="book-grid recommendation-grid">
+						{recommendedSection.books.map((book) => {
+							const numericBookId = Number(String(book.id || "").replace(/^book_/, ""));
+							const viewerRating = Math.max(0, Math.min(5, Number(viewerRatingByBookId.get(numericBookId) || 0)));
+							return (
+								<BookCard
+									title={book.title}
+									titleHref={`/book?bookId=${encodeURIComponent(String(numericBookId))}`}
+									author={book.authors.length > 0 ? book.authors.join(", ") : "Unknown author"}
+									authorHref={book.authors.length === 1 && book.authors[0] ? book.authorHref : ""}
+									thumbnail={book.thumbnail}
+									description={book.description || "Synopsis unavailable for this edition."}
+									readers={book.shelfCount}
+									shelfEntries={book.shelfCount}
+									publishedLabel={book.publishedDate ? formatPublishedLabel(book.publishedDate) : ""}
+									pageCount={book.pageCount}
+									averageRating={book.averageRating || viewerRating}
+								>
+									<p slot="preTitle" class="discovery-reason">{book.recommendationReason}</p>
+									<div slot="meta">
+										{viewerStatusByBookId.get(numericBookId) === "finished" && (
+											<RatingControl bookId={String(numericBookId)} rating={viewerRating} editable={true} />
+										)}
+									</div>
+									<div slot="actions" class="recommendation-actions">
+										<ShelfDropdown attrs={{
+											'data-book-id': String(numericBookId),
+											'data-initial-status': viewerStatusByBookId.get(numericBookId) || "",
+											'data-title': book.title,
+											'data-author': book.authors[0] ?? "",
+											'data-description': book.description,
+											'data-pages': String(book.pageCount ?? 0),
+											'data-cover': book.thumbnail,
+											'data-format': book.format,
+											'data-language': book.language,
+											'data-isbn10': book.isbn10 ?? "",
+											'data-isbn13': book.isbn13 ?? "",
+											'data-source': book.source,
+											'data-source-work-id': book.sourceWorkId ?? "",
+											'data-source-edition-id': book.sourceEditionId ?? "",
+											'data-source-url': book.sourceUrl ?? ""
+										}} />
+										<div class="recommendation-feedback" aria-label={`Recommendation feedback for ${book.title}`}>
+											<button type="button" data-action="recommendation-feedback" data-feedback="interesting" data-book-id={String(numericBookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>👍 Interesting</button>
+											<button type="button" data-action="recommendation-feedback" data-feedback="not_interested" data-book-id={String(numericBookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>👎 Not Interested</button>
+										</div>
+									</div>
+								</BookCard>
+							);
+						})}
+					</ul>
+				)}
+			</section>
 		)}
 
 		{featuredCollections.length > 0 && (
@@ -563,6 +639,58 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.95rem;
+	}
+	.recommended-section {
+		margin-top: 1.3rem;
+	}
+	.recommendation-empty {
+		display: grid;
+		gap: 0.5rem;
+		background: var(--color-surface-raised);
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		padding: 0.9rem;
+	}
+	.recommendation-empty p {
+		margin: 0;
+		color: var(--color-text-muted);
+	}
+	.recommendation-empty a,
+	.recommendation-feedback button {
+		border-radius: var(--radius-pill);
+		border: 1px solid var(--color-border-soft);
+		background: var(--color-nav-surface);
+		color: var(--color-nav);
+		padding: 0.38rem 0.68rem;
+		font: inherit;
+		font-size: 0.82rem;
+		font-weight: 750;
+		text-decoration: none;
+		cursor: pointer;
+	}
+	.recommendation-feedback {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin-top: 0.45rem;
+	}
+	.recommendation-feedback button:hover,
+	.recommendation-feedback button:focus-visible,
+	.recommendation-empty a:hover,
+	.recommendation-empty a:focus-visible {
+		background: var(--color-nav-surface-hover);
+		color: var(--color-nav-hover);
+	}
+	.recommendation-feedback button:disabled {
+		opacity: 0.7;
+		cursor: wait;
+	}
+	.recommendation-feedback-status {
+		flex-basis: 100%;
+		margin: 0;
+		font-size: 0.8rem;
+		font-weight: 700;
+		color: var(--color-primary);
 	}
 
 	.featured-collections-section {
@@ -1159,6 +1287,59 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		button.classList.toggle("is-added", state === "added");
 	}
 
+	function setRecommendationFeedbackStatus(button, message) {
+		const wrap = button.closest(".recommendation-feedback");
+		if (!(wrap instanceof HTMLElement)) return;
+		let status = wrap.querySelector("[data-recommendation-feedback-status]");
+		if (!(status instanceof HTMLElement)) {
+			status = document.createElement("p");
+			status.className = "recommendation-feedback-status";
+			status.dataset.recommendationFeedbackStatus = "true";
+			status.setAttribute("role", "status");
+			status.setAttribute("aria-live", "polite");
+			wrap.append(status);
+		}
+		status.textContent = message;
+	}
+
+	async function saveRecommendationFeedback(button) {
+		if (!(button instanceof HTMLButtonElement)) return;
+		if (!isAuthenticated) {
+			promptForShelfLogin();
+			return;
+		}
+		const bookId = Number(button.dataset.bookId || 0);
+		const feedback = String(button.dataset.feedback || "").trim();
+		if (!bookId || !feedback) return;
+		const wrap = button.closest(".recommendation-feedback");
+		const buttons = Array.from(wrap?.querySelectorAll("button") || []);
+		for (const item of buttons) if (item instanceof HTMLButtonElement) item.disabled = true;
+		setRecommendationFeedbackStatus(button, "Saving feedback...");
+		try {
+			const response = await fetch("/api/recommendations/feedback", {
+				method: "POST",
+				credentials: "same-origin",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					bookId,
+					feedback,
+					source: button.dataset.source || "",
+					reason: button.dataset.reason || ""
+				})
+			});
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok || data?.error) throw new Error(String(data?.error || "Failed to save feedback."));
+			setRecommendationFeedbackStatus(button, feedback === "not_interested" ? "Removed from future recommendations." : "Marked interesting.");
+			if (feedback === "not_interested") {
+				const card = button.closest(".book-card");
+				if (card instanceof HTMLElement) card.remove();
+			}
+		} catch (error) {
+			for (const item of buttons) if (item instanceof HTMLButtonElement) item.disabled = false;
+			setRecommendationFeedbackStatus(button, error instanceof Error ? error.message : "Failed to save feedback.");
+		}
+	}
+
 	function markMatchingMockShelfButtonsAsAdded(shelfName) {
 		const normalized = normalizeText(shelfName);
 		if (!normalized) return;
@@ -1474,6 +1655,12 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		if (createShelfButton instanceof HTMLButtonElement) {
 			event.preventDefault();
 			void createMockShelf(createShelfButton);
+			return;
+		}
+		const recommendationFeedbackButton = target.closest('[data-action="recommendation-feedback"]');
+		if (recommendationFeedbackButton instanceof HTMLButtonElement) {
+			event.preventDefault();
+			void saveRecommendationFeedback(recommendationFeedbackButton);
 			return;
 		}
 		const followButton = target.closest('[data-action="follow-reader"]');

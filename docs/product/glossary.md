@@ -108,6 +108,14 @@ JSON stored on `app_user.profile_data`. It contains profile fields and settings 
 
 A DogEared user with an account and, usually, a username/profile.
 
+## Recommendation Feedback
+
+A private signal a signed-in reader gives on a recommended book. Current values are Interesting and Not Interested. Not Interested removes the book from future personal recommendation results.
+
+## Recommended For You
+
+DogEared's personalized recommendation section. It uses transparent reader activity such as shelves, ratings, completed books, favorite genres, enjoyed authors, and similar books, with a visible reason on every card.
+
 ## Reading Progress Event
 
 A stored forward page movement for a reader and book, with from-page, to-page, page delta, and recorded time.

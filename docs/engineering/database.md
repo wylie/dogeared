@@ -327,6 +327,27 @@ Relationships:
 - Joins `user_activity` and `app_user`.
 - Can create `user_notification` rows for the activity owner.
 
+## Recommendation Feedback
+
+Entity: `user_recommendation_feedback`
+
+Stores explicit reader feedback on recommended books.
+
+Fields:
+
+- User.
+- Book.
+- Feedback value: `interesting` or `not_interested`.
+- Recommendation source.
+- Recommendation reason shown to the reader.
+- Created and updated timestamps.
+
+Relationships:
+
+- Belongs to `app_user` and `book`.
+- Used by the recommendations service to exclude Not Interested books from future personal recommendations.
+- Does not create public activity or profile content.
+
 ## Comments
 
 Entity: `user_activity_comment`

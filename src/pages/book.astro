@@ -14,6 +14,7 @@ import { resolveCustomShelfOptions } from "../lib/customShelves";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
 import { loadBookSeriesContext, type BookSeriesContext, type ShelfStatus } from "../lib/series";
 import { formatReadingPosition, loadJournalEntriesForBook, type JournalSearchResult } from "../lib/readingJournal";
+import { loadReadersAlsoEnjoyed, type RecommendationSection } from "../lib/recommendations";
 
 export const prerender = false;
 
@@ -198,6 +199,7 @@ let customShelfOptionsJson = "[]";
 let seriesContext: BookSeriesContext | null = null;
 let journalEntries: JournalSearchResult[] = [];
 let readerOwnsBook = false;
+let readersAlsoEnjoyed: RecommendationSection | null = null;
 
 async function fetchGoogleBook() {
 	const apiKey = normalizeText(import.meta.env.GOOGLE_BOOKS_API_KEY);
@@ -721,6 +723,7 @@ if (book && session?.userId) {
 	}
 	if (book?.id) {
 		seriesContext = await loadBookSeriesContext(sql, book.id, session?.userId || "");
+		readersAlsoEnjoyed = await loadReadersAlsoEnjoyed(sql, book.id, session?.userId || "", 6).catch(() => null);
 	}
 } catch (error) {
 	errorMessage = error instanceof Error ? error.message : "Failed to load book.";
@@ -1043,6 +1046,51 @@ const bookStructuredDataPayload = bookStructuredData
 								</ul>
 							)}
 						</div>
+					</section>
+				)}
+
+				{readersAlsoEnjoyed && readersAlsoEnjoyed.books.length > 0 && (
+					<section class="panel readers-also-panel" id="readers-also-enjoyed">
+						<div class="readers-also-head">
+							<h2>{readersAlsoEnjoyed.title}</h2>
+							<p>{readersAlsoEnjoyed.subtitle}</p>
+						</div>
+						<ul class="readers-also-list">
+							{readersAlsoEnjoyed.books.map((recommendation) => {
+								const recommendationBookId = Number(String(recommendation.id || "").replace(/^book_/, ""));
+								return (
+									<BookCard
+										title={recommendation.title}
+										titleHref={`/book?bookId=${encodeURIComponent(String(recommendationBookId))}`}
+										author={recommendation.authors.join(", ") || "Unknown author"}
+										authorHref={recommendation.authorHref}
+										thumbnail={recommendation.thumbnail}
+										description={recommendation.description || "Synopsis unavailable for this edition."}
+										readers={recommendation.shelfCount}
+										shelfEntries={recommendation.shelfCount}
+										publishedLabel={recommendation.publishedDate ? formatPublishedLabel(recommendation.publishedDate) : ""}
+										pageCount={recommendation.pageCount}
+										averageRating={recommendation.averageRating}
+									>
+										<p slot="preTitle" class="recommendation-reason">{recommendation.recommendationReason}</p>
+										<div slot="actions">
+											<ShelfDropdown attrs={{
+												"data-title": recommendation.title,
+												"data-author": recommendation.authors[0] || "",
+												"data-description": recommendation.description,
+												"data-cover": recommendation.thumbnail,
+												"data-pages": String(recommendation.pageCount || 0),
+												"data-isbn10": recommendation.isbn10 || "",
+												"data-isbn13": recommendation.isbn13 || "",
+												"data-google-books-id": recommendation.source === "google_books" ? recommendation.sourceWorkId || "" : "",
+												"data-book-id": String(recommendationBookId),
+												"data-initial-status": ""
+											}} />
+										</div>
+									</BookCard>
+								);
+							})}
+						</ul>
 					</section>
 				)}
 
@@ -2340,6 +2388,38 @@ const bookStructuredDataPayload = bookStructuredData
 		min-height: 2rem;
 		padding: 0.28rem 0.65rem;
 	}
+	.readers-also-panel {
+		border: none;
+		background: transparent;
+		padding: 0;
+	}
+	.readers-also-head {
+		display: grid;
+		gap: 0.2rem;
+		margin-bottom: 0.65rem;
+	}
+	.readers-also-head h2,
+	.readers-also-head p {
+		margin: 0;
+	}
+	.readers-also-head p {
+		color: var(--color-text-subtle);
+		font-size: 0.9rem;
+	}
+	.readers-also-list {
+		list-style: none;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.75rem;
+		margin: 0;
+		padding: 0;
+	}
+	.recommendation-reason {
+		margin: 0 0 0.35rem;
+		color: var(--color-nav);
+		font-size: 0.82rem;
+		font-weight: 800;
+	}
 	.activity-panel { border: none; background: transparent; padding: 0; }
 	.activity-grid { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.9rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.activity-headline { font-weight: 700; color: var(--color-text); }
@@ -2475,7 +2555,8 @@ const bookStructuredDataPayload = bookStructuredData
 	}
 	.error { color: #991b1b; }
 	@media (max-width: 860px) {
-		.activity-grid { grid-template-columns: 1fr; }
+		.activity-grid,
+		.readers-also-list { grid-template-columns: 1fr; }
 		.review-card { padding: 0.65rem; }
 		.series-continue {
 			align-items: flex-start;

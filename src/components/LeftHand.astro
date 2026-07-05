@@ -8,6 +8,7 @@ const currentNormalized = normalize(current);
 const isProfilePage = currentNormalized === "/profile" || currentNormalized.startsWith("/profile/");
 const isReadingLifePage = currentNormalized === "/reading-life";
 const isJournalPage = currentNormalized === "/journal";
+const isDiscoverPage = currentNormalized === "/discover";
 const isHomePage = currentNormalized === "/";
 const isAdminDashboardPage = currentNormalized === "/admin";
 const isAdminCollectionsPage = currentNormalized === "/admin/collections";
@@ -91,6 +92,16 @@ const query = Astro.url.searchParams.get("q") ?? "";
       <section class="nav-group nav-group-explore">
         <h3 class="nav-group-title">Explore</h3>
         <ul>
+          <li>
+            <a href={isDiscoverPage ? undefined : '/discover'} class={isDiscoverPage ? 'active' : 'hover'} aria-current={isDiscoverPage ? 'page' : undefined}>Discover</a>
+            {isDiscoverPage && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
           <li>
             <a href={isActive('/books') ? undefined : '/books'} class={isActive('/books') ? 'active' : 'hover'} aria-current={isActive('/books') ? 'page' : undefined}>Books</a>
             {isActive('/books') && sectionLinks.length > 0 && (
