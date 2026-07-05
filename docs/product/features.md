@@ -93,7 +93,7 @@ Status: Complete
 
 Home shows personalized, explainable recommendations. Signed-in recommendations use saved shelves, ratings, completed books, favorite genres, enjoyed authors, similar-book genre overlap, and community ratings. If DogEared has limited personal data, the section falls back to popular books.
 
-Every recommendation includes a visible reason. Readers can mark recommendations Interesting or Not Interested; Not Interested feedback is stored per user and excluded from future personal results.
+Every recommendation includes a visible reason. Readers can mark recommendations Interesting or hide them. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal results.
 
 Limitations: Review sentiment is future-ready but not currently scored. Recommendations are transparent heuristics, not an AI engine.
 
@@ -191,9 +191,9 @@ Limitations: Activity history may remain even after a shelf entry is removed.
 
 Status: Complete
 
-Profile shelf sections can be reordered and saved through the section-order API.
+Profile shelf sections and the profile Reviews section can be reordered and saved through the section-order API.
 
-Limitations: Ordering applies to profile shelf sections, not global navigation.
+Limitations: Ordering applies to profile content sections, not global navigation.
 
 ### DNF Shelf
 
@@ -209,9 +209,9 @@ Limitations: DNF imports map to Want to Read unless a different implemented stat
 
 Status: Complete
 
-Currently Reading books can store total pages and current page. Forward progress creates reading progress events and activity.
+Currently Reading books can store total pages and current page. The profile update control uses a typed selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time so the interaction matches journal reading positions. Forward progress creates reading progress events and activity.
 
-Limitations: Progress tracking is page-based. It does not currently model percentages, time listened, or multiple editions separately.
+Limitations: Persisted progress tracking remains page-based. Percentage updates are converted to pages when total pages are known; chapter, location, and audiobook inputs remain lightweight entry aids rather than a full alternate progress model.
 
 ### Quick Finish
 
@@ -235,7 +235,7 @@ Status: Complete
 
 Reviews are public finished-book recommendations stored on the shelf entry. When a reader marks a book Read, DogEared offers a simple completion flow: rating, optional review, and finish. Reviews support an optional title, optional body, spoiler flag, editing, deletion, and local draft autosave where the editor is available.
 
-Book pages show average rating, rating count, recent reviews, spoiler labels, collapsed long reviews, and an owner editor for finished books. Profiles include a Reviews section with latest reviews plus sort and spoiler filters.
+Book pages show average rating, rating count, recent reviews, spoiler labels, collapsed long reviews, and an owner editor for finished books. Profiles include a Reviews section with latest reviews, sort and spoiler filters, and the same move-up/move-down layout controls used by shelf sections.
 
 Limitations: Reviews are public by default. Future privacy settings may add alternate visibility, but current Journal entries remain the private place for notes while reading.
 
@@ -399,7 +399,7 @@ Status: Complete
 
 Editors can curate collections with title, slug, subtitle, description, editorial introduction, hero image, category, featured flag, publication state, and sort order. Books inside collections support custom order, editor notes, and featured quotes. Readers can browse published collections at `/collections`, open collection detail pages, read why each book belongs, see ratings, and add books to shelves.
 
-Featured collections appear sparingly on Home, author pages show collections that include that author, and Search returns matching published collections.
+Featured collections appear sparingly on Home, author pages show collections that include that author, and Search returns matching published collections. Collections is currently hidden from the left navigation until the beta product has enough useful published content to avoid an empty destination.
 
 Limitations: Collections are manually curated by admins. There is no staff profile, guest curator, award, library, or partnership workflow yet beyond the extensible collection metadata and category fields.
 

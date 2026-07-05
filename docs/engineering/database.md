@@ -345,7 +345,7 @@ Fields:
 Relationships:
 
 - Belongs to `app_user` and `book`.
-- Used by the recommendations service to exclude Not Interested books from future personal recommendations.
+- Used by the recommendations service to exclude books hidden through `not_interested` feedback from future personal recommendations.
 - Does not create public activity or profile content.
 
 ## Comments

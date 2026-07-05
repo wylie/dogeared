@@ -19,7 +19,7 @@ Authentication requirements:
 | `/authors` | Public | Search, filter, sort, and page through authors. | Author cards, author stats. |
 | `/author/[slug]` | Public | Canonical author detail page with Featured In collections and series-grouped local books. | `BookCard`, `ShelfDropdown`, `RatingControl`, collection links, series grouping, external author books, author metadata. |
 | `/author` | Redirect | Legacy author query route. | Redirects to canonical author path or `/authors`. |
-| `/collections` | Public | Browse published editorial collections by category. | `collections` helper, collection cards, published collection metadata. |
+| `/collections` | Public | Browse published editorial collections by category. The route remains available, but the primary left navigation hides Collections until there is enough useful published content for beta readers. | `collections` helper, collection cards, published collection metadata. |
 | `/collections/[slug]` | Public | Editorial collection detail page with introduction, ordered books, notes, quotes, ratings, and shelf controls. | `BookCard`, `ShelfDropdown`, `RatingControl`, `collections` helper. |
 | `/related` | Public | Landing and related pages for genres, topics, authors, and books. | `BookCard`, `ShelfDropdown`, genre/topic/author/book queries. |
 | `/profile/[username]` | Public with privacy checks | Public reader identity and current reading state; owner can edit profile, view notifications, and manage shelves. | Profile bundle, shelf summary, custom shelves, concise reading goal, momentum, current reads, notifications, activity likes/comments. |
@@ -68,7 +68,7 @@ Authentication requirements:
 | `/api/shelf/entries` | GET, POST, DELETE | Authenticated | Load, upsert, and remove default shelf entries. |
 | `/api/shelf/rating` | PATCH | Authenticated | Save or clear rating for an existing shelf entry. |
 | `/api/reviews/entry` | POST, DELETE | Authenticated | Save/edit or delete the signed-in reader's public review metadata for a finished shelf entry. |
-| `/api/recommendations/feedback` | POST | Authenticated | Store Interesting or Not Interested feedback for a recommended book. |
+| `/api/recommendations/feedback` | POST | Authenticated | Store Interesting or hidden recommendation (`not_interested`) feedback for a recommended book. |
 | `/api/shelf/custom-shelves` | GET, POST, PATCH, DELETE | Authenticated | Manage custom shelves. |
 | `/api/shelf/custom-shelf-books` | GET, POST, DELETE | Authenticated | Manage custom shelf book assignments. |
 | `/api/shelf/section-order` | GET, POST | Authenticated | Load/save profile shelf section ordering. |

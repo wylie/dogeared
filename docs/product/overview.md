@@ -32,14 +32,14 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 
 ## Major Application Sections
 
-- Home: Recommended For You, featured editorial collections, transparent community discovery sections, onboarding checklist, guided first-experience tips, discovery jump links, reader suggestions, and custom shelf ideas.
+- Home: Recommended For You, featured editorial collections when available, transparent community discovery sections, onboarding checklist, guided first-experience tips, discovery jump links, reader suggestions, and custom shelf ideas.
 - Discover: explainable personalized and community-powered discovery for what to read next.
 - Search: book search backed by DogEared catalog results plus Google Books and Open Library, with series labels and editorial collection matches when available.
 - Books: curated catalog views such as trending, most shelved, top rated, and recently active.
 - Book detail: metadata, series context, synopsis, genres, topics, shelf controls, ratings, Readers Also Enjoyed recommendations, private journal entry controls for shelved books, reviews, and related activity.
 - Authors: searchable and sortable author index.
 - Author detail: author profile, editorial collections featuring the author, author books grouped by series where available, standalone books, and external author-book context.
-- Editorial Collections: curated book lists with editorial introductions, book ordering, notes, quotes, and shelf controls.
+- Editorial Collections: curated book lists with editorial introductions, book ordering, notes, quotes, and shelf controls. Collection routes remain available, but Collections is hidden from primary navigation until there is useful published content to browse.
 - Profiles: public reader identity and current reading state, including profile card, notifications for the owner, bio, favorite book/author, concise reading goal summary, shelf summary, current reads, recent activity, and settings access.
 - My Reading Life: private historical reflection across finished books, pages, streaks, goals, ratings, timeline, reading calendar, genre and author history, milestones, fun statistics, and yearly summaries.
 - Reading Journal: private searchable notebook for what a reader was thinking while reading, including dated entries, optional book context, one optional reading position, moods, and personal tags.
@@ -104,7 +104,7 @@ If DogEared does not have enough data for a provider, that provider is hidden. I
 
 DogEared supports explainable Recommendations & Discovery v1. Home shows Recommended For You above broader community sections. Signed-in recommendations use the reader's shelves, ratings, finished books, favorite genres, enjoyed authors, similar books, and community ratings. If personal data is limited, DogEared falls back to popular books and explains that adding, rating, and reviewing books improves recommendations.
 
-Recommendation cards always explain why a book appears, with reasons such as "Because you enjoyed..." or "Popular with Fantasy readers." Readers can mark recommendations as Interesting or Not Interested. Not Interested feedback is stored per user and excluded from future personal recommendations.
+Recommendation cards always explain why a book appears, with reasons such as "Because you enjoyed..." or "Popular with Fantasy readers." Readers can mark recommendations Interesting or hide a recommendation. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal recommendations.
 
 The `/discover` page collects Recommended For You plus community sections such as Trending Up, New Releases Readers Love, Hidden Gems, Most Finished, and Community Favorites. Book detail pages include Readers Also Enjoyed, based on shared readers, genres, and authors. Recommendation feedback and future review sentiment are modeled as extension points, but the current system remains transparent and non-AI.
 
@@ -128,7 +128,7 @@ The launch-readiness stance is documented in `docs/beta-readiness.md`. Remaining
 
 DogEared supports first-class editorial collections for curated discovery that does not depend on popularity. Collections have title, slug, subtitle, description, editorial introduction, hero image, category, featured flag, publication state, sort order, and extensible metadata. Books inside collections have custom order, optional editor note, and optional featured quote.
 
-Published collections appear on `/collections` and detail pages at `/collections/[slug]`. Collection pages use larger editorial presentation, a short editor's note, and book cards with covers, title, author, ratings, Add to Shelf controls, and the reason each book belongs. Home shows at most two featured collections so the page stays calm. Author pages show a Featured In section when published collections include that author, and Search returns matching published collections above book results.
+Published collections appear on `/collections` and detail pages at `/collections/[slug]`. Collection pages use larger editorial presentation, a short editor's note, and book cards with covers, title, author, ratings, Add to Shelf controls, and the reason each book belongs. Home shows at most two featured collections so the page stays calm. Author pages show a Featured In section when published collections include that author, and Search returns matching published collections above book results. The left navigation does not currently link to Collections because the beta product should not send readers to an empty or sparse destination.
 
 Admins manage collections from `/admin/collections`, where they can create, edit, reorder, publish, archive, and feature collections.
 
@@ -138,7 +138,7 @@ Authors have an index page, canonical author detail routes, optional bio/photo/s
 
 ### Profiles
 
-Profiles show who a reader is and what they are reading now. They include reader identity, bio, favorite book and author, shelf counts, followers/following counts, a concise reading goal summary, notifications for the owner, custom shelves, current reads, recent activity, default shelf sections, and settings/profile edit access. Owners can edit profile information directly from their profile page.
+Profiles show who a reader is and what they are reading now. They include reader identity, bio, favorite book and author, shelf counts, followers/following counts, a concise reading goal summary, notifications for the owner, custom shelves, current reads, recent activity, profile Reviews, default shelf sections, and settings/profile edit access. Owners can edit profile information directly from their profile page and reorder Reviews alongside shelf sections.
 
 ### Shelves
 
@@ -148,7 +148,7 @@ DNF is referenced in roadmap and filtered from imported Goodreads genre tags, bu
 
 ### Reading Progress
 
-Currently Reading books can store total pages, current page, finished date after completion, and progress events. Forward page progress creates `user_reading_progress_event` rows. Read books can store finished date, rating, and public review metadata.
+Currently Reading books can store total pages, current page, finished date after completion, and progress events. The profile progress control uses a reading-position style selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time; persisted progress remains page-based, with percentages converted when total pages are known. Forward page progress creates `user_reading_progress_event` rows. Read books can store finished date, rating, and public review metadata.
 
 ### Momentum Score
 
@@ -176,7 +176,7 @@ Current limitations: My Reading Life and its timeline depend on recorded DogEare
 
 ### Reading Journal
 
-DogEared supports a private Reading Journal for signed-in readers. A journal entry belongs to one reader and may optionally be linked to a shelved book. Entries store an optional title, required body, journal date/time, one optional reading position, optional mood, personal tags, visibility metadata, and last-edited timestamps. Reading position is stored as a type and value, such as Page 20, 58%, Chapter 4, or Kindle location 1234.
+DogEared supports a private Reading Journal for signed-in readers. A journal entry belongs to one reader and may optionally be linked to a shelved book. Entries store an optional title, required body, journal date/time, one optional reading position, optional mood, personal tags, visibility metadata, and last-edited timestamps. Reading position is stored as a type and value, such as Page 20, 58%, Chapter 4, Kindle location 1234, or Audiobook 1h 20m.
 
 The private `/journal` page provides a prominent New Entry action, newest-first journal timeline, text search, searchable saved-book picker/filtering, date filtering, pagination, local draft recovery, inline entry viewing, editing, and delete-with-confirmation controls. Entries created there can be general notes or linked to a shelved book.
 
@@ -198,7 +198,7 @@ Activity is created for shelf changes, finished updates, progress updates, and r
 
 Reviews are public recommendations written after finishing a book. They are represented on `user_book` with optional star rating, optional review title, review body, spoiler flag, and review update timestamp. The finish flow offers rating, optional review, and Finish; reviews are never required.
 
-Book detail pages show aggregate rating context, recent reviews, spoiler labeling, collapsed long reviews, and an editor for the signed-in reader's own finished books. Profiles include a Reviews section with latest reviews, sorting, and spoiler filters. Reviews are distinct from Reading Journal entries: reviews are public recommendations after finishing, while journal entries are private notes while reading.
+Book detail pages show aggregate rating context, recent reviews, spoiler labeling, collapsed long reviews, and an editor for the signed-in reader's own finished books. Profiles include a Reviews section with latest reviews, sorting, spoiler filters, and the same owner reorder controls used by shelf sections. Reviews are distinct from Reading Journal entries: reviews are public recommendations after finishing, while journal entries are private notes while reading.
 
 Recently Reviewed recommendations show a review excerpt, reviewer attribution when a username is available, the reviewer's rating when present, and a direct link to the anchored review card on the book page.
 
@@ -263,7 +263,7 @@ Derived from the current repository structure and implementation:
 - Community discovery providers: 7.
 - Editorial collection publication states: 3 (`draft`, `published`, `archived`).
 - Series ordering modes: book order, publication order, chronological order.
-- Supported social/private interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment, create/view/edit/delete/search/filter own journal entries, mark recommendations Interesting/Not Interested, dismiss/complete/reset guided tips.
+- Supported social/private interactions: follow, unfollow, like activity, unlike activity, comment, delete own comment, create/view/edit/delete/search/filter own journal entries, mark recommendations Interesting or hide them, dismiss/complete/reset guided tips.
 - Supported catalog metadata types: editorial collections, series, genres, and topic tags.
 - Supported import source in Settings: Goodreads CSV.
 - Supported data export format in Settings: JSON.

@@ -122,16 +122,6 @@ const query = Astro.url.searchParams.get("q") ?? "";
               </ul>
             )}
           </li>
-          <li>
-            <a href={isActive('/collections') ? undefined : '/collections'} class={isActive('/collections') || currentNormalized.startsWith('/collections/') ? 'active' : 'hover'} aria-current={isActive('/collections') || currentNormalized.startsWith('/collections/') ? 'page' : undefined}>Collections</a>
-            {(isActive('/collections') || currentNormalized.startsWith('/collections/')) && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
           <li id="left-hand-following-item" hidden={!isAuthenticated}>
             <a href={isActive('/following') ? undefined : '/following'} class={isActive('/following') ? 'active' : 'hover'} aria-current={isActive('/following') ? 'page' : undefined}>Following</a>
             {isActive('/following') && sectionLinks.length > 0 && (

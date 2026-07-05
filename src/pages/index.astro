@@ -269,7 +269,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 										}} />
 										<div class="recommendation-feedback" aria-label={`Recommendation feedback for ${book.title}`}>
 											<button type="button" data-action="recommendation-feedback" data-feedback="interesting" data-book-id={String(numericBookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>👍 Interesting</button>
-											<button type="button" data-action="recommendation-feedback" data-feedback="not_interested" data-book-id={String(numericBookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>👎 Not Interested</button>
+											<button type="button" data-action="recommendation-feedback" data-feedback="not_interested" data-book-id={String(numericBookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>Hide recommendation</button>
 										</div>
 									</div>
 								</BookCard>
@@ -655,8 +655,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		margin: 0;
 		color: var(--color-text-muted);
 	}
-	.recommendation-empty a,
-	.recommendation-feedback button {
+	.recommendation-empty a {
 		border-radius: var(--radius-pill);
 		border: 1px solid var(--color-border-soft);
 		background: var(--color-nav-surface);
@@ -671,11 +670,27 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 	.recommendation-feedback {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.35rem;
-		margin-top: 0.45rem;
+		gap: 0.25rem;
+		margin-top: 0.32rem;
+		align-items: center;
+	}
+	.recommendation-feedback button {
+		border-radius: var(--radius-pill);
+		border: none;
+		background: transparent;
+		color: var(--color-text-muted);
+		padding: 0.18rem 0.42rem;
+		font: inherit;
+		font-size: 0.78rem;
+		font-weight: 750;
+		text-decoration: none;
+		cursor: pointer;
 	}
 	.recommendation-feedback button:hover,
-	.recommendation-feedback button:focus-visible,
+	.recommendation-feedback button:focus-visible {
+		background: rgba(87, 117, 144, 0.1);
+		color: var(--color-nav-hover);
+	}
 	.recommendation-empty a:hover,
 	.recommendation-empty a:focus-visible {
 		background: var(--color-nav-surface-hover);

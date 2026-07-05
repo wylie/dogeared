@@ -110,7 +110,7 @@ A DogEared user with an account and, usually, a username/profile.
 
 ## Recommendation Feedback
 
-A private signal a signed-in reader gives on a recommended book. Current values are Interesting and Not Interested. Not Interested removes the book from future personal recommendation results.
+A private signal a signed-in reader gives on a recommended book. Current UI actions are Interesting and Hide recommendation. Hiding stores `not_interested` feedback and removes the book from future personal recommendation results.
 
 ## Recommended For You
 

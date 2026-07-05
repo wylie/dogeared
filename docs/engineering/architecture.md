@@ -94,7 +94,7 @@ Home discovery is provider-based. The discovery service runs pure ranking provid
 
 Recommendations live in `src/lib/recommendations`. The service builds explainable personal recommendations from shelf entries, ratings, finished books, genre overlap, enjoyed authors, similar books, and aggregate community ratings. It falls back to popular books when personalization data is thin. It also powers book detail Readers Also Enjoyed through shared readers, genres, and authors.
 
-Recommendation feedback is stored through `/api/recommendations/feedback`; Not Interested feedback is excluded from future personal results. User-specific recommendations are recomputed on request so feedback takes effect without waiting for a shared cache.
+Recommendation feedback is stored through `/api/recommendations/feedback`; the Hide recommendation action stores `not_interested` feedback, which is excluded from future personal results. User-specific recommendations are recomputed on request so feedback takes effect without waiting for a shared cache.
 
 Current providers:
 

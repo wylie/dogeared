@@ -346,6 +346,7 @@ let customShelves: Array<{ id: number; name: string; slug: string; icon: string;
 let shelfSectionOrderKeys: string[] = [];
 let shelfSectionOrderByKey = new Map<string, number>();
 const RECENT_ACTIVITY_SECTION_KEY = "recent:activity";
+const REVIEWS_SECTION_KEY = "reviews:section";
 let customShelfBooksByShelfId = new Map<number, Array<{
 	bookId: number;
 	title: string;
@@ -821,7 +822,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		bookCount: Math.max(0, Number(row.book_count || 0) || 0)
 	})).filter((row) => row.id > 0 && row.name);
 	if (isOwnerViewer) {
-		const defaultKeys = ["default:reading", RECENT_ACTIVITY_SECTION_KEY, "default:want_to_read", "default:finished"];
+		const defaultKeys = ["default:reading", RECENT_ACTIVITY_SECTION_KEY, REVIEWS_SECTION_KEY, "default:want_to_read", "default:finished"];
 		const customKeys = customShelves.map((shelf) => `custom:${shelf.id}`);
 		const allKeys = [...defaultKeys, ...customKeys];
 		const defaultOrder = defaultProfileSectionOrder(customKeys);
@@ -1010,6 +1011,7 @@ function defaultProfileSectionOrder(customKeys: string[]) {
 	return [
 		"default:reading",
 		RECENT_ACTIVITY_SECTION_KEY,
+		REVIEWS_SECTION_KEY,
 		"default:want_to_read",
 		"default:finished",
 		...customKeys
@@ -1068,6 +1070,7 @@ const orderedShelfSectionLinks = isOwnerViewer
 	? [
 		{ id: "currently-reading", label: "Currently Reading", key: "default:reading" },
 		{ id: "recent-activity", label: "Recent Activity", key: RECENT_ACTIVITY_SECTION_KEY },
+		{ id: "reviews", label: "Reviews", key: REVIEWS_SECTION_KEY },
 		{ id: "want-to-read", label: "Want to Read", key: "default:want_to_read" },
 		{ id: "read", label: "Read", key: "default:finished" },
 		...customShelves.map((shelf) => ({
@@ -1081,6 +1084,7 @@ const orderedShelfSectionLinks = isOwnerViewer
 	: [
 		{ id: "currently-reading", label: "Currently Reading" },
 		{ id: "recent-activity", label: "Recent Activity" },
+		{ id: "reviews", label: "Reviews" },
 		{ id: "want-to-read", label: "Want to Read" },
 		{ id: "read", label: "Read" }
 	];
@@ -1811,9 +1815,25 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				)}
 
 				{(canViewActivity || isOwnerViewer) && (
-					<section id="reviews" class="activity-card activity-card-plain profile-reviews-section">
+					<section
+						id="reviews"
+						class="activity-card activity-card-plain profile-reviews-section"
+						data-shelf-section-key={REVIEWS_SECTION_KEY}
+						style={shelfSectionOrderStyle(REVIEWS_SECTION_KEY)}
+					>
 						<div class="custom-shelf-heading-row">
 							<h2><span class="material-icons custom-shelf-heading-icon default-shelf-heading-icon" aria-hidden="true">rate_review</span>Reviews</h2>
+							{isOwnerViewer && (
+								<div class="custom-shelf-menu-wrap">
+									<button type="button" class="custom-shelf-menu-trigger" data-action="toggle-custom-shelf-menu" aria-expanded="false" aria-label="Actions for Reviews">
+										<span class="material-icons" aria-hidden="true">more_vert</span>
+									</button>
+									<div class="custom-shelf-menu" hidden>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up" {...shelfSectionMoveAttrs(REVIEWS_SECTION_KEY, "up")}>Move up</button>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down" {...shelfSectionMoveAttrs(REVIEWS_SECTION_KEY, "down")}>Move down</button>
+									</div>
+								</div>
+							)}
 						</div>
 						<p class="section-intro">Public recommendations after finishing books. Private thoughts while reading stay in the Reading Journal.</p>
 						<form class="profile-review-controls" method="get" action={Astro.url.pathname}>
@@ -1983,14 +2003,21 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 											})()}
 											{isOwnerViewer && (
 												<div class="progress-inline">
-													<label class="progress-inline-label" for={`progress-inline-${item.bookId}`}>Update progress (page or %)</label>
+													<label class="progress-inline-label" for={`progress-inline-${item.bookId}`}>Update progress</label>
 													<div class="progress-inline-controls">
+														<select class="progress-inline-type" aria-label="Progress type">
+															<option value="page">Page Number</option>
+															<option value="percent">Percentage</option>
+															<option value="chapter">Chapter</option>
+															<option value="location">Kindle Location</option>
+															<option value="audio">Audiobook Time</option>
+														</select>
 														<input
 															id={`progress-inline-${item.bookId}`}
 															class="progress-inline-input"
 															type="text"
 															inputmode="text"
-															placeholder="154 or 31%"
+															placeholder="154"
 															value=""
 														/>
 														<button
@@ -3138,7 +3165,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.activity-social-row {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
+		gap: 0.45rem;
 		flex-wrap: nowrap;
 		min-width: 0;
 	}
@@ -3179,7 +3206,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.activity-comments-wrap {
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: 0.28rem;
 	}
 	.activity-comments-list {
 		display: flex;
@@ -3192,7 +3219,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	:global(.activity-comment-item) {
 		margin: 0;
-		font-size: 1.03rem;
+		font-size: 0.96rem;
 		color: #2f3b52;
 		line-height: 1.32;
 	}
@@ -3215,7 +3242,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		font-weight: 700;
 	}
 	:global(.activity-comment-body) {
-		font-size: 1.03rem;
+		font-size: 0.96rem;
 		color: #1f2937;
 	}
 	:global(.activity-comment-age) {
@@ -3237,8 +3264,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		color: #1f2a44;
 	}
 	:global(.activity-comment-item + .activity-comment-item) {
-		margin-top: 0.22rem;
-		padding-top: 0.22rem;
+		margin-top: 0.16rem;
+		padding-top: 0.18rem;
 		border-top: var(--border-subtle);
 	}
 	.activity-comment-form {
@@ -3276,7 +3303,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.activity-comment-feedback {
 		margin: 0;
-		min-height: 1rem;
+		min-height: 0.8rem;
 		font-size: 0.76rem;
 		color: #8b1d1d;
 	}
@@ -3424,29 +3451,32 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		margin-bottom: 0.22rem;
 	}
 	.progress-inline-controls {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.35rem;
+		display: grid;
+		grid-template-columns: minmax(128px, 0.85fr) minmax(88px, 0.65fr) auto auto;
+		gap: 0.38rem;
 		align-items: center;
 		width: 100%;
 		max-width: 100%;
 	}
+	.progress-inline-type,
 	.progress-inline-input {
-		width: 92px;
-		flex: 1 1 92px;
+		width: 100%;
 		min-width: 0;
-		height: 34px;
+		height: 36px;
 		border: var(--border-strong);
 		border-radius: var(--radius-sm);
 		padding: 0 0.45rem;
 		font-size: 0.85rem;
+		font-family: inherit;
+		color: var(--color-text);
+		background: #fff;
 		box-sizing: border-box;
 	}
 	.progress-inline-save,
 	.progress-inline-finish {
 		border: none;
 		border-radius: 8px;
-		height: 34px;
+		height: 36px;
 		min-width: 88px;
 		padding: 0 0.7rem;
 		background: var(--color-primary);
@@ -3461,7 +3491,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		flex: 0 0 auto;
 	}
 	.progress-inline-save {
-		min-width: 88px;
+		min-width: 76px;
 	}
 	.progress-inline-save:disabled {
 		opacity: 0.75;
@@ -3850,9 +3880,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 		.progress-inline-controls {
 			display: grid;
-			grid-template-columns: minmax(0, 1fr) auto auto;
+			grid-template-columns: minmax(0, 1fr) minmax(86px, 0.75fr) auto auto;
 			align-items: center;
 		}
+		.progress-inline-type,
 		.progress-inline-input {
 			width: 100%;
 			min-width: 0;
@@ -3863,6 +3894,15 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 		.progress-inline-finish {
 			padding: 0 0.45rem;
+		}
+	}
+	@media (max-width: 520px) {
+		.progress-inline-controls {
+			grid-template-columns: 1fr 1fr;
+		}
+		.progress-inline-save,
+		.progress-inline-finish {
+			width: 100%;
 		}
 	}
 </style>
@@ -3907,6 +3947,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	const momentumStreakUnitNode = document.querySelector("[data-momentum-streak-unit]");
 	const momentumNextActionNode = document.querySelector("[data-momentum-next-action]");
 	const RECENT_ACTIVITY_SECTION_KEY = "recent:activity";
+	const REVIEWS_SECTION_KEY = "reviews:section";
 	const shelfSectionNodes = Array.from(document.querySelectorAll("[data-shelf-section-key]"));
 	let readingStreakDayKeys = (() => {
 		try {
@@ -3957,12 +3998,16 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				.map((key) => String(key || "").trim())
 				.filter((key) => knownKeys.has(key))
 		));
-		if (!knownKeys.has(RECENT_ACTIVITY_SECTION_KEY) || deduped.includes(RECENT_ACTIVITY_SECTION_KEY)) {
-			return deduped;
+		if (knownKeys.has(RECENT_ACTIVITY_SECTION_KEY) && !deduped.includes(RECENT_ACTIVITY_SECTION_KEY)) {
+			const readingIndex = deduped.indexOf("default:reading");
+			if (readingIndex >= 0) deduped.splice(readingIndex + 1, 0, RECENT_ACTIVITY_SECTION_KEY);
+			else deduped.unshift(RECENT_ACTIVITY_SECTION_KEY);
 		}
-		const readingIndex = deduped.indexOf("default:reading");
-		if (readingIndex >= 0) deduped.splice(readingIndex + 1, 0, RECENT_ACTIVITY_SECTION_KEY);
-		else deduped.unshift(RECENT_ACTIVITY_SECTION_KEY);
+		if (knownKeys.has(REVIEWS_SECTION_KEY) && !deduped.includes(REVIEWS_SECTION_KEY)) {
+			const recentIndex = deduped.indexOf(RECENT_ACTIVITY_SECTION_KEY);
+			if (recentIndex >= 0) deduped.splice(recentIndex + 1, 0, REVIEWS_SECTION_KEY);
+			else deduped.push(REVIEWS_SECTION_KEY);
+		}
 		return deduped;
 	}
 
@@ -4439,12 +4484,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 	}
 
-	function parseProgressInput(rawValue, totalPages) {
+	function parseProgressInput(rawValue, totalPages, progressType = "page") {
 		const raw = String(rawValue || "").trim();
 		if (!raw) return { valid: false, currentPage: 0, mode: "page", normalizedText: "" };
 		const maxPages = Math.max(0, Number(totalPages || 0) || 0);
-		if (raw.endsWith("%")) {
-			const percentValue = Number(raw.slice(0, -1).trim());
+		const selectedType = String(progressType || "page").trim();
+		if (selectedType === "percent" || raw.endsWith("%")) {
+			const percentValue = Number(raw.replace("%", "").trim());
 			if (!Number.isFinite(percentValue)) return { valid: false, currentPage: 0, mode: "percent", normalizedText: raw };
 			const clampedPercent = Math.max(0, Math.min(100, percentValue));
 			const currentPage = maxPages > 0
@@ -4458,15 +4504,44 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				percent: clampedPercent
 			};
 		}
-		const numericPages = Number(raw);
+		const numericText = raw.replace(/[^0-9.]/g, "");
+		if (!numericText) return { valid: false, currentPage: 0, mode: selectedType || "page", normalizedText: raw };
+		const numericPages = Number(numericText);
 		if (!Number.isFinite(numericPages)) return { valid: false, currentPage: 0, mode: "page", normalizedText: raw };
 		const currentPage = Math.max(0, Math.min(maxPages > 0 ? maxPages : Number.MAX_SAFE_INTEGER, Math.round(numericPages)));
 		return {
 			valid: true,
 			currentPage,
-			mode: "page",
-			normalizedText: String(currentPage)
+			mode: selectedType || "page",
+			normalizedText: selectedType === "chapter"
+				? `Chapter ${Math.round(numericPages)}`
+				: selectedType === "location"
+					? `Location ${Math.round(numericPages)}`
+					: selectedType === "audio"
+						? raw
+						: String(currentPage)
 		};
+	}
+
+	function updateProgressInputPlaceholder(select) {
+		if (!(select instanceof HTMLSelectElement)) return;
+		const card = select.closest(".book-card");
+		const input = card?.querySelector(".progress-inline-input");
+		if (!(input instanceof HTMLInputElement)) return;
+		const placeholders = {
+			page: "154",
+			percent: "31",
+			chapter: "4",
+			location: "1234",
+			audio: "1h 20m"
+		};
+		input.placeholder = placeholders[select.value] || "154";
+		input.inputMode = select.value === "audio" ? "text" : "decimal";
+	}
+
+	for (const select of Array.from(document.querySelectorAll(".progress-inline-type"))) {
+		updateProgressInputPlaceholder(select);
+		select.addEventListener("change", () => updateProgressInputPlaceholder(select));
 	}
 
 	function safeFormatActivityDate(value) {
@@ -5180,9 +5255,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			event.stopPropagation();
 			const card = progressSave.closest(".book-card");
 			const input = card?.querySelector(".progress-inline-input");
+			const progressTypeInput = card?.querySelector(".progress-inline-type");
 			if (!(input instanceof HTMLInputElement)) return;
+			const progressType = progressTypeInput instanceof HTMLSelectElement ? progressTypeInput.value : "page";
 			const totalPages = Math.max(0, Number(progressSave.dataset.totalPages || 0) || 0);
-			const parsed = parseProgressInput(input.value, totalPages);
+			const parsed = parseProgressInput(input.value, totalPages, progressType);
 			if (!parsed.valid) {
 				progressSave.textContent = "Invalid";
 				setTimeout(() => {

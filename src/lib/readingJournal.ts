@@ -3,7 +3,7 @@ import type { getNeonSql } from "./neon";
 type Sql = ReturnType<typeof getNeonSql>;
 
 export type JournalVisibility = "private" | "friends" | "public" | "shared";
-export type ReadingPositionType = "" | "page" | "percent" | "chapter" | "location";
+export type ReadingPositionType = "" | "page" | "percent" | "chapter" | "location" | "audio";
 
 export type ReadingJournalEntry = {
 	id?: number;
@@ -104,7 +104,7 @@ export function normalizeJournalVisibility(value: unknown): JournalVisibility {
 
 export function normalizeReadingPositionType(value: unknown): ReadingPositionType {
 	const type = String(value || "").trim().toLowerCase();
-	if (type === "page" || type === "percent" || type === "chapter" || type === "location") return type;
+	if (type === "page" || type === "percent" || type === "chapter" || type === "location" || type === "audio") return type;
 	return "";
 }
 
@@ -115,6 +115,7 @@ export function formatReadingPosition(type: unknown, value: unknown) {
 	if (positionType === "page") return `Page ${positionValue}`;
 	if (positionType === "percent") return positionValue.endsWith("%") ? positionValue : `${positionValue}%`;
 	if (positionType === "chapter") return /^chapter\b/i.test(positionValue) ? positionValue : `Chapter ${positionValue}`;
+	if (positionType === "audio") return /^audiobook\b|^audio\b/i.test(positionValue) ? positionValue : `Audiobook ${positionValue}`;
 	return positionValue;
 }
 
