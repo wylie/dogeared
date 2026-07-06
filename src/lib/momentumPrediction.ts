@@ -67,7 +67,7 @@ export function resolveMomentumPrediction(input: PredictionInput): MomentumPredi
 	const updates = Math.max(0, Number(input.progressUpdateCount || 0) || 0);
 	const elapsedDays = Math.max(0, Number(input.daysSinceStart || 0) || 0);
 	const confidence = resolveConfidence(input);
-	const veryEarly = elapsedDays <= 2 && updates <= 1 && percent < 12;
+	const veryEarly = currentPage <= 0 && elapsedDays <= 2 && updates <= 1;
 	const hasMinimumData = (
 		currentPage >= MOMENTUM_THRESHOLDS.minPagesRead
 		&& percent >= MOMENTUM_THRESHOLDS.minPercentRead

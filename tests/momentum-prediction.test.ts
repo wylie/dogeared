@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { resolveMomentumPrediction } from "../src/lib/momentumPrediction.ts";
 
-test("suppresses prediction for newly started books", () => {
+test("suppresses prediction for books with no saved progress", () => {
 	const result = resolveMomentumPrediction({
-		currentPage: 14,
+		currentPage: 0,
 		totalPages: 226,
 		daysSinceUpdate: 0,
 		daysSinceStart: 0,
@@ -23,8 +23,20 @@ test("suppresses low-confidence predictions even with some progress", () => {
 		progressUpdateCount: 1
 	});
 	assert.equal(result.eligible, false);
-	assert.equal(result.label, "Recently started");
+	assert.equal(result.label, "Building reading history");
 	assert.ok(result.confidence < 0.5);
+});
+
+test("first nonzero progress update leaves recently started state", () => {
+	const result = resolveMomentumPrediction({
+		currentPage: 8,
+		totalPages: 320,
+		daysSinceUpdate: 0,
+		daysSinceStart: 0,
+		progressUpdateCount: 1
+	});
+	assert.equal(result.eligible, false);
+	assert.equal(result.label, "Building reading history");
 });
 
 test("shows supportive prediction once thresholds are met", () => {

@@ -106,6 +106,13 @@ test("profile progress saves refresh all derived reading UI without reload", () 
 	assert.equal(source.includes("setNodeText(momentumScoreNode"), true);
 	assert.equal(source.includes("setNodeText(momentumNextActionNode"), true);
 	assert.equal(source.includes('card.dataset.momentumProgressUpdates = String(persistedProgressUpdates > 0'), true);
+	const progressSaveStart = source.indexOf('if (progressSave instanceof HTMLButtonElement)');
+	const currentPageUpdate = source.indexOf("card.dataset.momentumCurrentPage = String(nextCurrentPage)", progressSaveStart);
+	const rememberProgress = source.indexOf("if (hasForwardProgress) rememberReadingActivityToday()", progressSaveStart);
+	const progressRefresh = source.indexOf("await refreshProfileReadingUiAfterMutation()", currentPageUpdate);
+	assert.ok(progressSaveStart > -1);
+	assert.ok(currentPageUpdate > progressSaveStart && currentPageUpdate < progressRefresh);
+	assert.ok(rememberProgress > progressSaveStart && rememberProgress < progressRefresh);
 	assert.equal(apiSource.includes("progress_updates"), true);
 	assert.equal(apiSource.includes("progressUpdates"), true);
 	assert.equal(apiSource.includes("user_reading_progress_event"), true);
