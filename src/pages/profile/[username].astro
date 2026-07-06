@@ -542,7 +542,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 					b.isbn13,
 					b.google_books_id,
 					ub.current_page,
-					ub.total_pages,
+					coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages,
 					ub.updated_at::text as updated_at,
 					coalesce(ub.first_added_at::text, ub.updated_at::text) as first_added_at,
 					coalesce(pe.progress_updates, 0)::int as progress_updates,

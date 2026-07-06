@@ -1464,7 +1464,8 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			format,
 			language,
 			isbn10,
-			isbn13
+			isbn13,
+			googleBooksId: String(dropdown.dataset.googleBooksId || "").trim()
 		}, {
 			status: selectedStatus,
 			totalPages,

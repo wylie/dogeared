@@ -122,6 +122,10 @@ test("profile progress saves refresh all derived reading UI without reload", () 
 	assert.equal(apiSource.includes("progressUpdates"), true);
 	assert.equal(apiSource.includes("user_reading_progress_event"), true);
 	assert.equal(apiSource.includes("previousStatus === status && status === \"reading\""), false);
+	assert.equal(apiSource.includes("coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages"), true);
+	assert.equal(apiSource.includes("const effectiveTotalPages = Math.max("), true);
+	assert.equal(apiSource.includes("${effectiveTotalPages}"), true);
+	assert.equal(source.includes("coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages"), true);
 });
 
 test("mobile progress updater keeps controls readable and touch sized", () => {

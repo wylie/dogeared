@@ -416,7 +416,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 				b.language,
 				ub.status,
 				ub.rating,
-				ub.total_pages,
+				coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages,
 				ub.current_page,
 				ub.finished_date::text as finished_date,
 				coalesce(ub.finished_reflection, '') as finished_reflection,
@@ -594,13 +594,14 @@ export const POST: APIRoute = async ({ request }) => {
 		const previousRows = await sql<Array<{
 			status: ShelfStatus;
 			rating: number | null;
+			total_pages: number;
 			current_page: number;
 			finished_date: string | null;
 			finished_reflection: string | null;
 			review_title: string | null;
 			review_spoiler: boolean | null;
 		}>>`
-			select status, rating, current_page, finished_date::text as finished_date, coalesce(finished_reflection, '') as finished_reflection, coalesce(review_title, '') as review_title, coalesce(review_spoiler, false) as review_spoiler
+			select status, rating, total_pages, current_page, finished_date::text as finished_date, coalesce(finished_reflection, '') as finished_reflection, coalesce(review_title, '') as review_title, coalesce(review_spoiler, false) as review_spoiler
 			from user_book
 			where user_id = ${userId}::uuid
 				and book_id = ${resolvedBookId || 0}
@@ -608,6 +609,7 @@ export const POST: APIRoute = async ({ request }) => {
 		`;
 		const previousStatus = String(previousRows[0]?.status || "").trim() as ShelfStatus | "";
 		const previousRating = normalizeRating(previousRows[0]?.rating);
+		const previousTotalPages = normalizePositiveInt(previousRows[0]?.total_pages);
 		const previousCurrentPage = normalizePositiveInt(previousRows[0]?.current_page);
 		const previousFinishedDate = String(previousRows[0]?.finished_date || "").trim();
 		const previousFinishedReflection = normalizeReviewBody(previousRows[0]?.finished_reflection);
@@ -615,8 +617,9 @@ export const POST: APIRoute = async ({ request }) => {
 		const previousReviewSpoiler = previousRows[0]?.review_spoiler === true;
 
 		let bookId = resolvedBookId;
+		let canonicalPageCount = Math.max(0, Number(pageCount || 0) || 0);
 		if (bookId > 0) {
-			await sql`
+			const updatedBookRows = await sql<Array<{ page_count: number }>>`
 				update book
 				set
 					title = ${title},
@@ -636,9 +639,11 @@ export const POST: APIRoute = async ({ request }) => {
 					published_year = coalesce(${publishedYear}, book.published_year),
 					updated_at = now()
 				where id = ${bookId}
+				returning coalesce(nullif(page_count, 0), 0)::int as page_count
 			`;
+			canonicalPageCount = Math.max(canonicalPageCount, Number(updatedBookRows[0]?.page_count || 0) || 0);
 		} else {
-			const bookRows = await sql<{ id: number }[]>`
+			const bookRows = await sql<Array<{ id: number; page_count: number }>>`
 				insert into book (
 					canonical_work_key,
 					title,
@@ -686,9 +691,10 @@ export const POST: APIRoute = async ({ request }) => {
 					end,
 					published_year = coalesce(excluded.published_year, book.published_year),
 					updated_at = now()
-				returning id
+				returning id, coalesce(nullif(page_count, 0), 0)::int as page_count
 			`;
 			bookId = Number(bookRows[0]?.id || 0);
+			canonicalPageCount = Math.max(canonicalPageCount, Number(bookRows[0]?.page_count || 0) || 0);
 		}
 		if (!bookId) throw new Error("Book upsert failed.");
 		await upsertBookSources(sql, bookId, sources);
@@ -716,6 +722,21 @@ export const POST: APIRoute = async ({ request }) => {
 		if (workEdition.representativeBookId > 0 && workEdition.representativeBookId !== bookId) {
 			bookId = workEdition.representativeBookId;
 		}
+		if (workEdition.editionId > 0) {
+			const canonicalPageRows = await sql<Array<{ page_count: number }>>`
+				select
+					coalesce(
+						nullif(be.page_count, 0),
+						nullif(b.page_count, 0),
+						0
+					)::int as page_count
+				from book_edition be
+				left join book b on b.id = ${bookId}
+				where be.id = ${workEdition.editionId}
+				limit 1
+			`;
+			canonicalPageCount = Math.max(canonicalPageCount, Number(canonicalPageRows[0]?.page_count || 0) || 0);
+		}
 		await upsertKnownSeriesForBook(sql, {
 			bookId,
 			workId: workEdition.workId,
@@ -724,6 +745,13 @@ export const POST: APIRoute = async ({ request }) => {
 			coverUrl,
 			publishedYear
 		});
+
+		const effectiveTotalPages = Math.max(
+			0,
+			totalPages || 0,
+			previousTotalPages || 0,
+			canonicalPageCount || 0
+		);
 
 		for (const genre of genres) {
 			await sql`
@@ -784,7 +812,7 @@ export const POST: APIRoute = async ({ request }) => {
 				${bookId},
 				${status},
 				${rating},
-				${totalPages},
+				${effectiveTotalPages},
 				${currentPage},
 				${finishedDate ? finishedDate : null}::date,
 				${finishedReflection},
@@ -798,7 +826,10 @@ export const POST: APIRoute = async ({ request }) => {
 			on conflict (user_id, book_id) do update set
 				status = excluded.status,
 				rating = excluded.rating,
-				total_pages = excluded.total_pages,
+				total_pages = case
+					when excluded.total_pages > 0 then excluded.total_pages
+					else user_book.total_pages
+				end,
 				current_page = excluded.current_page,
 				finished_date = excluded.finished_date,
 				finished_reflection = excluded.finished_reflection,
@@ -929,7 +960,7 @@ export const POST: APIRoute = async ({ request }) => {
 				b.language,
 				ub.status,
 				ub.rating,
-				ub.total_pages,
+				coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages,
 				ub.current_page,
 				ub.finished_date::text as finished_date,
 				ub.first_added_at::text as first_added_at,
