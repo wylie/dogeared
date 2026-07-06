@@ -19,6 +19,7 @@ Routes live in `src/pages/`.
 Shared components live in `src/components/`.
 
 - `BookCard` renders repeated book/activity cards.
+- Reusable UI behavior that belongs to a repeated card or shared surface should live with that component whenever practical, including its markup, scoped styles, data attributes, accessibility state, and client-side event handling. Pages should compose shared components and opt into component features instead of duplicating card-specific HTML, CSS, or JavaScript.
 - `ShelfDropdown` provides default and custom shelf controls.
 - `RatingControl` handles standalone star ratings, while book/profile review editors handle finished-book public recommendations.
 - `Chip` renders metadata chips for genres/topics.
@@ -94,7 +95,7 @@ Home discovery is provider-based. The discovery service runs pure ranking provid
 
 Recommendations live in `src/lib/recommendations`. The service builds explainable personal recommendations from shelf entries, ratings, finished books, genre overlap, enjoyed authors, similar books, and aggregate community ratings. It falls back to popular books when personalization data is thin. It also powers book detail Readers Also Enjoyed through shared readers, genres, and authors. Recommendation rows attach series labels and collapse display-level duplicate editions through `dedupeCatalogItemsByDisplayWork`.
 
-Recommendation feedback is stored through `/api/recommendations/feedback`; the Hide recommendation action stores `not_interested` feedback, which is excluded from future personal results. User-specific recommendations are recomputed on request so feedback takes effect without waiting for a shared cache. The UI renders feedback as lightweight rectangular secondary actions, leaving Add To Shelf as the primary action.
+Recommendation feedback is stored through `/api/recommendations/feedback`; the Hide recommendation action stores `not_interested` feedback, which is excluded from future personal results. User-specific recommendations are recomputed on request so feedback takes effect without waiting for a shared cache. `BookCard` owns the feedback controls, status messaging, disabled/loading states, styles, accessibility attributes, and client-side event handling through an opt-in API, leaving pages responsible only for rendering recommendation cards. The UI renders feedback as lightweight rectangular secondary actions, leaving Add To Shelf as the primary action.
 
 Current providers:
 

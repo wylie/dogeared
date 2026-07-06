@@ -17,6 +17,10 @@ type Props = {
 	genres?: string[];
 	topics?: string[];
 	showCommunityStats?: boolean;
+	showRecommendationFeedback?: boolean;
+	recommendationFeedbackBookId?: string | number;
+	recommendationFeedbackSource?: string;
+	recommendationFeedbackReason?: string;
 	attrs?: Record<string, string>;
 };
 
@@ -36,6 +40,10 @@ const {
 	genres = [],
 	topics = [],
 	showCommunityStats = true,
+	showRecommendationFeedback = false,
+	recommendationFeedbackBookId = "",
+	recommendationFeedbackSource = "",
+	recommendationFeedbackReason = "",
 	attrs = {}
 } = Astro.props as Props;
 
@@ -52,6 +60,8 @@ const normalizedThumbnail = normalizeBookCoverUrl(thumbnail);
 const displayThumbnail = displayBookCoverUrl(normalizedThumbnail);
 const normalizedGenres = Array.from(new Set((Array.isArray(genres) ? genres : []).map((genre) => String(genre || "").trim()).filter(Boolean))).slice(0, 4);
 const normalizedTopics = Array.from(new Set((Array.isArray(topics) ? topics : []).map((topic) => String(topic || "").trim()).filter(Boolean))).slice(0, 4);
+const normalizedRecommendationFeedbackBookId = Number(recommendationFeedbackBookId || 0);
+const canRenderRecommendationFeedback = showRecommendationFeedback && Number.isFinite(normalizedRecommendationFeedbackBookId) && normalizedRecommendationFeedbackBookId > 0;
 
 function renderAverageStars(value: number) {
 	const rounded = Math.round(value);
@@ -90,6 +100,33 @@ function renderAverageStars(value: number) {
 		)}
 		<div class="cover-actions">
 			<slot name="actions" />
+			{canRenderRecommendationFeedback && (
+				<div class="recommendation-feedback" aria-label={`Recommendation feedback for ${title}`}>
+					<button
+						type="button"
+						data-action="book-card-recommendation-feedback"
+						data-feedback="interesting"
+						data-book-id={String(normalizedRecommendationFeedbackBookId)}
+						data-source={recommendationFeedbackSource}
+						data-reason={recommendationFeedbackReason}
+						aria-label={`Mark ${title} as interesting`}
+					>
+						Interesting
+					</button>
+					<button
+						type="button"
+						data-action="book-card-recommendation-feedback"
+						data-feedback="not_interested"
+						data-book-id={String(normalizedRecommendationFeedbackBookId)}
+						data-source={recommendationFeedbackSource}
+						data-reason={recommendationFeedbackReason}
+						aria-label={`Hide ${title} from future recommendations`}
+					>
+						Hide
+					</button>
+					<p class="recommendation-feedback-status" data-recommendation-feedback-status role="status" aria-live="polite" hidden></p>
+				</div>
+			)}
 		</div>
 	</div>
 	<div class="card-body">
@@ -371,6 +408,56 @@ function renderAverageStars(value: number) {
 		right: auto !important;
 		left: 0 !important;
 	}
+	.recommendation-feedback {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.32rem;
+		margin-top: 0.28rem;
+		align-items: center;
+	}
+	.recommendation-feedback button {
+		width: 100%;
+		min-height: 32px;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--color-border-soft);
+		background: var(--color-surface);
+		color: var(--color-text-muted);
+		padding: 0.32rem 0.58rem;
+		font: inherit;
+		font-size: 0.78rem;
+		font-weight: 750;
+		line-height: 1.2;
+		text-decoration: none;
+		cursor: pointer;
+	}
+	.recommendation-feedback button[data-feedback="interesting"] {
+		border-color: rgba(175, 124, 39, 0.32);
+		background: rgba(255, 244, 214, 0.78);
+		color: #70501f;
+	}
+	.recommendation-feedback button[data-feedback="not_interested"] {
+		background: rgba(245, 244, 240, 0.88);
+		color: var(--color-text-muted);
+	}
+	.recommendation-feedback button:hover,
+	.recommendation-feedback button:focus-visible {
+		border-color: var(--color-border);
+		color: var(--color-nav-hover);
+	}
+	.recommendation-feedback button:disabled {
+		opacity: 0.7;
+		cursor: wait;
+	}
+	.recommendation-feedback-status {
+		flex-basis: 100%;
+		margin: 0;
+		font-size: 0.8rem;
+		font-weight: 700;
+		color: var(--color-primary);
+	}
+	.recommendation-feedback-status.is-error {
+		color: #991b1b;
+	}
 	.card-social {
 		grid-column: 1 / -1;
 		margin-top: 0.18rem;
@@ -419,6 +506,8 @@ function renderAverageStars(value: number) {
 </style>
 
 <script>
+	import { promptForShelfLogin } from "../lib/shelfClient.ts";
+
 	if (!(window as typeof window & { __bookCardMenuBound?: boolean }).__bookCardMenuBound) {
 		(window as typeof window & { __bookCardMenuBound?: boolean }).__bookCardMenuBound = true;
 		document.addEventListener("click", async (event) => {
@@ -457,6 +546,72 @@ function renderAverageStars(value: number) {
 			for (const menu of document.querySelectorAll(".card-menu[open]")) {
 				if (menu instanceof HTMLDetailsElement) menu.open = false;
 			}
+		});
+	}
+
+	if (!(window as typeof window & { __bookCardRecommendationFeedbackBound?: boolean }).__bookCardRecommendationFeedbackBound) {
+		(window as typeof window & { __bookCardRecommendationFeedbackBound?: boolean }).__bookCardRecommendationFeedbackBound = true;
+
+		function isFeedbackAuthenticated(button: HTMLElement) {
+			const scopedRoot = button.closest("[data-authenticated]");
+			return scopedRoot instanceof HTMLElement && scopedRoot.dataset.authenticated === "true";
+		}
+
+		function setRecommendationFeedbackStatus(button: HTMLElement, message: string, isError = false) {
+			const wrap = button.closest(".recommendation-feedback");
+			if (!(wrap instanceof HTMLElement)) return;
+			const status = wrap.querySelector("[data-recommendation-feedback-status]");
+			if (!(status instanceof HTMLElement)) return;
+			status.textContent = message;
+			status.hidden = !message;
+			status.classList.toggle("is-error", isError);
+		}
+
+		async function saveRecommendationFeedback(button: HTMLButtonElement) {
+			if (!isFeedbackAuthenticated(button)) {
+				promptForShelfLogin(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+				return;
+			}
+			const bookId = Number(button.dataset.bookId || 0);
+			const feedback = String(button.dataset.feedback || "").trim();
+			if (!bookId || !feedback) return;
+			const wrap = button.closest(".recommendation-feedback");
+			const buttons = Array.from(wrap?.querySelectorAll("button") || []);
+			for (const item of buttons) if (item instanceof HTMLButtonElement) item.disabled = true;
+			setRecommendationFeedbackStatus(button, "Saving feedback...");
+			try {
+				const response = await fetch("/api/recommendations/feedback", {
+					method: "POST",
+					credentials: "same-origin",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						bookId,
+						feedback,
+						source: button.dataset.source || "",
+						reason: button.dataset.reason || ""
+					})
+				});
+				const data = await response.json().catch(() => ({}));
+				if (!response.ok || data?.error) throw new Error(String(data?.error || "Failed to save feedback."));
+				const isNotInterested = feedback === "not_interested";
+				setRecommendationFeedbackStatus(button, isNotInterested ? "Removed from future recommendations." : "Marked interesting.");
+				if (isNotInterested) {
+					const card = button.closest(".book-card");
+					if (card instanceof HTMLElement) card.remove();
+				}
+			} catch (error) {
+				for (const item of buttons) if (item instanceof HTMLButtonElement) item.disabled = false;
+				setRecommendationFeedbackStatus(button, error instanceof Error ? error.message : "Failed to save feedback.", true);
+			}
+		}
+
+		document.addEventListener("click", (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			const button = target.closest('[data-action="book-card-recommendation-feedback"]');
+			if (!(button instanceof HTMLButtonElement)) return;
+			event.preventDefault();
+			void saveRecommendationFeedback(button);
 		});
 	}
 </script>

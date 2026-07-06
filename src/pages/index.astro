@@ -243,6 +243,10 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 									pageCount={book.pageCount}
 									averageRating={book.averageRating || viewerRating}
 									seriesLabel={book.seriesLabel}
+									showRecommendationFeedback={true}
+									recommendationFeedbackBookId={numericBookId}
+									recommendationFeedbackSource={book.recommendationSource}
+									recommendationFeedbackReason={book.recommendationReason}
 								>
 									<p slot="preTitle" class="discovery-reason">{book.recommendationReason}</p>
 									<div slot="meta">
@@ -268,10 +272,6 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 											'data-source-edition-id': book.sourceEditionId ?? "",
 											'data-source-url': book.sourceUrl ?? ""
 										}} />
-										<div class="recommendation-feedback" aria-label={`Recommendation feedback for ${book.title}`}>
-											<button type="button" data-action="recommendation-feedback" data-feedback="interesting" data-book-id={String(numericBookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>Interesting</button>
-											<button type="button" data-action="recommendation-feedback" data-feedback="not_interested" data-book-id={String(numericBookId)} data-source={book.recommendationSource} data-reason={book.recommendationReason}>Hide</button>
-										</div>
 									</div>
 								</BookCard>
 							);
@@ -669,56 +669,10 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		text-decoration: none;
 		cursor: pointer;
 	}
-	.recommendation-feedback {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.32rem;
-		margin-top: 0.28rem;
-		align-items: center;
-	}
-	.recommendation-feedback button {
-		min-height: 32px;
-		border-radius: var(--radius-sm);
-		border: 1px solid var(--color-border-soft);
-		background: var(--color-surface);
-		color: var(--color-text-muted);
-		padding: 0.32rem 0.58rem;
-		font: inherit;
-		font-size: 0.78rem;
-		font-weight: 700;
-		line-height: 1.2;
-		text-decoration: none;
-		cursor: pointer;
-	}
-	.recommendation-feedback button[data-feedback="interesting"] {
-		border-color: rgba(175, 124, 39, 0.32);
-		background: rgba(255, 244, 214, 0.78);
-		color: #70501f;
-	}
-	.recommendation-feedback button[data-feedback="not_interested"] {
-		background: rgba(245, 244, 240, 0.88);
-		color: var(--color-text-muted);
-	}
-	.recommendation-feedback button:hover,
-	.recommendation-feedback button:focus-visible {
-		border-color: var(--color-border);
-		color: var(--color-nav-hover);
-	}
 	.recommendation-empty a:hover,
 	.recommendation-empty a:focus-visible {
 		background: var(--color-nav-surface-hover);
 		color: var(--color-nav-hover);
-	}
-	.recommendation-feedback button:disabled {
-		opacity: 0.7;
-		cursor: wait;
-	}
-	.recommendation-feedback-status {
-		flex-basis: 100%;
-		margin: 0;
-		font-size: 0.8rem;
-		font-weight: 700;
-		color: var(--color-primary);
 	}
 
 	.featured-collections-section {
@@ -1315,59 +1269,6 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		button.classList.toggle("is-added", state === "added");
 	}
 
-	function setRecommendationFeedbackStatus(button, message) {
-		const wrap = button.closest(".recommendation-feedback");
-		if (!(wrap instanceof HTMLElement)) return;
-		let status = wrap.querySelector("[data-recommendation-feedback-status]");
-		if (!(status instanceof HTMLElement)) {
-			status = document.createElement("p");
-			status.className = "recommendation-feedback-status";
-			status.dataset.recommendationFeedbackStatus = "true";
-			status.setAttribute("role", "status");
-			status.setAttribute("aria-live", "polite");
-			wrap.append(status);
-		}
-		status.textContent = message;
-	}
-
-	async function saveRecommendationFeedback(button) {
-		if (!(button instanceof HTMLButtonElement)) return;
-		if (!isAuthenticated) {
-			promptForShelfLogin();
-			return;
-		}
-		const bookId = Number(button.dataset.bookId || 0);
-		const feedback = String(button.dataset.feedback || "").trim();
-		if (!bookId || !feedback) return;
-		const wrap = button.closest(".recommendation-feedback");
-		const buttons = Array.from(wrap?.querySelectorAll("button") || []);
-		for (const item of buttons) if (item instanceof HTMLButtonElement) item.disabled = true;
-		setRecommendationFeedbackStatus(button, "Saving feedback...");
-		try {
-			const response = await fetch("/api/recommendations/feedback", {
-				method: "POST",
-				credentials: "same-origin",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					bookId,
-					feedback,
-					source: button.dataset.source || "",
-					reason: button.dataset.reason || ""
-				})
-			});
-			const data = await response.json().catch(() => ({}));
-			if (!response.ok || data?.error) throw new Error(String(data?.error || "Failed to save feedback."));
-			setRecommendationFeedbackStatus(button, feedback === "not_interested" ? "Removed from future recommendations." : "Marked interesting.");
-			if (feedback === "not_interested") {
-				const card = button.closest(".book-card");
-				if (card instanceof HTMLElement) card.remove();
-			}
-		} catch (error) {
-			for (const item of buttons) if (item instanceof HTMLButtonElement) item.disabled = false;
-			setRecommendationFeedbackStatus(button, error instanceof Error ? error.message : "Failed to save feedback.");
-		}
-	}
-
 	function markMatchingMockShelfButtonsAsAdded(shelfName) {
 		const normalized = normalizeText(shelfName);
 		if (!normalized) return;
@@ -1683,12 +1584,6 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		if (createShelfButton instanceof HTMLButtonElement) {
 			event.preventDefault();
 			void createMockShelf(createShelfButton);
-			return;
-		}
-		const recommendationFeedbackButton = target.closest('[data-action="recommendation-feedback"]');
-		if (recommendationFeedbackButton instanceof HTMLButtonElement) {
-			event.preventDefault();
-			void saveRecommendationFeedback(recommendationFeedbackButton);
 			return;
 		}
 		const followButton = target.closest('[data-action="follow-reader"]');
