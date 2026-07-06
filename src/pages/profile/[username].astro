@@ -3524,44 +3524,56 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		filter: brightness(0.95);
 	}
 	.progress-journal-prompt {
-		margin-top: 0.55rem;
-		border: var(--border-subtle);
-		border-radius: var(--radius-md);
-		background: rgba(255, 255, 255, 0.68);
-		padding: 0.65rem;
+		margin-top: 0.45rem;
+		padding-top: 0.48rem;
+		border-top: var(--border-subtle);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.55rem;
 	}
 	.progress-journal-prompt p {
-		margin: 0 0 0.45rem;
-		color: var(--color-text);
-		line-height: 1.35;
+		margin: 0;
+		color: #596777;
+		font-size: 0.82rem;
+		font-weight: 600;
+		line-height: 1.3;
 	}
 	.progress-journal-actions {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
+		flex-wrap: nowrap;
+		gap: 0.35rem;
 		align-items: center;
+		justify-content: flex-end;
+		flex: 0 0 auto;
 	}
 	.progress-journal-actions a,
 	.progress-journal-actions button {
-		min-height: 34px;
+		min-height: 30px;
 		border-radius: 8px;
-		padding: 0.42rem 0.65rem;
+		padding: 0.34rem 0.56rem;
 		font: inherit;
-		font-size: 0.85rem;
-		font-weight: 760;
+		font-size: 0.8rem;
+		font-weight: 740;
+		line-height: 1;
 	}
 	.progress-journal-actions a {
 		display: inline-flex;
 		align-items: center;
-		background: var(--color-primary);
-		color: #fff;
+		background: rgba(31, 122, 69, 0.1);
+		color: var(--color-primary);
+		border: 1px solid rgba(31, 122, 69, 0.2);
 		text-decoration: none;
 	}
 	.progress-journal-actions button {
-		border: var(--border-subtle);
+		border: none;
 		background: transparent;
-		color: var(--color-nav);
+		color: #667385;
 		cursor: pointer;
+	}
+	.progress-journal-actions a:hover,
+	.progress-journal-actions button:hover {
+		background: rgba(87, 117, 144, 0.1);
 	}
 	.progress-track {
 		margin-top: 0.25rem;
@@ -3939,6 +3951,16 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			width: 44px;
 			height: 44px;
 			min-height: 44px;
+		}
+		.progress-journal-prompt {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 0.42rem;
+		}
+		.progress-journal-actions {
+			width: 100%;
+			justify-content: flex-start;
+			flex-wrap: wrap;
 		}
 	}
 </style>
@@ -5214,7 +5236,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		const prompt = document.createElement("div");
 		prompt.className = "progress-journal-prompt";
 		const text = document.createElement("p");
-		text.textContent = "Anything you'd like to remember from today's reading?";
+		text.textContent = "Capture a quick thought from today's reading.";
 		const actions = document.createElement("div");
 		actions.className = "progress-journal-actions";
 		const link = document.createElement("a");
