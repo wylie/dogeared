@@ -98,6 +98,7 @@ test("profile finish workflow updates shelves and activity optimistically", () =
 test("profile progress saves refresh all derived reading UI without reload", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	const apiSource = readFileSync("src/pages/api/shelf/entries.ts", "utf8");
+	const worksSource = readFileSync("src/lib/catalogWorks.ts", "utf8");
 	assert.equal(source.includes("normalizePersistedDateValue"), true);
 	assert.equal(source.includes("const hasForwardProgress = nextCurrentPage > previousCurrentPage"), true);
 	assert.equal(source.includes("if (hasForwardProgress) rememberReadingActivityToday()"), true);
@@ -125,7 +126,17 @@ test("profile progress saves refresh all derived reading UI without reload", () 
 	assert.equal(apiSource.includes("coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages"), true);
 	assert.equal(apiSource.includes("const effectiveTotalPages = Math.max("), true);
 	assert.equal(apiSource.includes("${effectiveTotalPages}"), true);
+	assert.equal(apiSource.includes('detail: import.meta.env.DEV && debugStage'), true);
+	assert.equal(apiSource.includes('console.error("[shelf.upsert.debug]"'), true);
 	assert.equal(source.includes("coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages"), true);
+	assert.equal(source.includes('function surfaceProgressSaveError(input, message)'), true);
+	assert.equal(source.includes('console.error("[progress.save.request.failed]"'), true);
+	assert.equal(worksSource.includes("const existingByBookRows = await sql"), true);
+	assert.equal(worksSource.includes("const existingByKeyRows = await sql"), true);
+	assert.equal(worksSource.includes("update user_book"), true);
+	assert.equal(worksSource.includes("delete from book_edition"), true);
+	assert.equal(worksSource.includes("update book_edition be"), true);
+	assert.equal(worksSource.includes("left join book_edition existing on existing.book_id = b.id"), true);
 });
 
 test("mobile progress updater keeps controls readable and touch sized", () => {

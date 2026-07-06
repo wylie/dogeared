@@ -482,12 +482,17 @@ export const GET: APIRoute = async ({ request, url }) => {
 };
 
 export const POST: APIRoute = async ({ request }) => {
+	let debugStage = "start";
+	let debugContext: Record<string, unknown> = {};
 	try {
 		await ensureShelfSchema();
+		debugStage = "session";
 		const session = await resolveUserBySession(request);
 		if (!session?.userId) return new Response(JSON.stringify({ error: "You must be logged in to save shelf entries." }), { status: 401, headers: { "Content-Type": "application/json" } });
+		debugStage = "parse_body";
 		const body = await request.json() as { entry?: ShelfEntryInput };
 		const entry = body?.entry || {};
+		debugContext.rawEntry = entry;
 		const directBookId = normalizePositiveInt(entry.bookId);
 		const bookPayload = fromShelfEntryInput(entry);
 		const title = bookPayload.title;
@@ -524,6 +529,16 @@ export const POST: APIRoute = async ({ request }) => {
 		let googleBooksId = bookPayload.googleBooksId;
 		let pageCount = totalPages;
 		let publisher = normalizeText(bookPayload.publisher);
+		debugContext = {
+			directBookId,
+			title,
+			author,
+			status,
+			totalPages,
+			currentPage,
+			isbn13,
+			googleBooksId
+		};
 		const shouldAttemptMetadataEnrichment = directBookId <= 0;
 		if (shouldAttemptMetadataEnrichment && (!synopsis || !coverUrl || !publishedYear || !language || !publisher || (!isbn10 && !isbn13) || !googleBooksId)) {
 			const enriched = await inferMetadataForBook({ title, author, isbn10, isbn13, googleBooksId });
@@ -567,6 +582,7 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 		const userId = session.userId;
 		const sql = getNeonSql();
+		debugStage = "ensure_canonical_schema";
 		await ensureCanonicalWorkSchema(sql);
 		let resolvedBookId = 0;
 		if (directBookId > 0) {
@@ -619,6 +635,7 @@ export const POST: APIRoute = async ({ request }) => {
 		let bookId = resolvedBookId;
 		let canonicalPageCount = Math.max(0, Number(pageCount || 0) || 0);
 		if (bookId > 0) {
+			debugStage = "update_book";
 			const updatedBookRows = await sql<Array<{ page_count: number }>>`
 				update book
 				set
@@ -643,6 +660,7 @@ export const POST: APIRoute = async ({ request }) => {
 			`;
 			canonicalPageCount = Math.max(canonicalPageCount, Number(updatedBookRows[0]?.page_count || 0) || 0);
 		} else {
+			debugStage = "insert_book";
 			const bookRows = await sql<Array<{ id: number; page_count: number }>>`
 				insert into book (
 					canonical_work_key,
@@ -697,7 +715,10 @@ export const POST: APIRoute = async ({ request }) => {
 			canonicalPageCount = Math.max(canonicalPageCount, Number(bookRows[0]?.page_count || 0) || 0);
 		}
 		if (!bookId) throw new Error("Book upsert failed.");
+		debugContext.bookId = bookId;
+		debugStage = "upsert_sources";
 		await upsertBookSources(sql, bookId, sources);
+		debugStage = "upsert_work_edition";
 		const workEdition = await upsertWorkAndEdition(sql, {
 			bookId,
 			title,
@@ -722,7 +743,9 @@ export const POST: APIRoute = async ({ request }) => {
 		if (workEdition.representativeBookId > 0 && workEdition.representativeBookId !== bookId) {
 			bookId = workEdition.representativeBookId;
 		}
+		debugContext.workEdition = workEdition;
 		if (workEdition.editionId > 0) {
+			debugStage = "canonical_page_count";
 			const canonicalPageRows = await sql<Array<{ page_count: number }>>`
 				select
 					coalesce(
@@ -737,6 +760,7 @@ export const POST: APIRoute = async ({ request }) => {
 			`;
 			canonicalPageCount = Math.max(canonicalPageCount, Number(canonicalPageRows[0]?.page_count || 0) || 0);
 		}
+		debugStage = "upsert_series";
 		await upsertKnownSeriesForBook(sql, {
 			bookId,
 			workId: workEdition.workId,
@@ -754,6 +778,7 @@ export const POST: APIRoute = async ({ request }) => {
 		);
 
 		for (const genre of genres) {
+			debugStage = "upsert_genres";
 			await sql`
 				insert into book_genre (book_id, genre_slug, genre_name)
 				values (${bookId}, ${genre.slug}, ${genre.name})
@@ -762,6 +787,7 @@ export const POST: APIRoute = async ({ request }) => {
 			`;
 		}
 		for (const tag of tags) {
+			debugStage = "upsert_tags";
 			await sql`
 				insert into book_tag (book_id, tag_slug, tag_name)
 				values (${bookId}, ${tag.slug}, ${tag.name})
@@ -771,6 +797,7 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 
 		if (genres.length === 0) {
+			debugStage = "infer_genres";
 			const genreCountRows = await sql<Array<{ count: number }>>`
 				select count(*)::int as count
 				from book_genre
@@ -790,6 +817,7 @@ export const POST: APIRoute = async ({ request }) => {
 			}
 		}
 
+		debugStage = "upsert_user_book";
 		await sql`
 			insert into user_book (
 				user_id,
@@ -847,6 +875,7 @@ export const POST: APIRoute = async ({ request }) => {
 		`;
 		// Single-shelf mode: putting a book on a default shelf removes it from
 		// all custom shelves for this user.
+		debugStage = "clear_custom_shelves";
 		await sql`
 			delete from user_custom_shelf_book
 			where user_id = ${userId}::uuid
@@ -855,6 +884,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 		const nextCurrentPage = normalizePositiveInt(currentPage);
 		if (!previousStatus || previousStatus !== status) {
+			debugStage = "activity_status";
 			await sql`
 				insert into user_activity (
 					user_id,
@@ -877,6 +907,7 @@ export const POST: APIRoute = async ({ request }) => {
 			|| previousReviewSpoiler !== reviewSpoiler
 		);
 		if (finishedMetadataChanged && previousStatus === "finished") {
+			debugStage = "activity_finished_metadata";
 			await sql`
 				insert into user_activity (
 					user_id,
@@ -891,6 +922,7 @@ export const POST: APIRoute = async ({ request }) => {
 			`;
 		}
 		if (rating !== null && previousRating !== rating) {
+			debugStage = "activity_rating";
 			await sql`
 				insert into user_activity (
 					user_id,
@@ -909,6 +941,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 		const deltaPages = Math.max(0, nextCurrentPage - previousCurrentPage);
 		if (deltaPages > 0 && (status === "reading" || status === "finished")) {
+			debugStage = "insert_progress_event";
 			await sql`
 				insert into user_reading_progress_event (
 					user_id,
@@ -927,6 +960,7 @@ export const POST: APIRoute = async ({ request }) => {
 			`;
 		}
 
+		debugStage = "load_persisted_entry";
 		const persistedRows = await sql<Array<{
 			book_id: number;
 			title: string;
@@ -1024,10 +1058,20 @@ export const POST: APIRoute = async ({ request }) => {
 			headers: { "Content-Type": "application/json" }
 		});
 	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown error";
+		if (import.meta.env.DEV) {
+			console.error("[shelf.upsert.debug]", {
+				stage: debugStage,
+				context: debugContext,
+				error: message
+			});
+		}
 		monitorEvent("shelf.upsert.error", { message: error instanceof Error ? error.message : "Unknown error" }, "error");
 		return new Response(JSON.stringify({
 			error: "Failed to save shelf entry.",
-			detail: error instanceof Error ? error.message : "Unknown error"
+			detail: import.meta.env.DEV && debugStage
+				? `[${debugStage}] ${message}`
+				: message
 		}), {
 			status: 500,
 			headers: { "Content-Type": "application/json" }

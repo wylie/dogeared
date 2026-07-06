@@ -213,3 +213,28 @@ test("saveShelfEntryWithRetry does not retry unauthorized responses", async () =
 		(globalThis as Record<string, unknown>).window = originalWindow;
 	}
 });
+
+test("saveShelfEntryWithRetry does not silently retry by default", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWindow = (globalThis as Record<string, unknown>).window;
+	let attempts = 0;
+
+	(globalThis as unknown as { fetch: typeof fetch }).fetch = (async () => {
+		attempts += 1;
+		return new Response(JSON.stringify({ error: "broken" }), {
+			status: 500,
+			headers: { "Content-Type": "application/json" }
+		});
+	}) as typeof fetch;
+	(globalThis as Record<string, unknown>).window = { location: { href: "" } };
+
+	try {
+		const result = await saveShelfEntryWithRetry({ title: "Broken Book" });
+		assert.equal(result.ok, false);
+		assert.equal(attempts, 1);
+		assert.equal(result.message, "broken");
+	} finally {
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
+		(globalThis as Record<string, unknown>).window = originalWindow;
+	}
+});

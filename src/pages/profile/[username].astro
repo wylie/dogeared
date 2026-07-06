@@ -4537,6 +4537,17 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		input.inputMode = select.value === "audio" ? "text" : "decimal";
 	}
 
+	function surfaceProgressSaveError(input, message) {
+		if (!(input instanceof HTMLInputElement)) return;
+		const detail = String(message || "").trim() || "Failed to save progress.";
+		console.error("[progress.save.error]", detail);
+		input.setCustomValidity(detail);
+		input.reportValidity();
+		window.setTimeout(() => {
+			if (input.validationMessage === detail) input.setCustomValidity("");
+		}, 0);
+	}
+
 	function ensureProgressDisplay(card, currentPage, totalPages) {
 		if (!(card instanceof HTMLElement)) return null;
 		const progressBlock = card.querySelector(".reading-progress-block");
@@ -5344,10 +5355,19 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 						removeCardFromShelfSection(dropdown, "finished");
 					}
 					await refreshProfileReadingUiAfterMutation();
-				} catch (error) {
-					if (dropdown) {
-						showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
-					}
+			} catch (error) {
+				console.error("[progress.save.request.failed]", {
+					progressType,
+					totalPages,
+					currentPage,
+					title: entry.title,
+					bookId: entry.bookId || directBookId || 0,
+					error: error instanceof Error ? error.message : error
+				});
+				surfaceProgressSaveError(input, error instanceof Error ? error.message : "Failed to save progress.");
+				if (dropdown) {
+					showShelfFeedback(dropdown, error instanceof Error ? error.message : "Failed to save.", feedbackTimers);
+				}
 					progressSave.textContent = "Retry";
 					setTimeout(() => {
 						progressSave.textContent = originalLabel;

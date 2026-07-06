@@ -177,6 +177,23 @@ async function backfillCanonicalWorks(sql: Sql) {
 			and (b.work_id is distinct from bw.id)
 	`);
 	await sql`
+		update book_edition be
+		set
+			work_id = b.work_id,
+			isbn10 = case when coalesce(nullif(trim(b.isbn10), ''), '') <> '' then coalesce(nullif(trim(b.isbn10), ''), '') else be.isbn10 end,
+			isbn13 = case when coalesce(nullif(trim(b.isbn13), ''), '') <> '' then coalesce(nullif(trim(b.isbn13), ''), '') else be.isbn13 end,
+			publisher = case when coalesce(nullif(trim(b.publisher), ''), '') <> '' then coalesce(nullif(trim(b.publisher), ''), '') else be.publisher end,
+			language = case when coalesce(nullif(trim(b.language), ''), '') <> '' then coalesce(nullif(trim(b.language), ''), '') else be.language end,
+			publication_year = coalesce(be.publication_year, b.published_year),
+			page_count = greatest(be.page_count, coalesce(nullif(b.page_count, 0), 0)::int),
+			cover_url = case when coalesce(nullif(trim(b.cover_url), ''), '') <> '' then coalesce(nullif(trim(b.cover_url), ''), '') else be.cover_url end,
+			google_books_id = case when coalesce(nullif(trim(b.google_books_id), ''), '') <> '' then coalesce(nullif(trim(b.google_books_id), ''), '') else be.google_books_id end,
+			updated_at = now()
+		from book b
+		where be.book_id = b.id
+			and b.work_id is not null
+	`;
+	await sql`
 		insert into book_edition (
 			work_id,
 			book_id,
@@ -203,7 +220,9 @@ async function backfillCanonicalWorks(sql: Sql) {
 			coalesce(nullif(trim(b.cover_url), ''), ''),
 			coalesce(nullif(trim(b.google_books_id), ''), '')
 		from book b
+		left join book_edition existing on existing.book_id = b.id
 		where b.work_id is not null
+			and existing.id is null
 		on conflict (work_id, edition_key) do update set
 			book_id = coalesce(book_edition.book_id, excluded.book_id),
 			isbn10 = case when excluded.isbn10 <> '' then excluded.isbn10 else book_edition.isbn10 end,
@@ -328,70 +347,142 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 		where id = ${bookId}
 			and (work_id is distinct from ${workId})
 	`;
-	const editionRows = await sql<Array<{ id: number }>>`
-		insert into book_edition (
-			work_id,
-			book_id,
-			edition_key,
-			isbn10,
-			isbn13,
-			publisher,
-			format,
-			language,
-			publication_date,
-			publication_year,
-			page_count,
-			cover_url,
-			google_books_id,
-			open_library_work_id,
-			open_library_edition_id,
-			external_ids,
-			updated_at
-		)
-		values (
-			${workId},
-			${bookId},
-			${editionKey},
-			${normalizeCatalogIsbn(input.isbn10)},
-			${normalizeCatalogIsbn(input.isbn13)},
-			${normalizeCatalogText(input.publisher)},
-			${normalizeCatalogText(input.format) || "Book"},
-			${normalizeCatalogText(input.language)},
-			${normalizeCatalogText(input.publicationDate)},
-			${publicationYear},
-			${Math.max(0, Number(input.pageCount || 0) || 0)},
-			${normalizeCatalogText(input.coverUrl)},
-			${normalizeCatalogText(input.googleBooksId)},
-			${normalizeCatalogText(openLibrary?.sourceWorkId)},
-			${normalizeCatalogText(openLibrary?.sourceEditionId)},
-			${JSON.stringify({
-				sources: sources.map((source) => ({
-					source: source.source,
-					sourceWorkId: normalizeCatalogText(source.sourceWorkId),
-					sourceEditionId: normalizeCatalogText(source.sourceEditionId),
-					sourceUrl: normalizeCatalogText(source.sourceUrl)
-				}))
-			})}::jsonb,
-			now()
-		)
-		on conflict (work_id, edition_key) do update set
-			book_id = coalesce(book_edition.book_id, excluded.book_id),
-			isbn10 = case when excluded.isbn10 <> '' then excluded.isbn10 else book_edition.isbn10 end,
-			isbn13 = case when excluded.isbn13 <> '' then excluded.isbn13 else book_edition.isbn13 end,
-			publisher = case when excluded.publisher <> '' then excluded.publisher else book_edition.publisher end,
-			format = case when excluded.format <> '' then excluded.format else book_edition.format end,
-			language = case when excluded.language <> '' then excluded.language else book_edition.language end,
-			publication_date = case when excluded.publication_date <> '' then excluded.publication_date else book_edition.publication_date end,
-			publication_year = coalesce(excluded.publication_year, book_edition.publication_year),
-			page_count = greatest(book_edition.page_count, excluded.page_count),
-			cover_url = case when excluded.cover_url <> '' then excluded.cover_url else book_edition.cover_url end,
-			google_books_id = case when excluded.google_books_id <> '' then excluded.google_books_id else book_edition.google_books_id end,
-			open_library_work_id = case when excluded.open_library_work_id <> '' then excluded.open_library_work_id else book_edition.open_library_work_id end,
-			open_library_edition_id = case when excluded.open_library_edition_id <> '' then excluded.open_library_edition_id else book_edition.open_library_edition_id end,
-			external_ids = book_edition.external_ids || excluded.external_ids,
-			updated_at = now()
-		returning id
+	const normalizedIsbn10 = normalizeCatalogIsbn(input.isbn10);
+	const normalizedIsbn13 = normalizeCatalogIsbn(input.isbn13);
+	const normalizedPublisher = normalizeCatalogText(input.publisher);
+	const normalizedFormat = normalizeCatalogText(input.format) || "Book";
+	const normalizedLanguage = normalizeCatalogText(input.language);
+	const normalizedPublicationDate = normalizeCatalogText(input.publicationDate);
+	const normalizedPageCount = Math.max(0, Number(input.pageCount || 0) || 0);
+	const normalizedCoverUrl = normalizeCatalogText(input.coverUrl);
+	const normalizedGoogleBooksId = normalizeCatalogText(input.googleBooksId);
+	const normalizedOpenLibraryWorkId = normalizeCatalogText(openLibrary?.sourceWorkId);
+	const normalizedOpenLibraryEditionId = normalizeCatalogText(openLibrary?.sourceEditionId);
+	const normalizedExternalIds = JSON.stringify({
+		sources: sources.map((source) => ({
+			source: source.source,
+			sourceWorkId: normalizeCatalogText(source.sourceWorkId),
+			sourceEditionId: normalizeCatalogText(source.sourceEditionId),
+			sourceUrl: normalizeCatalogText(source.sourceUrl)
+		}))
+	});
+
+	const existingByBookRows = await sql<Array<{ id: number }>>`
+		select id
+		from book_edition
+		where book_id = ${bookId}
+		limit 1
 	`;
+	const existingByKeyRows = await sql<Array<{ id: number }>>`
+		select id
+		from book_edition
+		where work_id = ${workId}
+			and edition_key = ${editionKey}
+		limit 1
+	`;
+
+	let targetEditionId = Number(existingByBookRows[0]?.id || 0);
+	const existingByKeyId = Number(existingByKeyRows[0]?.id || 0);
+
+	if (targetEditionId > 0 && existingByKeyId > 0 && targetEditionId !== existingByKeyId) {
+		await sql`
+			update user_book
+			set edition_id = ${existingByKeyId}
+			where edition_id = ${targetEditionId}
+		`;
+		await sql`
+			delete from book_edition
+			where id = ${targetEditionId}
+		`;
+		targetEditionId = existingByKeyId;
+	} else if (targetEditionId <= 0) {
+		targetEditionId = existingByKeyId;
+	}
+
+	let editionRows: Array<{ id: number }> = [];
+	if (targetEditionId > 0) {
+		editionRows = await sql<Array<{ id: number }>>`
+			update book_edition
+			set
+				work_id = ${workId},
+				book_id = ${bookId},
+				edition_key = ${editionKey},
+				isbn10 = case when ${normalizedIsbn10} <> '' then ${normalizedIsbn10} else isbn10 end,
+				isbn13 = case when ${normalizedIsbn13} <> '' then ${normalizedIsbn13} else isbn13 end,
+				publisher = case when ${normalizedPublisher} <> '' then ${normalizedPublisher} else publisher end,
+				format = case when ${normalizedFormat} <> '' then ${normalizedFormat} else format end,
+				language = case when ${normalizedLanguage} <> '' then ${normalizedLanguage} else language end,
+				publication_date = case when ${normalizedPublicationDate} <> '' then ${normalizedPublicationDate} else publication_date end,
+				publication_year = coalesce(${publicationYear}, publication_year),
+				page_count = greatest(page_count, ${normalizedPageCount}),
+				cover_url = case when ${normalizedCoverUrl} <> '' then ${normalizedCoverUrl} else cover_url end,
+				google_books_id = case when ${normalizedGoogleBooksId} <> '' then ${normalizedGoogleBooksId} else google_books_id end,
+				open_library_work_id = case when ${normalizedOpenLibraryWorkId} <> '' then ${normalizedOpenLibraryWorkId} else open_library_work_id end,
+				open_library_edition_id = case when ${normalizedOpenLibraryEditionId} <> '' then ${normalizedOpenLibraryEditionId} else open_library_edition_id end,
+				external_ids = external_ids || ${normalizedExternalIds}::jsonb,
+				updated_at = now()
+			where id = ${targetEditionId}
+			returning id
+		`;
+	} else {
+		editionRows = await sql<Array<{ id: number }>>`
+			insert into book_edition (
+				work_id,
+				book_id,
+				edition_key,
+				isbn10,
+				isbn13,
+				publisher,
+				format,
+				language,
+				publication_date,
+				publication_year,
+				page_count,
+				cover_url,
+				google_books_id,
+				open_library_work_id,
+				open_library_edition_id,
+				external_ids,
+				updated_at
+			)
+			values (
+				${workId},
+				${bookId},
+				${editionKey},
+				${normalizedIsbn10},
+				${normalizedIsbn13},
+				${normalizedPublisher},
+				${normalizedFormat},
+				${normalizedLanguage},
+				${normalizedPublicationDate},
+				${publicationYear},
+				${normalizedPageCount},
+				${normalizedCoverUrl},
+				${normalizedGoogleBooksId},
+				${normalizedOpenLibraryWorkId},
+				${normalizedOpenLibraryEditionId},
+				${normalizedExternalIds}::jsonb,
+				now()
+			)
+			on conflict (work_id, edition_key) do update set
+				book_id = coalesce(book_edition.book_id, excluded.book_id),
+				isbn10 = case when excluded.isbn10 <> '' then excluded.isbn10 else book_edition.isbn10 end,
+				isbn13 = case when excluded.isbn13 <> '' then excluded.isbn13 else book_edition.isbn13 end,
+				publisher = case when excluded.publisher <> '' then excluded.publisher else book_edition.publisher end,
+				format = case when excluded.format <> '' then excluded.format else book_edition.format end,
+				language = case when excluded.language <> '' then excluded.language else book_edition.language end,
+				publication_date = case when excluded.publication_date <> '' then excluded.publication_date else book_edition.publication_date end,
+				publication_year = coalesce(excluded.publication_year, book_edition.publication_year),
+				page_count = greatest(book_edition.page_count, excluded.page_count),
+				cover_url = case when excluded.cover_url <> '' then excluded.cover_url else book_edition.cover_url end,
+				google_books_id = case when excluded.google_books_id <> '' then excluded.google_books_id else book_edition.google_books_id end,
+				open_library_work_id = case when excluded.open_library_work_id <> '' then excluded.open_library_work_id else book_edition.open_library_work_id end,
+				open_library_edition_id = case when excluded.open_library_edition_id <> '' then excluded.open_library_edition_id else book_edition.open_library_edition_id end,
+				external_ids = book_edition.external_ids || excluded.external_ids,
+				updated_at = now()
+			returning id
+		`;
+	}
 	return {
 		workId,
 		editionId: Number(editionRows[0]?.id || 0),

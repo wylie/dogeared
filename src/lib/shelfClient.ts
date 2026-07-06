@@ -454,7 +454,7 @@ export async function saveShelfEntryWithRetry(
 	options?: { redirectPath?: string; retries?: number; retryDelayMs?: number }
 ) {
 	const redirectPath = String(options?.redirectPath || "/settings#account-settings");
-	const retries = Math.max(0, Number(options?.retries ?? 1) || 0);
+	const retries = Math.max(0, Number(options?.retries ?? 0) || 0);
 	const retryDelayMs = Math.max(0, Number(options?.retryDelayMs ?? 250) || 0);
 	let attempt = 0;
 	let lastResult: {
