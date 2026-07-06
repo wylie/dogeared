@@ -3962,6 +3962,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		migrateShelfEntriesInPlace
 	} from "../../lib/shelfStorage.ts";
 	import { daysSinceDate as daysSinceMomentumDate, resolveMomentumPrediction as resolveClientMomentumPrediction } from "../../lib/momentumPrediction.ts";
+	import { normalizeProgressUpdateInput } from "../../lib/readingProgress.ts";
 	const followToggle = document.getElementById("follow-toggle");
 	const followFeedback = document.getElementById("follow-feedback");
 	const dismissWelcomeBanner = document.getElementById("dismiss-welcome-banner");
@@ -4518,45 +4519,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		for (const trigger of Array.from(document.querySelectorAll('[data-action="toggle-custom-shelf-menu"]'))) {
 			if (trigger instanceof HTMLButtonElement) trigger.setAttribute("aria-expanded", "false");
 		}
-	}
-
-	function parseProgressInput(rawValue, totalPages, progressType = "page") {
-		const raw = String(rawValue || "").trim();
-		if (!raw) return { valid: false, currentPage: 0, mode: "page", normalizedText: "" };
-		const maxPages = Math.max(0, Number(totalPages || 0) || 0);
-		const selectedType = String(progressType || "page").trim();
-		if (selectedType === "percent" || raw.endsWith("%")) {
-			const percentValue = Number(raw.replace("%", "").trim());
-			if (!Number.isFinite(percentValue)) return { valid: false, currentPage: 0, mode: "percent", normalizedText: raw };
-			const clampedPercent = Math.max(0, Math.min(100, percentValue));
-			const currentPage = maxPages > 0
-				? Math.round((clampedPercent / 100) * maxPages)
-				: 0;
-			return {
-				valid: true,
-				currentPage,
-				mode: "percent",
-				normalizedText: `${clampedPercent}%`,
-				percent: clampedPercent
-			};
-		}
-		const numericText = raw.replace(/[^0-9.]/g, "");
-		if (!numericText) return { valid: false, currentPage: 0, mode: selectedType || "page", normalizedText: raw };
-		const numericPages = Number(numericText);
-		if (!Number.isFinite(numericPages)) return { valid: false, currentPage: 0, mode: "page", normalizedText: raw };
-		const currentPage = Math.max(0, Math.min(maxPages > 0 ? maxPages : Number.MAX_SAFE_INTEGER, Math.round(numericPages)));
-		return {
-			valid: true,
-			currentPage,
-			mode: selectedType || "page",
-			normalizedText: selectedType === "chapter"
-				? `Chapter ${Math.round(numericPages)}`
-				: selectedType === "location"
-					? `Location ${Math.round(numericPages)}`
-					: selectedType === "audio"
-						? raw
-						: String(currentPage)
-		};
 	}
 
 	function updateProgressInputPlaceholder(select) {
@@ -5330,7 +5292,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			if (!(input instanceof HTMLInputElement)) return;
 			const progressType = progressTypeInput instanceof HTMLSelectElement ? progressTypeInput.value : "page";
 			const totalPages = Math.max(0, Number(progressSave.dataset.totalPages || 0) || 0);
-			const parsed = parseProgressInput(input.value, totalPages, progressType);
+			const parsed = normalizeProgressUpdateInput({
+				rawValue: input.value,
+				totalPages,
+				progressType
+			});
 			if (!parsed.valid) {
 				progressSave.textContent = "Invalid";
 				setTimeout(() => {
