@@ -105,18 +105,33 @@ test("profile progress saves refresh all derived reading UI without reload", () 
 	assert.equal(source.includes("data-momentum-streak-unit"), true);
 	assert.equal(source.includes("setNodeText(momentumScoreNode"), true);
 	assert.equal(source.includes("setNodeText(momentumNextActionNode"), true);
+	assert.equal(source.includes("function ensureProgressDisplay(card, currentPage, totalPages)"), true);
+	assert.equal(source.includes('progressNode.className = "meta progress-current-value"'), true);
+	assert.equal(source.includes('progressTrack.className = "progress-track"'), true);
 	assert.equal(source.includes('card.dataset.momentumProgressUpdates = String(persistedProgressUpdates > 0'), true);
 	const progressSaveStart = source.indexOf('if (progressSave instanceof HTMLButtonElement)');
+	const progressMaterialize = source.indexOf("ensureProgressDisplay(card, nextCurrentPage, nextTotalPages)", progressSaveStart);
 	const currentPageUpdate = source.indexOf("card.dataset.momentumCurrentPage = String(nextCurrentPage)", progressSaveStart);
 	const rememberProgress = source.indexOf("if (hasForwardProgress) rememberReadingActivityToday()", progressSaveStart);
 	const progressRefresh = source.indexOf("await refreshProfileReadingUiAfterMutation()", currentPageUpdate);
 	assert.ok(progressSaveStart > -1);
+	assert.ok(progressMaterialize > progressSaveStart && progressMaterialize < currentPageUpdate);
 	assert.ok(currentPageUpdate > progressSaveStart && currentPageUpdate < progressRefresh);
 	assert.ok(rememberProgress > progressSaveStart && rememberProgress < progressRefresh);
 	assert.equal(apiSource.includes("progress_updates"), true);
 	assert.equal(apiSource.includes("progressUpdates"), true);
 	assert.equal(apiSource.includes("user_reading_progress_event"), true);
 	assert.equal(apiSource.includes("previousStatus === status && status === \"reading\""), false);
+});
+
+test("mobile progress updater keeps controls readable and touch sized", () => {
+	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const mobileStart = source.indexOf("@media (max-width: 520px)");
+	assert.ok(mobileStart > -1);
+	assert.ok(source.indexOf("grid-template-columns: minmax(0, 1fr) 44px", mobileStart) > mobileStart);
+	assert.ok(source.indexOf("grid-column: 1 / -1", mobileStart) > mobileStart);
+	assert.ok(source.indexOf("height: 44px", mobileStart) > mobileStart);
+	assert.ok(source.indexOf("progress-inline-save", mobileStart) > mobileStart);
 });
 
 test("profile defaults to currently reading, recent activity, then other shelves", () => {
