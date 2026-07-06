@@ -97,10 +97,6 @@ export function canonicalizeAuthor(value: unknown) {
 }
 
 export function canonicalWorkKey(entry: Partial<GoodreadsImportEntry>) {
-	const isbn13 = normalizeIsbn(entry.isbn13);
-	const isbn10 = normalizeIsbn(entry.isbn10);
-	if (isbn13) return `isbn13:${isbn13}`;
-	if (isbn10) return `isbn10:${isbn10}`;
 	return `title_author:${canonicalizeTitle(entry.title)}|${canonicalizeAuthor(entry.author)}`;
 }
 
@@ -347,9 +343,17 @@ export function dedupeGoodreadsCandidates(candidates: GoodreadsImportEntry[]) {
 	for (const candidate of candidates) {
 		const key = canonicalWorkKey(candidate);
 		if (!candidate.title || !key) continue;
-		const existing = byKey.get(key);
+		const isbn = normalizeIsbn(candidate.isbn13) || normalizeIsbn(candidate.isbn10);
+		const title = canonicalizeTitle(candidate.title);
+		const matchingKey = byKey.has(key)
+			? key
+			: Array.from(byKey.entries()).find(([, existingEntry]) => {
+				const existingIsbn = normalizeIsbn(existingEntry.isbn13) || normalizeIsbn(existingEntry.isbn10);
+				return !!isbn && isbn === existingIsbn && title === canonicalizeTitle(existingEntry.title);
+			})?.[0];
+		const existing = matchingKey ? byKey.get(matchingKey) : null;
 		if (existing) {
-			byKey.set(key, mergeDuplicateCandidate(existing, candidate));
+			byKey.set(matchingKey || key, mergeDuplicateCandidate(existing, candidate));
 			duplicateRows += 1;
 		} else {
 			byKey.set(key, candidate);

@@ -50,13 +50,65 @@ Relationships:
 
 - Belongs to `app_user`.
 
+## Works
+
+Entity: `book_work`
+
+Stores the canonical reader-facing literary Work:
+
+- Stable Work ID.
+- Work key based on normalized title and author.
+- Title and canonical title.
+- Primary author and optional `author_id`.
+- Description, subjects, genres.
+- Optional series ID and series position metadata.
+- Original publication year.
+- Preferred cover URL.
+- Rating average and rating count summary fields.
+- Extensible metadata and timestamps.
+
+Relationships:
+
+- May reference `author`.
+- Has many `book_edition` rows.
+- Is referenced by legacy `book.work_id` rows that serve as compatibility representatives.
+- Reader-facing shelves, ratings, reviews, progress, activity, recommendations, search, author pages, series, and Readers Also Enjoyed resolve to the Work through the representative book row.
+
+## Editions
+
+Entity: `book_edition`
+
+Stores edition-specific metadata beneath a Work:
+
+- Work and optional representative `book`.
+- Edition key.
+- ISBN-10 and ISBN-13.
+- Publisher.
+- Format.
+- Language.
+- Publication date and year.
+- Page count.
+- Cover URL.
+- Google Books ID.
+- Open Library work and edition IDs.
+- External IDs, metadata, and timestamps.
+
+Relationships:
+
+- Belongs to `book_work`.
+- May point at a compatibility `book` row.
+- May be remembered by `user_book.edition_id` for the reader's chosen edition.
+
+Edition data should not own ratings, reviews, shelves, reading progress, series membership, or recommendation identity.
+
 ## Books
 
 Entity: `book`
 
-Stores local catalog records:
+Stores legacy local catalog records and representative rows:
 
-- Canonical work key, which may be source/ISBN-specific for lookup and upsert safety.
+- `work_id` pointing at `book_work`.
+- Legacy canonical work key retained for lookup/backwards compatibility.
 - Title and primary author text.
 - Optional `author_id`.
 - ISBN-13, ISBN-10, Google Books ID.
@@ -67,8 +119,13 @@ Relationships:
 
 - May reference `author`.
 - Has zero or more source records, genres, topic tags, collection entries, shelf entries, reading journal entries, activity rows, and progress events.
+- May represent a canonical Work for older routes and relationships.
 
-Reader-facing lists use a display-work helper based on normalized title and author to collapse duplicate editions where practical. This keeps source/ISBN-specific catalog lookup intact while preventing duplicate editions from crowding recommendations, discovery, author, and related book surfaces.
+Current v1 compatibility rule:
+
+- Existing relationships still store `book_id`, but duplicate edition rows are migrated to the representative `book_id` for the Work whenever possible.
+- New shelf saves upsert `book_work` and `book_edition`, then use the representative Work row for reader-facing ownership.
+- ISBNs and source edition IDs are edition identity. Work identity is normalized title and author, with ISBN used only as supporting duplicate-detection evidence where appropriate.
 
 ## Authors
 
@@ -138,7 +195,7 @@ Series-book records store:
 Relationships:
 
 - A series has many series-book entries.
-- A series-book entry may reference a catalog `book`, or may represent a missing/not-yet-cataloged title.
+- A series-book entry is conceptually Work-level. During v1 it references the representative catalog `book` row for the Work, or may represent a missing/not-yet-cataloged title.
 - Reader progress for series is derived from `user_book` statuses joined through `series_book`, so profiles can later support series-completed and series-in-progress views without a separate progress table.
 
 ## Editorial Collections
@@ -169,7 +226,7 @@ Collection-book records store:
 Relationships:
 
 - A collection has many ordered collection-book entries.
-- A collection-book entry belongs to a catalog `book`.
+- A collection-book entry belongs to a representative catalog `book` row for a Work.
 - Published collections can surface on Home, Search, collection pages, and author pages.
 - Draft and archived collections remain admin-managed and are not shown to public readers.
 
@@ -195,6 +252,7 @@ Entity: `user_book`
 Stores a reader's default shelf state for a book:
 
 - User and book.
+- Optional edition ID remembering the selected Edition.
 - Status: `want_to_read`, `reading`, or `finished`.
 - Rating.
 - Total pages and current page.
@@ -207,8 +265,9 @@ Stores a reader's default shelf state for a book:
 
 Relationships:
 
-- Joins `app_user` and `book`.
-- Source of ratings, reviews, shelf counts, reading progress, profile shelves, metrics, and admin user counts.
+- Joins `app_user` and the representative `book` row for a Work.
+- May reference `book_edition` for the chosen Edition.
+- Source of Work-level ratings, reviews, shelf counts, reading progress, profile shelves, metrics, and admin user counts.
 
 Current limitation:
 
@@ -235,7 +294,7 @@ Stores private notebook entries for one reader:
 Relationships:
 
 - Belongs to `app_user`.
-- May reference `book`; if a book is supplied, the reader must already have that book on a default shelf before creating or updating the entry.
+- May reference the representative `book` row for a Work; if a book is supplied, the reader must already have that Work on a default shelf before creating or updating the entry.
 - Book detail pages load recent entries for the signed-in owner.
 - The private `/journal` page searches, date-filters, saved-book-filters, and paginates only the signed-in reader's entries. The UI uses a searchable saved-book picker instead of a long dropdown.
 
@@ -265,8 +324,9 @@ Created lazily by shelf/admin code. Stores forward reading movement:
 
 Relationships:
 
-- Belongs to `app_user` and `book`.
+- Belongs to `app_user` and the representative `book` row for a Work.
 - Used by profile momentum/streak, metrics, and My Reading Life calendar/streak summaries.
+- Progress belongs to the Work. Edition page counts or formats may influence calculations, but changing editions should not lose progress.
 
 ## My Reading Life And Timeline Data
 
@@ -274,7 +334,7 @@ My Reading Life does not introduce a new persistence table. It derives its summa
 
 - `user_book` for finished books, current books, ratings, pages, finished dates, and reflections.
 - `user_reading_progress_event` for reading activity dates and page movement.
-- `book`, `author`, `book_genre`, and `series_book`/`series` for catalog, author, genre, and series context.
+- `book_work`, representative `book`, `book_edition`, `author`, `book_genre`, and `series_book`/`series` for catalog, author, genre, edition, and series context.
 - `app_user.profile_data.readingGoal` for annual goal progress.
 
 Relationships:
@@ -305,7 +365,7 @@ Routine reading progress updates are not stored as `user_activity` rows. They ar
 
 Relationships:
 
-- Belongs to `app_user` and `book`.
+- Belongs to `app_user` and the representative `book` row for a Work.
 - Has likes, comments, and notifications.
 - Feeds profiles, book pages, following feed, settings recent activity, and public activity API.
 
@@ -323,9 +383,10 @@ Fields:
 
 Relationships:
 
-- Belong to one user/book shelf entry.
+- Belong to one user/Work shelf entry through the representative `book` row.
 - Shown through book-review helpers, book detail review cards, profile Reviews, activity surfaces, discovery providers, and admin counts.
 - Deleted reviews clear title/body/spoiler metadata while preserving the shelf entry and rating unless the reader clears the rating separately.
+- Reviews are never edition-owned.
 
 ## Likes
 
@@ -342,12 +403,12 @@ Relationships:
 
 Entity: `user_recommendation_feedback`
 
-Stores explicit reader feedback on recommended books.
+Stores explicit reader feedback on recommended Works.
 
 Fields:
 
 - User.
-- Book.
+- Book, stored as the representative `book` row for the Work.
 - Feedback value: `interesting` or `not_interested`.
 - Recommendation source.
 - Recommendation reason shown to the reader.
@@ -355,8 +416,8 @@ Fields:
 
 Relationships:
 
-- Belongs to `app_user` and `book`.
-- Used by the recommendations service to exclude books hidden through `not_interested` feedback from future personal recommendations.
+- Belongs to `app_user` and the representative `book` row for a Work.
+- Used by the recommendations service to exclude Works hidden through `not_interested` feedback from future personal recommendations.
 - Does not create public activity or profile content.
 
 ## Comments
@@ -433,7 +494,7 @@ Stores books assigned to custom shelves:
 
 Relationships:
 
-- Joins `app_user`, `user_custom_shelf`, and `book`.
+- Joins `app_user`, `user_custom_shelf`, and the representative `book` row for a Work.
 
 ## Feedback Events
 

@@ -15,6 +15,7 @@ import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
 import { loadBookSeriesContext, type BookSeriesContext, type ShelfStatus } from "../lib/series";
 import { formatReadingPosition, loadJournalEntriesForBook, type JournalSearchResult } from "../lib/readingJournal";
 import { loadReadersAlsoEnjoyed, type RecommendationSection } from "../lib/recommendations";
+import { ensureCanonicalWorkSchema, resolveRepresentativeBookId } from "../lib/catalogWorks";
 
 export const prerender = false;
 
@@ -148,6 +149,7 @@ function isDisplayNoise(value: string) {
 
 type BookDetails = {
 	id: number;
+	workId: number;
 	title: string;
 	author: string;
 	authorId: number;
@@ -163,6 +165,18 @@ type BookDetails = {
 	averageRating: number;
 	ratingCount: number;
 	pageCount: number;
+};
+
+type AvailableEdition = {
+	id: number;
+	bookId: number;
+	format: string;
+	publisher: string;
+	language: string;
+	publicationLabel: string;
+	pageCount: number;
+	isbn: string;
+	coverUrl: string;
 };
 
 const params = Astro.url.searchParams;
@@ -200,6 +214,7 @@ let seriesContext: BookSeriesContext | null = null;
 let journalEntries: JournalSearchResult[] = [];
 let readerOwnsBook = false;
 let readersAlsoEnjoyed: RecommendationSection | null = null;
+let availableEditions: AvailableEdition[] = [];
 
 async function fetchGoogleBook() {
 	const apiKey = normalizeText(import.meta.env.GOOGLE_BOOKS_API_KEY);
@@ -270,6 +285,7 @@ async function fetchOpenLibraryBook() {
 
 try {
 	const sql = getNeonSql();
+	await ensureCanonicalWorkSchema(sql);
 	let rows: Array<{
 		id: number;
 		title: string;
@@ -431,11 +447,22 @@ try {
 	const row = rows[0];
 	if (row?.id) {
 		const resolvedBookId = Number(row.id || 0);
+		const representativeBookId = resolvedBookId > 0 ? await resolveRepresentativeBookId(sql, resolvedBookId) : 0;
+		if (representativeBookId > 0 && representativeBookId !== resolvedBookId) {
+			return Astro.redirect(`/book?bookId=${encodeURIComponent(String(representativeBookId))}`, 302);
+		}
 		if (resolvedBookId > 0 && queryBookId !== resolvedBookId) {
 			return Astro.redirect(`/book?bookId=${encodeURIComponent(String(resolvedBookId))}`, 302);
 		}
+		const workRows = await sql<Array<{ work_id: number | null }>>`
+			select work_id
+			from book
+			where id = ${resolvedBookId}
+			limit 1
+		`;
 		book = {
 			id: resolvedBookId,
+			workId: Number(workRows[0]?.work_id || 0),
 			title: normalizeText(row.title),
 			author: normalizeText(row.author),
 			authorId: Number(row.author_id || 0),
@@ -452,6 +479,67 @@ try {
 			ratingCount: Number(row.rating_count || 0)
 			,pageCount: normalizeCatalogPageCount(row.page_count)
 		};
+		if (book.workId > 0) {
+			const editionRows = await sql<Array<{
+				id: number;
+				book_id: number | null;
+				format: string | null;
+				publisher: string | null;
+				language: string | null;
+				publication_date: string | null;
+				publication_year: number | null;
+				page_count: number | null;
+				isbn13: string | null;
+				isbn10: string | null;
+				cover_url: string | null;
+			}>>`
+				select
+					be.id,
+					be.book_id,
+					coalesce(nullif(trim(be.format), ''), 'Book') as format,
+					coalesce(nullif(trim(be.publisher), ''), '') as publisher,
+					coalesce(nullif(trim(be.language), ''), '') as language,
+					be.publication_date::text as publication_date,
+					be.publication_year,
+					be.page_count,
+					coalesce(nullif(trim(be.isbn13), ''), '') as isbn13,
+					coalesce(nullif(trim(be.isbn10), ''), '') as isbn10,
+					coalesce(nullif(trim(be.cover_url), ''), '') as cover_url
+				from book_edition be
+				where be.work_id = ${book.workId}
+				order by
+					case when be.book_id = ${book.id} then 0 else 1 end,
+					case lower(coalesce(be.format, ''))
+						when 'hardcover' then 1
+						when 'paperback' then 2
+						when 'ebook' then 3
+						when 'audiobook' then 4
+						else 5
+					end,
+					coalesce(be.publication_date::text, ''),
+					be.id
+				limit 12
+			`;
+			const seenEditions = new Set<string>();
+			availableEditions = editionRows
+				.map((edition) => ({
+					id: Number(edition.id || 0),
+					bookId: Number(edition.book_id || 0),
+					format: normalizeText(edition.format) || "Book",
+					publisher: normalizeText(edition.publisher),
+					language: normalizeText(edition.language).toUpperCase(),
+					publicationLabel: formatPublishedLabel(normalizeText(edition.publication_date)) || (edition.publication_year ? String(edition.publication_year) : ""),
+					pageCount: normalizeCatalogPageCount(edition.page_count),
+					isbn: normalizeText(edition.isbn13 || edition.isbn10),
+					coverUrl: normalizeText(edition.cover_url)
+				}))
+				.filter((edition) => {
+					const key = `${edition.format}|${edition.publisher}|${edition.publicationLabel}|${edition.isbn}|${edition.pageCount}`;
+					if (!key.replace(/\|/g, "") || seenEditions.has(key)) return false;
+					seenEditions.add(key);
+					return true;
+				});
+		}
 		const genreRows = await sql<Array<{ genre_name: string }>>`
 			select distinct coalesce(nullif(trim(genre_name), ''), '') as genre_name
 			from book_genre
@@ -617,6 +705,7 @@ try {
 			const info = google.volumeInfo || {};
 			book = {
 				id: 0,
+				workId: 0,
 				title: normalizeText(info.title || queryTitle),
 				author: normalizeText(Array.isArray(info.authors) ? info.authors[0] : queryAuthor),
 				authorId: 0,
@@ -638,6 +727,7 @@ try {
 			if (open) {
 				book = {
 					id: 0,
+					workId: 0,
 					title: open.title || queryTitle,
 					author: open.author || queryAuthor,
 					authorId: 0,
@@ -853,6 +943,31 @@ const bookStructuredDataPayload = bookStructuredData
 						</BookCard>
 					</ul>
 				</section>
+
+				{availableEditions.length > 1 && (
+					<section class="panel editions-panel" aria-labelledby="available-editions-heading">
+						<div class="editions-head">
+							<h2 id="available-editions-heading">Available Editions</h2>
+						</div>
+						<ul class="editions-list">
+							{availableEditions.map((edition) => (
+								<li class={`edition-item${edition.bookId === book.id ? " is-current" : ""}`}>
+									{edition.coverUrl ? (
+										<img class="edition-cover" src={edition.coverUrl} alt="" loading="lazy" decoding="async" width="38" height="56" />
+									) : (
+										<div class="edition-cover edition-cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></div>
+									)}
+									<div class="edition-main">
+										<p class="edition-format">{edition.format}{edition.bookId === book.id ? " · Current" : ""}</p>
+										<p class="edition-meta">
+											{[edition.publisher, edition.publicationLabel, edition.language, edition.pageCount > 0 ? `${edition.pageCount.toLocaleString()} pages` : "", edition.isbn ? `ISBN ${edition.isbn}` : ""].filter(Boolean).join(" · ")}
+										</p>
+									</div>
+								</li>
+							))}
+						</ul>
+					</section>
+				)}
 
 				{seriesContext && (
 					<section class="panel series-panel" aria-labelledby="series-heading">
@@ -1751,6 +1866,65 @@ const bookStructuredDataPayload = bookStructuredData
 	.book-head :global(.shelf-state) { display: none !important; }
 	.panel { margin-top: 0.95rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
 	.panel h2 { margin: 0 0 0.55rem; }
+	.editions-panel {
+		display: grid;
+		gap: 0.7rem;
+	}
+	.editions-head h2 {
+		margin-bottom: 0;
+	}
+	.editions-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.45rem;
+	}
+	.edition-item {
+		display: grid;
+		grid-template-columns: 38px minmax(0, 1fr);
+		gap: 0.65rem;
+		align-items: center;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.54);
+		padding: 0.55rem;
+	}
+	.edition-item.is-current {
+		border-color: var(--color-border);
+		background: #fff;
+	}
+	.edition-cover,
+	.edition-cover-placeholder {
+		width: 38px;
+		height: 56px;
+		border-radius: var(--radius-sm);
+		object-fit: cover;
+		background: rgba(255, 255, 255, 0.7);
+		border: var(--border-subtle);
+	}
+	.edition-cover-placeholder {
+		display: grid;
+		place-items: center;
+		color: var(--color-text-subtle);
+	}
+	.edition-main {
+		min-width: 0;
+	}
+	.edition-format,
+	.edition-meta {
+		margin: 0;
+		line-height: 1.35;
+	}
+	.edition-format {
+		font-weight: 760;
+		color: var(--color-text);
+	}
+	.edition-meta {
+		margin-top: 0.18rem;
+		color: var(--color-text-muted);
+		font-size: 0.88rem;
+	}
 	.journal-panel {
 		display: grid;
 		gap: 0.9rem;

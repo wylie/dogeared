@@ -87,11 +87,21 @@ Limitations: There is no separate following list route for another user's follow
 
 ## Books And Catalog
 
+### Canonical Works And Editions
+
+Status: Complete
+
+DogEared uses a Work -> Edition catalog model. Reader-facing surfaces resolve to a canonical Work so shelves, ratings, reviews, reading progress, recommendations, search, author pages, series, activity, and Readers Also Enjoyed do not duplicate hardcover, paperback, ebook, audiobook, translated, or publisher-specific editions.
+
+Editions remain available for precision metadata such as ISBN, publisher, format, language, publication date, page count, cover, Open Library IDs, Google Books ID, and external source IDs. Work detail pages show an Available Editions section only when more than one edition is known.
+
+Limitations: v1 keeps the existing `book` table as a compatibility representative for routes and older relationships while new `book_work` and `book_edition` records carry the canonical model.
+
 ### Recommended For You
 
 Status: Complete
 
-Home shows personalized, explainable recommendations. Signed-in recommendations use saved shelves, ratings, completed books, favorite genres, enjoyed authors, similar-book genre overlap, and community ratings. If DogEared has limited personal data, the section falls back to popular books.
+Home shows personalized, explainable recommendations. Signed-in recommendations use saved Works, ratings, completed Works, favorite genres, enjoyed authors, similar-Work genre overlap, and community ratings. If DogEared has limited personal data, the section falls back to popular Works.
 
 Every recommendation includes a visible reason. Readers can mark recommendations Interesting or Hide them through small rectangular secondary buttons; Interesting uses a subtle amber treatment, Hide uses neutral gray, and Add To Shelf remains the primary green action. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal results.
 
@@ -109,7 +119,7 @@ Limitations: Award winners and staff picks are future extension points through e
 
 Status: Complete
 
-Search combines DogEared catalog, Google Books, and Open Library results. Users can add search results to shelves, catalog matches show series name/book number when available, and matching editorial collections appear above book results.
+Search combines DogEared catalog, Google Books, and Open Library results, then returns Works rather than separate duplicate editions. Users can add search results to shelves, catalog matches show series name/book number when available, and matching editorial collections appear above book results.
 
 Limitations: External APIs can fail or return incomplete metadata.
 
@@ -117,7 +127,7 @@ Limitations: External APIs can fail or return incomplete metadata.
 
 Status: Complete
 
-Book pages show metadata, cover, synopsis, author link, series context, genres, topics, shelf controls, ratings, reviews, and activity.
+Book pages represent the Work. They show metadata, cover, synopsis, author link, series context, genres, topics, shelf controls, ratings, reviews, activity, and a lightweight Available Editions section when more than one edition is known.
 
 Limitations: If a book is not in DogEared, the page may resolve from Google Books/Open Library query parameters and may have sparse metadata.
 
@@ -125,7 +135,7 @@ Limitations: If a book is not in DogEared, the page may resolve from Google Book
 
 Status: Complete
 
-DogEared stores first-class series records with name, optional description, optional cover, total-book count, ordered book entries, publication order, chronological order, and extensible metadata. Book pages show a Series section with the current book highlighted, reader completion state, missing-title placeholders, and links to available books. Finished readers see a Continue the series callout for the next available book, including one-click Add to Want to Read when it is not already shelved. Search results, discovery cards, recommendation cards, author cards, and book detail cards display concise series labels where metadata exists.
+DogEared stores first-class series records with name, optional description, optional cover, total-book count, ordered Work entries, publication order, chronological order, and extensible metadata. Book pages show a Series section with the current Work highlighted, reader completion state, missing-title placeholders, and links to available Works. Finished readers see a Continue the series callout for the next available Work, including one-click Add to Want to Read when it is not already shelved. Search results, discovery cards, recommendation cards, author cards, and book detail cards display concise series labels where metadata exists.
 
 Limitations: Series metadata must exist in DogEared; the app does not currently auto-import or infer series membership from external catalogs.
 
@@ -149,7 +159,7 @@ Limitations: Author quality depends on catalog and backfill data.
 
 Status: Complete
 
-Author pages show author metadata, reader/shelf counts, editorial collections featuring the author, books in DogEared grouped by series where available, standalone books, and shelf controls.
+Author pages show author metadata, reader/shelf counts, editorial collections featuring the author, unique Works in DogEared grouped by series where available, standalone Works, and shelf controls.
 
 Limitations: Author bio and photo may be missing.
 
@@ -167,7 +177,7 @@ Limitations: It only accepts normalized Google Books cover URLs.
 
 Status: Complete
 
-Readers can save books as Want to Read, Currently Reading, or Read.
+Readers can save Works as Want to Read, Currently Reading, or Read. DogEared may retain the chosen Edition internally, but shelf lists should not show duplicate editions of the same Work.
 
 Limitations: Only these three statuses are persisted in `user_book.status`.
 
@@ -209,7 +219,7 @@ Limitations: DNF imports map to Want to Read unless a different implemented stat
 
 Status: Complete
 
-Currently Reading books can store total pages and current page. The profile update control uses a compact grouped selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time so the interaction matches journal reading positions without overflowing book cards. Forward progress creates reading progress events for metrics and streaks, but it does not create repeated Recent Activity shelf events.
+Currently Reading Works can store total pages and current page. Edition metadata may influence progress calculations, but progress belongs to the Work and must survive edition changes. The profile update control uses a compact grouped selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time so the interaction matches journal reading positions without overflowing book cards. Forward progress creates reading progress events for metrics and streaks, but it does not create repeated Recent Activity shelf events.
 
 Limitations: Persisted progress tracking remains page-based. Percentage updates are converted to pages when total pages are known; chapter, location, and audiobook inputs remain lightweight entry aids rather than a full alternate progress model.
 
@@ -225,7 +235,7 @@ Limitations: Completion quality depends on available total page count and suppli
 
 Status: Complete
 
-Readers can rate shelved books from 1 to 5 stars. Rating updates create rating activity and update aggregate book ratings.
+Readers can rate shelved Works from 1 to 5 stars. Rating updates create rating activity and update aggregate Work ratings.
 
 Limitations: A book must be on the reader's shelf before it can be rated.
 
@@ -233,7 +243,7 @@ Limitations: A book must be on the reader's shelf before it can be rated.
 
 Status: Complete
 
-Reviews are public finished-book recommendations stored on the shelf entry. When a reader marks a book Read, DogEared offers a simple completion flow: rating, optional review, and finish. Reviews support an optional title, optional body, spoiler flag, editing, deletion, and local draft autosave where the editor is available.
+Reviews are public finished-Work recommendations stored on the shelf entry. When a reader marks a Work Read, DogEared offers a simple completion flow: rating, optional review, and finish. Reviews support an optional title, optional body, spoiler flag, editing, deletion, and local draft autosave where the editor is available. Reviews belong to the Work, never to an individual Edition.
 
 Book pages show average rating, rating count, recent reviews, spoiler labels, collapsed long reviews, and an owner editor for finished books. Profiles include a Reviews section with latest reviews, sort and spoiler filters, and the same move-up/move-down layout controls used by shelf sections.
 

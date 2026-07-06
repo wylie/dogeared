@@ -7,9 +7,11 @@ import {
 	normalizeCatalogText,
 	type CatalogSourceInput
 } from "./catalogKeys";
+import { ensureCanonicalWorkSchema, resolveRepresentativeBookId } from "./catalogWorks";
 
 export {
 	canonicalCatalogWorkKey,
+	canonicalCatalogEditionKey,
 	canonicalCatalogDisplayWorkKey,
 	canonicalizeCatalogAuthor,
 	canonicalizeCatalogTitle,
@@ -36,6 +38,7 @@ export async function resolveBestCatalogBookId(
 	sql: ReturnType<typeof getNeonSql>,
 	input: CatalogBookLookupInput
 ) {
+	await ensureCanonicalWorkSchema(sql);
 	const isbn13 = normalizeCatalogIsbn(input.isbn13);
 	const isbn10 = normalizeCatalogIsbn(input.isbn10);
 	const googleBooksId = normalizeCatalogText(input.googleBooksId);
@@ -56,20 +59,25 @@ export async function resolveBestCatalogBookId(
 	const rows = await sql<Array<{ id: number }>>`
 		select b.id
 		from book b
+		left join book_work bw on bw.id = b.work_id
 		where (
 			(${googleBooksId} <> '' and b.google_books_id = ${googleBooksId})
 			or (${isbn13} <> '' and b.isbn13 = ${isbn13})
 			or (${isbn10} <> '' and b.isbn10 = ${isbn10})
 			or (${canonicalWorkKey} <> '' and b.canonical_work_key = ${canonicalWorkKey})
 			or (${titleAuthorKey} <> '' and b.canonical_work_key = ${titleAuthorKey})
+			or (${canonicalWorkKey} <> '' and bw.work_key = ${canonicalWorkKey})
+			or (${titleAuthorKey} <> '' and bw.work_key = ${titleAuthorKey})
 		)
 		order by
 			case
-				when ${googleBooksId} <> '' and b.google_books_id = ${googleBooksId} then 1
-				when ${isbn13} <> '' and b.isbn13 = ${isbn13} then 2
-				when ${isbn10} <> '' and b.isbn10 = ${isbn10} then 3
-				when ${canonicalWorkKey} <> '' and b.canonical_work_key = ${canonicalWorkKey} then 4
-				when ${titleAuthorKey} <> '' and b.canonical_work_key = ${titleAuthorKey} then 5
+				when ${canonicalWorkKey} <> '' and bw.work_key = ${canonicalWorkKey} then 1
+				when ${titleAuthorKey} <> '' and bw.work_key = ${titleAuthorKey} then 2
+				when ${googleBooksId} <> '' and b.google_books_id = ${googleBooksId} then 3
+				when ${isbn13} <> '' and b.isbn13 = ${isbn13} then 4
+				when ${isbn10} <> '' and b.isbn10 = ${isbn10} then 5
+				when ${canonicalWorkKey} <> '' and b.canonical_work_key = ${canonicalWorkKey} then 6
+				when ${titleAuthorKey} <> '' and b.canonical_work_key = ${titleAuthorKey} then 7
 				else 9
 			end asc,
 			b.updated_at desc,
@@ -77,7 +85,7 @@ export async function resolveBestCatalogBookId(
 		limit 1
 	`;
 	const directBookId = Number(rows[0]?.id || 0);
-	if (directBookId > 0) return directBookId;
+	if (directBookId > 0) return resolveRepresentativeBookId(sql, directBookId);
 
 	const sourceCandidates: CatalogSourceInput[] = [...(input.sources || [])];
 	if (googleBooksId) sourceCandidates.push({ source: "google_books", sourceWorkId: googleBooksId });
@@ -97,7 +105,7 @@ export async function resolveBestCatalogBookId(
 				limit 1
 			`;
 			const sourceBookId = Number(sourceRows[0]?.id || 0);
-			if (sourceBookId > 0) return sourceBookId;
+			if (sourceBookId > 0) return resolveRepresentativeBookId(sql, sourceBookId);
 		}
 	}
 

@@ -2,7 +2,7 @@
 
 DogEared is a calm social reading and book-tracking application. It helps readers save books, track reading progress, rate and review finished books, discover titles through reader activity, and maintain a long-term memory of their reading life.
 
-DogEared is inspired by book communities and personal reading journals, but the current product avoids ad-driven social media patterns. The application is organized around books, authors, reader profiles, shelves, private journal entries, recent activity, and lightweight community interactions.
+DogEared is inspired by book communities and personal reading journals, but the current product avoids ad-driven social media patterns. The application is organized around literary works, editions, authors, reader profiles, shelves, private journal entries, recent activity, and lightweight community interactions.
 
 ## Target Audience
 
@@ -82,13 +82,17 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 
 DogEared uses email magic links for sign-in. Sessions are stored server-side and can be reviewed or revoked from Settings. Email changes require verification at the new address and preserve reading history, shelves, ratings, reviews, follows, and notifications.
 
-### Books
+### Works And Editions
 
-Books have catalog records with title, primary author, author link, ISBNs, Google Books ID, synopsis, cover, language, page count, publisher, published year, genres, topic tags, source records, and optional series membership. Books can be found through search, home sections, book lists, related pages, author pages, profile shelves, and activity.
+DogEared treats the literary Work as the reader-facing catalog identity. A Work represents the intellectual book, such as `Project Hail Mary` or `The Fellowship of the Ring`, and owns title, canonical title, author, description, subjects, genres, series position, original publication year, preferred cover, and rating summary.
+
+Editions sit beneath a Work. An Edition stores precision metadata such as ISBN-10/ISBN-13, publisher, format, language, publication date, page count, edition cover, Open Library identifiers, Google Books ID, and other external IDs. Book search, recommendations, author pages, series, shelves, ratings, reviews, reading progress, activity, and Readers Also Enjoyed should resolve to the canonical Work so duplicate editions do not fragment the reader experience. Edition details appear only when useful, such as the Available Editions section on Work detail pages.
+
+The legacy `book` record remains a compatibility catalog row and representative display record while v1 migrates data into `book_work` and `book_edition`.
 
 ### Series
 
-DogEared supports first-class series metadata. A series can have a name, description, cover image, total-book count, ordered book entries, publication order, chronological order, and extensible metadata. Series entries can point to DogEared books or represent known missing titles with a title override.
+DogEared supports first-class series metadata. A series can have a name, description, cover image, total-book count, ordered Work entries, publication order, chronological order, and extensible metadata. Series entries point at canonical Works through their representative catalog row or represent known missing titles with a title override.
 
 When a book belongs to a series, the book page shows a dedicated Series section with the current book highlighted, ordered entries, completion state from the signed-in reader's shelves, and direct links to available books. If the signed-in reader has finished the current book and the next available book exists, DogEared shows a calm Continue the series callout with a one-click Add to Want to Read action unless the next book is already on a shelf.
 
@@ -104,9 +108,9 @@ If DogEared does not have enough data for a provider, that provider is hidden. I
 
 DogEared supports explainable Recommendations & Discovery v1. Home shows Recommended For You above broader community sections. Signed-in recommendations use the reader's shelves, ratings, finished books, favorite genres, enjoyed authors, similar books, and community ratings. If personal data is limited, DogEared falls back to popular books and explains that adding, rating, and reviewing books improves recommendations.
 
-Recommendation cards always explain why a book appears, with reasons such as "Because you enjoyed..." or "Popular with Fantasy readers." Feedback controls are small rectangular secondary buttons: Interesting uses a subtle amber treatment, Hide uses neutral gray, and Add To Shelf remains the primary green action. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal recommendations.
+Recommendation cards always explain why a Work appears, with reasons such as "Because you enjoyed..." or "Popular with Fantasy readers." Feedback controls are small rectangular secondary buttons: Interesting uses a subtle amber treatment, Hide uses neutral gray, and Add To Shelf remains the primary green action. Hidden recommendations store `not_interested` feedback per user and are excluded from future personal recommendations.
 
-The `/discover` page collects Recommended For You plus community sections such as Trending Up, New Releases Readers Love, Hidden Gems, Most Finished, and Community Favorites. Book detail pages include Readers Also Enjoyed, based on shared readers, genres, and authors. Recommendation and discovery lists collapse duplicate editions by display work where practical so readers normally see one logical book unless they intentionally browse editions. Recommendation feedback and future review sentiment are modeled as extension points, but the current system remains transparent and non-AI.
+The `/discover` page collects Recommended For You plus community sections such as Trending Up, New Releases Readers Love, Hidden Gems, Most Finished, and Community Favorites. Work detail pages include Readers Also Enjoyed, based on shared readers, genres, and authors. Recommendation and discovery lists use canonical Works and collapse duplicate editions so readers normally see one logical book unless they intentionally browse editions. Recommendation feedback and future review sentiment are modeled as extension points, but the current system remains transparent and non-AI.
 
 ### Guided First Experience
 
@@ -142,13 +146,13 @@ Profiles show who a reader is and what they are reading now. They include reader
 
 ### Shelves
 
-The implemented default shelf statuses are Want to Read, Currently Reading, and Read. Readers can also create custom shelves with names, slugs, icons, ordering, renaming, and deletion. Assigning a book to a default shelf removes it from custom shelves; assigning to a custom shelf stores a separate custom shelf-book relation.
+The implemented default shelf statuses are Want to Read, Currently Reading, and Read. Readers can also create custom shelves with names, slugs, icons, ordering, renaming, and deletion. Readers shelve Works, while DogEared may remember the selected Edition for precision. Assigning a Work to a default shelf removes it from custom shelves; assigning to a custom shelf stores a separate custom shelf-book relation that resolves to the representative Work row.
 
 DNF is referenced in roadmap and filtered from imported Goodreads genre tags, but it is not currently a persisted default shelf status in the main shelf schema or shelf API.
 
 ### Reading Progress
 
-Currently Reading books can store total pages, current page, finished date after completion, and progress events. The profile progress control uses a compact grouped selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time plus value, Save, and complete actions; persisted progress remains page-based, with percentages converted when total pages are known. Forward page progress creates `user_reading_progress_event` rows for streaks, Reading Life, and momentum, but it does not create another Recent Activity shelf event. Read books can store finished date, rating, and public review metadata.
+Currently Reading Works can store total pages, current page, finished date after completion, and progress events. Edition metadata such as page count or audiobook format may inform calculations, but changing editions must not lose progress. The profile progress control uses a compact grouped selector for Page Number, Percentage, Chapter, Kindle Location, and Audiobook Time plus value, Save, and complete actions; persisted progress remains page-based, with percentages converted when total pages are known. Forward page progress creates `user_reading_progress_event` rows for streaks, Reading Life, and momentum, but it does not create another Recent Activity shelf event. Read Works can store finished date, rating, and public review metadata.
 
 ### Momentum Score
 
@@ -196,7 +200,7 @@ Activity is created for meaningful public reading events: adding a book to Want 
 
 ### Reviews
 
-Reviews are public recommendations written after finishing a book. They are represented on `user_book` with optional star rating, optional review title, review body, spoiler flag, and review update timestamp. The finish flow offers rating, optional review, and Finish; reviews are never required.
+Reviews are public recommendations written after finishing a Work. Ratings and reviews belong to the Work, not to an individual Edition, so the same rating/review context appears regardless of whether a reader originally shelved a hardcover, ebook, audiobook, or paperback. They are represented on `user_book` with optional star rating, optional review title, review body, spoiler flag, and review update timestamp. The finish flow offers rating, optional review, and Finish; reviews are never required.
 
 Book detail pages show aggregate rating context, recent reviews, spoiler labeling, collapsed long reviews, and an editor for the signed-in reader's own finished books. Profiles include a Reviews section with latest reviews, sorting, spoiler filters, and the same owner reorder controls used by shelf sections. Reviews are distinct from Reading Journal entries: reviews are public recommendations after finishing, while journal entries are private notes while reading.
 

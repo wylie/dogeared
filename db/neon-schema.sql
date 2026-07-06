@@ -102,6 +102,53 @@ create table if not exists book (
 	updated_at timestamptz not null default now()
 );
 
+create table if not exists book_work (
+	id bigserial primary key,
+	work_key text not null unique,
+	title text not null,
+	canonical_title text not null default '',
+	primary_author text not null default '',
+	author_id bigint references author(id) on delete set null,
+	description text not null default '',
+	subjects text[] not null default '{}',
+	genres text[] not null default '{}',
+	series_id bigint,
+	series_position numeric,
+	original_publication_year int,
+	preferred_cover_url text not null default '',
+	rating_average numeric,
+	rating_count int not null default 0,
+	metadata jsonb not null default '{}'::jsonb,
+	created_at timestamptz not null default now(),
+	updated_at timestamptz not null default now()
+);
+
+alter table book add column if not exists work_id bigint references book_work(id) on delete set null;
+
+create table if not exists book_edition (
+	id bigserial primary key,
+	work_id bigint not null references book_work(id) on delete cascade,
+	book_id bigint references book(id) on delete set null,
+	edition_key text not null,
+	isbn10 text not null default '',
+	isbn13 text not null default '',
+	publisher text not null default '',
+	format text not null default '',
+	language text not null default '',
+	publication_date text not null default '',
+	publication_year int,
+	page_count int not null default 0,
+	cover_url text not null default '',
+	google_books_id text not null default '',
+	open_library_work_id text not null default '',
+	open_library_edition_id text not null default '',
+	external_ids jsonb not null default '{}'::jsonb,
+	metadata jsonb not null default '{}'::jsonb,
+	created_at timestamptz not null default now(),
+	updated_at timestamptz not null default now(),
+	unique (work_id, edition_key)
+);
+
 create table if not exists book_source (
 	id bigserial primary key,
 	book_id bigint not null references book(id) on delete cascade,
@@ -187,6 +234,7 @@ create table if not exists user_book (
 	finished_reflection text not null default '',
 	review_title text not null default '',
 	review_spoiler boolean not null default false,
+	edition_id bigint references book_edition(id) on delete set null,
 	review_updated_at timestamptz,
 	first_added_at timestamptz not null default now(),
 	updated_at timestamptz not null default now(),
@@ -263,6 +311,9 @@ create table if not exists user_follow (
 create index if not exists idx_book_genre_slug on book_genre(genre_slug);
 create index if not exists idx_book_source_book on book_source(book_id);
 create index if not exists idx_book_source_source on book_source(source, source_work_id, source_edition_id);
+create index if not exists idx_book_work_id on book(work_id);
+create index if not exists idx_book_edition_work on book_edition(work_id);
+create unique index if not exists idx_book_edition_book on book_edition(book_id) where book_id is not null;
 create index if not exists idx_series_book_series_order on series_book(series_id, book_order, publication_order, chronological_order);
 create index if not exists idx_series_book_book on series_book(book_id) where book_id is not null;
 create unique index if not exists idx_series_book_unique_book on series_book(series_id, book_id) where book_id is not null;
@@ -273,6 +324,7 @@ create index if not exists idx_collection_book_book on collection_book(book_id);
 create index if not exists idx_user_activity_user_created on user_activity(user_id, created_at desc);
 create index if not exists idx_user_book_status_updated on user_book(status, updated_at desc);
 create index if not exists idx_user_book_book on user_book(book_id);
+create index if not exists idx_user_book_edition on user_book(edition_id) where edition_id is not null;
 create index if not exists idx_reading_journal_user_updated on reading_journal_entry(user_id, updated_at desc);
 create index if not exists idx_reading_journal_book on reading_journal_entry(book_id);
 create index if not exists idx_reading_journal_visibility on reading_journal_entry(visibility);

@@ -46,7 +46,7 @@ Most APIs resolve the current session when mutating or reading private user data
 Shared product/data logic lives in `src/lib/`.
 
 - Authentication and account helpers: `auth`, `authHardening`, `emailChange`, `email`.
-- Catalog and metadata helpers: `catalog`, `bookPayload`, `bookCovers`, `catalogKeys`, `author`, `authorEnrichment`, `externalAuthorBooks`, `genres`, `metadataAssets`, `series`, `collections`.
+- Catalog and metadata helpers: `catalog`, `catalogWorks`, `bookPayload`, `bookCovers`, `catalogKeys`, `author`, `authorEnrichment`, `externalAuthorBooks`, `genres`, `metadataAssets`, `series`, `collections`.
 - Reader/product logic: `shelfClient`, `shelfStorage`, `customShelves`, `readingGoal`, `readingLife`, `readingJournal`, `guidedTour`, `momentumPrediction`, `goodreadsImport`, `bookReviews`, `recommendations`.
 - Discovery logic: `discoveryProviders` exposes the discovery service and reusable Home providers; `homeSections` loads cached aggregate signals and maps provider output to book cards.
 - Community and privacy: `feed`, `publicProfile`, `privacy`, `followPolicy`, `demoVisibility`.
@@ -61,7 +61,7 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 1. A page renders from Astro on the server.
 2. Server code resolves session state when needed.
 3. Pages query Neon directly or through library helpers.
-4. Catalog pages enrich books with optional series and editorial collection metadata when available. Reader-facing recommendation/discovery lists dedupe by display work so ISBN-specific editions do not normally appear as duplicate books.
+4. Catalog pages resolve to canonical Works when possible, enrich representative book rows with optional series and editorial collection metadata, and retain Edition metadata for ISBN/publisher/format precision. Reader-facing recommendation/discovery/search/author lists dedupe by Work so ISBN-specific editions do not normally appear as duplicate books.
 5. Editorial collection pages load published collection records and ordered collection-book entries with notes, quotes, ratings, and shelf state.
 6. My Reading Life derives private personal summaries from shelf entries, finished dates, ratings, progress events, genres, authors, series, and profile goal data, including timeline and calendar history. Annual reading goal progress uses the same `readingGoal` helper as Profile.
 7. Reading Journal loads private entries for the signed-in reader, supports optional book-linked entries for owned books, saves through an authenticated API, and searches/filters only that reader's entries.
@@ -73,7 +73,19 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 
 ## Series Support
 
-Series support lives in `src/lib/series`. The helper owns schema readiness, series-book ordering, current-book detection, next-book continuation logic, and author-page grouping. Book detail pages load a series context when a book belongs to a series. Search attaches series labels to catalog results, BookCard can render concise series labels, recommendation/discovery queries attach series metadata where available, and author pages group books by series while keeping standalone books separate.
+Series support lives in `src/lib/series`. The helper owns schema readiness, series-book ordering, current-book detection, next-book continuation logic, and author-page grouping. Series are conceptually Work-level. During v1, `series_book.book_id` points at the representative catalog row for that Work. Book detail pages load a series context when a Work belongs to a series. Search attaches series labels to catalog results, BookCard can render concise series labels, recommendation/discovery queries attach series metadata where available, and author pages group Works by series while keeping standalone Works separate.
+
+## Canonical Works And Editions
+
+Work/Edition support lives in `src/lib/catalogWorks` and `src/lib/catalogKeys`.
+
+- `book_work` is the canonical reader-facing Work table. It owns title, canonical title, author, description, subjects, genres, series metadata, original publication year, preferred cover, rating summary, and extensible metadata.
+- `book_edition` stores Edition precision: ISBNs, publisher, format, language, publication date/year, page count, cover, Google Books ID, Open Library work/edition IDs, external IDs, and metadata.
+- `book.work_id` links legacy catalog rows to their canonical Work. The existing `book` table remains a compatibility representative for routes, cards, and older relationships during v1.
+- `user_book.edition_id` can remember the chosen Edition, but shelves, ratings, reviews, progress, activity, recommendations, search, author pages, series, and Readers Also Enjoyed operate on the Work through the representative book row.
+- `canonicalCatalogWorkKey` is title/author based. ISBNs and source edition IDs are Edition identity, not Work identity. Import/dedupe code can still use ISBN as supporting evidence when deciding whether two rows represent the same Work.
+
+The migration `2026-07-05-canonical-works-editions-v1.sql` creates the Work/Edition tables, backfills existing books, chooses a representative book per Work, merges duplicate shelf/rating/review/progress/journal/activity/custom-shelf/recommendation-feedback rows, and rewrites series and collection relations to the representative Work row.
 
 ## Editorial Collections
 

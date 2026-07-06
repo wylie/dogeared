@@ -12,11 +12,13 @@ import { authorCanonicalPath } from "../../lib/indexing";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
 import { ensureSeriesSchema, groupAuthorBooksBySeries } from "../../lib/series";
 import { loadCollectionsForAuthor, type CollectionRecord } from "../../lib/collections";
+import { ensureCanonicalWorkSchema } from "../../lib/catalogWorks";
 
 export const prerender = false;
 
 type BookRow = {
 	id: number;
+	workId: number;
 	title: string;
 	author: string;
 	authorId: number;
@@ -101,6 +103,7 @@ async function fetchOpenLibraryBio(name: string) {
 
 try {
 	const sql = getNeonSql();
+	await ensureCanonicalWorkSchema(sql);
 	await ensureSeriesSchema(sql);
 	const canonicalAuthorRows = await sql<Array<{
 		id: number;
@@ -128,6 +131,7 @@ try {
 	const rows = await sql<BookRow[]>`
 		select
 			b.id,
+			coalesce(b.work_id, b.id)::bigint as "workId",
 			b.title,
 			coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
 			coalesce(b.author_id, 0)::bigint as "authorId",
@@ -165,13 +169,18 @@ try {
 			(${authorId} > 0 and b.author_id = ${authorId})
 			or lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
 		)
-		group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis, b.published_year, b.page_count, rt.average_rating, rt.rating_count, s.id, s.name, sb.book_order, sb.publication_order, sb.chronological_order
+		group by b.id, b.work_id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis, b.published_year, b.page_count, rt.average_rating, rt.rating_count, s.id, s.name, sb.book_order, sb.publication_order, sb.chronological_order
 		order by coalesce(s.name, '') asc, coalesce(sb.book_order, 999999) asc, shelves desc, readers desc, b.title asc
 	`;
 
 	if (rows.length > 0) {
 		authorName = normalizeAuthorName(rows[0].author);
-		books = rows;
+		const byWorkId = new Map<number, BookRow>();
+		for (const row of rows) {
+			const key = Number(row.workId || row.id || 0);
+			if (key > 0 && !byWorkId.has(key)) byWorkId.set(key, row);
+		}
+		books = Array.from(byWorkId.values());
 		const authorCounts = await sql<Array<{ shelves: number; readers: number }>>`
 			select
 				count(distinct concat(ub.user_id::text, ':', coalesce(ub.status, '')))::int as shelves,

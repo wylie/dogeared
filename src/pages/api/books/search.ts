@@ -244,13 +244,12 @@ function dedupeVariants(input: SearchResult[], queryText: string) {
 		const canonicalAuthor = canonicalizeAuthor(primaryAuthor);
 		const isbnGroup = String(result.isbn13 || result.isbn10 || "").trim();
 		const googleGroup = String(result.googleBooksId || "").trim();
-		const key = isbnGroup
+		const workGroup = stem
+			? `work:${stem}|${canonicalAuthor}`
+			: (canonicalTitle ? `work:${canonicalTitle}|${canonicalAuthor}` : "");
+		const key = workGroup || (isbnGroup
 			? `isbn:${isbnGroup}`
-			: (googleGroup
-				? `gid:${googleGroup}`
-				: (stem
-					? `stem:${stem}|${canonicalAuthor}`
-					: (canonicalTitle ? `${canonicalTitle}|${canonicalAuthor}` : `ungrouped_${index}`)));
+			: (googleGroup ? `gid:${googleGroup}` : `ungrouped_${index}`));
 		const existing = grouped.get(key) || [];
 		existing.push(result);
 		grouped.set(key, existing);

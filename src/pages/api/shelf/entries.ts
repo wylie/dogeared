@@ -19,6 +19,7 @@ import { normalizeTopicTagList } from "../../../lib/genres";
 import { ensureCustomShelfSchema } from "../../../lib/customShelves";
 import { monitorEvent } from "../../../lib/monitoring";
 import { ensureReviewSchema, normalizeReviewBody, normalizeReviewTitle } from "../../../lib/bookReviews";
+import { ensureCanonicalWorkSchema, resolveRepresentativeBookId, upsertWorkAndEdition } from "../../../lib/catalogWorks";
 
 export const prerender = false;
 
@@ -565,6 +566,7 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 		const userId = session.userId;
 		const sql = getNeonSql();
+		await ensureCanonicalWorkSchema(sql);
 		let resolvedBookId = 0;
 		if (directBookId > 0) {
 			const directRows = await sql<Array<{ id: number }>>`
@@ -574,6 +576,7 @@ export const POST: APIRoute = async ({ request }) => {
 				limit 1
 			`;
 			resolvedBookId = Number(directRows[0]?.id || 0);
+			if (resolvedBookId > 0) resolvedBookId = await resolveRepresentativeBookId(sql, resolvedBookId);
 		}
 		if (resolvedBookId <= 0) {
 			resolvedBookId = await resolveBestCatalogBookId(sql, {
@@ -688,6 +691,30 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 		if (!bookId) throw new Error("Book upsert failed.");
 		await upsertBookSources(sql, bookId, sources);
+		const workEdition = await upsertWorkAndEdition(sql, {
+			bookId,
+			title,
+			author,
+			authorId,
+			description: synopsis,
+			genres: genres.map((genre) => genre.name),
+			topics: tags.map((tag) => tag.name),
+			coverUrl,
+			isbn10,
+			isbn13,
+			publisher,
+			format: normalizeText(entry.format) || "Book",
+			language,
+			publicationDate: publishedDate,
+			publicationYear: publishedYear,
+			originalPublicationYear: publishedYear,
+			pageCount,
+			googleBooksId,
+			sources
+		});
+		if (workEdition.representativeBookId > 0 && workEdition.representativeBookId !== bookId) {
+			bookId = workEdition.representativeBookId;
+		}
 
 		for (const genre of genres) {
 			await sql`
@@ -738,6 +765,7 @@ export const POST: APIRoute = async ({ request }) => {
 				finished_reflection,
 				review_title,
 				review_spoiler,
+				edition_id,
 				review_updated_at,
 				first_added_at,
 				updated_at
@@ -753,6 +781,7 @@ export const POST: APIRoute = async ({ request }) => {
 				${finishedReflection},
 				${reviewTitle},
 				${reviewSpoiler},
+				${workEdition.editionId > 0 ? workEdition.editionId : null},
 				case when ${reviewTitle} <> '' or ${finishedReflection} <> '' then now() else null end,
 				now(),
 				now()
@@ -766,6 +795,7 @@ export const POST: APIRoute = async ({ request }) => {
 				finished_reflection = excluded.finished_reflection,
 				review_title = excluded.review_title,
 				review_spoiler = excluded.review_spoiler,
+				edition_id = coalesce(excluded.edition_id, user_book.edition_id),
 				review_updated_at = case
 					when excluded.review_title <> user_book.review_title
 						or excluded.finished_reflection <> user_book.finished_reflection

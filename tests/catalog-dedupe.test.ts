@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+	canonicalCatalogEditionKey,
 	canonicalCatalogWorkKey,
 	canonicalCatalogDisplayWorkKey,
 	canonicalizeCatalogAuthor,
@@ -11,7 +12,7 @@ import {
 	normalizeCatalogIsbn
 } from "../src/lib/catalogKeys.ts";
 
-test("canonicalCatalogWorkKey prefers ISBN identifiers over title and author", () => {
+test("canonical catalog keys separate works from editions", () => {
 	assert.equal(
 		canonicalCatalogWorkKey({
 			title: "The Fellowship of the Ring",
@@ -19,17 +20,17 @@ test("canonicalCatalogWorkKey prefers ISBN identifiers over title and author", (
 			isbn10: " 0-618-34625-2 ",
 			isbn13: "978-0-618-34625-7"
 		}),
-		"isbn13:9780618346257"
+		"title_author:fellowship of the ring|j r r tolkien"
 	);
 
 	assert.equal(
-		canonicalCatalogWorkKey({
+		canonicalCatalogEditionKey({
 			title: "The Fellowship of the Ring",
 			author: "J.R.R. Tolkien",
-			isbn10: "0-618-34625-2",
-			isbn13: ""
+			isbn10: " 0-618-34625-2 ",
+			isbn13: "978-0-618-34625-7"
 		}),
-		"isbn10:0618346252"
+		"isbn13:9780618346257"
 	);
 });
 

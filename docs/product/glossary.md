@@ -14,7 +14,7 @@ A reader's target number of finished books for the current year. DogEared calcul
 
 ## Canonical Work
 
-The catalog identity DogEared uses to resolve and upsert books safely. Source and ISBN data may preserve edition-specific identity, while reader-facing discovery and recommendation lists also use a display-work grouping based on normalized title and author to avoid showing duplicate editions as separate recommendations.
+The reader-facing literary Work DogEared uses as the primary catalog identity. A Work represents the intellectual book and owns shelves, ratings, reviews, reading progress, series membership, recommendations, search identity, author-page display, and Readers Also Enjoyed identity.
 
 ## Author
 
@@ -22,7 +22,11 @@ A catalog entity representing a writer. Books may reference an author record thr
 
 ## Book
 
-A catalog entity for a title/work in DogEared. Book records store metadata such as author, ISBNs, Google Books ID, synopsis, cover, language, page count, publisher, published year, genres, tags, and source links.
+A legacy catalog row and compatibility representative for a Work in DogEared. During Work/Edition v1, existing routes and relationships still use representative `book` rows, but product behavior should think in Works first.
+
+## Edition
+
+A specific publication or format beneath a Work, such as hardcover, paperback, ebook, audiobook, translated edition, large print, illustrated edition, or publisher-specific edition. Editions own ISBN, publisher, format, language, publication date, page count, edition cover, and external edition IDs. Editions do not own shelves, ratings, reviews, reading progress, or series membership.
 
 ## Book Source
 
@@ -122,7 +126,7 @@ DogEared's personalized recommendation section. It uses transparent reader activ
 
 ## Reading Progress Event
 
-A stored forward page movement for a reader and book, with from-page, to-page, page delta, and recorded time.
+A stored forward page movement for a reader and Work, with from-page, to-page, page delta, and recorded time.
 
 ## Reading Journal
 
@@ -138,7 +142,7 @@ A count of consecutive reading/progress days derived from recorded reading updat
 
 ## Review
 
-A public recommendation written after finishing a book. Reviews can include a star rating, optional title, optional body, spoiler flag, and update timestamp. They are distinct from private Reading Journal entries.
+A public recommendation written after finishing a Work. Reviews can include a star rating, optional title, optional body, spoiler flag, and update timestamp. Reviews belong to the Work, not an Edition, and are distinct from private Reading Journal entries.
 
 ## Shelf
 
@@ -146,11 +150,11 @@ A collection/state for a reader's books. Implemented default shelf statuses are 
 
 ## Shelf Entry
 
-The user-book relation that stores a reader's status, rating, total pages, current page, finished date, public review metadata, first-added timestamp, and update timestamp.
+The user-Work relation, represented by `user_book`, that stores a reader's status, optional edition, rating, total pages, current page, finished date, public review metadata, first-added timestamp, and update timestamp.
 
 ## Series
 
-A catalog entity for an ordered set of books. Series can store name, description, cover image, total-book count, and ordered entries.
+A catalog entity for an ordered set of Works. Series can store name, description, cover image, total-book count, and ordered entries.
 
 ## Series Entry
 

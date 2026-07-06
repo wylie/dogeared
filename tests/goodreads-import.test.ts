@@ -111,7 +111,7 @@ test("buildGoodreadsImportPlan is idempotent against existing shelf entries", ()
 	assert.equal(summary.finished, 1);
 	assert.equal(summary.wantToRead, 1);
 	assert.equal(plan.nextEntries.length, 2);
-	assert.equal(canonicalWorkKey(plan.nextEntries.find((item) => item.title === "Project Hail Mary") || {}), "isbn13:9780593135204");
+	assert.equal(canonicalWorkKey(plan.nextEntries.find((item) => item.title === "Project Hail Mary") || {}), "title_author:project hail mary|andy weir");
 });
 
 test("buildGoodreadsImportPlan replace mode ignores existing shelf entries", () => {

@@ -41,10 +41,6 @@ export function canonicalizeCatalogAuthor(value: unknown) {
 }
 
 export function canonicalCatalogWorkKey(input: { title?: unknown; author?: unknown; isbn10?: unknown; isbn13?: unknown }) {
-	const isbn13 = normalizeCatalogIsbn(input.isbn13);
-	const isbn10 = normalizeCatalogIsbn(input.isbn10);
-	if (isbn13) return `isbn13:${isbn13}`;
-	if (isbn10) return `isbn10:${isbn10}`;
 	const title = canonicalizeCatalogTitle(input.title) || "untitled";
 	const author = canonicalizeCatalogAuthor(input.author) || "unknown";
 	return `title_author:${title}|${author}`;
@@ -121,4 +117,27 @@ export function getCatalogSourceKeys(input: CatalogSourceInput) {
 		normalizeCatalogText(input.sourceEditionId)
 	].filter(Boolean);
 	return Array.from(new Set(keys));
+}
+
+export function canonicalCatalogEditionKey(input: {
+	isbn10?: unknown;
+	isbn13?: unknown;
+	googleBooksId?: unknown;
+	sources?: CatalogSourceInput[];
+	fallback?: unknown;
+}) {
+	const isbn13 = normalizeCatalogIsbn(input.isbn13);
+	const isbn10 = normalizeCatalogIsbn(input.isbn10);
+	if (isbn13) return `isbn13:${isbn13}`;
+	if (isbn10) return `isbn10:${isbn10}`;
+	const googleBooksId = normalizeCatalogText(input.googleBooksId);
+	if (googleBooksId) return `google_books:${googleBooksId}`;
+	for (const source of input.sources || []) {
+		const editionId = normalizeCatalogText(source.sourceEditionId);
+		if (editionId) return `${source.source}:edition:${editionId}`;
+		const workId = normalizeCatalogText(source.sourceWorkId);
+		if (workId) return `${source.source}:work:${workId}`;
+	}
+	const fallback = normalizeCatalogText(input.fallback);
+	return fallback ? `fallback:${fallback}` : "";
 }
