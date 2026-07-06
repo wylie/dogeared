@@ -20,6 +20,7 @@ import { ensureCustomShelfSchema } from "../../../lib/customShelves";
 import { monitorEvent } from "../../../lib/monitoring";
 import { ensureReviewSchema, normalizeReviewBody, normalizeReviewTitle } from "../../../lib/bookReviews";
 import { ensureCanonicalWorkSchema, resolveRepresentativeBookId, upsertWorkAndEdition } from "../../../lib/catalogWorks";
+import { upsertKnownSeriesForBook } from "../../../lib/series";
 
 export const prerender = false;
 
@@ -715,6 +716,14 @@ export const POST: APIRoute = async ({ request }) => {
 		if (workEdition.representativeBookId > 0 && workEdition.representativeBookId !== bookId) {
 			bookId = workEdition.representativeBookId;
 		}
+		await upsertKnownSeriesForBook(sql, {
+			bookId,
+			workId: workEdition.workId,
+			title,
+			author,
+			coverUrl,
+			publishedYear
+		});
 
 		for (const genre of genres) {
 			await sql`

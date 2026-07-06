@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
 	buildBookSeriesContext,
 	groupAuthorBooksBySeries,
+	inferKnownSeriesMetadata,
 	orderSeriesBooks
 } from "../src/lib/series.ts";
 
@@ -75,4 +77,36 @@ test("author books group by series and keep standalone books separate", () => {
 	assert.deepEqual(groups[0]?.books.map((book) => book.id), [1, 2]);
 	assert.equal(groups[1]?.title, "Standalone Books");
 	assert.deepEqual(groups[1]?.books.map((book) => book.id), [3]);
+});
+
+test("known series metadata is inferred for regression fixtures", () => {
+	const cases = [
+		["Harry Potter and the Chamber of Secrets", "J.K. Rowling", "Harry Potter", 2],
+		["The Fellowship of the Ring", "J. R. R. Tolkien", "The Lord of the Rings", 1],
+		["Fourth Wing", "Rebecca Yarros", "The Empyrean", 1],
+		["The Dragonet Prophecy", "Tui T. Sutherland", "Wings of Fire", 1],
+		["The Bad Beginning", "Lemony Snicket", "A Series of Unfortunate Events", 1],
+		["The Final Empire", "Brandon Sanderson", "Mistborn", 1]
+	] as const;
+
+	for (const [title, author, seriesName, bookOrder] of cases) {
+		const inferred = inferKnownSeriesMetadata({ title, author });
+		assert.equal(inferred?.seriesName, seriesName);
+		assert.equal(inferred?.bookOrder, bookOrder);
+	}
+});
+
+test("series inference is wired through search, shelf import, recommendations, and migration", () => {
+	const search = readFileSync("src/pages/api/books/search.ts", "utf8");
+	const shelfEntries = readFileSync("src/pages/api/shelf/entries.ts", "utf8");
+	const recommendations = readFileSync("src/lib/recommendations.ts", "utf8");
+	const migration = readFileSync("db/migrations/2026-07-06-known-series-backfill.sql", "utf8");
+
+	assert.match(search, /inferKnownSeriesMetadata/);
+	assert.match(shelfEntries, /upsertKnownSeriesForBook/);
+	assert.match(recommendations, /next_series/);
+	assert.match(recommendations, /Next in/);
+	for (const fixture of ["harry-potter", "the-lord-of-the-rings", "the-empyrean", "wings-of-fire", "a-series-of-unfortunate-events", "mistborn"]) {
+		assert.match(migration, new RegExp(fixture));
+	}
 });

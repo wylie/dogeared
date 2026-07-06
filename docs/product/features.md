@@ -135,9 +135,9 @@ Limitations: If a book is not in DogEared, the page may resolve from Google Book
 
 Status: Complete
 
-DogEared stores first-class series records with name, optional description, optional cover, total-book count, ordered Work entries, publication order, chronological order, and extensible metadata. Book pages show a Series section with the current Work highlighted, reader completion state, missing-title placeholders, and links to available Works. Finished readers see a Continue the series callout for the next available Work, including one-click Add to Want to Read when it is not already shelved. Search results, discovery cards, recommendation cards, author cards, and book detail cards display concise series labels where metadata exists.
+DogEared stores first-class series records with name, optional description, optional cover, total-book count, ordered Work entries, publication order, chronological order, and extensible metadata. Book pages show a Series section with the current Work highlighted, reader completion state, missing-title placeholders, links to available Works, and Add to DogEared search actions for missing titles. Finished readers see a Continue the series callout for the next available Work, including one-click Add to Want to Read when it is not already shelved. Search results, discovery cards, recommendation cards, author cards, and book detail cards display concise series labels where metadata exists.
 
-Limitations: Series metadata must exist in DogEared; the app does not currently auto-import or infer series membership from external catalogs.
+Series membership belongs to the canonical Work, not an Edition. Catalog imports attach known-series metadata during shelf creation, search infers labels for known series before a book is saved, and the known-series backfill migration populates existing catalog rows for Harry Potter, The Lord of the Rings, The Empyrean, Wings of Fire, A Series of Unfortunate Events, and Mistborn. When source metadata is incomplete and no known-series rule matches, the Work remains standalone until DogEared receives reliable series metadata.
 
 ### Books Index
 

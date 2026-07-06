@@ -196,6 +196,10 @@ Relationships:
 
 - A series has many series-book entries.
 - A series-book entry is conceptually Work-level. During v1 it references the representative catalog `book` row for the Work, or may represent a missing/not-yet-cataloged title.
+- Canonical Work ownership is mirrored on `book_work.series_id` and `book_work.series_position`. Editions never own series membership.
+- Series ordering uses `book_order` first, then publication order, chronological order, publication year, title, and representative book id.
+- Known missing titles can be stored as placeholder `series_book` rows with `book_id = null` and `title_override`; when a real representative book is later attached at the same order, the placeholder is removed.
+- The known-series backfill migration populates common series and real entries by normalized title/author matching while preserving existing shelves, ratings, reviews, journal entries, progress, activity, favorites, and goals.
 - Reader progress for series is derived from `user_book` statuses joined through `series_book`, so profiles can later support series-completed and series-in-progress views without a separate progress table.
 
 ## Editorial Collections

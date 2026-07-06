@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { googleBooksCoverUrl } from "../../../lib/bookCovers";
 import { getNeonSql } from "../../../lib/neon";
 import { createPublicCacheControl, withRuntimeCache } from "../../../lib/runtimeCache";
-import { ensureSeriesSchema } from "../../../lib/series";
+import { ensureSeriesSchema, inferKnownSeriesMetadata } from "../../../lib/series";
 import { searchCollections } from "../../../lib/collections";
 
 export const prerender = false;
@@ -275,6 +275,12 @@ function dedupeVariants(input: SearchResult[], queryText: string) {
 			return true;
 		});
 		const best = { ...sorted[0], variantCount: variants.length, variants };
+		const seriesCarrier = sorted.find((item) => item.seriesName || item.seriesBookOrder || item.seriesLabel);
+		if (seriesCarrier) {
+			best.seriesName ||= seriesCarrier.seriesName;
+			best.seriesBookOrder ||= seriesCarrier.seriesBookOrder;
+			best.seriesLabel ||= seriesCarrier.seriesLabel;
+		}
 		deduped.push(best);
 	}
 
@@ -466,6 +472,8 @@ export const GET: APIRoute = async ({ url }) => {
 		const items = Array.from(byId.values());
 		const googleMapped: SearchResult[] = items.map((item) => {
 			const info = item.volumeInfo ?? {};
+			const authors = Array.isArray(info.authors) ? info.authors : [];
+			const inferredSeries = inferKnownSeriesMetadata({ title: info.title ?? "", author: authors[0] || "" });
 			const identifiers = Array.isArray(info.industryIdentifiers) ? info.industryIdentifiers : [];
 			const isbn13 = String(
 				(identifiers.find((entry) => String(entry?.type || "") === "ISBN_13")?.identifier || "")
@@ -477,7 +485,7 @@ export const GET: APIRoute = async ({ url }) => {
 				source: "google_books",
 				title: info.title ?? "Untitled",
 				subtitle: info.subtitle ?? "",
-				authors: Array.isArray(info.authors) ? info.authors : [],
+				authors,
 				description: info.description ?? "",
 				publisher: info.publisher ?? "",
 				publishedDate: info.publishedDate ?? "",
@@ -488,7 +496,10 @@ export const GET: APIRoute = async ({ url }) => {
 				thumbnail: googleBooksCoverUrl(info.imageLinks, "card"),
 				isbn10,
 				isbn13,
-				googleBooksId: String(item?.id || "").trim()
+				googleBooksId: String(item?.id || "").trim(),
+				seriesName: inferredSeries?.seriesName || "",
+				seriesBookOrder: inferredSeries?.bookOrder || 0,
+				seriesLabel: formatSeriesSearchLabel(inferredSeries?.seriesName || "", inferredSeries?.bookOrder || 0)
 			};
 		});
 
@@ -526,6 +537,7 @@ export const GET: APIRoute = async ({ url }) => {
 		const openItems = Array.from(openByWork.values());
 		const openLibraryMapped: SearchResult[] = openItems.map((doc) => {
 			const authorNames = Array.isArray(doc?.author_name) ? doc.author_name.map((v: unknown) => String(v || "").trim()).filter(Boolean) : [];
+			const inferredSeries = inferKnownSeriesMetadata({ title: doc?.title || "", author: authorNames[0] || "" });
 			const isbns = Array.isArray(doc?.isbn) ? doc.isbn.map((v: unknown) => String(v || "").replace(/[^0-9Xx]/g, "").toUpperCase()).filter(Boolean) : [];
 			const isbn13 = isbns.find((value: string) => value.length === 13) || "";
 			const isbn10 = isbns.find((value: string) => value.length === 10) || "";
@@ -546,7 +558,10 @@ export const GET: APIRoute = async ({ url }) => {
 				thumbnail: coverId > 0 ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : "",
 				isbn10,
 				isbn13,
-				googleBooksId: ""
+				googleBooksId: "",
+				seriesName: inferredSeries?.seriesName || "",
+				seriesBookOrder: inferredSeries?.bookOrder || 0,
+				seriesLabel: formatSeriesSearchLabel(inferredSeries?.seriesName || "", inferredSeries?.bookOrder || 0)
 			};
 		});
 
@@ -609,13 +624,18 @@ export const GET: APIRoute = async ({ url }) => {
 		}
 		const mappedWithIds = mapped.map((item) => {
 			const match = byGoogleId.get(item.googleBooksId) || byIsbn13.get(item.isbn13) || byIsbn10.get(item.isbn10);
+			const inferredSeries = item.seriesName ? null : inferKnownSeriesMetadata({ title: item.title, author: item.authors[0] || "" });
+			const seriesName = item.seriesName || match?.seriesName || inferredSeries?.seriesName || "";
+			const seriesBookOrder = Number(item.seriesBookOrder || 0) > 0
+				? Number(item.seriesBookOrder || 0)
+				: (match?.seriesBookOrder || inferredSeries?.bookOrder || 0);
 			return {
 				...item,
 				bookId: Number(item.bookId || 0) > 0 ? Number(item.bookId || 0) : (match?.bookId || 0),
 				authorId: Number(item.authorId || 0) > 0 ? Number(item.authorId || 0) : (match?.authorId || 0),
-				seriesName: item.seriesName || match?.seriesName || "",
-				seriesBookOrder: Number(item.seriesBookOrder || 0) > 0 ? Number(item.seriesBookOrder || 0) : (match?.seriesBookOrder || 0),
-				seriesLabel: item.seriesLabel || match?.seriesLabel || ""
+				seriesName,
+				seriesBookOrder,
+				seriesLabel: item.seriesLabel || match?.seriesLabel || formatSeriesSearchLabel(seriesName, seriesBookOrder)
 			};
 		});
 		const results = dedupeVariants(mappedWithIds, query);

@@ -1009,13 +1009,15 @@ const bookStructuredDataPayload = bookStructuredData
 										{seriesBook.bookHref ? (
 											<a class="series-book-title" href={seriesBook.bookHref}>{seriesBook.title}</a>
 										) : (
-											<span class="series-book-title">{seriesBook.title}</span>
+											<a class="series-book-title" href={`/search?q=${encodeURIComponent(seriesBook.title)}`}>{seriesBook.title}</a>
 										)}
 										{seriesBook.isCurrent && <span class="series-current-badge">Current book</span>}
 									</div>
 									<div class="series-book-state">
 										{seriesBook.shelfStatus === "finished" ? (
 											<span class="series-state-read"><span aria-hidden="true">✓</span> Read</span>
+										) : !seriesBook.canOpenBook ? (
+											<a class="series-add-link" href={`/search?q=${encodeURIComponent(seriesBook.title)}`}>Add to DogEared</a>
 										) : (
 											shelfStatusLabel(seriesBook.shelfStatus || "") || "Not on shelf"
 										)}
@@ -2211,6 +2213,16 @@ const bookStructuredDataPayload = bookStructuredData
 	}
 	.series-state-read {
 		color: var(--color-primary);
+	}
+	.series-add-link {
+		color: var(--color-nav);
+		font-weight: 760;
+		text-decoration: none;
+	}
+	.series-add-link:hover,
+	.series-add-link:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
 	}
 	.series-continue {
 		display: flex;

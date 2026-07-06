@@ -73,7 +73,9 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 
 ## Series Support
 
-Series support lives in `src/lib/series`. The helper owns schema readiness, series-book ordering, current-book detection, next-book continuation logic, and author-page grouping. Series are conceptually Work-level. During v1, `series_book.book_id` points at the representative catalog row for that Work. Book detail pages load a series context when a Work belongs to a series. Search attaches series labels to catalog results, BookCard can render concise series labels, recommendation/discovery queries attach series metadata where available, and author pages group Works by series while keeping standalone Works separate.
+Series support lives in `src/lib/series`. The helper owns schema readiness, known-series inference, idempotent series attachment, series-book ordering, current-book detection, next-book continuation logic, and author-page grouping. Series are conceptually Work-level. During v1, `series_book.book_id` points at the representative catalog row for that Work, while `book_work.series_id` and `book_work.series_position` store canonical Work ownership. Book detail pages load a series context when a Work belongs to a series. Search attaches stored series labels to catalog results and infers labels for known external results before they are saved. BookCard can render concise series labels, recommendation/discovery queries attach series metadata where available, and author pages group Works by series while keeping standalone Works separate.
+
+Series ordering prefers explicit `book_order`, then publication order, chronological order, publication year, title, and representative book id. Missing known titles may be represented as `series_book` placeholder rows with `title_override` and no `book_id`; book detail links those placeholders to Search so readers can add the title when a catalog row is not available yet. Recommendations use series context to rank the earliest unread next book after a finished series entry ahead of unrelated recommendations, while avoiding later unread books until earlier available entries have been finished.
 
 ## Canonical Works And Editions
 
@@ -85,7 +87,7 @@ Work/Edition support lives in `src/lib/catalogWorks` and `src/lib/catalogKeys`.
 - `user_book.edition_id` can remember the chosen Edition, but shelves, ratings, reviews, progress, activity, recommendations, search, author pages, series, and Readers Also Enjoyed operate on the Work through the representative book row.
 - `canonicalCatalogWorkKey` is title/author based. ISBNs and source edition IDs are Edition identity, not Work identity. Import/dedupe code can still use ISBN as supporting evidence when deciding whether two rows represent the same Work.
 
-The migration `2026-07-05-canonical-works-editions-v1.sql` creates the Work/Edition tables, backfills existing books, chooses a representative book per Work, merges duplicate shelf/rating/review/progress/journal/activity/custom-shelf/recommendation-feedback rows, and rewrites series and collection relations to the representative Work row.
+The migration `2026-07-05-canonical-works-editions-v1.sql` creates the Work/Edition tables, backfills existing books, chooses a representative book per Work, merges duplicate shelf/rating/review/progress/journal/activity/custom-shelf/recommendation-feedback rows, and rewrites series and collection relations to the representative Work row. The follow-up known-series migration backfills common series whose metadata is often missing from external providers without changing shelves, ratings, reviews, journal entries, progress, activity, favorites, or goals.
 
 ## Editorial Collections
 

@@ -193,18 +193,120 @@ export async function loadRecommendedForUser(sql: any, userId: string, limit = 8
 				title asc
 			limit ${Math.max(1, Math.min(24, limit))}
 	`;
-	if (rows.length === 0) return loadPopularFallbackRecommendations(sql, limit);
+	const nextSeriesRows = await sql<Array<{
+		book_id: number;
+		title: string;
+		primary_author: string;
+		author_id: number | null;
+		shelf_count: number;
+		synopsis: string;
+		cover_url: string;
+		published_year: number | null;
+		language: string;
+		isbn10: string;
+		isbn13: string;
+		google_books_id: string;
+		page_count: number;
+		average_rating: number | null;
+		rating_count: number;
+		series_name: string | null;
+		series_book_order: number | null;
+	}>>`
+		with viewer_books as (
+			select ub.book_id, ub.status
+			from user_book ub
+			where ub.user_id = ${normalizedUserId}::uuid
+		),
+		next_series as (
+			select distinct on (candidate.series_id)
+				candidate.book_id,
+				candidate.series_id,
+				candidate.book_order
+			from series_book candidate
+			where candidate.book_id is not null
+				and candidate.book_order is not null
+				and exists (
+					select 1
+					from viewer_books vb
+					join series_book read_entry on read_entry.book_id = vb.book_id
+					where read_entry.series_id = candidate.series_id
+						and read_entry.book_order < candidate.book_order
+						and vb.status = 'finished'
+				)
+				and not exists (
+					select 1
+					from viewer_books vb
+					where vb.book_id = candidate.book_id
+				)
+				and not exists (
+					select 1
+					from series_book earlier
+					where earlier.series_id = candidate.series_id
+						and earlier.book_id is not null
+						and earlier.book_order < candidate.book_order
+						and not exists (
+							select 1
+							from viewer_books vb
+							where vb.book_id = earlier.book_id
+								and vb.status = 'finished'
+						)
+				)
+				and not exists (
+					select 1 from user_recommendation_feedback rf
+					where rf.user_id = ${normalizedUserId}::uuid
+						and rf.book_id = candidate.book_id
+						and rf.feedback = 'not_interested'
+				)
+			order by candidate.series_id, candidate.book_order asc
+		)
+		select
+			b.id as book_id,
+			b.title,
+			b.primary_author,
+			b.author_id,
+			coalesce(count(distinct ub.user_id), 0)::int as shelf_count,
+			coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+			coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+			b.published_year,
+			b.language,
+			b.isbn10,
+			b.isbn13,
+			b.google_books_id,
+			coalesce(nullif(b.page_count, 0), 0)::int as page_count,
+			round(avg(ub.rating)::numeric, 2) as average_rating,
+			count(*) filter (where ub.rating is not null)::int as rating_count,
+			s.name as series_name,
+			ns.book_order as series_book_order
+		from next_series ns
+		join book b on b.id = ns.book_id
+		join series s on s.id = ns.series_id
+		left join user_book ub on ub.book_id = b.id
+		group by b.id, s.name, ns.book_order
+		order by ns.book_order asc, b.title asc
+		limit ${Math.max(1, Math.min(8, limit))}
+	`;
+	if (rows.length === 0 && nextSeriesRows.length === 0) return loadPopularFallbackRecommendations(sql, limit);
+	const seriesBooks = nextSeriesRows.map((row) => {
+		const reason = `Next in ${normalizeText(row.series_name)}.`;
+		return {
+			...toBook(row),
+			recommendationReason: reason,
+			recommendationSource: "personal" as const,
+			discoveryReason: reason
+		};
+	});
+	const personalBooks = rows.map((row) => ({
+		...toBook(row),
+		recommendationReason: reasonFor(row),
+		recommendationSource: "personal" as const,
+		discoveryReason: reasonFor(row)
+	}));
 	return {
 		id: "recommended-for-you",
 		title: "Recommended For You",
 		subtitle: "Explainable suggestions based on your shelves, ratings, finished books, favorite genres, and authors.",
 		emptyState: "The more books you add, rate, and review, the better your recommendations become.",
-		books: dedupeCatalogItemsByDisplayWork(rows.map((row) => ({
-			...toBook(row),
-			recommendationReason: reasonFor(row),
-			recommendationSource: "personal" as const,
-			discoveryReason: reasonFor(row)
-		})))
+		books: dedupeCatalogItemsByDisplayWork([...seriesBooks, ...personalBooks]).slice(0, Math.max(1, limit))
 	};
 }
 

@@ -1,4 +1,5 @@
 import { getNeonSql } from "./neon.ts";
+import { canonicalizeCatalogAuthor, canonicalizeCatalogTitle } from "./catalogKeys.ts";
 
 type SeriesSql = ReturnType<typeof getNeonSql>;
 
@@ -69,6 +70,135 @@ export type AuthorBookGroup<T extends AuthorSeriesBook = AuthorSeriesBook> = {
 
 let seriesSchemaReady: Promise<void> | null = null;
 
+type KnownSeriesBook = {
+	title: string;
+	order: number;
+	aliases?: string[];
+};
+
+type KnownSeries = {
+	name: string;
+	slug: string;
+	totalBooks: number;
+	authors: string[];
+	books: KnownSeriesBook[];
+};
+
+export type InferredSeriesMetadata = {
+	seriesName: string;
+	seriesSlug: string;
+	seriesTotalBooks: number;
+	bookOrder: number;
+};
+
+type UpsertKnownSeriesInput = {
+	bookId: number;
+	workId?: number;
+	title?: unknown;
+	author?: unknown;
+	coverUrl?: unknown;
+	publishedYear?: unknown;
+};
+
+const KNOWN_SERIES: KnownSeries[] = [
+	{
+		name: "Harry Potter",
+		slug: "harry-potter",
+		totalBooks: 7,
+		authors: ["j k rowling", "jk rowling"],
+		books: [
+			{ title: "Harry Potter and the Sorcerer's Stone", order: 1, aliases: ["Harry Potter and the Philosopher's Stone"] },
+			{ title: "Harry Potter and the Chamber of Secrets", order: 2 },
+			{ title: "Harry Potter and the Prisoner of Azkaban", order: 3 },
+			{ title: "Harry Potter and the Goblet of Fire", order: 4 },
+			{ title: "Harry Potter and the Order of the Phoenix", order: 5 },
+			{ title: "Harry Potter and the Half-Blood Prince", order: 6 },
+			{ title: "Harry Potter and the Deathly Hallows", order: 7 }
+		]
+	},
+	{
+		name: "The Lord of the Rings",
+		slug: "the-lord-of-the-rings",
+		totalBooks: 3,
+		authors: ["j r r tolkien", "jrr tolkien"],
+		books: [
+			{ title: "The Fellowship of the Ring", order: 1, aliases: ["Fellowship of the Ring"] },
+			{ title: "The Two Towers", order: 2 },
+			{ title: "The Return of the King", order: 3 }
+		]
+	},
+	{
+		name: "The Empyrean",
+		slug: "the-empyrean",
+		totalBooks: 3,
+		authors: ["rebecca yarros"],
+		books: [
+			{ title: "Fourth Wing", order: 1 },
+			{ title: "Iron Flame", order: 2 },
+			{ title: "Onyx Storm", order: 3 }
+		]
+	},
+	{
+		name: "Wings of Fire",
+		slug: "wings-of-fire",
+		totalBooks: 15,
+		authors: ["tui t sutherland"],
+		books: [
+			{ title: "The Dragonet Prophecy", order: 1 },
+			{ title: "The Lost Heir", order: 2 },
+			{ title: "The Hidden Kingdom", order: 3 },
+			{ title: "The Dark Secret", order: 4 },
+			{ title: "The Brightest Night", order: 5 },
+			{ title: "Moon Rising", order: 6 },
+			{ title: "Winter Turning", order: 7 },
+			{ title: "Escaping Peril", order: 8 },
+			{ title: "Talons of Power", order: 9 },
+			{ title: "Darkness of Dragons", order: 10 },
+			{ title: "The Lost Continent", order: 11 },
+			{ title: "The Hive Queen", order: 12 },
+			{ title: "The Poison Jungle", order: 13 },
+			{ title: "The Dangerous Gift", order: 14 },
+			{ title: "The Flames of Hope", order: 15 }
+		]
+	},
+	{
+		name: "A Series of Unfortunate Events",
+		slug: "a-series-of-unfortunate-events",
+		totalBooks: 13,
+		authors: ["lemony snicket"],
+		books: [
+			{ title: "The Bad Beginning", order: 1 },
+			{ title: "The Reptile Room", order: 2 },
+			{ title: "The Wide Window", order: 3 },
+			{ title: "The Miserable Mill", order: 4 },
+			{ title: "The Austere Academy", order: 5 },
+			{ title: "The Ersatz Elevator", order: 6 },
+			{ title: "The Vile Village", order: 7 },
+			{ title: "The Hostile Hospital", order: 8 },
+			{ title: "The Carnivorous Carnival", order: 9 },
+			{ title: "The Slippery Slope", order: 10 },
+			{ title: "The Grim Grotto", order: 11 },
+			{ title: "The Penultimate Peril", order: 12 },
+			{ title: "The End", order: 13 }
+		]
+	},
+	{
+		name: "Mistborn",
+		slug: "mistborn",
+		totalBooks: 7,
+		authors: ["brandon sanderson"],
+		books: [
+			{ title: "Mistborn: The Final Empire", order: 1, aliases: ["The Final Empire", "Mistborn"] },
+			{ title: "The Well of Ascension", order: 2 },
+			{ title: "The Hero of Ages", order: 3 },
+			{ title: "The Alloy of Law", order: 4 },
+			{ title: "Shadows of Self", order: 5 },
+			{ title: "The Bands of Mourning", order: 6 },
+			{ title: "The Lost Metal", order: 7 }
+		]
+	}
+];
+
 function normalizeText(value: unknown) {
 	return String(value || "").trim();
 }
@@ -76,6 +206,170 @@ function normalizeText(value: unknown) {
 function numericOrder(value: unknown) {
 	const numeric = Number(value || 0);
 	return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+}
+
+function seriesTitleKeys(book: KnownSeriesBook) {
+	return [book.title, ...(book.aliases || [])].map((title) => canonicalizeCatalogTitle(title)).filter(Boolean);
+}
+
+function findKnownSeriesBySlug(slug: string) {
+	return KNOWN_SERIES.find((series) => series.slug === slug) || null;
+}
+
+export function inferKnownSeriesMetadata(input: { title?: unknown; author?: unknown }): InferredSeriesMetadata | null {
+	const title = canonicalizeCatalogTitle(input.title);
+	const author = canonicalizeCatalogAuthor(input.author);
+	if (!title) return null;
+	for (const series of KNOWN_SERIES) {
+		const authorMatches = !author || series.authors.some((knownAuthor) => author === knownAuthor || author.includes(knownAuthor) || knownAuthor.includes(author));
+		for (const book of series.books) {
+			const titleMatches = seriesTitleKeys(book).some((knownTitle) => title === knownTitle || title.includes(knownTitle) || knownTitle.includes(title));
+			if (!titleMatches) continue;
+			if (!authorMatches && author) continue;
+			return {
+				seriesName: series.name,
+				seriesSlug: series.slug,
+				seriesTotalBooks: series.totalBooks,
+				bookOrder: book.order
+			};
+		}
+	}
+	return null;
+}
+
+export async function upsertKnownSeriesForBook(
+	sql: SeriesSql,
+	input: UpsertKnownSeriesInput
+): Promise<InferredSeriesMetadata | null> {
+	const bookId = Math.max(0, Number(input.bookId || 0) || 0);
+	if (bookId <= 0) return null;
+	const inferred = inferKnownSeriesMetadata(input);
+	if (!inferred) return null;
+	const knownSeries = findKnownSeriesBySlug(inferred.seriesSlug);
+	if (!knownSeries) return null;
+	await ensureSeriesSchema(sql);
+	const seriesRows = await sql<Array<{ id: number }>>`
+		insert into series (
+			name,
+			slug,
+			total_books,
+			cover_url,
+			metadata
+		)
+		values (
+			${knownSeries.name},
+			${knownSeries.slug},
+			${knownSeries.totalBooks},
+			${normalizeText(input.coverUrl)},
+			jsonb_build_object('source', 'known-series-v1')
+		)
+		on conflict (slug) do update set
+			name = excluded.name,
+			total_books = greatest(series.total_books, excluded.total_books),
+			cover_url = case when excluded.cover_url <> '' then excluded.cover_url else series.cover_url end,
+			metadata = series.metadata || excluded.metadata,
+			updated_at = now()
+		returning id
+	`;
+	const seriesId = Number(seriesRows[0]?.id || 0);
+	if (seriesId <= 0) return null;
+	for (const book of knownSeries.books) {
+		await sql`
+			update series_book
+			set
+				title_override = ${book.title},
+				book_order = ${book.order},
+				publication_order = ${book.order},
+				chronological_order = ${book.order},
+				updated_at = now()
+			where series_id = ${seriesId}
+				and book_id is null
+				and book_order = ${book.order}
+		`;
+		await sql`
+			insert into series_book (
+				series_id,
+				book_id,
+				title_override,
+				book_order,
+				publication_order,
+				chronological_order,
+				metadata
+			)
+			select
+				${seriesId},
+				null,
+				${book.title},
+				${book.order},
+				${book.order},
+				${book.order},
+				jsonb_build_object('source', 'known-series-v1')
+			where not exists (
+				select 1
+				from series_book existing
+				where existing.series_id = ${seriesId}
+					and existing.book_id is null
+					and existing.book_order = ${book.order}
+			)
+		`;
+	}
+	await sql`
+		insert into series_book (
+			series_id,
+			book_id,
+			title_override,
+			book_order,
+			publication_order,
+			chronological_order,
+			metadata
+		)
+		values (
+			${seriesId},
+			${bookId},
+			'',
+			${inferred.bookOrder},
+			${inferred.bookOrder},
+			${inferred.bookOrder},
+			jsonb_build_object('source', 'known-series-v1')
+		)
+		on conflict do nothing
+	`;
+	await sql`
+		update series_book
+		set
+			title_override = '',
+			book_order = ${inferred.bookOrder},
+			publication_order = ${inferred.bookOrder},
+			chronological_order = ${inferred.bookOrder},
+			updated_at = now()
+		where series_id = ${seriesId}
+			and book_id = ${bookId}
+	`;
+	await sql`
+		delete from series_book placeholder
+		where placeholder.series_id = ${seriesId}
+			and placeholder.book_id is null
+			and placeholder.book_order = ${inferred.bookOrder}
+			and exists (
+				select 1
+				from series_book real_entry
+				where real_entry.series_id = placeholder.series_id
+					and real_entry.book_id is not null
+					and real_entry.book_order = placeholder.book_order
+			)
+	`;
+	const workId = Math.max(0, Number(input.workId || 0) || 0);
+	if (workId > 0) {
+		await sql`
+			update book_work
+			set
+				series_id = ${seriesId},
+				series_position = ${inferred.bookOrder},
+				updated_at = now()
+			where id = ${workId}
+		`;
+	}
+	return inferred;
 }
 
 export function formatSeriesBookLabel(book: Pick<SeriesBookInput, "bookOrder" | "publicationOrder" | "chronologicalOrder">) {
