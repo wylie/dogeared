@@ -46,7 +46,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
 - Settings: profile/account entry points, magic-link auth, email changes, Goodreads import, preferences, privacy, notifications, Learning controls for helpful tips, data export, shelf clearing, API endpoint references, and sessions.
-- Admin: operational overview, beta feedback dashboard, data health, user search, user detail, and admin delete-user tools.
+- Admin: operational overview, privacy-friendly product analytics, beta feedback dashboard, data health, user search, user detail, and admin delete-user tools.
 - Mission, Roadmap, Privacy, Support: public product context and project direction.
 
 ## Current Information Architecture
@@ -74,7 +74,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Profile management: update name, avatar, location, birth year, goal text, favorite book, favorite author, blurb, and genres.
 - Privacy management: set public/private profile visibility and control location, activity, discovery, and follow availability.
 - Import/export: import Goodreads CSV data with preview/merge/replace controls, export account data as JSON, and clear shelf entries.
-- Admin operations: inspect site statistics, beta feedback and bug reports, metadata coverage, import health, duplicate risk, backfill movement, and user accounts.
+- Admin operations: inspect site statistics, aggregate product analytics, beta feedback and bug reports, metadata coverage, import health, duplicate risk, backfill movement, and user accounts.
 
 ## Current Capabilities
 
@@ -228,7 +228,9 @@ Notifications exist for activity likes and comments. Profile owners see a notifi
 
 ### Admin
 
-Admins are recognized by username through `ADMIN_USERNAMES`. Admin pages include an overview, beta feedback dashboard, data-health view, user search, user detail, and delete-user controls. Admin pages redirect non-admins to home.
+Admins are recognized by username through `ADMIN_USERNAMES`. Admin pages include an overview, product analytics dashboard, beta feedback dashboard, data-health view, user search, user detail, and delete-user controls. Admin pages redirect non-admins to home.
+
+The Product Analytics dashboard is first-party and product-focused rather than marketing-focused. It records small aggregate events such as page views, feature views, search queries with result counts, recommendation impressions, recommendation clicks, recommendation feedback, and recommendation add-to-shelf intent. Admins see aggregate growth, reading, community, search, discovery, first-run funnel, and feature-adoption metrics. The dashboard does not show private journal content, passwords, reader-level behavioral reports, or unnecessary personal information.
 
 The Feedback dashboard is the beta bug-reporting workflow. It stores user-submitted reports with tracking numbers, type, optional severity, subject, description, bug details, screenshots, diagnostic context, status, private internal notes, follow-up flags, duplicate markers, resolved version, and resolution dates. Diagnostic context is limited to page and environment details useful for debugging; private journal content, passwords, and sensitive personal information are intentionally excluded.
 

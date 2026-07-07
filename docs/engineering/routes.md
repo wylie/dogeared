@@ -41,6 +41,7 @@ Authentication requirements:
 | `/privacy` | Public | Privacy explanation. | Static Astro page. |
 | `/support` | Public | Support project context. | Static Astro page. |
 | `/admin` | Admin | Admin overview and site statistics. | `resolveAdminSession`, `loadAdminOverviewStats`. |
+| `/admin/analytics` | Admin | Aggregate product analytics, search trends, discovery performance, first-run funnel, and feature adoption. | `resolveAdminSession`, `loadAdminProductAnalytics`, `product_analytics_event`. |
 | `/admin/collections` | Admin | Create, edit, reorder, publish, archive, and feature editorial collections. | `collections` helper, collection form, collection list. |
 | `/admin/feedback` | Admin | Search, filter, triage, annotate, and resolve beta feedback and bug reports. | `feedback` helper, `feedback_submission`, admin workflow form. |
 | `/admin/data-health` | Admin | Metadata, import, duplicate, backfill, page count, and publisher health. | Neon diagnostic queries. |
@@ -64,6 +65,7 @@ Authentication requirements:
 | `/api/account/clear-shelf` | POST | Authenticated | Delete all default shelf entries for current user. |
 | `/api/account/delete` | POST | Authenticated | Delete current user account and clear session. Not exposed by Settings UI. |
 | `/api/books/search` | GET | Public | Search DogEared catalog, Google Books, Open Library, and published editorial collections; attaches local series metadata when available. |
+| `/api/analytics/event` | POST | Public/session-aware | Record first-party product analytics events for aggregate admin insights. Writes are best-effort and capped to non-sensitive context. |
 | `/api/books/suggest` | GET | Public | Return Google Books suggestions for query text. |
 | `/api/books/cover` | GET | Public | Proxy allowed Google Books cover URLs. |
 | `/api/shelf/entries` | GET, POST, DELETE | Authenticated | Load, upsert, and remove default shelf entries. |

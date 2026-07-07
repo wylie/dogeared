@@ -216,8 +216,8 @@ test("feedback submission uses env-configured delivery, honeypot, rate limiting,
 	assert.equal(apiSource.includes("ensureBetaFeedbackSchema"), true);
 	assert.equal(apiSource.includes("screenshots"), true);
 	assert.equal(apiSource.includes("diagnosticContext"), true);
-	assert.equal(widgetSource.includes("Feedback Submitted"), true);
-	assert.equal(widgetSource.includes("feedback_type"), true);
+	assert.equal(widgetSource.includes("gtag"), false);
+	assert.equal(widgetSource.includes("dataLayer"), false);
 	assert.equal(widgetSource.includes("message_content"), false);
 	assert.equal(layoutSource.includes("<FloatingActions"), true);
 });

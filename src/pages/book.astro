@@ -970,7 +970,7 @@ const bookStructuredDataPayload = bookStructuredData
 				)}
 
 				{seriesContext && (
-					<section class="panel series-panel" aria-labelledby="series-heading">
+					<section class="panel series-panel" aria-labelledby="series-heading" data-feature="series">
 						<div class="series-heading-row">
 							{(seriesContext.series.coverUrl || seriesContext.currentBook?.coverUrl || book.coverUrl) ? (
 								<img

@@ -80,6 +80,10 @@ A reader-submitted beta feedback item or bug report with a tracking number, type
 
 Admin triage state for a Feedback Report: New, Investigating, Needs More Info, Planned, Fixed, or Closed.
 
+## Product Analytics
+
+First-party aggregate usage signals used by DogEared admins to improve the reader experience. Product analytics covers growth, reading actions, search quality, discovery performance, first-run funnel steps, and feature adoption without exposing private journal content or reader-level behavior reports.
+
 ## Guided Tip
 
 A reusable callout with a title, explanation, optional icon, primary action, and dismiss control. Completion and dismissal are stored per user.

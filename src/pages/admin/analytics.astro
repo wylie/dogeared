@@ -1,0 +1,479 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { resolveAdminSession } from "../../lib/admin";
+import { getNeonSql } from "../../lib/neon";
+import { loadAdminProductAnalytics } from "../../lib/productAnalytics";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const sql = getNeonSql();
+const analytics = await loadAdminProductAnalytics(sql);
+
+const sectionLinks = [
+	{ id: "growth", label: "Growth" },
+	{ id: "reading", label: "Reading" },
+	{ id: "community", label: "Community" },
+	{ id: "search", label: "Search" },
+	{ id: "discovery", label: "Discovery" },
+	{ id: "funnel", label: "Funnel" },
+	{ id: "features", label: "Features" }
+];
+
+function formatNumber(value: number) {
+	return Math.max(0, Number(value || 0) || 0).toLocaleString();
+}
+
+function formatTrend(value: number) {
+	const count = Number(value || 0) || 0;
+	if (count > 0) return `+${count.toLocaleString()}`;
+	return count.toLocaleString();
+}
+
+function formatPercent(value: number) {
+	return `${Math.max(0, Number(value || 0) || 0).toFixed(1).replace(/\.0$/, "")}%`;
+}
+
+const searchTables = [
+	{ title: "Books", rows: analytics.search.topBooks, empty: "Book searches will appear after readers search." },
+	{ title: "Authors", rows: analytics.search.topAuthors, empty: "Author searches will appear after readers search." },
+	{ title: "Genres", rows: analytics.search.topGenres, empty: "Genre searches will appear after readers search." },
+	{ title: "No Results", rows: analytics.search.noResultQueries, empty: "No-result searches will appear here." }
+];
+const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...rows.map((row) => Math.max(0, Number(row.value || 0) || 0)));
+---
+
+<Layout title="Admin Analytics" sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="analytics-page">
+		<header class="hero">
+			<nav class="breadcrumbs" aria-label="Breadcrumb">
+				<a href="/admin">Admin</a><span aria-hidden="true">/</span><span>Analytics</span>
+			</nav>
+			<h1>Product Analytics</h1>
+			<p>Aggregate product signals for improving DogEared. No private journal content, passwords, or reader-level reports are shown here.</p>
+			<p class="timestamp">Generated {new Date(analytics.generatedAt).toLocaleString()}</p>
+		</header>
+
+		<section id="growth" class="panel">
+			<div class="panel-head">
+				<h2>Growth</h2>
+				<p>New and returning reader activity across the past day and week.</p>
+			</div>
+			<div class="metric-grid">
+				{analytics.growth.map((metric) => (
+					<article class="metric-card">
+						<p>{metric.label}</p>
+						<strong>{formatNumber(metric.value)}</strong>
+						{metric.helper && <span>{metric.helper}</span>}
+					</article>
+				))}
+			</div>
+		</section>
+
+		<section id="reading" class="panel">
+			<div class="panel-head">
+				<h2>Reading</h2>
+				<p>Core reading actions from the last 7 days.</p>
+			</div>
+			<div class="metric-grid">
+				{analytics.reading.map((metric) => (
+					<article class="metric-card">
+						<p>{metric.label}</p>
+						<strong>{formatNumber(metric.value)}</strong>
+					</article>
+				))}
+			</div>
+		</section>
+
+		<section id="community" class="panel">
+			<div class="panel-head">
+				<h2>Community</h2>
+				<p>Lightweight social and recommendation feedback activity from the last 7 days.</p>
+			</div>
+			<div class="metric-grid metric-grid-three">
+				{analytics.community.map((metric) => (
+					<article class="metric-card">
+						<p>{metric.label}</p>
+						<strong>{formatNumber(metric.value)}</strong>
+					</article>
+				))}
+			</div>
+		</section>
+
+		<section id="search" class="panel">
+			<div class="panel-head split">
+				<div>
+					<h2>Search</h2>
+					<p>Search behavior from first-party product events in the last 30 days.</p>
+				</div>
+				<div class="summary-pill">
+					<strong>{formatNumber(analytics.search.totalSearches30d)}</strong>
+					<span>searches</span>
+					<strong>{formatPercent(analytics.search.noResultRate30d)}</strong>
+					<span>no results</span>
+				</div>
+			</div>
+			<div class="table-grid">
+				{searchTables.map((table) => {
+					const max = maxByTable(table.rows);
+					return (
+						<div>
+							<h3>{table.title}</h3>
+							{table.rows.length > 0 ? (
+								<div class="analytics-table" role="table">
+									<div class="analytics-row analytics-row-head" role="row">
+										<span role="columnheader">Item</span>
+										<span role="columnheader">30 days</span>
+										<span role="columnheader">Trend</span>
+									</div>
+									{table.rows.map((row) => (
+										<div class="analytics-row" role="row">
+											<span role="cell">{row.label}</span>
+											<span role="cell">
+												<span class="bar" style={`--bar-width: ${Math.round((Math.max(0, row.value) / max) * 100)}%`}><span></span></span>
+												<strong>{formatNumber(row.value)}</strong>
+											</span>
+											<span class={row.trend > 0 ? "trend-up" : row.trend < 0 ? "trend-down" : "trend-flat"} role="cell">{formatTrend(row.trend)}</span>
+										</div>
+									))}
+								</div>
+							) : (
+								<p class="empty">{table.empty}</p>
+							)}
+						</div>
+					);
+				})}
+			</div>
+		</section>
+
+		<section id="discovery" class="panel">
+			<div class="panel-head split">
+				<div>
+					<h2>Discovery</h2>
+					<p>Recommendation impressions, clicks, and feedback from the last 30 days.</p>
+				</div>
+				<div class="summary-pill">
+					<strong>{formatPercent(analytics.discovery.ctr30d)}</strong>
+					<span>CTR</span>
+				</div>
+			</div>
+			<div class="metric-grid metric-grid-five">
+				<article class="metric-card"><p>Impressions</p><strong>{formatNumber(analytics.discovery.impressions30d)}</strong></article>
+				<article class="metric-card"><p>Clicks</p><strong>{formatNumber(analytics.discovery.clicks30d)}</strong></article>
+				<article class="metric-card"><p>Interesting</p><strong>{formatNumber(analytics.discovery.interesting30d)}</strong></article>
+				<article class="metric-card"><p>Hide</p><strong>{formatNumber(analytics.discovery.hidden30d)}</strong></article>
+				<article class="metric-card"><p>Add to shelf</p><strong>{formatNumber(analytics.discovery.addToShelf30d)}</strong></article>
+			</div>
+			<div class="subsection">
+				<h3>Top Sources</h3>
+				{analytics.discovery.topSources.length > 0 ? (
+					<div class="analytics-table" role="table">
+						<div class="analytics-row analytics-row-head" role="row">
+							<span role="columnheader">Source</span>
+							<span role="columnheader">30 days</span>
+							<span role="columnheader">Trend</span>
+						</div>
+						{analytics.discovery.topSources.map((row) => {
+							const max = maxByTable(analytics.discovery.topSources);
+							return (
+								<div class="analytics-row" role="row">
+									<span role="cell">{row.label}</span>
+									<span role="cell">
+										<span class="bar" style={`--bar-width: ${Math.round((Math.max(0, row.value) / max) * 100)}%`}><span></span></span>
+										<strong>{formatNumber(row.value)}</strong>
+									</span>
+									<span class={row.trend > 0 ? "trend-up" : row.trend < 0 ? "trend-down" : "trend-flat"} role="cell">{formatTrend(row.trend)}</span>
+								</div>
+							);
+						})}
+					</div>
+				) : (
+					<p class="empty">Recommendation source data will appear after readers see recommendations.</p>
+				)}
+			</div>
+		</section>
+
+		<section id="funnel" class="panel">
+			<div class="panel-head">
+				<h2>First-Run Funnel</h2>
+				<p>Aggregate beta onboarding progression from visits, accounts, reading actions, reflection, and return behavior.</p>
+			</div>
+			<div class="funnel-list">
+				{analytics.funnel.map((step) => (
+					<div class="funnel-step">
+						<div>
+							<strong>{step.label}</strong>
+							<span>{formatNumber(step.value)} readers/events</span>
+						</div>
+						<div class="funnel-bar" style={`--bar-width: ${Math.max(2, Math.round(step.percent))}%`}><span></span></div>
+						<em>{formatPercent(step.percent)}</em>
+					</div>
+				))}
+			</div>
+		</section>
+
+		<section id="features" class="panel">
+			<div class="panel-head">
+				<h2>Feature Adoption</h2>
+				<p>Which product areas readers are using most often in the last 30 days.</p>
+			</div>
+			<div class="analytics-table" role="table">
+				<div class="analytics-row analytics-row-head" role="row">
+					<span role="columnheader">Feature</span>
+					<span role="columnheader">30 days</span>
+					<span role="columnheader">Trend</span>
+				</div>
+				{analytics.featureAdoption.map((row) => {
+					const max = maxByTable(analytics.featureAdoption);
+					return (
+						<div class="analytics-row" role="row">
+							<span role="cell">{row.label}</span>
+							<span role="cell">
+								<span class="bar" style={`--bar-width: ${Math.round((Math.max(0, row.value) / max) * 100)}%`}><span></span></span>
+								<strong>{formatNumber(row.value)}</strong>
+							</span>
+							<span class={row.trend > 0 ? "trend-up" : row.trend < 0 ? "trend-down" : "trend-flat"} role="cell">{formatTrend(row.trend)}</span>
+						</div>
+					);
+				})}
+			</div>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.analytics-page {
+		max-width: 1080px;
+		display: grid;
+		gap: 1rem;
+	}
+	.breadcrumbs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		color: var(--color-text-subtle);
+		font-size: 0.88rem;
+	}
+	.breadcrumbs a {
+		color: var(--color-nav);
+		text-decoration: none;
+	}
+	.hero {
+		display: grid;
+		gap: 0.35rem;
+	}
+	.hero h1,
+	.hero p {
+		margin: 0;
+	}
+	.hero p,
+	.timestamp,
+	.panel-head p,
+	.empty {
+		color: var(--color-text-muted);
+	}
+	.timestamp {
+		font-size: 0.86rem;
+	}
+	.panel {
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		padding: 1rem;
+	}
+	.panel-head {
+		display: grid;
+		gap: 0.25rem;
+		margin-bottom: 0.75rem;
+	}
+	.panel-head.split {
+		display: flex;
+		align-items: start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.panel-head h2,
+	.panel-head p,
+	.subsection h3,
+	.table-grid h3 {
+		margin: 0;
+	}
+	.metric-grid {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 0.6rem;
+	}
+	.metric-grid-three {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	.metric-grid-five {
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+	}
+	.metric-card,
+	.summary-pill,
+	.analytics-row {
+		border: var(--border-subtle);
+		background: rgba(255, 255, 255, 0.62);
+	}
+	.metric-card {
+		border-radius: var(--radius-md);
+		padding: 0.7rem;
+	}
+	.metric-card p {
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: 0.84rem;
+	}
+	.metric-card strong {
+		display: block;
+		margin-top: 0.22rem;
+		font-size: 1.35rem;
+		line-height: 1.1;
+	}
+	.metric-card span {
+		display: block;
+		margin-top: 0.2rem;
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+		line-height: 1.3;
+	}
+	.summary-pill {
+		display: flex;
+		align-items: baseline;
+		gap: 0.35rem;
+		border-radius: var(--radius-pill);
+		padding: 0.42rem 0.65rem;
+		white-space: nowrap;
+	}
+	.summary-pill strong {
+		color: var(--color-nav);
+	}
+	.summary-pill span {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+	}
+	.table-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1rem;
+	}
+	.table-grid > div,
+	.subsection {
+		display: grid;
+		gap: 0.5rem;
+	}
+	.subsection {
+		margin-top: 1rem;
+	}
+	.analytics-table {
+		display: grid;
+		gap: 0.3rem;
+	}
+	.analytics-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1.2fr) minmax(150px, 1fr) 74px;
+		align-items: center;
+		gap: 0.6rem;
+		border-radius: var(--radius-md);
+		padding: 0.48rem 0.55rem;
+		font-size: 0.88rem;
+	}
+	.analytics-row-head {
+		background: transparent;
+		border-color: transparent;
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+		font-weight: 800;
+		text-transform: uppercase;
+	}
+	.bar,
+	.funnel-bar {
+		display: inline-block;
+		width: 100%;
+		height: 0.45rem;
+		border-radius: var(--radius-pill);
+		background: rgba(87, 117, 144, 0.18);
+		overflow: hidden;
+		vertical-align: middle;
+	}
+	.bar span,
+	.funnel-bar span {
+		display: block;
+		width: var(--bar-width);
+		height: 100%;
+		border-radius: inherit;
+		background: var(--color-primary);
+	}
+	.analytics-row span[role="cell"]:nth-child(2) {
+		display: grid;
+		grid-template-columns: minmax(70px, 1fr) auto;
+		align-items: center;
+		gap: 0.45rem;
+	}
+	.trend-up {
+		color: var(--color-primary);
+		font-weight: 800;
+	}
+	.trend-down {
+		color: #8a1d1d;
+		font-weight: 800;
+	}
+	.trend-flat {
+		color: var(--color-text-muted);
+	}
+	.funnel-list {
+		display: grid;
+		gap: 0.55rem;
+	}
+	.funnel-step {
+		display: grid;
+		grid-template-columns: minmax(150px, 1fr) minmax(160px, 2fr) 64px;
+		align-items: center;
+		gap: 0.7rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.62);
+		padding: 0.6rem;
+	}
+	.funnel-step strong,
+	.funnel-step span {
+		display: block;
+	}
+	.funnel-step span,
+	.funnel-step em {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-style: normal;
+	}
+
+	@media (max-width: 900px) {
+		.metric-grid,
+		.metric-grid-three,
+		.metric-grid-five,
+		.table-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+		.panel-head.split {
+			display: grid;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.metric-grid,
+		.metric-grid-three,
+		.metric-grid-five,
+		.table-grid {
+			grid-template-columns: 1fr;
+		}
+		.analytics-row,
+		.funnel-step {
+			grid-template-columns: 1fr;
+		}
+		.summary-pill {
+			justify-content: center;
+			white-space: normal;
+		}
+	}
+</style>

@@ -631,6 +631,18 @@ Admins can view site totals and recent weekly activity.
 
 Limitations: Admin access is username allow-list based.
 
+### Admin Product Analytics
+
+Status: Beta
+
+Admins can review aggregate product analytics at `/admin/analytics`: growth, reading actions, community activity, search trends, discovery performance, first-run funnel steps, and feature adoption. The system uses first-party product events plus existing shelf, progress, journal, review, follow, like, and recommendation tables.
+
+Tracked events are intentionally small: page views, feature views, search performed with result counts, recommendation impressions, recommendation clicks, recommendation feedback, and recommendation add-to-shelf intent.
+
+Privacy decisions: analytics dashboards show aggregate counts and top terms only. DogEared does not collect private journal content, passwords, sensitive personal information, or expose reader-level behavioral reports for this dashboard.
+
+Limitations: Discovery impressions and recommendation add-to-shelf are client-side best-effort signals. Admin analytics uses cached aggregate queries and may lag briefly.
+
 ### Admin Collection Management
 
 Status: Complete

@@ -31,7 +31,6 @@ const {
 	structuredData?: string;
 };
 const currentPath = Astro.url.pathname;
-const shouldLoadAnalytics = !["localhost", "127.0.0.1"].includes(Astro.url.hostname);
 const fontStylesheetHref = "https://fonts.googleapis.com/css2?family=Copse&family=Outfit:wght@100..900&display=swap";
 const iconStylesheetHref = "https://fonts.googleapis.com/icon?family=Material+Icons&display=swap";
 const session = await resolveUserBySession(Astro.request);
@@ -67,22 +66,6 @@ import '../assets/global.css';
 <!doctype html>
 <html lang="en">
 	<head>
-		<!-- Google Analytics: Only load in production -->
-		{shouldLoadAnalytics ? (
-			<>
-				<script async src="https://www.googletagmanager.com/gtag/js?id=G-RT7DKML8JY"></script>
-				<script is:inline>
-				// @ts-ignore
-				window.dataLayer = window.dataLayer || [];
-				// @ts-ignore
-				function gtag(){dataLayer.push(arguments);}
-				// @ts-ignore
-				gtag('js', new Date());
-				// @ts-ignore
-				gtag('config', 'G-RT7DKML8JY');
-				</script>
-			</>
-		) : null}
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		{METADATA_ICON_LINKS.map((link) => (
@@ -137,6 +120,110 @@ import '../assets/global.css';
 			<GuidedTip isAuthenticated={isAuthenticated} />
 			<OnboardingMilestones isAuthenticated={isAuthenticated} />
 			<FloatingActions isAuthenticated={isAuthenticated} />
+			<script define:vars={{ currentPath }}>
+				(() => {
+					const endpoint = "/api/analytics/event";
+					const sentImpressions = new Set();
+					const featureByRoute = (path) => {
+						if (path === "/") return "Home";
+						if (path === "/discover") return "Discover";
+						if (path === "/journal") return "Reading Journal";
+						if (path === "/reading-life") return "My Reading Life";
+						if (path === "/search") return "Search";
+						if (path === "/books") return "Books";
+						if (path === "/authors" || path.startsWith("/author/")) return "Authors";
+						if (path === "/book") return "Book Detail";
+						if (path === "/collections" || path.startsWith("/collections/")) return "Collections";
+						if (path.startsWith("/profile")) return "Profile";
+						if (path === "/following") return "Following";
+						return "";
+					};
+					const post = (payload) => {
+						try {
+							const body = JSON.stringify({
+								route: currentPath,
+								...payload
+							});
+							if (navigator.sendBeacon) {
+								const blob = new Blob([body], { type: "application/json" });
+								if (navigator.sendBeacon(endpoint, blob)) return;
+							}
+							fetch(endpoint, {
+								method: "POST",
+								headers: { "Content-Type": "application/json" },
+								credentials: "same-origin",
+								keepalive: true,
+								body
+							}).catch(() => {});
+						} catch {
+							// Product analytics must never block the reading experience.
+						}
+					};
+					window.dogearedTrackProductEvent = post;
+					post({ eventName: "page_view", eventGroup: "navigation", source: featureByRoute(currentPath) || currentPath });
+					const feature = featureByRoute(currentPath);
+					if (feature) post({ eventName: "feature_view", eventGroup: "feature", source: feature });
+					if (document.querySelector("[data-feature='series']")) {
+						post({ eventName: "feature_view", eventGroup: "feature", source: "Series" });
+					}
+					const recommendationCards = Array.from(document.querySelectorAll("[data-analytics-recommendation-book-id]"));
+					const sendImpression = (card) => {
+						if (!(card instanceof HTMLElement)) return;
+						const bookId = card.dataset.analyticsRecommendationBookId || "";
+						if (!bookId || sentImpressions.has(bookId)) return;
+						sentImpressions.add(bookId);
+						post({
+							eventName: "recommendation_impression",
+							eventGroup: "discovery",
+							source: card.dataset.analyticsRecommendationSource || "unknown",
+							subjectType: "book",
+							subjectId: bookId
+						});
+					};
+					if ("IntersectionObserver" in window) {
+						const observer = new IntersectionObserver((entries) => {
+							for (const entry of entries) {
+								if (!entry.isIntersecting) continue;
+								sendImpression(entry.target);
+								observer.unobserve(entry.target);
+							}
+						}, { threshold: 0.45 });
+						for (const card of recommendationCards) observer.observe(card);
+					} else {
+						for (const card of recommendationCards) sendImpression(card);
+					}
+					document.addEventListener("click", (event) => {
+						const target = event.target instanceof Element ? event.target : null;
+						if (!target) return;
+						const recommendationCard = target.closest("[data-analytics-recommendation-book-id]");
+						if (!(recommendationCard instanceof HTMLElement)) return;
+						const bookId = recommendationCard.dataset.analyticsRecommendationBookId || "";
+						const source = recommendationCard.dataset.analyticsRecommendationSource || "unknown";
+						if (target.closest("a[href*='/book']")) {
+							post({
+								eventName: "recommendation_click",
+								eventGroup: "discovery",
+								source,
+								subjectType: "book",
+								subjectId: bookId
+							});
+						}
+						const shelfOption = target.closest("[data-action='set-shelf'], [data-action='assign-custom-shelf']");
+						if (shelfOption) {
+							post({
+								eventName: "recommendation_add_to_shelf",
+								eventGroup: "discovery",
+								source,
+								subjectType: "book",
+								subjectId: bookId,
+								metadata: {
+									status: shelfOption instanceof HTMLElement ? shelfOption.dataset.status || "" : ""
+								}
+							});
+						}
+					});
+				})();
+			</script>
 		</body>
 	</html>
 

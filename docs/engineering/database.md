@@ -19,7 +19,7 @@ Stores the account identity:
 
 Relationships:
 
-- Owns sessions, magic links, email changes, shelf entries, reading journal entries, activity, follows, custom shelves, likes, comments, notifications, feedback events, and progress events.
+- Owns sessions, magic links, email changes, shelf entries, reading journal entries, activity, follows, custom shelves, likes, comments, notifications, feedback events, progress events, and first-party product analytics events.
 
 ## Authentication
 
@@ -532,6 +532,30 @@ Stores beta feedback and bug reports for admin workflow:
 - Private admin notes, Needs Reply, Needs Reproduction, Duplicate, Duplicate Of, Resolved In Version, and resolution timestamp.
 
 Privacy rule: feedback diagnostics must not include passwords, private journal content, or sensitive personal information. Admin notes are internal only and are never surfaced to readers.
+
+## Product Analytics Events
+
+Entity: `product_analytics_event`
+
+Stores small first-party product events for aggregate admin insights:
+
+- Event name and event group.
+- Optional internal user ID for active-user and funnel aggregation.
+- Route, source, subject type, subject ID, normalized query, result count, and capped metadata.
+- Creation timestamp.
+
+Tracked events include:
+
+- `page_view` and `feature_view` for aggregate feature adoption.
+- `search_performed` with normalized query, broad inferred subject type, and result count.
+- `recommendation_impression`, `recommendation_click`, `recommendation_feedback`, and `recommendation_add_to_shelf` for discovery performance.
+
+Privacy rules:
+
+- Admin analytics dashboards show aggregate counts, trends, and top terms only.
+- Private journal bodies, passwords, screenshots, sensitive profile text, and reader-level behavioral reports are not analytics data.
+- Search queries are capped and normalized for product improvement, especially no-result searches.
+- Analytics writes are best-effort and must never block shelf saves, feedback, search, or recommendation workflows.
 
 ## Settings
 

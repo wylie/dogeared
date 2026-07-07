@@ -12,6 +12,7 @@
 - Shared shelf feedback now keeps loading messages visible while saves are in flight, gives recoverable errors longer on screen, and uses consistent busy/error styling across every ShelfDropdown instance.
 - Recommendation feedback busy, success, retry, and accessibility state is owned by BookCard, so Home and Discover share the same implementation.
 - Beta feedback now stores reports with tracking numbers, diagnostic context, screenshot previews, client-error opt-in prompts, and an admin triage dashboard.
+- Product analytics are first-party and aggregate-focused, giving admins search, discovery, funnel, and feature-adoption insight without private journal content or reader-level behavior reports.
 - Profile progress saves now surface request failures without secondary client errors, including the edge case where a progress update completes the book.
 
 ## Risks

@@ -3,6 +3,7 @@ import { resolveUserBySession } from "../../../lib/auth";
 import { addOnboardingAction, loadGuidedTourStatus, normalizeGuidedTourSettings } from "../../../lib/guidedTour";
 import { getNeonSql } from "../../../lib/neon";
 import { ensureRecommendationSchema } from "../../../lib/recommendations";
+import { recordProductAnalyticsEventSafe } from "../../../lib/productAnalytics";
 
 export const prerender = false;
 
@@ -39,6 +40,19 @@ export const POST: APIRoute = async ({ request }) => {
 				reason = excluded.reason,
 				updated_at = now()
 		`;
+		await recordProductAnalyticsEventSafe(sql, {
+			eventName: "recommendation_feedback",
+			eventGroup: "discovery",
+			userId: session.userId,
+			route: "/discover",
+			source: feedback,
+			subjectType: "book",
+			subjectId: bookId,
+			metadata: {
+				recommendationSource: source,
+				hasReason: !!reason
+			}
+		});
 		const guidance = await loadGuidedTourStatus(sql, session.userId);
 		const nextGuidance = normalizeGuidedTourSettings(addOnboardingAction(guidance.settings, "first-recommendation-interaction"));
 		await sql`

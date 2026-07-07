@@ -10,7 +10,7 @@ Routes live in `src/pages/`.
 
 - Content and product pages: home, books, authors, book detail, author detail, editorial collections, related, mission, roadmap, privacy, support.
 - Authenticated reader pages: profile, following, My Reading Life, Reading Journal, settings, welcome, metrics.
-- Admin pages: admin overview, collections, data health, users, user detail.
+- Admin pages: admin overview, product analytics, collections, feedback, data health, users, user detail.
 - Compatibility redirects: discover, feed, myreads, profile index, author query redirect, reading timeline, legacy `/u/[username]`.
 - System routes: robots and sitemap.
 
@@ -37,7 +37,7 @@ API routes live in `src/pages/api/` and are grouped by product area:
 - Journal: private journal entry create/search/filter, update, and delete.
 - Profile/public: profile info, username, public shelf/activity/profile.
 - Shelf/reviews: shelf entries, ratings, finished-book review metadata, custom shelves, custom shelf books, section ordering.
-- Admin-adjacent/system: health, feedback, notifications count, onboarding status, guided first-experience status, top lists, reader suggestions.
+- Admin-adjacent/system: health, feedback, first-party analytics events, notifications count, onboarding status, guided first-experience status, top lists, reader suggestions.
 
 Most APIs resolve the current session when mutating or reading private user data.
 
@@ -50,7 +50,7 @@ Shared product/data logic lives in `src/lib/`.
 - Reader/product logic: `shelfClient`, `shelfStorage`, `customShelves`, `readingGoal`, `readingLife`, `readingJournal`, `guidedTour`, `momentumPrediction`, `goodreadsImport`, `bookReviews`, `recommendations`.
 - Discovery logic: `discoveryProviders` exposes the discovery service and reusable Home providers; `homeSections` loads cached aggregate signals and maps provider output to book cards.
 - Community and privacy: `feed`, `publicProfile`, `privacy`, `followPolicy`, `demoVisibility`.
-- Operations: `admin`, `adminData`, `monitoring`, `feedback`, `runtimeCache`, `indexing`, `seo`, `roadmap`, `homeSections`.
+- Operations: `admin`, `adminData`, `monitoring`, `feedback`, `productAnalytics`, `runtimeCache`, `indexing`, `seo`, `roadmap`, `homeSections`.
 
 ## Utilities
 
@@ -112,6 +112,8 @@ Recommendations live in `src/lib/recommendations`. The service builds explainabl
 Recommendation feedback is stored through `/api/recommendations/feedback`; the Hide recommendation action stores `not_interested` feedback, which is excluded from future personal results. User-specific recommendations are recomputed on request so feedback takes effect without waiting for a shared cache. `BookCard` owns the feedback controls, status messaging, disabled/loading states, styles, accessibility attributes, and client-side event handling through an opt-in API, leaving pages responsible only for rendering recommendation cards. The UI renders feedback as lightweight rectangular secondary actions, leaving Add To Shelf as the primary action.
 
 Beta feedback and bug reporting are handled by `FeedbackWidget`, `/api/feedback`, `feedback_submission`, and `/admin/feedback`. The widget owns the reader-facing form, bug-only fields, screenshot preview, privacy copy, context capture, and opt-in client-error prompt. The API validates input, rate-limits by user/IP hash, stores the report with a tracking number and diagnostics, and sends a best-effort notification email when configured. The admin dashboard owns triage status, internal notes, follow-up flags, duplicate markers, resolved version, and resolution dates.
+
+Product analytics live in `src/lib/productAnalytics`, `/api/analytics/event`, and `/admin/analytics`. The system is first-party and aggregate-focused: server routes record durable events for search and recommendation feedback, while Layout records small non-blocking client events for page views, feature views, recommendation impressions, recommendation clicks, and recommendation add-to-shelf intent. Admin analytics uses cached aggregate queries and existing product tables for growth, reading, community, search, discovery, first-run funnel, and feature adoption. It does not collect private journal content, passwords, sensitive profile text, or expose reader-level behavior reports.
 
 Current providers:
 

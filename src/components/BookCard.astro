@@ -62,6 +62,13 @@ const normalizedGenres = Array.from(new Set((Array.isArray(genres) ? genres : []
 const normalizedTopics = Array.from(new Set((Array.isArray(topics) ? topics : []).map((topic) => String(topic || "").trim()).filter(Boolean))).slice(0, 4);
 const normalizedRecommendationFeedbackBookId = Number(recommendationFeedbackBookId || 0);
 const canRenderRecommendationFeedback = showRecommendationFeedback && Number.isFinite(normalizedRecommendationFeedbackBookId) && normalizedRecommendationFeedbackBookId > 0;
+const cardAttrs = {
+	...attrs,
+	...(canRenderRecommendationFeedback ? {
+		"data-analytics-recommendation-book-id": String(normalizedRecommendationFeedbackBookId),
+		"data-analytics-recommendation-source": String(recommendationFeedbackSource || "").trim() || "unknown"
+	} : {})
+};
 
 function renderAverageStars(value: number) {
 	const rounded = Math.round(value);
@@ -69,7 +76,7 @@ function renderAverageStars(value: number) {
 }
 ---
 
-<li class="book-card" {...attrs}>
+<li class="book-card" {...cardAttrs}>
 	{titleHref && (
 		<details class="card-menu">
 			<summary aria-label={`Open actions for ${title}`} title="More actions">

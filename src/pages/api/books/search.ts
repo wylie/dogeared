@@ -4,6 +4,8 @@ import { getNeonSql } from "../../../lib/neon";
 import { createPublicCacheControl, withRuntimeCache } from "../../../lib/runtimeCache";
 import { ensureSeriesSchema, inferKnownSeriesMetadata } from "../../../lib/series";
 import { searchCollections } from "../../../lib/collections";
+import { resolveUserBySession } from "../../../lib/auth";
+import { classifySearchAnalyticsSubject, recordProductAnalyticsEventSafe } from "../../../lib/productAnalytics";
 
 export const prerender = false;
 
@@ -323,7 +325,7 @@ function dedupeVariants(input: SearchResult[], queryText: string) {
 	return merged;
 }
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ request, url }) => {
 	const query = String(url.searchParams.get("q") || "").trim();
 	const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
 	const pageSize = Math.min(40, Math.max(10, Number(url.searchParams.get("pageSize") || 20) || 20));
@@ -641,6 +643,22 @@ export const GET: APIRoute = async ({ url }) => {
 		const results = dedupeVariants(mappedWithIds, query);
 		const collectionResults = await collectionResultsPromise;
 		const hasMore = dbdRows.length >= pageSize || items.length >= pageSize || openItems.length >= pageSize;
+		const session = await resolveUserBySession(request).catch(() => null);
+		await recordProductAnalyticsEventSafe(sql, {
+			eventName: "search_performed",
+			eventGroup: "search",
+			userId: session?.userId || "",
+			route: "/search",
+			source: "book_search",
+			subjectType: classifySearchAnalyticsSubject({ query, results }),
+			query,
+			resultCount: results.length + collectionResults.length,
+			metadata: {
+				page,
+				hasCollections: collectionResults.length > 0,
+				hasMore
+			}
+		});
 		return new Response(JSON.stringify({ results, collectionResults, hasMore, page }), {
 			status: 200,
 			headers: {

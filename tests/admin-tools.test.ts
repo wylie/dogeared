@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 test("admin dashboard and users pages require admin session", () => {
-	for (const path of ["src/pages/admin.astro", "src/pages/admin/users.astro", "src/pages/admin/users/[username].astro"]) {
+	for (const path of ["src/pages/admin.astro", "src/pages/admin/analytics.astro", "src/pages/admin/users.astro", "src/pages/admin/users/[username].astro"]) {
 		const source = readFileSync(path, "utf8");
 		assert.equal(source.includes("resolveAdminSession"), true);
 		assert.equal(source.includes("if (!admin.isAdmin) return Astro.redirect(\"/\")"), true);
@@ -20,6 +20,7 @@ test("admin navigation is rendered only for admin sessions", () => {
 	assert.equal(nav.includes("{isAdmin && ("), true);
 	assert.equal(nav.includes("<h3 class=\"nav-group-title\">Admin</h3>"), true);
 	assert.equal(nav.includes("Dashboard"), true);
+	assert.equal(nav.includes("/admin/analytics"), true);
 	assert.equal(nav.includes("/admin/feedback"), true);
 	assert.equal(nav.includes("/admin/data-health"), true);
 	assert.equal(nav.includes("/admin/users"), true);
@@ -41,6 +42,7 @@ test("admin overview displays real site statistics and quick links", () => {
 		assert.equal(page.includes(label), true);
 	}
 	assert.equal(page.includes('href: "/admin/data-health"'), true);
+	assert.equal(page.includes('href: "/admin/analytics"'), true);
 	assert.equal(page.includes('href: "/admin/feedback"'), true);
 	assert.equal(page.includes('href: "/admin/users"'), true);
 	assert.equal(page.includes('href: "/metrics"'), true);

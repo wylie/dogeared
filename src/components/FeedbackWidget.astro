@@ -288,19 +288,7 @@ const { isAuthenticated = false } = Astro.props as Props;
 		}
 
 		function trackFeedbackSubmitted(type) {
-			const detail = {
-				feedback_type: type,
-				authenticated
-			};
-			if (typeof window.gtag === "function") {
-				window.gtag("event", "Feedback Submitted", detail);
-			} else {
-				window.dataLayer = window.dataLayer || [];
-				window.dataLayer.push({
-					event: "Feedback Submitted",
-					...detail
-				});
-			}
+			void type;
 		}
 
 		function escapeHtml(value) {

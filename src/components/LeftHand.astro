@@ -11,6 +11,7 @@ const isJournalPage = currentNormalized === "/journal";
 const isDiscoverPage = currentNormalized === "/discover";
 const isHomePage = currentNormalized === "/";
 const isAdminDashboardPage = currentNormalized === "/admin";
+const isAdminAnalyticsPage = currentNormalized === "/admin/analytics";
 const isAdminCollectionsPage = currentNormalized === "/admin/collections";
 const isAdminUsersPage = currentNormalized === "/admin/users" || currentNormalized.startsWith("/admin/users/");
 const isAdminFeedbackPage = currentNormalized === "/admin/feedback";
@@ -187,6 +188,16 @@ const query = Astro.url.searchParams.get("q") ?? "";
               )}
             </li>
             <li>
+              <a href={isAdminAnalyticsPage ? undefined : '/admin/analytics'} class={isAdminAnalyticsPage ? 'active' : 'hover'} aria-current={isAdminAnalyticsPage ? 'page' : undefined}>Analytics</a>
+              {isAdminAnalyticsPage && sectionLinks.length > 0 && (
+                <ul class="section-links-nested">
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+            <li>
               <a href={isAdminCollectionsPage ? undefined : '/admin/collections'} class={isAdminCollectionsPage ? 'active' : 'hover'} aria-current={isAdminCollectionsPage ? 'page' : undefined}>Collections</a>
               {isAdminCollectionsPage && sectionLinks.length > 0 && (
                 <ul class="section-links-nested">
@@ -201,7 +212,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
               {isAdminFeedbackPage && sectionLinks.length > 0 && (
                 <ul class="section-links-nested" aria-label="Admin Feedback sections">
                   {sectionLinks.map((link) => (
-                    <li><a href={`#${link.id}`} class={isSectionActive(link.id) ? 'section-active' : undefined} aria-current={isSectionActive(link.id) ? 'true' : undefined}>{link.label}</a></li>
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
                   ))}
                 </ul>
               )}
