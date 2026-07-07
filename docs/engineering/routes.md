@@ -42,6 +42,7 @@ Authentication requirements:
 | `/support` | Public | Support project context. | Static Astro page. |
 | `/admin` | Admin | Admin overview and site statistics. | `resolveAdminSession`, `loadAdminOverviewStats`. |
 | `/admin/collections` | Admin | Create, edit, reorder, publish, archive, and feature editorial collections. | `collections` helper, collection form, collection list. |
+| `/admin/feedback` | Admin | Search, filter, triage, annotate, and resolve beta feedback and bug reports. | `feedback` helper, `feedback_submission`, admin workflow form. |
 | `/admin/data-health` | Admin | Metadata, import, duplicate, backfill, page count, and publisher health. | Neon diagnostic queries. |
 | `/admin/users` | Admin | Search users and delete users from list. | `searchAdminUsers`, `deleteAdminUser`. |
 | `/admin/users/[username]` | Admin | User detail counts and delete-user flow. | `loadAdminUserDetail`, `deleteAdminUser`. |
@@ -87,5 +88,5 @@ Authentication requirements:
 | `/api/public/activity` | GET | Public/session-aware | Return public activity when visible. |
 | `/api/home/reader-suggestions` | GET | Authenticated | Return suggested public readers. |
 | `/api/lists/top` | GET | Public | Return top books by genre from shelf activity. |
-| `/api/feedback` | POST | Public/session-aware | Submit feedback with rate limiting. |
+| `/api/feedback` | POST | Public/session-aware | Store beta feedback or bug report with diagnostics, screenshots, tracking number, rate limiting, and best-effort email notification. |
 | `/api/health` | GET | Public | Health payload and database connectivity check. |

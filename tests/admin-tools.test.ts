@@ -20,6 +20,7 @@ test("admin navigation is rendered only for admin sessions", () => {
 	assert.equal(nav.includes("{isAdmin && ("), true);
 	assert.equal(nav.includes("<h3 class=\"nav-group-title\">Admin</h3>"), true);
 	assert.equal(nav.includes("Dashboard"), true);
+	assert.equal(nav.includes("/admin/feedback"), true);
 	assert.equal(nav.includes("/admin/data-health"), true);
 	assert.equal(nav.includes("/admin/users"), true);
 });
@@ -40,6 +41,7 @@ test("admin overview displays real site statistics and quick links", () => {
 		assert.equal(page.includes(label), true);
 	}
 	assert.equal(page.includes('href: "/admin/data-health"'), true);
+	assert.equal(page.includes('href: "/admin/feedback"'), true);
 	assert.equal(page.includes('href: "/admin/users"'), true);
 	assert.equal(page.includes('href: "/metrics"'), true);
 	assert.equal(page.includes('href: "/roadmap"'), true);

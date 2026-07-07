@@ -72,6 +72,14 @@ Catalog metadata stored in `book_genre`. Genre pages are implemented through `/r
 
 Optional first-run guidance for signed-in readers. It combines a Home welcome card, checklist, reading goal prompt, recommendation education, milestone cards, and contextual tips without trapping readers in a wizard.
 
+## Feedback Report
+
+A reader-submitted beta feedback item or bug report with a tracking number, type, optional severity, diagnostic context, optional screenshots, and admin-only workflow fields.
+
+## Feedback Status
+
+Admin triage state for a Feedback Report: New, Investigating, Needs More Info, Planned, Fixed, or Closed.
+
 ## Guided Tip
 
 A reusable callout with a title, explanation, optional icon, primary action, and dismiss control. Completion and dismissal are stored per user.

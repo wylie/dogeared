@@ -13,6 +13,7 @@ const isHomePage = currentNormalized === "/";
 const isAdminDashboardPage = currentNormalized === "/admin";
 const isAdminCollectionsPage = currentNormalized === "/admin/collections";
 const isAdminUsersPage = currentNormalized === "/admin/users" || currentNormalized.startsWith("/admin/users/");
+const isAdminFeedbackPage = currentNormalized === "/admin/feedback";
 const query = Astro.url.searchParams.get("q") ?? "";
 ---
 
@@ -191,6 +192,16 @@ const query = Astro.url.searchParams.get("q") ?? "";
                 <ul class="section-links-nested">
                   {sectionLinks.map((link) => (
                     <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+            <li>
+              <a href={isAdminFeedbackPage ? undefined : '/admin/feedback'} class={isAdminFeedbackPage ? 'active' : 'hover'} aria-current={isAdminFeedbackPage ? 'page' : undefined}>Feedback</a>
+              {isAdminFeedbackPage && sectionLinks.length > 0 && (
+                <ul class="section-links-nested" aria-label="Admin Feedback sections">
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class={isSectionActive(link.id) ? 'section-active' : undefined} aria-current={isSectionActive(link.id) ? 'true' : undefined}>{link.label}</a></li>
                   ))}
                 </ul>
               )}

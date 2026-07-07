@@ -270,7 +270,7 @@ const authorStructuredData = displayName
 	socialImageAlt={displayName ? `${displayName} on DogEared` : "Authors on DogEared"}
 	structuredData={authorStructuredData}
 >
-	<div slot="right" class="author-page">
+	<div slot="right" class="author-page" data-author-id={authorId > 0 ? String(authorId) : ""}>
 		{errorMessage && <p class="error">{errorMessage}</p>}
 
 		<section class="panel author-head">

@@ -111,6 +111,8 @@ Recommendations live in `src/lib/recommendations`. The service builds explainabl
 
 Recommendation feedback is stored through `/api/recommendations/feedback`; the Hide recommendation action stores `not_interested` feedback, which is excluded from future personal results. User-specific recommendations are recomputed on request so feedback takes effect without waiting for a shared cache. `BookCard` owns the feedback controls, status messaging, disabled/loading states, styles, accessibility attributes, and client-side event handling through an opt-in API, leaving pages responsible only for rendering recommendation cards. The UI renders feedback as lightweight rectangular secondary actions, leaving Add To Shelf as the primary action.
 
+Beta feedback and bug reporting are handled by `FeedbackWidget`, `/api/feedback`, `feedback_submission`, and `/admin/feedback`. The widget owns the reader-facing form, bug-only fields, screenshot preview, privacy copy, context capture, and opt-in client-error prompt. The API validates input, rate-limits by user/IP hash, stores the report with a tracking number and diagnostics, and sends a best-effort notification email when configured. The admin dashboard owns triage status, internal notes, follow-up flags, duplicate markers, resolved version, and resolution dates.
+
 Current providers:
 
 - `CommunityFavoritesProvider`.

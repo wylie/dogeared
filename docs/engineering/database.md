@@ -504,7 +504,7 @@ Relationships:
 
 Entity: `feedback_submission_event`
 
-Tracks feedback submissions for rate limiting and reporting:
+Tracks feedback submissions for rate limiting:
 
 - Optional user.
 - IP hash.
@@ -514,6 +514,24 @@ Tracks feedback submissions for rate limiting and reporting:
 Relationships:
 
 - May reference `app_user`.
+
+## Feedback Submissions
+
+Entity: `feedback_submission`
+
+Stores beta feedback and bug reports for admin workflow:
+
+- Tracking number.
+- Optional user and follow-up email.
+- Feedback type and optional severity.
+- Status: New, Investigating, Needs More Info, Planned, Fixed, Closed.
+- Subject, description, expected behavior, actual behavior, and steps to reproduce.
+- Page URL, route, app version, git commit, browser, operating system, screen size, viewport size, color scheme, language, login state, and relevant book/author/collection/search/recommendation IDs.
+- Diagnostic context JSON, including admin-only feature flags and recent client-side errors when available.
+- Screenshot metadata/data for beta-scale review.
+- Private admin notes, Needs Reply, Needs Reproduction, Duplicate, Duplicate Of, Resolved In Version, and resolution timestamp.
+
+Privacy rule: feedback diagnostics must not include passwords, private journal content, or sensitive personal information. Admin notes are internal only and are never surfaced to readers.
 
 ## Settings
 

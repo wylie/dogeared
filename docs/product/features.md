@@ -587,9 +587,15 @@ Limitations: This is a lightweight reference, not full developer documentation.
 
 Status: Complete
 
-Feedback can be submitted and rate-limited. Submission events are tracked with user/IP hashes.
+Feedback is a beta-ready reporting system available from the floating Feedback action. Readers can submit Bug Report, Feature Request, General Feedback, or Question, with optional severity for non-general reports. Bug reports reveal focused fields for expected behavior, actual behavior, and steps to reproduce; other feedback stays compact with subject, description, optional email, and optional screenshots.
 
-Limitations: The repository documents event tracking, not a complete feedback management dashboard.
+Submissions automatically capture diagnostic context: page URL, route, timestamp, app version, git commit when available, browser, operating system, screen and viewport size, color scheme, language, login state, relevant book/author/collection/search/recommendation IDs, and recent client-side errors when the reader consents through the error prompt. DogEared never asks readers to enter this manually and does not collect passwords, private journal content, or sensitive personal information.
+
+Client-side errors show a lightweight opt-in prompt: "Something unexpected happened. Would you like to send a report?" Reports are never sent automatically. Screenshot attachments are previewed before submit and stored with the feedback report for admin review.
+
+Admins manage reports at `/admin/feedback`. The dashboard supports search and filters by type, severity, status, date, and user. Admins can add private internal notes, update status, mark Needs Reply, Needs Reproduction, Duplicate, add a duplicate tracking number, record Resolved in Version, and track resolution dates.
+
+Limitations: Screenshot storage is currently inline JSON for beta-scale reports. A future expansion should move images to object storage if volume grows.
 
 ## Metrics And Admin
 

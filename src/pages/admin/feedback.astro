@@ -1,0 +1,635 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { resolveAdminSession } from "../../lib/admin";
+import { getNeonSql } from "../../lib/neon";
+import {
+	ensureBetaFeedbackSchema,
+	feedbackSeverityLabels,
+	feedbackStatusLabels,
+	feedbackTypeLabels,
+	normalizeFeedbackSeverity,
+	normalizeFeedbackStatus
+} from "../../lib/feedback";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const sql = getNeonSql();
+await ensureBetaFeedbackSchema(sql);
+
+function text(value: unknown, max = 500) {
+	return String(value || "").trim().slice(0, max);
+}
+
+if (Astro.request.method === "POST") {
+	const form = await Astro.request.formData();
+	const id = Math.max(0, Math.floor(Number(form.get("id") || 0) || 0));
+	const status = normalizeFeedbackStatus(form.get("status"));
+	const adminNotes = text(form.get("adminNotes"), 8000);
+	const needsReply = form.get("needsReply") === "on";
+	const needsReproduction = form.get("needsReproduction") === "on";
+	const isDuplicate = form.get("isDuplicate") === "on";
+	const duplicateOf = text(form.get("duplicateOf"), 80);
+	const resolvedInVersion = text(form.get("resolvedInVersion"), 80);
+	const shouldResolve = status === "fixed" || status === "closed" || !!resolvedInVersion;
+	if (id > 0) {
+		await sql`
+			update feedback_submission
+			set
+				status = ${status},
+				admin_notes = ${adminNotes},
+				needs_reply = ${needsReply},
+				needs_reproduction = ${needsReproduction},
+				is_duplicate = ${isDuplicate},
+				duplicate_of = ${duplicateOf},
+				resolved_in_version = ${resolvedInVersion},
+				resolved_at = case
+					when ${shouldResolve}::boolean then coalesce(resolved_at, now())
+					else resolved_at
+				end,
+				updated_at = now()
+			where id = ${id}
+		`;
+	}
+	return Astro.redirect(`/admin/feedback${Astro.url.search || ""}#report-${id}`);
+}
+
+const typeFilter = text(Astro.url.searchParams.get("type"), 40);
+const severityFilter = normalizeFeedbackSeverity(Astro.url.searchParams.get("severity"));
+const statusFilter = text(Astro.url.searchParams.get("status"), 40);
+const query = text(Astro.url.searchParams.get("q"), 160);
+const userFilter = text(Astro.url.searchParams.get("user"), 160);
+const rawDateFrom = text(Astro.url.searchParams.get("from"), 10);
+const rawDateTo = text(Astro.url.searchParams.get("to"), 10);
+const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(rawDateFrom) ? rawDateFrom : null;
+const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(rawDateTo) ? rawDateTo : null;
+const normalizedStatusFilter = Object.keys(feedbackStatusLabels).includes(statusFilter) ? statusFilter : "";
+const normalizedTypeFilter = Object.keys(feedbackTypeLabels).includes(typeFilter) ? typeFilter : "";
+
+type Screenshot = {
+	name?: string;
+	type?: string;
+	size?: number;
+	dataUrl?: string;
+};
+
+type FeedbackReport = {
+	id: number;
+	tracking_number: string;
+	username: string | null;
+	user_id: string | null;
+	email: string;
+	feedback_type: string;
+	severity: string;
+	status: string;
+	subject: string;
+	description: string;
+	expected_behavior: string;
+	actual_behavior: string;
+	steps_to_reproduce: string;
+	page_url: string;
+	route: string;
+	app_version: string;
+	git_commit: string;
+	browser: string;
+	operating_system: string;
+	screen_size: string;
+	viewport_size: string;
+	color_scheme: string;
+	language: string;
+	is_authenticated: boolean;
+	book_id: string;
+	author_id: string;
+	collection_id: string;
+	search_query: string;
+	recommendation_source: string;
+	diagnostic_context: unknown;
+	screenshots: Screenshot[] | string | null;
+	admin_notes: string;
+	needs_reply: boolean;
+	needs_reproduction: boolean;
+	is_duplicate: boolean;
+	duplicate_of: string;
+	resolved_in_version: string;
+	resolved_at: string | null;
+	created_at: string;
+	updated_at: string;
+};
+
+const reports = await sql<FeedbackReport[]>`
+	select
+		fs.id,
+		fs.tracking_number,
+		u.username,
+		fs.user_id::text as user_id,
+		fs.email,
+		fs.feedback_type,
+		fs.severity,
+		fs.status,
+		fs.subject,
+		fs.description,
+		fs.expected_behavior,
+		fs.actual_behavior,
+		fs.steps_to_reproduce,
+		fs.page_url,
+		fs.route,
+		fs.app_version,
+		fs.git_commit,
+		fs.browser,
+		fs.operating_system,
+		fs.screen_size,
+		fs.viewport_size,
+		fs.color_scheme,
+		fs.language,
+		fs.is_authenticated,
+		fs.book_id,
+		fs.author_id,
+		fs.collection_id,
+		fs.search_query,
+		fs.recommendation_source,
+		fs.diagnostic_context,
+		fs.screenshots,
+		fs.admin_notes,
+		fs.needs_reply,
+		fs.needs_reproduction,
+		fs.is_duplicate,
+		fs.duplicate_of,
+		fs.resolved_in_version,
+		fs.resolved_at::text as resolved_at,
+		fs.created_at::text as created_at,
+		fs.updated_at::text as updated_at
+	from feedback_submission fs
+	left join app_user u on u.id = fs.user_id
+	where (${normalizedTypeFilter} = '' or fs.feedback_type = ${normalizedTypeFilter})
+		and (${severityFilter} = '' or fs.severity = ${severityFilter})
+		and (${normalizedStatusFilter} = '' or fs.status = ${normalizedStatusFilter})
+		and (${dateFrom}::date is null or fs.created_at >= ${dateFrom}::date)
+		and (${dateTo}::date is null or fs.created_at < (${dateTo}::date + interval '1 day'))
+		and (
+			${query} = ''
+			or fs.tracking_number ilike ${`%${query}%`}
+			or fs.subject ilike ${`%${query}%`}
+			or fs.description ilike ${`%${query}%`}
+			or fs.page_url ilike ${`%${query}%`}
+		)
+		and (
+			${userFilter} = ''
+			or coalesce(u.username, '') ilike ${`%${userFilter}%`}
+			or fs.email ilike ${`%${userFilter}%`}
+			or fs.user_id::text ilike ${`%${userFilter}%`}
+		)
+	order by fs.created_at desc
+	limit 100
+`;
+
+const summaryRows = await sql<Array<{ status: string; count: number }>>`
+	select status, count(*)::int as count
+	from feedback_submission
+	group by status
+	order by status asc
+`;
+const statusCounts = new Map(summaryRows.map((row) => [row.status, Number(row.count || 0)]));
+
+const sectionLinks = [
+	{ id: "filters", label: "Filters" },
+	{ id: "reports", label: "Reports" }
+];
+
+function labelFor(map: Record<string, string>, value: string, fallback = "Not set") {
+	return map[value] || fallback;
+}
+
+function formatDate(value: string | null) {
+	if (!value) return "Not set";
+	const date = new Date(value);
+	if (!Number.isFinite(date.getTime())) return value;
+	return new Intl.DateTimeFormat("en", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+		hour: "numeric",
+		minute: "2-digit"
+	}).format(date);
+}
+
+function normalizedScreenshots(value: FeedbackReport["screenshots"]) {
+	if (typeof value === "string") {
+		try {
+			const parsed = JSON.parse(value);
+			return Array.isArray(parsed) ? parsed as Screenshot[] : [];
+		} catch {
+			return [];
+		}
+	}
+	return Array.isArray(value) ? value : [];
+}
+---
+
+<Layout title="Admin Feedback" sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="admin-feedback-page">
+		<header class="hero">
+			<h1>Feedback</h1>
+			<p>Beta reader feedback, bug reports, diagnostics, screenshots, and private admin workflow notes.</p>
+		</header>
+
+		<section class="panel summary-panel" aria-label="Feedback status summary">
+			{Object.entries(feedbackStatusLabels).map(([status, label]) => (
+				<article>
+					<p>{label}</p>
+					<strong>{(statusCounts.get(status) || 0).toLocaleString()}</strong>
+				</article>
+			))}
+		</section>
+
+		<section class="panel" id="filters" aria-labelledby="filters-title">
+			<div class="panel-head">
+				<h2 id="filters-title">Filters</h2>
+				<a href="/admin/feedback">Clear</a>
+			</div>
+			<form class="filter-form" method="get" action="/admin/feedback">
+				<label>
+					<span>Search</span>
+					<input type="search" name="q" value={query} placeholder="Tracking, subject, description, URL" />
+				</label>
+				<label>
+					<span>User</span>
+					<input type="search" name="user" value={userFilter} placeholder="Username, email, or user ID" />
+				</label>
+				<label>
+					<span>Type</span>
+					<select name="type">
+						<option value="" selected={!normalizedTypeFilter}>Any type</option>
+						{Object.entries(feedbackTypeLabels).map(([value, label]) => <option value={value} selected={normalizedTypeFilter === value}>{label}</option>)}
+					</select>
+				</label>
+				<label>
+					<span>Severity</span>
+					<select name="severity">
+						<option value="" selected={!severityFilter}>Any severity</option>
+						{Object.entries(feedbackSeverityLabels).map(([value, label]) => <option value={value} selected={severityFilter === value}>{label}</option>)}
+					</select>
+				</label>
+				<label>
+					<span>Status</span>
+					<select name="status">
+						<option value="" selected={!normalizedStatusFilter}>Any status</option>
+						{Object.entries(feedbackStatusLabels).map(([value, label]) => <option value={value} selected={normalizedStatusFilter === value}>{label}</option>)}
+					</select>
+				</label>
+				<label>
+					<span>From</span>
+					<input type="date" name="from" value={dateFrom || ""} />
+				</label>
+				<label>
+					<span>To</span>
+					<input type="date" name="to" value={dateTo || ""} />
+				</label>
+				<button type="submit">Apply</button>
+			</form>
+		</section>
+
+		<section class="panel" id="reports" aria-labelledby="reports-title">
+			<div class="panel-head">
+				<h2 id="reports-title">Reports</h2>
+				<p>{reports.length.toLocaleString()} shown</p>
+			</div>
+			{reports.length === 0 ? (
+				<p class="empty">No feedback reports match these filters.</p>
+			) : (
+				<ul class="report-list">
+					{reports.map((report) => {
+						const screenshots = normalizedScreenshots(report.screenshots);
+						return (
+							<li class="report-card" id={`report-${report.id}`}>
+								<div class="report-head">
+									<div>
+										<p class="tracking">{report.tracking_number || `DE-${report.id}`}</p>
+										<h3>{report.subject || report.description.slice(0, 96) || "Untitled feedback"}</h3>
+										<p class="meta">
+											{labelFor(feedbackTypeLabels, report.feedback_type)} · {labelFor(feedbackSeverityLabels, report.severity)} · {labelFor(feedbackStatusLabels, report.status)}
+										</p>
+									</div>
+									<p class="meta right">{formatDate(report.created_at)}</p>
+								</div>
+								<p class="description">{report.description}</p>
+								<dl class="report-details">
+									<div><dt>User</dt><dd>{report.username ? `@${report.username}` : "Anonymous"}{report.email ? ` · ${report.email}` : ""}</dd></div>
+									<div><dt>Route</dt><dd>{report.route || "Not provided"}</dd></div>
+									<div><dt>Page</dt><dd>{report.page_url ? <a href={report.page_url}>{report.page_url}</a> : "Not provided"}</dd></div>
+									<div><dt>Browser</dt><dd>{report.browser || "Not provided"}{report.operating_system ? ` · ${report.operating_system}` : ""}</dd></div>
+									<div><dt>Viewport</dt><dd>{report.viewport_size || "Not provided"}{report.screen_size ? ` · screen ${report.screen_size}` : ""}</dd></div>
+									<div><dt>Version</dt><dd>{report.app_version || "Not provided"}{report.git_commit ? ` · ${report.git_commit.slice(0, 12)}` : ""}</dd></div>
+									{report.book_id && <div><dt>Book ID</dt><dd>{report.book_id}</dd></div>}
+									{report.author_id && <div><dt>Author ID</dt><dd>{report.author_id}</dd></div>}
+									{report.collection_id && <div><dt>Collection ID</dt><dd>{report.collection_id}</dd></div>}
+									{report.search_query && <div><dt>Search</dt><dd>{report.search_query}</dd></div>}
+									{report.recommendation_source && <div><dt>Recommendation</dt><dd>{report.recommendation_source}</dd></div>}
+									{report.resolved_at && <div><dt>Resolved</dt><dd>{formatDate(report.resolved_at)}</dd></div>}
+								</dl>
+								{(report.expected_behavior || report.actual_behavior || report.steps_to_reproduce) && (
+									<details class="report-block">
+										<summary>Bug details</summary>
+										{report.expected_behavior && <p><strong>Expected:</strong> {report.expected_behavior}</p>}
+										{report.actual_behavior && <p><strong>Actual:</strong> {report.actual_behavior}</p>}
+										{report.steps_to_reproduce && <pre>{report.steps_to_reproduce}</pre>}
+									</details>
+								)}
+								{screenshots.length > 0 && (
+									<ul class="screenshot-grid" aria-label={`Screenshots for ${report.tracking_number || report.id}`}>
+										{screenshots.map((screenshot) => (
+											<li>
+												<a href={screenshot.dataUrl || "#"} target="_blank" rel="noopener noreferrer">
+													<img src={screenshot.dataUrl || ""} alt={screenshot.name || "Feedback screenshot"} loading="lazy" />
+													<span>{screenshot.name || "Screenshot"}</span>
+												</a>
+											</li>
+										))}
+									</ul>
+								)}
+								<details class="report-block">
+									<summary>Diagnostics</summary>
+									<pre>{JSON.stringify(report.diagnostic_context || {}, null, 2)}</pre>
+								</details>
+								<form class="workflow-form" method="post" action={`/admin/feedback${Astro.url.search || ""}#report-${report.id}`}>
+									<input type="hidden" name="id" value={String(report.id)} />
+									<label>
+										<span>Status</span>
+										<select name="status">
+											{Object.entries(feedbackStatusLabels).map(([value, label]) => <option value={value} selected={report.status === value}>{label}</option>)}
+										</select>
+									</label>
+									<label>
+										<span>Resolved in version</span>
+										<input type="text" name="resolvedInVersion" value={report.resolved_in_version} />
+									</label>
+									<label>
+										<span>Duplicate of</span>
+										<input type="text" name="duplicateOf" value={report.duplicate_of} placeholder="Tracking number" />
+									</label>
+									<label class="checkbox-row"><input type="checkbox" name="needsReply" checked={report.needs_reply} /> Needs Reply</label>
+									<label class="checkbox-row"><input type="checkbox" name="needsReproduction" checked={report.needs_reproduction} /> Needs Reproduction</label>
+									<label class="checkbox-row"><input type="checkbox" name="isDuplicate" checked={report.is_duplicate} /> Duplicate</label>
+									<label class="notes">
+										<span>Internal notes</span>
+										<textarea name="adminNotes" rows="4">{report.admin_notes}</textarea>
+									</label>
+									<button type="submit">Save Workflow</button>
+								</form>
+							</li>
+						);
+					})}
+				</ul>
+			)}
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.admin-feedback-page {
+		max-width: 1040px;
+	}
+	.hero h1,
+	.hero p {
+		margin: 0;
+	}
+	.hero p,
+	.meta,
+	.empty {
+		color: var(--color-text-muted);
+	}
+	.panel {
+		margin-top: 1rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		padding: 1rem;
+	}
+	.panel-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 0.8rem;
+	}
+	.panel-head h2,
+	.panel-head p {
+		margin: 0;
+	}
+	.panel-head a,
+	.report-details a {
+		color: var(--color-nav);
+		font-weight: 760;
+		text-decoration: none;
+	}
+	.panel-head a:hover,
+	.report-details a:hover {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.summary-panel {
+		display: grid;
+		grid-template-columns: repeat(6, minmax(0, 1fr));
+		gap: 0.55rem;
+	}
+	.summary-panel article,
+	.report-card {
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.62);
+	}
+	.summary-panel article {
+		padding: 0.65rem;
+	}
+	.summary-panel p {
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-weight: 760;
+	}
+	.summary-panel strong {
+		display: block;
+		margin-top: 0.2rem;
+		font-size: 1.25rem;
+	}
+	.filter-form,
+	.workflow-form {
+		display: grid;
+		gap: 0.65rem;
+	}
+	.filter-form {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		align-items: end;
+	}
+	label span {
+		display: block;
+		margin-bottom: 0.25rem;
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-weight: 760;
+	}
+	input,
+	select,
+	textarea {
+		width: 100%;
+		box-sizing: border-box;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: #fff;
+		color: var(--color-text);
+		font: inherit;
+		padding: 0.55rem 0.65rem;
+	}
+	textarea {
+		resize: vertical;
+	}
+	button {
+		border: 1px solid var(--color-primary);
+		border-radius: var(--radius-sm);
+		background: var(--color-primary);
+		color: #fff;
+		font: inherit;
+		font-weight: 760;
+		min-height: 42px;
+		padding: 0.55rem 0.85rem;
+		cursor: pointer;
+	}
+	button:hover,
+	button:focus-visible {
+		background: var(--color-primary-hover);
+		border-color: var(--color-primary-hover);
+	}
+	.report-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.9rem;
+	}
+	.report-card {
+		padding: 0.9rem;
+	}
+	.report-head {
+		display: flex;
+		align-items: start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.tracking {
+		margin: 0 0 0.2rem;
+		color: var(--color-nav);
+		font-size: 0.82rem;
+		font-weight: 820;
+	}
+	.report-card h3 {
+		margin: 0;
+	}
+	.right {
+		text-align: right;
+	}
+	.description {
+		margin: 0.7rem 0 0;
+		line-height: 1.5;
+	}
+	.report-details {
+		margin: 0.8rem 0 0;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.45rem 0.8rem;
+	}
+	.report-details div {
+		min-width: 0;
+	}
+	.report-details dt {
+		margin: 0;
+		color: var(--color-text-subtle);
+		font-size: 0.72rem;
+		font-weight: 760;
+		text-transform: uppercase;
+	}
+	.report-details dd {
+		margin: 0.1rem 0 0;
+		color: var(--color-text-muted);
+		overflow-wrap: anywhere;
+	}
+	.report-block {
+		margin-top: 0.8rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: rgba(255, 255, 255, 0.58);
+		padding: 0.65rem;
+	}
+	.report-block summary {
+		cursor: pointer;
+		font-weight: 760;
+		color: var(--color-nav);
+	}
+	.report-block p {
+		margin: 0.55rem 0 0;
+	}
+	pre {
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		font-family: inherit;
+		color: var(--color-text-muted);
+	}
+	.screenshot-grid {
+		list-style: none;
+		margin: 0.8rem 0 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+		gap: 0.55rem;
+	}
+	.screenshot-grid a {
+		display: grid;
+		gap: 0.3rem;
+		color: var(--color-nav);
+		text-decoration: none;
+		font-size: 0.84rem;
+		font-weight: 760;
+	}
+	.screenshot-grid img {
+		width: 100%;
+		aspect-ratio: 16 / 9;
+		object-fit: cover;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: #fff;
+	}
+	.workflow-form {
+		margin-top: 0.9rem;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		align-items: end;
+		border-top: var(--border-subtle);
+		padding-top: 0.85rem;
+	}
+	.checkbox-row {
+		display: flex;
+		gap: 0.45rem;
+		align-items: center;
+		color: var(--color-text);
+		font-weight: 650;
+	}
+	.checkbox-row input {
+		width: auto;
+	}
+	.notes {
+		grid-column: 1 / -1;
+	}
+	@media (max-width: 900px) {
+		.summary-panel,
+		.filter-form,
+		.report-details,
+		.workflow-form {
+			grid-template-columns: 1fr;
+		}
+		.report-head {
+			display: grid;
+		}
+		.right {
+			text-align: left;
+		}
+	}
+</style>

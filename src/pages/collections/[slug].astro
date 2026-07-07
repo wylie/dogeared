@@ -55,7 +55,7 @@ const sectionLinks = collection?.books.length ? [
 	socialImageAlt={collection ? `${collection.title} on DogEared` : "DogEared editorial collections"}
 	sectionLinks={sectionLinks}
 >
-	<div slot="right" class="collection-page" data-authenticated={String(!!viewerUserId)}>
+	<div slot="right" class="collection-page" data-authenticated={String(!!viewerUserId)} data-collection-id={collection ? String(collection.id) : ""}>
 		{errorMessage && <p class="error">{errorMessage}</p>}
 		{collection && (
 			<>

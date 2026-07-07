@@ -883,7 +883,7 @@ const bookStructuredDataPayload = bookStructuredData
 	robots={bookRobots}
 	structuredData={bookStructuredDataPayload}
 >
-	<div slot="right" class="book-page" data-authenticated={String(isAuthenticated)}>
+	<div slot="right" class="book-page" data-authenticated={String(isAuthenticated)} data-book-id={book ? String(book.id) : ""} data-author-id={book?.authorId ? String(book.authorId) : ""}>
 		<nav class="breadcrumbs" aria-label="Breadcrumb">
 			<a href="/">Home</a>
 			<span aria-hidden="true">/</span>
