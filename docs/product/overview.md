@@ -40,7 +40,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Authors: searchable and sortable author index.
 - Author detail: author profile, editorial collections featuring the author, author books grouped by series where available, standalone books, and external author-book context.
 - Editorial Collections: curated book lists with editorial introductions, book ordering, notes, quotes, and shelf controls. Collection routes remain available, but Collections is hidden from primary navigation until there is useful published content to browse.
-- Profiles: public reader identity and current reading state, including profile card, notifications for the owner, bio, favorite book/author, concise reading goal summary, shelf summary, current reads, recent activity, and settings access.
+- Profiles: public reader identity and current reading state, including profile card, bio, favorite book/author, concise reading goal summary, shelf summary, current reads, recent activity, and settings access.
 - My Reading Life: private historical reflection across finished books, pages, streaks, goals, ratings, timeline, reading calendar, genre and author history, milestones, fun statistics, and yearly summaries.
 - Reading Journal: private searchable notebook for what a reader was thinking while reading, including dated entries, optional book context, one optional reading position, moods, and personal tags.
 - Following: reader suggestions, current follows, and activity from followed readers.
@@ -57,7 +57,7 @@ DogEared separates the signed-in reader experience into three personal destinati
 - My Reading Life answers "How has my reading changed over time?" It consolidates yearly progress, timeline, calendar, genre/author history, milestones, journey summaries, and fun statistics into one richer reflective area.
 - Reading Journal answers "What was I thinking while reading?" It is private notebook space only, with no shelves, reading goal, profile information, or statistics.
 
-The signed-in navigation under You is intentionally short: Profile, My Reading Life, Reading Journal, Settings, and Log Out. Following remains available as a community/discovery destination rather than part of the core personal IA.
+The signed-in navigation under You is intentionally short: Profile, My Reading Life, Reading Journal, Notifications, Settings, and Log Out. Following remains available as a community/discovery destination rather than part of the core personal IA.
 
 ## Major Workflows
 
@@ -70,7 +70,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, timeline history, milestones, and yearly summaries.
 - Private journaling: create, autosave, search, date-filter, book-filter, view, edit, and delete private journal entries from the Reading Journal page; create book-linked entries from a Currently Reading book page or after saving reading progress.
 - Reviews and ratings: finish a book through a rating plus optional public review flow, then edit or delete that review later.
-- Social reading: follow readers, view following activity, like activity, comment on activity, and receive activity notifications.
+- Social reading: follow readers, view following activity, like activity, comment on activity, and receive low-noise notifications.
 - Profile management: update name, avatar, location, birth year, goal text, favorite book, favorite author, blurb, and genres.
 - Privacy management: set public/private profile visibility and control location, activity, discovery, and follow availability.
 - Import/export: import Goodreads CSV data with dashboard status, preview, duplicate explanations, merge/replace controls, reports, resumable failed syncs, export account data as JSON, and clear shelf entries.
@@ -154,7 +154,7 @@ Authors have an index page, canonical author detail routes, optional bio/photo/s
 
 ### Profiles
 
-Profiles show who a reader is and what they are reading now. They include reader identity, bio, favorite book and author, shelf counts, followers/following counts, a concise reading goal summary, notifications for the owner, custom shelves, current reads, recent activity, profile Reviews, default shelf sections, and settings/profile edit access. Owners can edit profile information directly from their profile page and reorder Reviews alongside shelf sections.
+Profiles show who a reader is and what they are reading now. They include reader identity, bio, favorite book and author, shelf counts, followers/following counts, a concise reading goal summary, custom shelves, current reads, recent activity, profile Reviews, default shelf sections, and settings/profile edit access. Owners can edit profile information directly from their profile page and reorder Reviews alongside shelf sections.
 
 ### Shelves
 
@@ -232,7 +232,13 @@ Readers can follow and unfollow other public readers unless the target disables 
 
 ### Notifications
 
-Notifications exist for activity likes and comments. Profile owners see a notifications section on their own profile and the API exposes unread count.
+DogEared supports thoughtful in-app Notifications v1. Notifications are designed to be helpful, relevant, calm, and actionable; they should never be used as engagement bait or urgency-driven loops. The dedicated `/notifications` page is private, authenticated, and grouped into Today, This Week, and Earlier. Each notification includes an icon, title, short description, timestamp, read/unread state, and an optional action.
+
+Supported v1 types include community notifications for follows, review likes, review comments, and comment replies; reading/milestone notifications for yearly goal completion, reading streak milestones, and finished series; discovery notifications for Want to Read books gaining reader interest and newly imported favorite-author books; and system/import notifications for completed imports. Current event generators create follow, like, comment, reply, reading goal, reading streak, and series completion notifications. Discovery and import types are modeled for scheduled/import jobs.
+
+Notification actions include mark one as read, mark all as read, delete, and Open. Opening a notification marks it read before redirecting. Unread counts appear as a subtle badge in signed-in navigation and are cached through the count endpoint rather than polled aggressively.
+
+Smart grouping uses a notification `group_key` and configurable window so bursts such as multiple review likes become a single grouped notification like "3 people liked your review." Settings includes in-app category preferences for Community, Reading, Discovery, Milestones, and System, while browser and email controls remain future-ready.
 
 ### Admin
 

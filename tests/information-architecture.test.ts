@@ -8,8 +8,10 @@ test("signed-in navigation separates personal, discovery, and settings destinati
 	const youGroup = nav.slice(nav.indexOf("nav-group-you"), nav.indexOf("nav-group-explore"));
 	assert.ok(youGroup.indexOf("left-hand-profile-item") < youGroup.indexOf("left-hand-reading-life-item"));
 	assert.ok(youGroup.indexOf("left-hand-reading-life-item") < youGroup.indexOf("left-hand-journal-item"));
-	assert.ok(youGroup.indexOf("left-hand-journal-item") < youGroup.indexOf("left-hand-settings-item"));
+	assert.ok(youGroup.indexOf("left-hand-journal-item") < youGroup.indexOf("left-hand-notifications-item"));
+	assert.ok(youGroup.indexOf("left-hand-notifications-item") < youGroup.indexOf("left-hand-settings-item"));
 	assert.ok(youGroup.indexOf("left-hand-settings-item") < youGroup.indexOf("left-hand-logout-item"));
+	assert.match(youGroup, /\/notifications/);
 	assert.doesNotMatch(youGroup, /Following/);
 	assert.doesNotMatch(youGroup, /Reading Timeline/);
 
@@ -20,7 +22,6 @@ test("signed-in navigation separates personal, discovery, and settings destinati
 test("profile stays focused on reader identity and current reading state", () => {
 	const profilePage = readFileSync("src/pages/profile/[username].astro", "utf8");
 
-	assert.match(profilePage, /id="notifications"/);
 	assert.match(profilePage, /id="about"/);
 	assert.match(profilePage, /id="reading-goal"/);
 	assert.match(profilePage, /id="shelf-summary"/);

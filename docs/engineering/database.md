@@ -461,18 +461,26 @@ Relationships:
 
 Entity: `user_notification`
 
-Created lazily by activity/admin/notification code. Stores:
+Created lazily by notification service, activity APIs, and admin code. Stores:
 
 - Recipient user.
-- Actor user.
-- Activity.
-- Type: `activity_like` or `activity_comment`.
+- Optional actor user.
+- Optional activity.
+- Type: `user_follow`, `activity_like`, `activity_comment`, `activity_reply`, `reading_goal_completed`, `reading_streak_milestone`, `series_finished`, `discovery_want_to_read_trending`, `author_new_book`, `import_completed`, or `goodreads_import_completed`.
+- Category: Community, Reading, Discovery, Milestones, or System.
+- Title, short body, icon, and action URL.
+- Group key and actor count for low-noise grouping.
+- Extensible metadata.
 - Created time.
 - Optional read time.
+- Optional deleted time for soft deletion.
 
 Relationships:
 
-- Belongs to recipient user, actor user, and activity.
+- Belongs to recipient user.
+- May reference an actor user and activity.
+- Respects in-app notification category preferences stored under `app_user.profile_data.settings.notifications.categories`.
+- Grouping uses `group_key` plus a configurable time window so similar events can update one notification instead of creating many rows.
 
 ## Custom Shelves
 

@@ -21,6 +21,7 @@ import { monitorEvent } from "../../../lib/monitoring";
 import { ensureReviewSchema, normalizeReviewBody, normalizeReviewTitle } from "../../../lib/bookReviews";
 import { ensureCanonicalWorkSchema, resolveRepresentativeBookId, upsertWorkAndEdition } from "../../../lib/catalogWorks";
 import { upsertKnownSeriesForBook } from "../../../lib/series";
+import { createReadingMilestoneNotifications } from "../../../lib/notifications";
 
 export const prerender = false;
 
@@ -958,6 +959,14 @@ export const POST: APIRoute = async ({ request }) => {
 					${deltaPages}
 				)
 			`;
+		}
+		if (status === "finished" || deltaPages > 0) {
+			debugStage = "reading_milestone_notifications";
+			await createReadingMilestoneNotifications(sql, userId, {
+				status,
+				bookId,
+				title
+			});
 		}
 
 		debugStage = "load_persisted_entry";

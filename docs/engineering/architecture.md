@@ -37,7 +37,7 @@ API routes live in `src/pages/api/` and are grouped by product area:
 - Journal: private journal entry create/search/filter, update, and delete.
 - Profile/public: profile info, username, public shelf/activity/profile.
 - Shelf/reviews: shelf entries, ratings, finished-book review metadata, custom shelves, custom shelf books, section ordering.
-- Admin-adjacent/system: health, feedback, first-party analytics events, notifications count, onboarding status, guided first-experience status, top lists, reader suggestions.
+- Admin-adjacent/system: health, feedback, first-party analytics events, notifications, notifications count, onboarding status, guided first-experience status, top lists, reader suggestions.
 
 Most APIs resolve the current session when mutating or reading private user data.
 
@@ -131,6 +131,8 @@ Founding Reader access is handled by `src/lib/foundingReaders.ts`, `/api/auth/re
 Release management is handled by `src/lib/releases.ts`, `/admin/releases`, `/release-notes`, Roadmap Recently Shipped, and the global What's New modal in `Layout`. Admin releases use the existing `admin_release_note` table with additive structured fields for summary, release date, status, highlights, bug fixes, known issues, and migration notes. Only published releases are reader-facing. The feedback flow includes app version, latest release version, and commit hash in diagnostic metadata.
 
 Product analytics live in `src/lib/productAnalytics`, `/api/analytics/event`, and `/admin/analytics`. The system is first-party and aggregate-focused: server routes record durable events for search and recommendation feedback, while Layout records small non-blocking client events for page views, feature views, recommendation impressions, recommendation clicks, and recommendation add-to-shelf intent. Admin analytics uses cached aggregate queries and existing product tables for growth, reading, community, search, discovery, first-run funnel, and feature adoption. It does not collect private journal content, passwords, sensitive profile text, or expose reader-level behavior reports.
+
+Notifications live in `src/lib/notifications`, `/notifications`, `/api/notifications`, `/api/notifications/count`, and `/admin/notifications`. The helper owns schema readiness, supported types, category preferences, low-noise grouping, unread counts, read/delete operations, reader-facing loading, admin statistics, and milestone generators. Event sources such as activity likes, comments, follows, and shelf/progress updates call the helper rather than embedding notification SQL locally. The renderer is the dedicated Notifications page, while Settings owns category preferences for Community, Reading, Discovery, Milestones, and System. New notification types should add a type/category/icon/default copy in the helper and then call `createNotification` from the relevant product event generator.
 
 Current providers:
 

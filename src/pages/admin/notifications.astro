@@ -1,0 +1,224 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { resolveAdminSession } from "../../lib/admin";
+import { getNeonSql } from "../../lib/neon";
+import { loadAdminNotificationStats } from "../../lib/notifications";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const sql = getNeonSql();
+const stats = await loadAdminNotificationStats(sql);
+const sectionLinks = [
+	{ id: "summary", label: "Summary" },
+	{ id: "types", label: "Types" },
+	{ id: "volume", label: "Volume" }
+];
+const maxVolume = Math.max(1, ...stats.volume.map((row) => row.count));
+const maxType = Math.max(1, ...stats.topTypes.map((row) => row.count));
+const formatType = (value: string) => String(value || "unknown").replaceAll("_", " ");
+---
+
+<Layout title="Admin Notifications" sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="admin-notifications-page">
+		<header class="hero">
+			<nav class="breadcrumbs" aria-label="Breadcrumb">
+				<a href="/admin">Admin</a><span aria-hidden="true">/</span><span>Notifications</span>
+			</nav>
+			<h1>Notification Operations</h1>
+			<p>Operational visibility for low-noise in-app notifications.</p>
+		</header>
+
+		<section id="summary" class="panel">
+			<div class="panel-head">
+				<h2>Summary</h2>
+			</div>
+			<div class="stat-grid">
+				<article class="stat-card">
+					<p>Notifications sent today</p>
+					<strong>{stats.sentToday.toLocaleString()}</strong>
+				</article>
+				<article class="stat-card">
+					<p>Unread notifications</p>
+					<strong>{stats.unread.toLocaleString()}</strong>
+				</article>
+				<article class="stat-card">
+					<p>Failed notification jobs</p>
+					<strong>{stats.failedJobs.toLocaleString()}</strong>
+					<span>Future email/job queue hook.</span>
+				</article>
+			</div>
+		</section>
+
+		<section id="types" class="panel">
+			<div class="panel-head">
+				<h2>Most Common Types</h2>
+				<p>Last 30 days.</p>
+			</div>
+			{stats.topTypes.length === 0 ? (
+				<p class="empty">No notifications have been created yet.</p>
+			) : (
+				<div class="rows" role="table">
+					{stats.topTypes.map((row) => (
+						<div class="data-row" role="row">
+							<span role="cell">{formatType(row.type)}</span>
+							<span role="cell"><span class="bar" style={`--bar-width: ${Math.round((row.count / maxType) * 100)}%`}><span></span></span></span>
+							<strong role="cell">{row.count.toLocaleString()}</strong>
+						</div>
+					))}
+				</div>
+			)}
+		</section>
+
+		<section id="volume" class="panel">
+			<div class="panel-head">
+				<h2>Volume Over Time</h2>
+				<p>Daily notification volume for the last 14 days.</p>
+			</div>
+			<div class="volume-grid" aria-label="Notification volume by day">
+				{stats.volume.map((row) => (
+					<div class="volume-day">
+						<div class="volume-bar" style={`--bar-height: ${Math.max(4, Math.round((row.count / maxVolume) * 100))}%`}><span></span></div>
+						<strong>{row.count}</strong>
+						<span>{row.day.slice(5)}</span>
+					</div>
+				))}
+			</div>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.admin-notifications-page {
+		max-width: 980px;
+		display: grid;
+		gap: 1rem;
+	}
+	.breadcrumbs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		color: var(--color-text-subtle);
+		font-size: 0.88rem;
+	}
+	.breadcrumbs a {
+		color: var(--color-nav);
+		text-decoration: none;
+	}
+	.hero h1,
+	.hero p,
+	.panel-head h2,
+	.panel-head p {
+		margin: 0;
+	}
+	.hero p,
+	.panel-head p,
+	.empty,
+	.stat-card span {
+		color: var(--color-text-muted);
+	}
+	.panel {
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		padding: 1rem;
+	}
+	.panel-head {
+		display: grid;
+		gap: 0.25rem;
+		margin-bottom: 0.7rem;
+	}
+	.stat-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.6rem;
+	}
+	.stat-card {
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.64);
+		padding: 0.7rem;
+	}
+	.stat-card p {
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: 0.84rem;
+	}
+	.stat-card strong {
+		display: block;
+		margin-top: 0.2rem;
+		font-size: 1.35rem;
+	}
+	.rows {
+		display: grid;
+		gap: 0.35rem;
+	}
+	.data-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(120px, 2fr) 64px;
+		gap: 0.6rem;
+		align-items: center;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.64);
+		padding: 0.55rem 0.65rem;
+		text-transform: capitalize;
+	}
+	.bar {
+		display: block;
+		height: 0.5rem;
+		border-radius: var(--radius-pill);
+		background: rgba(87, 117, 144, 0.18);
+		overflow: hidden;
+	}
+	.bar span {
+		display: block;
+		width: var(--bar-width);
+		height: 100%;
+		border-radius: inherit;
+		background: var(--color-primary);
+	}
+	.volume-grid {
+		display: grid;
+		grid-template-columns: repeat(14, minmax(0, 1fr));
+		gap: 0.4rem;
+		align-items: end;
+		min-height: 170px;
+	}
+	.volume-day {
+		display: grid;
+		gap: 0.22rem;
+		align-items: end;
+		justify-items: center;
+		color: var(--color-text-muted);
+		font-size: 0.74rem;
+	}
+	.volume-bar {
+		position: relative;
+		width: 100%;
+		height: 110px;
+		border-radius: var(--radius-sm);
+		background: rgba(87, 117, 144, 0.16);
+		overflow: hidden;
+	}
+	.volume-bar span {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: var(--bar-height);
+		background: var(--color-primary);
+	}
+
+	@media (max-width: 760px) {
+		.stat-grid,
+		.data-row {
+			grid-template-columns: 1fr;
+		}
+		.volume-grid {
+			grid-template-columns: repeat(7, minmax(0, 1fr));
+		}
+	}
+</style>

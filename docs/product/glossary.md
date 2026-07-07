@@ -130,7 +130,7 @@ A private reader-facing page that reflects a signed-in reader's finished books, 
 
 ## Notification
 
-A record created when another reader likes or comments on a user's activity. Current notification types are `activity_like` and `activity_comment`.
+A low-noise in-app update for meaningful community, reading, discovery, milestone, or system activity. Notifications store a category, type, title, body, icon, optional action URL, read state, soft-delete state, grouping key, actor count, and diagnostic metadata so repeated events can be grouped calmly.
 
 ## Personal Tags
 

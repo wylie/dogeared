@@ -13,6 +13,7 @@
 - Recommendation feedback busy, success, retry, and accessibility state is owned by BookCard, so Home and Discover share the same implementation.
 - Beta feedback now stores reports with tracking numbers, diagnostic context, screenshot previews, client-error opt-in prompts, and an admin triage dashboard.
 - Product analytics are first-party and aggregate-focused, giving admins search, discovery, funnel, and feature-adoption insight without private journal content or reader-level behavior reports.
+- Notifications now use a dedicated low-noise center with category preferences, grouped events, unread badges, read/delete actions, and admin operational visibility.
 - Profile progress saves now surface request failures without secondary client errors, including the edge case where a progress update completes the book.
 
 ## Risks
@@ -23,8 +24,7 @@
 
 ## Recommended Next Features
 1. Reader-facing recommendation controls beyond Interesting and Hide, such as "save for later" or "show me less like this."
-2. Notification quality pass for actionable events only.
-3. Additional launch telemetry around failed imports, abandoned sign-up, and first shelf save errors.
+2. Additional launch telemetry around failed imports, abandoned sign-up, and first shelf save errors.
 
 ## Known Technical Debt
 - Recommendation ranking logic is distributed and would benefit from a single scoring layer.

@@ -171,11 +171,31 @@ const sectionLinks = [
 
 		<section class="settings-section" id="notifications-settings" aria-labelledby="notifications-settings-title">
 			<h2 id="notifications-settings-title">Notifications</h2>
-			<p class="section-copy">Choose how DogEared keeps in touch. Account security emails are always sent when your login email changes.</p>
+			<p class="section-copy">Choose which in-app notifications DogEared can show. Account security emails are always sent when your login email changes.</p>
 			<div class="danger-form">
 				<label class="checkbox-row">
+					<input type="checkbox" id="notification-category-community" checked />
+					<span>Community updates</span>
+				</label>
+				<label class="checkbox-row">
+					<input type="checkbox" id="notification-category-reading" checked />
+					<span>Reading updates</span>
+				</label>
+				<label class="checkbox-row">
+					<input type="checkbox" id="notification-category-discovery" checked />
+					<span>Discovery updates</span>
+				</label>
+				<label class="checkbox-row">
+					<input type="checkbox" id="notification-category-milestones" checked />
+					<span>Milestones</span>
+				</label>
+				<label class="checkbox-row">
+					<input type="checkbox" id="notification-category-system" checked />
+					<span>System and import updates</span>
+				</label>
+				<label class="checkbox-row">
 					<input type="checkbox" id="browser-notifications-enabled" />
-					<span>Enable browser notifications when available</span>
+					<span>Prepare for browser notifications when available</span>
 				</label>
 				<label class="checkbox-row">
 					<input type="checkbox" id="release-email-enabled" />
@@ -880,6 +900,11 @@ const sectionLinks = [
 	const shareActivityCheckbox = document.getElementById("share-activity");
 	const allowDiscoveryCheckbox = document.getElementById("allow-discovery");
 	const allowFollowRequestsCheckbox = document.getElementById("allow-follow-requests");
+	const notificationCategoryCommunity = document.getElementById("notification-category-community");
+	const notificationCategoryReading = document.getElementById("notification-category-reading");
+	const notificationCategoryDiscovery = document.getElementById("notification-category-discovery");
+	const notificationCategoryMilestones = document.getElementById("notification-category-milestones");
+	const notificationCategorySystem = document.getElementById("notification-category-system");
 	const browserNotificationsEnabled = document.getElementById("browser-notifications-enabled");
 	const releaseEmailEnabled = document.getElementById("release-email-enabled");
 	const weeklySummaryEnabled = document.getElementById("weekly-summary-enabled");
@@ -1276,7 +1301,14 @@ const sectionLinks = [
 			notifications: {
 				browserEnabled: !!(browserNotificationsEnabled instanceof HTMLInputElement && browserNotificationsEnabled.checked),
 				releaseEmail: !!(releaseEmailEnabled instanceof HTMLInputElement && releaseEmailEnabled.checked),
-				weeklySummary: !!(weeklySummaryEnabled instanceof HTMLInputElement && weeklySummaryEnabled.checked)
+				weeklySummary: !!(weeklySummaryEnabled instanceof HTMLInputElement && weeklySummaryEnabled.checked),
+				categories: {
+					community: !!(notificationCategoryCommunity instanceof HTMLInputElement && notificationCategoryCommunity.checked),
+					reading: !!(notificationCategoryReading instanceof HTMLInputElement && notificationCategoryReading.checked),
+					discovery: !!(notificationCategoryDiscovery instanceof HTMLInputElement && notificationCategoryDiscovery.checked),
+					milestones: !!(notificationCategoryMilestones instanceof HTMLInputElement && notificationCategoryMilestones.checked),
+					system: !!(notificationCategorySystem instanceof HTMLInputElement && notificationCategorySystem.checked)
+				}
 			},
 			dataControls: {
 				preferredExportFormat: String(preferredExportFormat instanceof HTMLSelectElement ? preferredExportFormat.value : "json")
@@ -1315,6 +1347,12 @@ const sectionLinks = [
 		if (preferredExportFormat instanceof HTMLSelectElement) preferredExportFormat.value = String(dataControls.preferredExportFormat || "json");
 
 		const notifications = preferences?.notifications || {};
+		const notificationCategories = notifications.categories || {};
+		if (notificationCategoryCommunity instanceof HTMLInputElement) notificationCategoryCommunity.checked = notificationCategories.community !== false;
+		if (notificationCategoryReading instanceof HTMLInputElement) notificationCategoryReading.checked = notificationCategories.reading !== false;
+		if (notificationCategoryDiscovery instanceof HTMLInputElement) notificationCategoryDiscovery.checked = notificationCategories.discovery !== false;
+		if (notificationCategoryMilestones instanceof HTMLInputElement) notificationCategoryMilestones.checked = notificationCategories.milestones !== false;
+		if (notificationCategorySystem instanceof HTMLInputElement) notificationCategorySystem.checked = notificationCategories.system !== false;
 		if (browserNotificationsEnabled instanceof HTMLInputElement) browserNotificationsEnabled.checked = !!notifications.browserEnabled;
 		if (releaseEmailEnabled instanceof HTMLInputElement) releaseEmailEnabled.checked = !!notifications.releaseEmail;
 		if (weeklySummaryEnabled instanceof HTMLInputElement) weeklySummaryEnabled.checked = !!notifications.weeklySummary;

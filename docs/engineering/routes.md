@@ -22,11 +22,12 @@ Authentication requirements:
 | `/collections` | Public | Browse published editorial collections by category. The route remains available, but the primary left navigation hides Collections until there is enough useful published content for beta readers. | `collections` helper, collection cards, published collection metadata. |
 | `/collections/[slug]` | Public | Editorial collection detail page with introduction, ordered books, notes, quotes, ratings, and shelf controls. | `BookCard`, `ShelfDropdown`, `RatingControl`, `collections` helper. |
 | `/related` | Public | Landing and related pages for genres, topics, authors, and books. | `BookCard`, `ShelfDropdown`, genre/topic/author/book queries. |
-| `/profile/[username]` | Public with privacy checks | Public reader identity and current reading state; owner can edit profile, view notifications, and manage shelves. | Profile bundle, shelf summary, custom shelves, concise reading goal, momentum, current reads, notifications, activity likes/comments. |
+| `/profile/[username]` | Public with privacy checks | Public reader identity and current reading state; owner can edit profile and manage shelves. | Profile bundle, shelf summary, custom shelves, concise reading goal, momentum, current reads, activity likes/comments. |
 | `/profile/[username]/followers` | Public with privacy checks | Paginated followers list for a profile. | Public profile bundle, follower search/sort. |
 | `/profile` | Redirect | Sends the signed-in user to their profile or settings. | Session and username lookup. |
 | `/u/[username]` | Redirect | Legacy profile alias. | Redirects to `/profile/[username]`. |
 | `/following` | Authenticated | Manage followed readers and view following activity. | Reader suggestions, following readers, `BookCard`, likes/comments, follow API. |
+| `/notifications` | Authenticated | Low-noise notification center grouped by Today, This Week, and Earlier with read/delete/open actions. | `notifications` helper, `user_notification`, unread badge, notification preferences. |
 | `/reading-life` | Authenticated | Private reflection on the signed-in reader's historical reading life, organized around overview, history, insights, and journey. | `readingLife` helper, shelf entries, progress events, genres, authors, series metadata, reading goal data, timeline, calendar, statistics. |
 | `/reading-timeline` | Redirect | Compatibility route for old timeline links. | Redirects to `/reading-life#timeline` while preserving query parameters. |
 | `/journal` | Authenticated | Private reading journal for creating, viewing, searching, filtering, editing, and deleting the signed-in reader's own notes. | `readingJournal` helper, newest-first paginated timeline, search, searchable saved-book picker, date filters, new-entry form, inline detail view, edit/delete controls, local draft recovery, book links to `#reading-journal`. |
@@ -84,6 +85,7 @@ Authentication requirements:
 | `/api/activity/like` | POST, DELETE | Authenticated | Like or unlike activity. |
 | `/api/activity/comments` | GET, POST, DELETE | Authenticated | Load, create, or delete activity comments. |
 | `/api/follow` | GET, POST, DELETE | Mixed | Read follow state; follow/unfollow when authenticated. |
+| `/api/notifications` | GET, POST | Authenticated | Load notification history and mark one read, mark all read, or delete a notification. |
 | `/api/notifications/count` | GET | Session-aware | Return unread notification count for signed-in user, otherwise zero. |
 | `/api/onboarding/status` | GET | Authenticated | Return legacy-compatible onboarding completion from the canonical guided first-experience state. |
 | `/api/guidance/status` | GET, POST | Authenticated | Load guided first-experience settings and reader-state counts; dismiss, complete, disable, or reset guided tips. |

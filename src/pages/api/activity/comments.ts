@@ -38,22 +38,6 @@ async function ensureCommentTable() {
 	await sql`create index if not exists idx_user_activity_comment_user on user_activity_comment(user_id, created_at desc)`;
 }
 
-async function ensureNotificationTable() {
-	const sql = getNeonSql();
-	await sql`
-		create table if not exists user_notification (
-			id bigserial primary key,
-			user_id uuid not null references app_user(id) on delete cascade,
-			actor_user_id uuid not null references app_user(id) on delete cascade,
-			activity_id bigint not null references user_activity(id) on delete cascade,
-			type text not null check (type in ('activity_like', 'activity_comment')),
-			created_at timestamptz not null default now(),
-			read_at timestamptz null
-		)
-	`;
-	await sql`create index if not exists idx_user_notification_user_read on user_notification(user_id, read_at, created_at desc)`;
-}
-
 export const GET: APIRoute = async ({ request, url }) => {
 	try {
 		const session = await resolveUserBySession(request);
@@ -116,7 +100,6 @@ export const POST: APIRoute = async ({ request }) => {
 			return json(400, { error: "Comment cannot be empty." });
 		}
 		await ensureCommentTable();
-		await ensureNotificationTable();
 		const sql = getNeonSql();
 		const activityRows = await sql<Array<{ actor_user_id: string }>>`
 			select user_id::text as actor_user_id
@@ -145,10 +128,30 @@ export const POST: APIRoute = async ({ request }) => {
 		`;
 		const ownerUserId = String(activityRows[0]?.actor_user_id || "");
 		if (ownerUserId && ownerUserId !== session.userId) {
-			await sql`
-				insert into user_notification (user_id, actor_user_id, activity_id, type)
-				values (${ownerUserId}::uuid, ${session.userId}::uuid, ${activityId}, 'activity_comment')
-			`;
+			await createNotification(sql, {
+				userId: ownerUserId,
+				actorUserId: session.userId,
+				activityId,
+				type: "activity_comment",
+				groupKey: `activity_comment:${activityId}`
+			});
+		}
+		const replyTargets = await sql<Array<{ user_id: string }>>`
+			select distinct user_id::text as user_id
+			from user_activity_comment
+			where activity_id = ${activityId}
+				and user_id <> ${session.userId}::uuid
+				and user_id <> ${ownerUserId || null}::uuid
+			limit 20
+		`;
+		for (const target of replyTargets) {
+			await createNotification(sql, {
+				userId: String(target.user_id || ""),
+				actorUserId: session.userId,
+				activityId,
+				type: "activity_reply",
+				groupKey: `activity_reply:${activityId}:${target.user_id}`
+			});
 		}
 		monitorEvent("activity.comment.success", { userId: session.userId, activityId, commentId: Number(inserted[0]?.id || 0) });
 		return json(200, {

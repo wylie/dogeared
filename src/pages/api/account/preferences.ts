@@ -21,6 +21,13 @@ type Preferences = {
 		browserEnabled: boolean;
 		releaseEmail: boolean;
 		weeklySummary: boolean;
+		categories: {
+			community: boolean;
+			reading: boolean;
+			discovery: boolean;
+			milestones: boolean;
+			system: boolean;
+		};
 	};
 	dataControls: {
 		preferredExportFormat: "json" | "csv";
@@ -55,7 +62,14 @@ const DEFAULT_PREFERENCES: Preferences = {
 	notifications: {
 		browserEnabled: false,
 		releaseEmail: false,
-		weeklySummary: false
+		weeklySummary: false,
+		categories: {
+			community: true,
+			reading: true,
+			discovery: true,
+			milestones: true,
+			system: true
+		}
 	},
 	dataControls: {
 		preferredExportFormat: "json"
@@ -102,6 +116,7 @@ function normalizePreferences(input: unknown): Preferences {
 	const privacy = source.privacy && typeof source.privacy === "object" ? source.privacy as Record<string, unknown> : {};
 	const readingDefaults = source.readingDefaults && typeof source.readingDefaults === "object" ? source.readingDefaults as Record<string, unknown> : {};
 	const notifications = source.notifications && typeof source.notifications === "object" ? source.notifications as Record<string, unknown> : {};
+	const notificationCategories = notifications.categories && typeof notifications.categories === "object" ? notifications.categories as Record<string, unknown> : {};
 	const dataControls = source.dataControls && typeof source.dataControls === "object" ? source.dataControls as Record<string, unknown> : {};
 	const importControls = source.importControls && typeof source.importControls === "object" ? source.importControls as Record<string, unknown> : {};
 	const personalization = source.personalization && typeof source.personalization === "object" ? source.personalization as Record<string, unknown> : {};
@@ -131,7 +146,14 @@ function normalizePreferences(input: unknown): Preferences {
 		notifications: {
 			browserEnabled: toBool(notifications.browserEnabled, false),
 			releaseEmail: toBool(notifications.releaseEmail, false),
-			weeklySummary: toBool(notifications.weeklySummary, false)
+			weeklySummary: toBool(notifications.weeklySummary, false),
+			categories: {
+				community: toBool(notificationCategories.community, true),
+				reading: toBool(notificationCategories.reading, true),
+				discovery: toBool(notificationCategories.discovery, true),
+				milestones: toBool(notificationCategories.milestones, true),
+				system: toBool(notificationCategories.system, true)
+			}
 		},
 		dataControls: {
 			preferredExportFormat

@@ -26,6 +26,7 @@ const currentNormalized = normalize(current);
 const isProfilePage = currentNormalized === "/profile" || currentNormalized.startsWith("/profile/");
 const isReadingLifePage = currentNormalized === "/reading-life";
 const isJournalPage = currentNormalized === "/journal";
+const isNotificationsPage = currentNormalized === "/notifications";
 const isDiscoverPage = currentNormalized === "/discover";
 const isHomePage = currentNormalized === "/";
 const isAdminDashboardPage = currentNormalized === "/admin";
@@ -79,7 +80,7 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
         <ul>
           <li id="left-hand-login-item" hidden={isAuthenticated || !allowAuthPrompt}><button type="button" class="nav-text-button hover">Log In</button></li>
           <li id="left-hand-profile-item" hidden={!isAuthenticated}>
-            <a href="/profile" class={isProfilePage ? 'active' : 'hover'} aria-current={isProfilePage ? 'page' : undefined}><span id="left-hand-profile-label">Profile</span></a>
+            <a href="/profile" class={isProfilePage ? 'active' : 'hover'} aria-current={isProfilePage ? 'page' : undefined}>Profile</a>
             {isProfilePage && sectionLinks.length > 0 && (
               <ul class="section-links-nested">
                 {sectionLinks.map((link) => (
@@ -101,6 +102,19 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
           <li id="left-hand-journal-item" hidden={!isAuthenticated}>
             <a href={isJournalPage ? undefined : '/journal'} class={isJournalPage ? 'active' : 'hover'} aria-current={isJournalPage ? 'page' : undefined}>Reading Journal</a>
             {isJournalPage && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
+          <li id="left-hand-notifications-item" hidden={!isAuthenticated}>
+            <a href={isNotificationsPage ? undefined : '/notifications'} class={isNotificationsPage ? 'active notification-nav-link' : 'hover notification-nav-link'} aria-current={isNotificationsPage ? 'page' : undefined}>
+              <span>Notifications</span>
+              <span id="left-hand-notification-badge" class="notification-badge" aria-label="0 unread notifications" hidden>0</span>
+            </a>
+            {isNotificationsPage && sectionLinks.length > 0 && (
               <ul class="section-links-nested">
                 {sectionLinks.map((link) => (
                   <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
@@ -252,6 +266,16 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
               <a href={isAdminFeedbackPage ? undefined : '/admin/feedback'} class={isAdminFeedbackPage ? 'active' : 'hover'} aria-current={isAdminFeedbackPage ? 'page' : undefined}>Feedback</a>
               {isAdminFeedbackPage && sectionLinks.length > 0 && (
                 <ul class="section-links-nested" aria-label="Admin Feedback sections">
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+            <li>
+              <a href={isAdminNotificationsPage ? undefined : '/admin/notifications'} class={isAdminNotificationsPage ? 'active' : 'hover'} aria-current={isAdminNotificationsPage ? 'page' : undefined}>Notifications</a>
+              {isAdminNotificationsPage && sectionLinks.length > 0 && (
+                <ul class="section-links-nested">
                   {sectionLinks.map((link) => (
                     <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
                   ))}
@@ -499,6 +523,26 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
     padding: 0.34rem 0.58rem;
     line-height: 1.2;
     border-radius: var(--radius-pill);
+  }
+  .notification-nav-link {
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .notification-badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    border-radius: var(--radius-pill);
+    background: rgba(31, 122, 69, 0.14);
+    color: var(--color-primary);
+    font-size: 0.72rem;
+    font-weight: 850;
+    line-height: 1;
+    padding: 0 0.25rem;
+  }
+  .notification-badge[hidden] {
+    display: none;
   }
   a.active {
     background: var(--color-nav-surface);
@@ -883,7 +927,8 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
   const leftHandFollowingItem = document.getElementById("left-hand-following-item");
   const leftHandProfileItem = document.getElementById("left-hand-profile-item");
   const leftHandProfileLink = leftHandProfileItem?.querySelector("a");
-  const leftHandProfileLabel = document.getElementById("left-hand-profile-label");
+  const leftHandNotificationsItem = document.getElementById("left-hand-notifications-item");
+  const leftHandNotificationBadge = document.getElementById("left-hand-notification-badge");
   const leftHandSettingsItem = document.getElementById("left-hand-settings-item");
   const leftHandLogoutItem = document.getElementById("left-hand-logout-item");
   const leftHandAuthDivider = document.getElementById("left-hand-auth-divider");
@@ -968,6 +1013,7 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
     if (leftHandLoginItem instanceof HTMLElement) leftHandLoginItem.hidden = authenticated || !allowAuthPrompt;
     if (leftHandFollowingItem instanceof HTMLElement) leftHandFollowingItem.hidden = !authenticated;
     if (leftHandProfileItem instanceof HTMLElement) leftHandProfileItem.hidden = !authenticated;
+    if (leftHandNotificationsItem instanceof HTMLElement) leftHandNotificationsItem.hidden = !authenticated;
     if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = !authenticated;
     if (leftHandLogoutItem instanceof HTMLElement) leftHandLogoutItem.hidden = !authenticated;
     if (leftHandAuthDivider instanceof HTMLElement) leftHandAuthDivider.hidden = !authenticated;
@@ -975,9 +1021,11 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
   }
 
   async function syncNotificationCount(authenticated) {
-    if (!(leftHandProfileLabel instanceof HTMLElement)) return;
+    if (!(leftHandNotificationBadge instanceof HTMLElement)) return;
     if (!authenticated) {
-      leftHandProfileLabel.textContent = "Profile";
+      leftHandNotificationBadge.hidden = true;
+      leftHandNotificationBadge.textContent = "0";
+      leftHandNotificationBadge.setAttribute("aria-label", "0 unread notifications");
       return;
     }
     try {
@@ -985,9 +1033,11 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(String(data?.error || "Failed to load notifications."));
       const unreadCount = Math.max(0, Number(data?.unreadCount || 0));
-      leftHandProfileLabel.textContent = unreadCount > 0 ? `Profile (${unreadCount})` : "Profile";
+      leftHandNotificationBadge.hidden = unreadCount <= 0;
+      leftHandNotificationBadge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+      leftHandNotificationBadge.setAttribute("aria-label", `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}`);
     } catch {
-      leftHandProfileLabel.textContent = "Profile";
+      leftHandNotificationBadge.hidden = true;
     }
   }
 
@@ -1196,8 +1246,10 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
       ? event.detail
       : {};
     const unreadCount = Math.max(0, Number((detail as { unreadCount?: unknown }).unreadCount || 0));
-    if (leftHandProfileLabel instanceof HTMLElement) {
-      leftHandProfileLabel.textContent = unreadCount > 0 ? `Profile (${unreadCount})` : "Profile";
+    if (leftHandNotificationBadge instanceof HTMLElement) {
+      leftHandNotificationBadge.hidden = unreadCount <= 0;
+      leftHandNotificationBadge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+      leftHandNotificationBadge.setAttribute("aria-label", `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}`);
     }
   });
   void syncLeftHandAuthState();

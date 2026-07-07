@@ -21,6 +21,7 @@ test("admin navigation is rendered only for admin sessions", () => {
 	assert.equal(nav.includes("<h3 class=\"nav-group-title\">Admin</h3>"), true);
 	assert.equal(nav.includes("Dashboard"), true);
 	assert.equal(nav.includes("/admin/analytics"), true);
+	assert.equal(nav.includes("/admin/notifications"), true);
 	assert.equal(nav.includes("/admin/feedback"), true);
 	assert.equal(nav.includes("/admin/data-health"), true);
 	assert.equal(nav.includes("/admin/founding-readers"), true);

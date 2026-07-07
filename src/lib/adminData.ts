@@ -169,13 +169,34 @@ export async function ensureAdminSupportSchema(sql: NeonQueryFunction<false, fal
 		create table if not exists user_notification (
 			id bigserial primary key,
 			user_id uuid not null references app_user(id) on delete cascade,
-			actor_user_id uuid not null references app_user(id) on delete cascade,
-			activity_id bigint not null references user_activity(id) on delete cascade,
-			type text not null check (type in ('activity_like', 'activity_comment')),
+			actor_user_id uuid references app_user(id) on delete set null,
+			activity_id bigint references user_activity(id) on delete cascade,
+			type text not null default 'activity_comment',
+			category text not null default 'community',
+			title text not null default '',
+			body text not null default '',
+			icon text not null default '',
+			action_url text not null default '',
+			group_key text not null default '',
+			actor_count int not null default 1,
+			metadata jsonb not null default '{}'::jsonb,
 			created_at timestamptz not null default now(),
-			read_at timestamptz null
+			read_at timestamptz null,
+			deleted_at timestamptz null
 		)
 	`;
+	await sql`alter table user_notification alter column actor_user_id drop not null`;
+	await sql`alter table user_notification alter column activity_id drop not null`;
+	await sql`alter table user_notification drop constraint if exists user_notification_type_check`;
+	await sql`alter table user_notification add column if not exists category text not null default 'community'`;
+	await sql`alter table user_notification add column if not exists title text not null default ''`;
+	await sql`alter table user_notification add column if not exists body text not null default ''`;
+	await sql`alter table user_notification add column if not exists icon text not null default ''`;
+	await sql`alter table user_notification add column if not exists action_url text not null default ''`;
+	await sql`alter table user_notification add column if not exists group_key text not null default ''`;
+	await sql`alter table user_notification add column if not exists actor_count int not null default 1`;
+	await sql`alter table user_notification add column if not exists metadata jsonb not null default '{}'::jsonb`;
+	await sql`alter table user_notification add column if not exists deleted_at timestamptz null`;
 	await sql`
 		create table if not exists user_follow (
 			follower_user_id uuid not null references app_user(id) on delete cascade,

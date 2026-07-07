@@ -3,6 +3,7 @@ import { resolveUserBySession } from "../../../lib/auth";
 import { getNeonSql } from "../../../lib/neon";
 import { resolvePublicProfileBundle } from "../../../lib/publicProfile";
 import { canFollowUser } from "../../../lib/followPolicy";
+import { createNotification } from "../../../lib/notifications";
 
 export const prerender = false;
 
@@ -67,11 +68,25 @@ export const POST: APIRoute = async ({ request }) => {
 		if (!target.allowFollowRequests) return json(403, { error: "This user is not accepting follow requests." });
 
 		const sql = getNeonSql();
-		await sql`
-			insert into user_follow (follower_user_id, followed_user_id)
-			values (${viewerUserId}::uuid, ${target.targetUserId}::uuid)
-			on conflict (follower_user_id, followed_user_id) do nothing
+		const insertedRows = await sql<Array<{ inserted: number }>>`
+			with inserted as (
+				insert into user_follow (follower_user_id, followed_user_id)
+				values (${viewerUserId}::uuid, ${target.targetUserId}::uuid)
+				on conflict (follower_user_id, followed_user_id) do nothing
+				returning 1 as inserted
+			)
+			select coalesce(sum(inserted), 0)::int as inserted
+			from inserted
 		`;
+		if (Number(insertedRows[0]?.inserted || 0) > 0) {
+			await createNotification(sql, {
+				userId: target.targetUserId,
+				actorUserId: viewerUserId,
+				type: "user_follow",
+				groupKey: `user_follow:${target.targetUserId}`,
+				actionUrl: `/profile/${encodeURIComponent(username)}/followers`
+			});
+		}
 
 		const refreshed = await resolveTarget({ username, viewerUserId });
 		return json(200, {

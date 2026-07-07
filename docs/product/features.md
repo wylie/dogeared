@@ -57,7 +57,7 @@ Status: Complete
 
 Profiles show reader identity, shelf summary, reading goal, shelves, custom shelves, recent activity, followers, and following counts.
 
-Profiles are the "Who am I as a reader?" surface, so the owner experience stays focused on profile card, notifications, bio, favorite book/author, concise reading goal summary, shelf summary, currently reading, recent activity, and settings access.
+Profiles are the "Who am I as a reader?" surface, so the owner experience stays focused on profile card, bio, favorite book/author, concise reading goal summary, shelf summary, currently reading, recent activity, and settings access. Notifications live in the dedicated notification center.
 
 Limitations: Private profiles are hidden from non-owners. Private journal entries are intentionally not shown on profiles.
 
@@ -367,9 +367,11 @@ Limitations: Comments are capped at 500 characters.
 
 Status: Complete
 
-Activity likes and comments create notifications. Owners see notification cards on their own profile and an API unread count is available.
+DogEared has a dedicated low-noise notification center for meaningful updates. Notifications are grouped by Today, This Week, and Earlier and include an icon, title, short description, timestamp, read/unread state, and optional action. Readers can open, mark read, mark all read, or delete notifications. The left navigation shows a subtle unread badge only when unread notifications exist.
 
-Limitations: Notification settings exist for browser/release/weekly preferences, but the implemented notification event types are activity like and activity comment.
+Supported v1 event types cover community updates (follows, likes, comments, replies), reading and milestone updates (goal completion, streak milestones, finished series), discovery updates (trending Want to Read books and favorite-author imports), and future-ready system imports. Similar events can be grouped within a configurable window so repeated likes or replies become one calm notification. Settings includes in-app category preferences for Community, Reading, Discovery, Milestones, and System. Admin includes a notification operations dashboard for sent today, unread count, common types, and volume over time.
+
+Limitations: Email and push delivery are future expansion points; v1 is in-app only. Failed notification job reporting is represented as an admin-ready placeholder until asynchronous jobs exist.
 
 ## Discovery And Navigation
 

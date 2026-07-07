@@ -1,0 +1,310 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { resolveUserBySession } from "../lib/auth";
+import { getNeonSql } from "../lib/neon";
+import {
+	deleteNotification,
+	loadNotifications,
+	loadUnreadNotificationCount,
+	markAllNotificationsRead,
+	markNotificationRead,
+	type NotificationRecord
+} from "../lib/notifications";
+
+export const prerender = false;
+
+const session = await resolveUserBySession(Astro.request);
+if (!session?.userId) return Astro.redirect("/");
+
+const sql = getNeonSql();
+
+function normalizeId(value: unknown) {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed)) return 0;
+	return Math.max(0, Math.floor(parsed));
+}
+
+function safeRedirect(value: unknown) {
+	const raw = String(value || "").trim();
+	if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/notifications";
+	return raw;
+}
+
+if (Astro.request.method === "POST") {
+	const formData = await Astro.request.formData();
+	const intent = String(formData.get("notificationIntent") || "").trim();
+	const notificationId = normalizeId(formData.get("notificationId"));
+	if (intent === "mark_all_read") {
+		await markAllNotificationsRead(sql, session.userId);
+	} else if (intent === "mark_read" && notificationId > 0) {
+		await markNotificationRead(sql, session.userId, notificationId);
+	} else if (intent === "delete" && notificationId > 0) {
+		await deleteNotification(sql, session.userId, notificationId);
+	} else if (intent === "open" && notificationId > 0) {
+		await markNotificationRead(sql, session.userId, notificationId);
+		return Astro.redirect(safeRedirect(formData.get("actionUrl")));
+	}
+	return Astro.redirect("/notifications");
+}
+
+const notifications = await loadNotifications(sql, session.userId, { limit: 60 });
+const unreadCount = await loadUnreadNotificationCount(sql, session.userId);
+const sectionLinks = [
+	{ id: "today", label: "Today" },
+	{ id: "this-week", label: "This Week" },
+	{ id: "earlier", label: "Earlier" }
+];
+const grouped: Record<NotificationRecord["groupLabel"], NotificationRecord[]> = {
+	Today: notifications.filter((note) => note.groupLabel === "Today"),
+	"This Week": notifications.filter((note) => note.groupLabel === "This Week"),
+	Earlier: notifications.filter((note) => note.groupLabel === "Earlier")
+};
+const groupLabels = ["Today", "This Week", "Earlier"] as const;
+const groupIds: Record<NotificationRecord["groupLabel"], string> = {
+	Today: "today",
+	"This Week": "this-week",
+	Earlier: "earlier"
+};
+
+function formatAge(value: string) {
+	const date = new Date(value);
+	const timestamp = date.getTime();
+	if (!Number.isFinite(timestamp)) return "";
+	const diffMs = Date.now() - timestamp;
+	const minutes = Math.max(0, Math.floor(diffMs / 60000));
+	if (minutes < 1) return "Just now";
+	if (minutes < 60) return `${minutes}m ago`;
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return `${hours}h ago`;
+	const days = Math.floor(hours / 24);
+	if (days < 7) return `${days}d ago`;
+	return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+---
+
+<Layout title="Notifications" sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="notifications-page">
+		<header class="hero">
+			<h1>Notifications</h1>
+			<p>Meaningful updates from your reading community and DogEared. No urgency, no noise.</p>
+			{unreadCount > 0 && (
+				<form method="post">
+					<input type="hidden" name="notificationIntent" value="mark_all_read" />
+					<button type="submit" class="secondary">Mark all as read</button>
+				</form>
+			)}
+		</header>
+
+		{notifications.length === 0 ? (
+			<section class="empty-state" aria-live="polite">
+				<span class="material-icons" aria-hidden="true">done_all</span>
+				<h2>You're all caught up.</h2>
+				<p>As you interact with other readers, important updates will appear here.</p>
+			</section>
+		) : (
+			<>
+				{groupLabels.map((label) => (
+					<section id={groupIds[label]} class="notification-group" aria-labelledby={`${groupIds[label]}-title`}>
+						<h2 id={`${groupIds[label]}-title`}>{label}</h2>
+						{grouped[label].length === 0 ? (
+							<p class="group-empty">No notifications here.</p>
+						) : (
+							<ul class="notification-list">
+								{grouped[label].map((note) => (
+									<li class={`notification-card${note.readAt ? "" : " is-unread"}`}>
+										<div class="notification-icon" aria-hidden="true">
+											<span class="material-icons">{note.icon}</span>
+										</div>
+										<div class="notification-main">
+											<div class="notification-title-row">
+												<h3>{note.title}</h3>
+												{!note.readAt && <span class="unread-pill">Unread</span>}
+											</div>
+											<p>{note.body}</p>
+											<p class="notification-meta">
+												<span>{formatAge(note.createdAt)}</span>
+												<span aria-hidden="true">·</span>
+												<span>{note.category}</span>
+											</p>
+											<div class="notification-actions">
+												{note.actionUrl && (
+													<form method="post">
+														<input type="hidden" name="notificationIntent" value="open" />
+														<input type="hidden" name="notificationId" value={String(note.id)} />
+														<input type="hidden" name="actionUrl" value={note.actionUrl} />
+														<button type="submit">Open</button>
+													</form>
+												)}
+												{!note.readAt && (
+													<form method="post">
+														<input type="hidden" name="notificationIntent" value="mark_read" />
+														<input type="hidden" name="notificationId" value={String(note.id)} />
+														<button type="submit" class="secondary">Mark read</button>
+													</form>
+												)}
+												<form method="post">
+													<input type="hidden" name="notificationIntent" value="delete" />
+													<input type="hidden" name="notificationId" value={String(note.id)} />
+													<button type="submit" class="ghost-danger">Delete</button>
+												</form>
+											</div>
+										</div>
+									</li>
+								))}
+							</ul>
+						)}
+					</section>
+				))}
+			</>
+		)}
+	</div>
+</Layout>
+
+<style>
+	.notifications-page {
+		max-width: 860px;
+		display: grid;
+		gap: 1rem;
+	}
+	.hero {
+		display: grid;
+		gap: 0.45rem;
+	}
+	.hero h1,
+	.hero p {
+		margin: 0;
+	}
+	.hero p,
+	.notification-main p,
+	.notification-meta,
+	.group-empty {
+		color: var(--color-text-muted);
+	}
+	.hero form {
+		margin-top: 0.3rem;
+	}
+	.hero button,
+	.notification-actions button {
+		border-radius: var(--radius-pill);
+		border: none;
+		background: var(--color-primary);
+		color: #fff;
+		padding: 0.5rem 0.78rem;
+		font: inherit;
+		font-weight: 800;
+		cursor: pointer;
+	}
+	.hero button.secondary,
+	.notification-actions button.secondary {
+		background: #eef4f7;
+		color: var(--color-nav);
+	}
+	.notification-actions button.ghost-danger {
+		background: transparent;
+		color: #8a1d1d;
+		border: 1px solid rgba(138, 29, 29, 0.22);
+	}
+	.empty-state {
+		display: grid;
+		justify-items: start;
+		gap: 0.35rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		padding: 1.1rem;
+	}
+	.empty-state .material-icons {
+		color: var(--color-primary);
+		font-size: 1.8rem;
+	}
+	.empty-state h2,
+	.empty-state p {
+		margin: 0;
+	}
+	.notification-group {
+		display: grid;
+		gap: 0.55rem;
+	}
+	.notification-group h2 {
+		margin: 0;
+	}
+	.notification-list {
+		list-style: none;
+		display: grid;
+		gap: 0.6rem;
+		margin: 0;
+		padding: 0;
+	}
+	.notification-card {
+		display: grid;
+		grid-template-columns: 42px minmax(0, 1fr);
+		gap: 0.75rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.72);
+		padding: 0.85rem;
+	}
+	.notification-card.is-unread {
+		background: #fff;
+		border-color: rgba(31, 122, 69, 0.42);
+		box-shadow: 0 8px 20px rgba(31, 85, 103, 0.08);
+	}
+	.notification-icon {
+		width: 42px;
+		height: 42px;
+		border-radius: var(--radius-pill);
+		display: grid;
+		place-items: center;
+		background: rgba(31, 122, 69, 0.1);
+		color: var(--color-primary);
+	}
+	.notification-title-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+	.notification-title-row h3 {
+		margin: 0;
+		font-size: 1rem;
+	}
+	.unread-pill {
+		border-radius: var(--radius-pill);
+		background: rgba(31, 122, 69, 0.12);
+		color: var(--color-primary);
+		padding: 0.16rem 0.45rem;
+		font-size: 0.75rem;
+		font-weight: 800;
+	}
+	.notification-main {
+		display: grid;
+		gap: 0.32rem;
+	}
+	.notification-main p {
+		margin: 0;
+		line-height: 1.45;
+	}
+	.notification-meta {
+		display: flex;
+		gap: 0.35rem;
+		font-size: 0.82rem;
+	}
+	.notification-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+		margin-top: 0.25rem;
+	}
+	.notification-actions form {
+		margin: 0;
+	}
+
+	@media (max-width: 560px) {
+		.notification-card {
+			grid-template-columns: 1fr;
+		}
+		.notification-actions button {
+			min-height: 44px;
+		}
+	}
+</style>
