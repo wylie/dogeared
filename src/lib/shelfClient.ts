@@ -249,20 +249,34 @@ export function showShelfFeedback(
 ) {
 	const feedback = dropdown.querySelector(".shelf-feedback");
 	if (!(feedback instanceof HTMLElement)) return;
+	const existingElementTimer = Number(feedback.dataset.hideTimer || 0);
+	if (existingElementTimer) window.clearTimeout(existingElementTimer);
+	delete feedback.dataset.hideTimer;
 	feedback.textContent = message;
 	feedback.hidden = false;
+	const isBusy = /\bsaving\b/i.test(message);
+	const isError = /\b(failed|unable|error|retry|invalid|network|server)\b/i.test(message);
+	feedback.classList.toggle("is-error", isError);
+	feedback.classList.toggle("is-busy", isBusy);
+	if (isBusy) return;
+	const hideDelay = isError ? 4200 : 1800;
 	if (feedbackTimers) {
 		const existingTimer = feedbackTimers.get(dropdown);
 		if (existingTimer) clearTimeout(existingTimer);
 		const timer = setTimeout(() => {
 			feedback.hidden = true;
-		}, 1800);
+			feedback.classList.remove("is-error", "is-busy");
+		}, hideDelay);
 		feedbackTimers.set(dropdown, timer);
+		feedback.dataset.hideTimer = String(timer);
 		return;
 	}
-	setTimeout(() => {
+	const timer = window.setTimeout(() => {
 		feedback.hidden = true;
-	}, 1800);
+		feedback.classList.remove("is-error", "is-busy");
+		delete feedback.dataset.hideTimer;
+	}, hideDelay);
+	feedback.dataset.hideTimer = String(timer);
 }
 
 export function closeShelfMenus(shelfDropdowns: Element[]) {

@@ -53,6 +53,10 @@ test("recommendation UI is wired into home, discover, and book detail", () => {
 	assert.match(discover, /recommendationFeedbackBookId=\{bookId\}/);
 	assert.doesNotMatch(discover, /data-action="recommendation-feedback"/);
 	assert.match(bookCard, /data-action="book-card-recommendation-feedback"/);
+	assert.match(bookCard, /aria-busy/);
+	assert.match(bookCard, /setRecommendationFeedbackBusy/);
+	assert.match(bookCard, /Recommendation hidden\./);
+	assert.match(bookCard, /Marked interesting\./);
 	assert.match(bookCard, /data-feedback="interesting"[\s\S]+>[\s\S]*Interesting[\s\S]*<\/button>/);
 	assert.match(bookCard, /button\[data-feedback="interesting"\]/);
 	assert.match(bookCard, /\/api\/recommendations\/feedback/);

@@ -146,6 +146,7 @@ test("journal UI is wired into book, private journal page, navigation, and autos
 	assert.doesNotMatch(profilePage, /Recent Journal Entries/);
 	assert.doesNotMatch(profilePage, /loadRecentJournalEntries/);
 	assert.match(profilePage, /Capture a quick thought from today's reading/);
+	assert.match(profilePage, /Write journal entry/);
 	assert.match(profilePage, /progress-journal-prompt/);
 	assert.match(profilePage, /border-top: var\(--border-subtle\)/);
 	assert.match(profilePage, /background: rgba\(31, 122, 69, 0\.1\)/);

@@ -9,6 +9,9 @@
 - Import and account feedback uses more actionable language, including clear recovery paths when CSV import, magic links, or export preparation fail.
 - Comment-loading layout shift was reduced by removing passive "Loading comments..." placeholders on card lists.
 - Mobile comment actions have more consistent button sizing and centered labeling.
+- Shared shelf feedback now keeps loading messages visible while saves are in flight, gives recoverable errors longer on screen, and uses consistent busy/error styling across every ShelfDropdown instance.
+- Recommendation feedback busy, success, retry, and accessibility state is owned by BookCard, so Home and Discover share the same implementation.
+- Profile progress saves now surface request failures without secondary client errors, including the edge case where a progress update completes the book.
 
 ## Risks
 - Recommendation quality still depends on data volume and metadata quality; fallback helps but personalization depth is still emerging.
@@ -25,7 +28,7 @@
 
 ## Known Technical Debt
 - Recommendation ranking logic is distributed and would benefit from a single scoring layer.
-- Shelf mutation pathways still have page-level UI implementations that could be further consolidated.
+- Some shelf mutation pathways still have page-level orchestration around the shared ShelfDropdown/client helper implementation and could be further consolidated.
 - Monitoring hooks exist but should be standardized and routed to centralized dashboards/alerts.
 - Empty-state copy is more consistent, but still page-local; a shared helper could reduce drift later.
 

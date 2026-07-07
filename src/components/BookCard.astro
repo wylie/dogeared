@@ -106,6 +106,7 @@ function renderAverageStars(value: number) {
 						type="button"
 						data-action="book-card-recommendation-feedback"
 						data-feedback="interesting"
+						data-default-label="Interesting"
 						data-book-id={String(normalizedRecommendationFeedbackBookId)}
 						data-source={recommendationFeedbackSource}
 						data-reason={recommendationFeedbackReason}
@@ -117,6 +118,7 @@ function renderAverageStars(value: number) {
 						type="button"
 						data-action="book-card-recommendation-feedback"
 						data-feedback="not_interested"
+						data-default-label="Hide"
 						data-book-id={String(normalizedRecommendationFeedbackBookId)}
 						data-source={recommendationFeedbackSource}
 						data-reason={recommendationFeedbackReason}
@@ -448,6 +450,9 @@ function renderAverageStars(value: number) {
 		opacity: 0.7;
 		cursor: wait;
 	}
+	.recommendation-feedback[aria-busy="true"] button {
+		cursor: wait;
+	}
 	.recommendation-feedback-status {
 		flex-basis: 100%;
 		margin: 0;
@@ -567,6 +572,16 @@ function renderAverageStars(value: number) {
 			status.classList.toggle("is-error", isError);
 		}
 
+		function setRecommendationFeedbackBusy(buttons: Element[], isBusy: boolean) {
+			for (const item of buttons) {
+				if (!(item instanceof HTMLButtonElement)) continue;
+				item.disabled = isBusy;
+				item.setAttribute("aria-disabled", isBusy ? "true" : "false");
+			}
+			const wrap = buttons[0]?.closest(".recommendation-feedback");
+			if (wrap instanceof HTMLElement) wrap.setAttribute("aria-busy", isBusy ? "true" : "false");
+		}
+
 		async function saveRecommendationFeedback(button: HTMLButtonElement) {
 			if (!isFeedbackAuthenticated(button)) {
 				promptForShelfLogin(`${window.location.pathname}${window.location.search}${window.location.hash}`);
@@ -577,8 +592,10 @@ function renderAverageStars(value: number) {
 			if (!bookId || !feedback) return;
 			const wrap = button.closest(".recommendation-feedback");
 			const buttons = Array.from(wrap?.querySelectorAll("button") || []);
-			for (const item of buttons) if (item instanceof HTMLButtonElement) item.disabled = true;
-			setRecommendationFeedbackStatus(button, "Saving feedback...");
+			setRecommendationFeedbackBusy(buttons, true);
+			const originalLabel = button.textContent || String(button.dataset.defaultLabel || "");
+			button.textContent = "Saving...";
+			setRecommendationFeedbackStatus(button, "Saving...");
 			try {
 				const response = await fetch("/api/recommendations/feedback", {
 					method: "POST",
@@ -594,14 +611,18 @@ function renderAverageStars(value: number) {
 				const data = await response.json().catch(() => ({}));
 				if (!response.ok || data?.error) throw new Error(String(data?.error || "Failed to save feedback."));
 				const isNotInterested = feedback === "not_interested";
-				setRecommendationFeedbackStatus(button, isNotInterested ? "Removed from future recommendations." : "Marked interesting.");
+				setRecommendationFeedbackStatus(button, isNotInterested ? "Recommendation hidden." : "Marked interesting.");
 				if (isNotInterested) {
 					const card = button.closest(".book-card");
 					if (card instanceof HTMLElement) card.remove();
+					return;
 				}
 			} catch (error) {
-				for (const item of buttons) if (item instanceof HTMLButtonElement) item.disabled = false;
-				setRecommendationFeedbackStatus(button, error instanceof Error ? error.message : "Failed to save feedback.", true);
+				console.error("[recommendation.feedback.failed]", error);
+				setRecommendationFeedbackStatus(button, "Unable to save feedback. Please try again.", true);
+			} finally {
+				button.textContent = originalLabel;
+				setRecommendationFeedbackBusy(buttons, false);
 			}
 		}
 

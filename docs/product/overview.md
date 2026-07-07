@@ -122,9 +122,11 @@ Journal-specific guidance is intentionally narrow. It appears on the Reading Jou
 
 ### Beta Launch Readiness
 
-DogEared is prepared for a limited beta cohort with launch-readiness polish focused on reducing confusion rather than adding major functionality. First-time surfaces use clear language and recoverable error states across username setup, Search, Goodreads import, shelf saves, progress updates, recommendation feedback, reviews, and return visits.
+DogEared is prepared for a limited beta cohort with launch-readiness polish focused on reducing confusion rather than adding major functionality. First-time surfaces use clear language and recoverable error states across username setup, Search, Goodreads import, shelf saves, progress updates, recommendation feedback, reviews, and return visits. Reusable UI behavior should live inside shared components or client utilities whenever practical, so pages compose BookCard, ShelfDropdown, RatingControl, and shared shelf/progress helpers instead of recreating feedback markup, loading state, or retry behavior.
 
 Empty states are expected to answer "What should I do next?" Owner views on Profile shelves, Recent Activity, Reading Goal, Search, and recommendation areas include direct CTAs such as adding a book, searching again, finding a book to start, or reviewing shelves after import. Success messages stay plain and calm, such as saved shelf, saved rating, progress saved, import complete, preferences saved, and export downloaded. Error messages avoid bare "Error" language and should tell readers what to retry or where to continue.
+
+Launch polish keeps async feedback visible while work is in flight. Shelf saves, recommendation feedback, and progress updates should expose busy states through disabled controls, `aria-busy` where helpful, and live status messages that do not collapse card layout. Developer diagnostics may log failing progress requests, but normal successful use should not create console errors.
 
 The launch-readiness stance is documented in `docs/beta-readiness.md`. Remaining beta risks are mostly operational: real-device mobile QA, assistive-technology review, centralized monitoring, and server-persisted onboarding checklist dismissal.
 

@@ -399,7 +399,9 @@ Status: Complete
 
 DogEared includes a limited-beta readiness pass focused on reducing confusion in the first reader journey. Username setup, Search, Goodreads import, Profile shelves, Recent Activity, Reading Goal, recommendations, progress updates, and review prompts use clearer next-step language. Owner-facing empty states include CTAs such as searching for books, finding a book to start, adding a finished book, searching again, and reviewing shelves after import.
 
-Success and error messages are intentionally plain and recoverable. Examples include import completion with a Profile next step, magic-link retry guidance, export retry guidance, and signed-out shelf prompts that explain why account creation matters.
+Success and error messages are intentionally plain and recoverable. Examples include import completion with a Profile next step, magic-link retry guidance, export retry guidance, progress-save retry guidance, recommendation feedback status, and signed-out shelf prompts that explain why account creation matters.
+
+Reusable UI behavior belongs inside shared components or shared client utilities whenever practical. Recommendation feedback is owned by BookCard. Shelf feedback timing, loading persistence, and error styling are owned by the ShelfDropdown helper path. Pages should opt into these shared behaviors instead of rebuilding equivalent markup, CSS, or JavaScript.
 
 Limitations: The beta readiness pass improves existing flows but does not add centralized telemetry, a device-lab QA matrix, server-persisted onboarding checklist dismissal, or a full assistive-technology audit.
 

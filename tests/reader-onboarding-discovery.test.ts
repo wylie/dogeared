@@ -131,6 +131,8 @@ test("profile progress saves refresh all derived reading UI without reload", () 
 	assert.equal(source.includes("coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages"), true);
 	assert.equal(source.includes('function surfaceProgressSaveError(input, message)'), true);
 	assert.equal(source.includes('console.error("[progress.save.request.failed]"'), true);
+	assert.equal(source.includes("title: finishEntry.title"), true);
+	assert.equal(source.includes("bookId: finishEntry.bookId || directBookId || 0"), true);
 	assert.equal(worksSource.includes("const existingByBookRows = await sql"), true);
 	assert.equal(worksSource.includes("const existingByKeyRows = await sql"), true);
 	assert.equal(worksSource.includes("update user_book"), true);
