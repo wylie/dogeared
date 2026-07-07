@@ -529,8 +529,14 @@ Settings are stored inside `app_user.profile_data.settings`, not as standalone t
   - `showHelpfulTips`.
   - `dismissedTips`.
   - `completedTips`.
+  - `onboarding.welcomeCompleted`.
+  - `onboarding.checklistDismissed`.
+  - `onboarding.goalPromptDismissed`.
+  - `onboarding.recommendationEducationDismissed`.
+  - `onboarding.completedActions`.
+  - `onboarding.celebratedMilestones`.
 
-Guided tour progress is per user and intentionally stored with settings because tips are interface preferences, not community activity. Resetting the guided tour clears dismissed/completed tip IDs without deleting reading data.
+Guided tour and onboarding progress are per user and intentionally stored with settings because they are interface preferences, not community activity. Resetting guided tips clears dismissed/completed tip IDs without deleting onboarding progress or reading data. Restarting onboarding resets the onboarding state without changing shelves, ratings, reviews, journal entries, follows, goals, or activity.
 
 ## Discovery Signals
 

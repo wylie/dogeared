@@ -2,6 +2,7 @@
 import LeftHand from '../components/LeftHand.astro';
 import FloatingActions from '../components/FloatingActions.astro';
 import GuidedTip from '../components/GuidedTip.astro';
+import OnboardingMilestones from '../components/OnboardingMilestones.astro';
 import ReaderGuidance from '../components/ReaderGuidance.astro';
 import { resolveAdminSession } from '../lib/admin';
 import { resolveUserBySession } from '../lib/auth';
@@ -134,6 +135,7 @@ import '../assets/global.css';
 			</div>
 			<ReaderGuidance isAuthenticated={isAuthenticated} />
 			<GuidedTip isAuthenticated={isAuthenticated} />
+			<OnboardingMilestones isAuthenticated={isAuthenticated} />
 			<FloatingActions isAuthenticated={isAuthenticated} />
 		</body>
 	</html>

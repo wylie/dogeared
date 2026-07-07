@@ -106,12 +106,24 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 				path: "/journal",
 				anchor: "[data-guided-anchor='journal-entry-form'], #new-entry",
 				title: "Your private notebook",
-				description: "Capture thoughts, quotes, reactions, and predictions here. Journal entries are never public.",
+				description: "Capture thoughts, favorite quotes, questions, predictions, interesting passages, and small reading moments here. Journal entries are never public.",
 				icon: "lock",
 				primaryLabel: "New Entry",
 				primaryHref: "#new-entry",
 				placement: "above",
 				when: (stats) => stats.journalEntries === 0
+			},
+			{
+				id: "discover-recommendations",
+				path: "/discover",
+				anchor: "[data-guided-anchor='discover-recommendations'], #recommended-for-you, .discover-intro",
+				title: "Recommendations learn with you",
+				description: "They improve as you finish books, rate books, review books, follow readers, and build your shelves.",
+				icon: "explore",
+				primaryLabel: "Browse Recommendations",
+				primaryHref: "#recommended-for-you",
+				placement: "below",
+				when: (stats) => Number(stats?.recommendationInteractions || 0) === 0
 			},
 			{
 				id: "first-finished-book",

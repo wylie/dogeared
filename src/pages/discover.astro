@@ -53,7 +53,7 @@ function numericBookId(book: BrowseBook) {
 		<nav class="breadcrumbs" aria-label="Breadcrumb">
 			<a href="/">Home</a><span aria-hidden="true">/</span><span>Discover</span>
 		</nav>
-		<header class="discover-intro">
+		<header class="discover-intro" data-guided-anchor="discover-recommendations">
 			<h1>Discover</h1>
 			<p>Find what to read next through your reading history and transparent community activity. Every recommendation explains why it appears.</p>
 		</header>
@@ -264,3 +264,22 @@ function numericBookId(book: BrowseBook) {
 		}
 	}
 </style>
+
+{viewerUserId && (
+	<script is:inline>
+	(() => {
+		try {
+			fetch("/api/guidance/status", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "same-origin",
+				body: JSON.stringify({ action: "mark-onboarding-action", actionId: "explore-discover" })
+			}).then(() => {
+				window.dispatchEvent(new CustomEvent("dogeared:reading-data-changed"));
+			}).catch(() => {});
+		} catch {
+			// Onboarding progress should not block Discover.
+		}
+	})();
+	</script>
+)}

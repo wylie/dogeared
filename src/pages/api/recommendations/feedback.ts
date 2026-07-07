@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { resolveUserBySession } from "../../../lib/auth";
+import { addOnboardingAction, loadGuidedTourStatus, normalizeGuidedTourSettings } from "../../../lib/guidedTour";
 import { getNeonSql } from "../../../lib/neon";
 import { ensureRecommendationSchema } from "../../../lib/recommendations";
 
@@ -37,6 +38,18 @@ export const POST: APIRoute = async ({ request }) => {
 				source = excluded.source,
 				reason = excluded.reason,
 				updated_at = now()
+		`;
+		const guidance = await loadGuidedTourStatus(sql, session.userId);
+		const nextGuidance = normalizeGuidedTourSettings(addOnboardingAction(guidance.settings, "first-recommendation-interaction"));
+		await sql`
+			update app_user
+			set profile_data = jsonb_set(
+				jsonb_set(coalesce(profile_data, '{}'::jsonb), '{settings}', coalesce(profile_data->'settings', '{}'::jsonb), true),
+				'{settings,guidedTour}',
+				${JSON.stringify(nextGuidance)}::jsonb,
+				true
+			)
+			where id = ${session.userId}::uuid
 		`;
 		return Response.json({ ok: true });
 	} catch (error) {

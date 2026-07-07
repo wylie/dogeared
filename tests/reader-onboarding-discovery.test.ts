@@ -32,9 +32,15 @@ test("account creation transitions visitor guidance to new-reader guidance", () 
 	assert.equal(source.includes("dogeared_new_reader=true;"), true);
 });
 
-test("onboarding completion requires shelf, rating, and review milestones", () => {
+test("onboarding completion uses canonical guidance actions", () => {
 	const source = readFileSync("src/pages/api/onboarding/status.ts", "utf8");
-	assert.equal(source.includes("status.shelfEntries > 0 && status.ratings > 0 && status.reviews > 0"), true);
+	assert.equal(source.includes("loadGuidedTourStatus"), true);
+	assert.equal(source.includes('"first-book-added"'), true);
+	assert.equal(source.includes('"first-progress-update"'), true);
+	assert.equal(source.includes('"first-journal-entry"'), true);
+	assert.equal(source.includes('"first-review"'), true);
+	assert.equal(source.includes('"first-follow"'), true);
+	assert.equal(source.includes('"explore-discover"'), true);
 });
 
 test("external author books exclude local titles and duplicates", () => {

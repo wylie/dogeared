@@ -259,6 +259,7 @@ const calendarSummary = {
 	pages: calendarDays.reduce((sum, day) => sum + day.pages, 0),
 	completions: calendarDays.reduce((sum, day) => sum + day.completions, 0)
 };
+const hasReadingLifeData = finishedBooks.length > 0 || currentBooks.length > 0 || progressEvents.length > 0;
 const yearOptions = readingLife.availableYears.length > 0 ? readingLife.availableYears : [currentYear];
 const months = Array.from({ length: 12 }, (_, index) => index + 1);
 ---
@@ -286,6 +287,13 @@ const months = Array.from({ length: 12 }, (_, index) => index + 1);
 
 		{viewerUserId && (
 			<>
+				{!hasReadingLifeData && (
+					<section class="empty-reading-life panel" aria-labelledby="empty-reading-life-title">
+						<h2 id="empty-reading-life-title">Your reading story starts with one book.</h2>
+						<p>Add your first book to begin tracking progress, finished dates, ratings, and the patterns that make this page useful.</p>
+						<a class="button-link" href="/search">Find a Book</a>
+					</section>
+				)}
 				<section id="overview" class="panel overview-panel" aria-labelledby="overview-title">
 					<div class="section-head">
 						<div>
@@ -636,6 +644,22 @@ const months = Array.from({ length: 12 }, (_, index) => index + 1);
 	}
 	.sign-in-panel h2 {
 		margin: 0 0 0.35rem;
+	}
+	.empty-reading-life {
+		margin-bottom: 1rem;
+	}
+	.empty-reading-life h2,
+	.empty-reading-life p {
+		margin: 0;
+	}
+	.empty-reading-life p {
+		margin-top: 0.4rem;
+		max-width: 620px;
+		color: var(--color-text-muted);
+		line-height: 1.5;
+	}
+	.empty-reading-life .button-link {
+		margin-top: 0.8rem;
 	}
 	.button-link,
 	.timeline-filters button {

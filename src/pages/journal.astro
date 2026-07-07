@@ -218,7 +218,7 @@ const sectionLinks = viewerUserId ? [
 					) : entries.length === 0 ? (
 						<div class="journal-empty-state">
 							<h3>{query || filterBookId || filterDate ? "No journal entries matched those filters." : "Start a private record of your reading life."}</h3>
-							<p>{query || filterBookId || filterDate ? "Try clearing the filters or searching for a different phrase." : "Use the Reading Journal to remember reactions, questions, favorite lines, page notes, and the small moments that do not belong in a public review."}</p>
+							<p>{query || filterBookId || filterDate ? "Try clearing the filters or searching for a different phrase." : "Use the Reading Journal for thoughts, favorite quotes, questions, predictions, interesting passages, and small reading moments that do not belong in a public review."}</p>
 							<p>{query || filterBookId || filterDate ? "Your journal remains private even when filtered." : "Entries are private by default and never appear on public profiles, comments, feeds, or recent activity."}</p>
 							<a class="journal-button journal-button-primary journal-button-compact" href="#new-entry">Create your first journal entry</a>
 						</div>
@@ -402,6 +402,17 @@ const sectionLinks = viewerUserId ? [
 				return;
 			}
 			try { window.localStorage.removeItem(draftKey); } catch {}
+			try {
+				await fetch("/api/guidance/status", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					credentials: "same-origin",
+					body: JSON.stringify({ action: "mark-onboarding-action", actionId: "first-journal-entry" })
+				});
+				window.dispatchEvent(new CustomEvent("dogeared:reading-data-changed"));
+			} catch {
+				// Journal save succeeded; onboarding progress can catch up from server stats.
+			}
 			setStatus("Saved privately. Refreshing...");
 			window.location.href = "/journal";
 		});

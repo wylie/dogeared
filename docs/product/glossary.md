@@ -70,11 +70,15 @@ Catalog metadata stored in `book_genre`. Genre pages are implemented through `/r
 
 ## Guided First Experience
 
-Contextual, dismissible guidance for signed-in readers. It uses reader state to show one useful tip at a time instead of a traditional onboarding wizard.
+Optional first-run guidance for signed-in readers. It combines a Home welcome card, checklist, reading goal prompt, recommendation education, milestone cards, and contextual tips without trapping readers in a wizard.
 
 ## Guided Tip
 
 A reusable callout with a title, explanation, optional icon, primary action, and dismiss control. Completion and dismissal are stored per user.
+
+## Onboarding State
+
+Per-user settings under `profile_data.settings.guidedTour.onboarding` that track welcome completion, checklist visibility, prompt dismissals, completed first-run actions, and celebrated milestones.
 
 ## Like
 

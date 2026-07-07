@@ -114,11 +114,13 @@ The `/discover` page collects Recommended For You plus community sections such a
 
 ### Guided First Experience
 
-DogEared includes site-wide contextual first-time guidance for signed-in readers. Instead of a full-screen onboarding wizard, the application shows lightweight callouts near relevant interface areas across the first reader journey. Fresh users begin on Home, then guidance can appear for Search, book detail shelf controls, adding a first book, Currently Reading progress, the first progress update, Reading Journal, the first finished book review suggestion, and Settings.
+DogEared includes a complete but optional first-run experience for signed-in readers. Instead of trapping readers in a wizard, Home can show a calm welcome card, a dismissible six-step checklist, a one-time yearly reading goal prompt, and short recommendation education. The checklist tracks adding a first book, updating progress, rating a book, writing a first journal note, following another reader, and exploring Discover.
 
-Tips are shown only when the reader's current route and state make them useful. DogEared shows at most one active tip, and each tip can be dismissed or completed. Progress is stored per user in Settings data so completed or dismissed tips do not reappear. Settings includes a Learning section with a Show helpful tips checkbox and Reset Guided Tour action.
+Contextual tips are shown only when the reader's current route and state make them useful. DogEared shows at most one active tip, and each tip can be dismissed or completed. Guidance can appear for Home, Search, book detail shelf controls, adding a first book, Currently Reading progress, the first progress update, Reading Journal privacy, Discover recommendations, first finished book review guidance, and Settings. Progress is stored per user in Settings data so completed or dismissed tips do not reappear. Settings includes Learning controls to show helpful tips, reset guided tips, restart onboarding, and hide the onboarding checklist.
 
 Journal-specific guidance is intentionally narrow. It appears on the Reading Journal page itself or after a reader has saved progress and may want to remember something from that reading session.
+
+The onboarding state object lives under `profile_data.settings.guidedTour.onboarding`. It tracks welcome completion, checklist dismissal, reading goal prompt dismissal, recommendation education dismissal, completed onboarding actions, and celebrated milestones. Milestones use subtle success cards or existing toasts, not confetti.
 
 ### Beta Launch Readiness
 
@@ -128,7 +130,7 @@ Empty states are expected to answer "What should I do next?" Owner views on Prof
 
 Launch polish keeps async feedback visible while work is in flight. Shelf saves, recommendation feedback, and progress updates should expose busy states through disabled controls, `aria-busy` where helpful, and live status messages that do not collapse card layout. Developer diagnostics may log failing progress requests, but normal successful use should not create console errors.
 
-The launch-readiness stance is documented in `docs/beta-readiness.md`. Remaining beta risks are mostly operational: real-device mobile QA, assistive-technology review, centralized monitoring, and server-persisted onboarding checklist dismissal.
+The launch-readiness stance is documented in `docs/beta-readiness.md`. Remaining beta risks are mostly operational: real-device mobile QA, assistive-technology review, and centralized monitoring.
 
 ### Editorial Collections
 

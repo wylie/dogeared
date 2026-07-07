@@ -1,0 +1,194 @@
+---
+const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean };
+---
+
+{isAuthenticated && (
+	<aside class="onboarding-milestone" data-onboarding-milestone hidden role="status" aria-live="polite" aria-atomic="true">
+		<span class="milestone-icon" aria-hidden="true">task_alt</span>
+		<div>
+			<h2 data-milestone-title></h2>
+			<p data-milestone-copy></p>
+			<button type="button" data-milestone-dismiss>Nice</button>
+		</div>
+	</aside>
+)}
+
+{isAuthenticated && (
+	<script is:inline>
+	(() => {
+		const root = document.querySelector("[data-onboarding-milestone]");
+		if (!(root instanceof HTMLElement)) return;
+		const titleEl = root.querySelector("[data-milestone-title]");
+		const copyEl = root.querySelector("[data-milestone-copy]");
+		const dismissEl = root.querySelector("[data-milestone-dismiss]");
+		if (!(titleEl instanceof HTMLElement) || !(copyEl instanceof HTMLElement) || !(dismissEl instanceof HTMLButtonElement)) return;
+
+		const MILESTONES = [
+			{
+				id: "first-book-added",
+				title: "First book saved",
+				copy: "Your reading life has a starting point.",
+				when: (stats) => Number(stats?.totalBooks || 0) > 0
+			},
+			{
+				id: "first-journal-entry",
+				title: "First private note saved",
+				copy: "That thought is waiting for future you.",
+				when: (stats) => Number(stats?.journalEntries || 0) > 0
+			},
+			{
+				id: "first-review",
+				title: "First review published",
+				copy: "Your finished book can now help another reader decide.",
+				when: (stats) => Number(stats?.reviews || 0) > 0
+			},
+			{
+				id: "first-finished-book",
+				title: "First book finished",
+				copy: "DogEared will keep that finish in your reading history.",
+				when: (stats) => Number(stats?.finishedBooks || 0) > 0
+			},
+			{
+				id: "first-follow",
+				title: "First reader followed",
+				copy: "Your community recommendations now have another signal.",
+				when: (stats) => Number(stats?.follows || 0) > 0
+			},
+			{
+				id: "first-recommendation-interaction",
+				title: "Recommendation feedback saved",
+				copy: "DogEared will use that signal to tune future recommendations.",
+				when: (stats) => Number(stats?.recommendationInteractions || 0) > 0
+			}
+		];
+		let activeMilestone = null;
+		let refreshTimer = 0;
+
+		function hide() {
+			activeMilestone = null;
+			root.hidden = true;
+		}
+
+		function show(milestone) {
+			activeMilestone = milestone;
+			titleEl.textContent = milestone.title;
+			copyEl.textContent = milestone.copy;
+			root.hidden = false;
+		}
+
+		async function loadStatus() {
+			try {
+				const response = await fetch("/api/guidance/status", { headers: { Accept: "application/json" } });
+				if (!response.ok) return hide();
+				const data = await response.json().catch(() => ({}));
+				const celebrated = Array.isArray(data?.settings?.onboarding?.celebratedMilestones)
+					? data.settings.onboarding.celebratedMilestones
+					: [];
+				const stats = data?.stats || {};
+				const next = MILESTONES.find((milestone) => !celebrated.includes(milestone.id) && milestone.when(stats));
+				if (next) show(next);
+				else hide();
+			} catch {
+				hide();
+			}
+		}
+
+		async function markCelebrated() {
+			if (!activeMilestone) return;
+			const milestoneId = activeMilestone.id;
+			hide();
+			try {
+				await fetch("/api/guidance/status", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ action: "celebrate-milestone", milestoneId })
+				});
+			} catch {
+				// Milestone cards are nonessential.
+			}
+		}
+
+		dismissEl.addEventListener("click", () => {
+			void markCelebrated();
+		});
+		document.addEventListener("keydown", (event) => {
+			if (event.key === "Escape" && !root.hidden) void markCelebrated();
+		});
+		window.addEventListener("dogeared:reading-data-changed", () => {
+			window.clearTimeout(refreshTimer);
+			refreshTimer = window.setTimeout(loadStatus, 800);
+		});
+		void loadStatus();
+	})();
+	</script>
+)}
+
+<style>
+	.onboarding-milestone {
+		position: fixed;
+		right: 1rem;
+		bottom: 1rem;
+		z-index: 11500;
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 0.7rem;
+		width: min(360px, calc(100vw - 2rem));
+		box-sizing: border-box;
+		padding: 0.85rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.97);
+		box-shadow: var(--shadow-popover);
+	}
+	.onboarding-milestone[hidden] {
+		display: none;
+	}
+	.milestone-icon {
+		display: inline-grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 999px;
+		background: rgba(47, 83, 69, 0.1);
+		color: var(--color-primary);
+		font-family: "Material Icons";
+		font-size: 1.2rem;
+	}
+	.onboarding-milestone h2 {
+		margin: 0;
+		font-size: 0.98rem;
+		line-height: 1.2;
+	}
+	.onboarding-milestone p {
+		margin: 0.3rem 0 0;
+		color: var(--color-text-muted);
+		line-height: 1.4;
+	}
+	.onboarding-milestone button {
+		margin-top: 0.65rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: rgba(255, 255, 255, 0.78);
+		color: var(--color-nav);
+		font: inherit;
+		font-size: 0.88rem;
+		font-weight: 760;
+		padding: 0.42rem 0.72rem;
+		cursor: pointer;
+	}
+	.onboarding-milestone button:hover,
+	.onboarding-milestone button:focus-visible {
+		background: #fff;
+		color: var(--color-nav-hover);
+		outline: 3px solid rgba(47, 83, 69, 0.22);
+		outline-offset: 2px;
+	}
+	@media (max-width: 720px) {
+		.onboarding-milestone {
+			right: 0.75rem;
+			left: 0.75rem;
+			bottom: 0.75rem;
+			width: auto;
+		}
+	}
+</style>

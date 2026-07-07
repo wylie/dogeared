@@ -78,7 +78,7 @@ Authentication requirements:
 | `/api/activity/comments` | GET, POST, DELETE | Authenticated | Load, create, or delete activity comments. |
 | `/api/follow` | GET, POST, DELETE | Mixed | Read follow state; follow/unfollow when authenticated. |
 | `/api/notifications/count` | GET | Session-aware | Return unread notification count for signed-in user, otherwise zero. |
-| `/api/onboarding/status` | GET | Authenticated | Return onboarding completion state from shelf/rating/review counts. |
+| `/api/onboarding/status` | GET | Authenticated | Return legacy-compatible onboarding completion from the canonical guided first-experience state. |
 | `/api/guidance/status` | GET, POST | Authenticated | Load guided first-experience settings and reader-state counts; dismiss, complete, disable, or reset guided tips. |
 | `/api/profile/info` | GET, POST | Mixed | Read public/current profile info and save current user's profile info. |
 | `/api/profile/username` | GET, POST | Authenticated | Validate and save username. |

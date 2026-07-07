@@ -9,6 +9,7 @@ import { getNeonSql } from '../lib/neon';
 import { formatPublishedLabel, resolvePublicHomeSections, type BrowseSection } from "../lib/homeSections";
 import { loadFeaturedCollections, type CollectionDetail } from "../lib/collections";
 import { loadRecommendedForUser, loadPopularFallbackRecommendations, type RecommendationSection } from "../lib/recommendations";
+import { loadGuidedTourStatus } from "../lib/guidedTour";
 
 export const prerender = false;
 const shouldProfileHome = import.meta.env.DEV;
@@ -56,10 +57,18 @@ let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finishe
 let viewerRatingByBookId = new Map<number, number>();
 let onboardingProgress = {
 	totalBooks: 0,
+	progressEvents: 0,
 	ratedBooks: 0,
-	finishedWithReview: 0,
+	reviews: 0,
+	journalEntries: 0,
 	follows: 0,
-	profileComplete: false
+	recommendationInteractions: 0,
+	hasReadingGoal: false,
+	welcomeCompleted: false,
+	checklistDismissed: false,
+	goalPromptDismissed: false,
+	recommendationEducationDismissed: false,
+	completedActions: [] as string[]
 };
 const shelfIdeas: ShelfIdea[] = [
 	{
@@ -120,36 +129,21 @@ try {
 	}
 	if (session?.userId) {
 		try {
-			const [bookRows, followRows, profileRows] = await Promise.all([
-				sql<Array<{ total_books: number; rated_books: number; finished_with_review: number }>>`
-					select
-						count(*)::int as total_books,
-						count(*) filter (where rating is not null)::int as rated_books,
-						count(*) filter (where status = 'finished' and char_length(trim(coalesce(finished_reflection, ''))) > 0)::int as finished_with_review
-					from user_book
-					where user_id = ${session.userId}::uuid
-				`,
-				sql<Array<{ follows: number }>>`
-					select count(*)::int as follows
-					from user_follow
-					where follower_user_id = ${session.userId}::uuid
-				`,
-				sql<Array<{ profile_data: unknown }>>`
-					select profile_data
-					from app_user
-					where id = ${session.userId}::uuid
-					limit 1
-				`
-			]);
-			const profileData = (profileRows[0]?.profile_data && typeof profileRows[0]?.profile_data === "object")
-				? profileRows[0].profile_data as Record<string, unknown>
-				: {};
+			const guidance = await loadGuidedTourStatus(sql, session.userId);
 			onboardingProgress = {
-				totalBooks: Math.max(0, Number(bookRows[0]?.total_books || 0)),
-				ratedBooks: Math.max(0, Number(bookRows[0]?.rated_books || 0)),
-				finishedWithReview: Math.max(0, Number(bookRows[0]?.finished_with_review || 0)),
-				follows: Math.max(0, Number(followRows[0]?.follows || 0)),
-				profileComplete: !!String(profileData.blurb || "").trim()
+				totalBooks: guidance.stats.totalBooks,
+				progressEvents: guidance.stats.progressEvents,
+				ratedBooks: guidance.stats.ratedBooks,
+				reviews: guidance.stats.reviews,
+				journalEntries: guidance.stats.journalEntries,
+				follows: guidance.stats.follows,
+				recommendationInteractions: guidance.stats.recommendationInteractions,
+				hasReadingGoal: guidance.stats.hasReadingGoal,
+				welcomeCompleted: guidance.settings.onboarding.welcomeCompleted,
+				checklistDismissed: guidance.settings.onboarding.checklistDismissed,
+				goalPromptDismissed: guidance.settings.onboarding.goalPromptDismissed,
+				recommendationEducationDismissed: guidance.settings.onboarding.recommendationEducationDismissed,
+				completedActions: guidance.settings.onboarding.completedActions
 			};
 		} catch (error) {
 			console.error("Home onboarding progress query failed.", error);
@@ -161,10 +155,30 @@ try {
 }
 const isOnboardingComplete = (
 	onboardingProgress.totalBooks > 0
+	&& onboardingProgress.progressEvents > 0
 	&& onboardingProgress.ratedBooks > 0
-	&& onboardingProgress.finishedWithReview > 0
+	&& onboardingProgress.journalEntries > 0
 	&& onboardingProgress.follows > 0
-	&& onboardingProgress.profileComplete
+	&& onboardingProgress.completedActions.includes("explore-discover")
+);
+const onboardingChecklistItems = [
+	{ label: "Add your first book", href: "/search", isDone: onboardingProgress.totalBooks > 0 },
+	{ label: "Update reading progress", href: "/profile#currently-reading", isDone: onboardingProgress.progressEvents > 0 },
+	{ label: "Rate a book", href: "/profile#read", isDone: onboardingProgress.ratedBooks > 0 },
+	{ label: "Write your first journal note", href: "/journal#new-entry", isDone: onboardingProgress.journalEntries > 0 },
+	{ label: "Follow another reader", href: "/following", isDone: onboardingProgress.follows > 0 },
+	{ label: "Explore Discover", href: "/discover", isDone: onboardingProgress.completedActions.includes("explore-discover") }
+];
+const onboardingChecklistCompleted = onboardingChecklistItems.filter((item) => item.isDone).length;
+const shouldShowWelcome = isAuthenticated && !onboardingProgress.welcomeCompleted && onboardingProgress.totalBooks === 0;
+const shouldShowChecklist = isAuthenticated && !isOnboardingComplete && !onboardingProgress.checklistDismissed;
+const shouldShowGoalPrompt = isAuthenticated && !onboardingProgress.hasReadingGoal && !onboardingProgress.goalPromptDismissed;
+const shouldShowRecommendationEducation = (
+	isAuthenticated
+	&& !!recommendedSection
+	&& recommendedSection.books.length > 0
+	&& !onboardingProgress.recommendationEducationDismissed
+	&& onboardingProgress.recommendationInteractions === 0
 );
 logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 ---
@@ -179,20 +193,56 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			<h1>Find your next book.<br/>Keep your reading life your own.</h1>
 			<p class="subhead">Browse popular shelves, save what matters, and build your reading history without the noise.</p>
 		</header>
-		{isAuthenticated && !isOnboardingComplete && (
+		{shouldShowWelcome && (
+			<section class="onboarding-welcome" data-onboarding-welcome aria-labelledby="onboarding-welcome-title">
+				<div>
+					<p class="eyebrow">Welcome</p>
+					<h2 id="onboarding-welcome-title">Welcome to DogEared.</h2>
+					<p class="welcome-copy">DogEared is designed to help you build a reading life you'll actually remember.</p>
+					<ul>
+						<li>Track what you're reading.</li>
+						<li>Keep a private reading journal.</li>
+						<li>Write public reviews after finishing books.</li>
+						<li>Discover your next favorite book.</li>
+					</ul>
+				</div>
+				<div class="onboarding-actions">
+					<a class="onboarding-primary" href="/search" data-action="complete-onboarding-welcome">Get Started</a>
+					<button type="button" class="onboarding-secondary" data-action="skip-onboarding-welcome">Skip for now</button>
+				</div>
+			</section>
+		)}
+		{shouldShowChecklist && (
 			<section class="onboarding-checklist" data-onboarding-checklist>
 				<div class="checklist-head">
 					<h2>Getting Started</h2>
 					<button type="button" class="checklist-dismiss" data-action="dismiss-onboarding-checklist">Dismiss</button>
 				</div>
-				<p class="checklist-copy">These steps help DogEared learn your taste faster and improve recommendations.</p>
+				<p class="checklist-copy">{onboardingChecklistCompleted} of {onboardingChecklistItems.length} completed. These steps help DogEared learn your taste faster and improve recommendations.</p>
 				<ul>
-					<li class={onboardingProgress.totalBooks > 0 ? "is-done" : ""}>{onboardingProgress.totalBooks > 0 ? "Done" : "Next"}: Add your first book to a shelf.</li>
-					<li class={onboardingProgress.ratedBooks > 0 ? "is-done" : ""}>{onboardingProgress.ratedBooks > 0 ? "Done" : "Next"}: Rate a book you finished.</li>
-					<li class={onboardingProgress.finishedWithReview > 0 ? "is-done" : ""}>{onboardingProgress.finishedWithReview > 0 ? "Done" : "Next"}: Write one short review.</li>
-					<li class={onboardingProgress.follows > 0 ? "is-done" : ""}>{onboardingProgress.follows > 0 ? "Done" : "Next"}: Follow a reader you trust.</li>
-					<li class={onboardingProgress.profileComplete ? "is-done" : ""}>{onboardingProgress.profileComplete ? "Done" : "Next"}: Add a profile blurb so readers can find you.</li>
+					{onboardingChecklistItems.map((item) => (
+						<li class={item.isDone ? "is-done" : ""}>
+							<span class="checklist-state" aria-hidden="true">{item.isDone ? "check_circle" : "radio_button_unchecked"}</span>
+							<a href={item.href}>{item.label}</a>
+							<span class="sr-only">{item.isDone ? "complete" : "not complete"}</span>
+						</li>
+					))}
 				</ul>
+			</section>
+		)}
+		{shouldShowGoalPrompt && (
+			<section class="reading-goal-prompt" data-reading-goal-prompt aria-labelledby="reading-goal-title">
+				<div>
+					<h2 id="reading-goal-title">How many books would you like to read this year?</h2>
+					<p>Choose a goal now, or skip it and set one later.</p>
+				</div>
+				<div class="goal-options" aria-label="Reading goal options">
+					{[12, 24, 36, 52, 100].map((goal) => (
+						<button type="button" data-reading-goal={String(goal)}>{goal}</button>
+					))}
+					<button type="button" data-reading-goal="custom">Custom</button>
+					<button type="button" class="goal-skip" data-action="dismiss-reading-goal">Skip</button>
+				</div>
 			</section>
 		)}
 		{!errorMessage && sections.length > 0 && (
@@ -219,6 +269,15 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 					</div>
 					<a class="section-head-link" href="/discover">Open Discover</a>
 				</div>
+				{shouldShowRecommendationEducation && (
+					<div class="recommendation-education" data-recommendation-education>
+						<div>
+							<h3>Recommendations improve as you read.</h3>
+							<p>They get better when you finish books, rate books, review books, follow readers, and build your shelves.</p>
+						</div>
+						<button type="button" data-action="dismiss-recommendation-education">Got it</button>
+					</div>
+				)}
 				{recommendedSection.books.length === 0 ? (
 					<div class="recommendation-empty">
 						<p>{recommendedSection.emptyState}</p>
@@ -557,12 +616,108 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		padding: 0.7rem 0.8rem;
 		border-radius: var(--radius-md);
 	}
+	.onboarding-welcome,
+	.reading-goal-prompt,
 	.onboarding-checklist {
 		margin: 0 0 1rem;
-		background: rgba(255, 255, 255, 0.56);
+		background: var(--color-surface-raised);
 		border: var(--border-subtle);
 		border-radius: var(--radius-lg);
-		padding: 0.82rem;
+		padding: 0.9rem;
+		box-shadow: var(--shadow-xs);
+	}
+	.onboarding-welcome {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 1rem;
+		align-items: start;
+	}
+	.onboarding-welcome h2,
+	.reading-goal-prompt h2 {
+		margin: 0;
+		font-size: 1.15rem;
+		line-height: 1.25;
+	}
+	.welcome-copy,
+	.reading-goal-prompt p {
+		margin: 0.35rem 0 0;
+		color: var(--color-text-muted);
+		line-height: 1.45;
+	}
+	.onboarding-welcome ul {
+		margin: 0.7rem 0 0;
+		padding: 0;
+		list-style: none;
+		display: grid;
+		gap: 0.32rem;
+		color: var(--color-text-muted);
+	}
+	.onboarding-welcome li::before {
+		content: "check_circle";
+		margin-right: 0.38rem;
+		color: var(--color-primary);
+		font-family: "Material Icons";
+		font-size: 1rem;
+		vertical-align: -0.16rem;
+	}
+	.onboarding-actions,
+	.goal-options {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		align-items: center;
+	}
+	.onboarding-actions {
+		justify-content: flex-end;
+	}
+	.onboarding-primary,
+	.onboarding-secondary,
+	.reading-goal-prompt button,
+	.recommendation-education button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 40px;
+		border-radius: var(--radius-sm);
+		padding: 0.52rem 0.82rem;
+		font: inherit;
+		font-weight: 760;
+		line-height: 1.1;
+		cursor: pointer;
+	}
+	.onboarding-primary,
+	.reading-goal-prompt button:not(.goal-skip) {
+		border: 1px solid var(--color-primary);
+		background: var(--color-primary);
+		color: #fff;
+		text-decoration: none;
+	}
+	.onboarding-primary:hover,
+	.onboarding-primary:focus-visible,
+	.reading-goal-prompt button:not(.goal-skip):hover,
+	.reading-goal-prompt button:not(.goal-skip):focus-visible {
+		background: var(--color-primary-hover);
+		border-color: var(--color-primary-hover);
+	}
+	.onboarding-secondary,
+	.goal-skip,
+	.recommendation-education button {
+		border: var(--border-subtle);
+		background: rgba(255, 255, 255, 0.76);
+		color: var(--color-nav);
+	}
+	.onboarding-secondary:hover,
+	.onboarding-secondary:focus-visible,
+	.goal-skip:hover,
+	.goal-skip:focus-visible,
+	.recommendation-education button:hover,
+	.recommendation-education button:focus-visible {
+		background: #fff;
+		color: var(--color-nav-hover);
+	}
+	.reading-goal-prompt {
+		display: grid;
+		gap: 0.8rem;
 	}
 	.checklist-head {
 		display: flex;
@@ -572,9 +727,26 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 	}
 	.checklist-head h2 { margin: 0; font-size: 1rem; }
 	.checklist-copy { margin: 0.35rem 0 0; font-size: 0.9rem; color: var(--color-text-muted); }
-	.onboarding-checklist ul { margin: 0.5rem 0 0; padding-left: 1rem; display: grid; gap: 0.2rem; }
-	.onboarding-checklist li { font-size: 0.9rem; color: #2f3b52; }
+	.onboarding-checklist ul { margin: 0.65rem 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.38rem 0.75rem; }
+	.onboarding-checklist li { display: flex; gap: 0.35rem; align-items: center; font-size: 0.9rem; color: #2f3b52; min-width: 0; }
 	.onboarding-checklist li.is-done { color: #1f7a45; }
+	.onboarding-checklist a {
+		color: inherit;
+		text-decoration: none;
+		font-weight: 700;
+		overflow-wrap: anywhere;
+	}
+	.onboarding-checklist a:hover,
+	.onboarding-checklist a:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.checklist-state {
+		flex: 0 0 auto;
+		font-family: "Material Icons";
+		font-size: 1rem;
+		line-height: 1;
+	}
 	.checklist-dismiss {
 		border: none;
 		background: transparent;
@@ -584,6 +756,39 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		font-weight: 700;
 		cursor: pointer;
 		padding: 0.2rem 0.35rem;
+	}
+	.recommendation-education {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.8rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.62);
+		padding: 0.8rem;
+	}
+	.recommendation-education h3,
+	.recommendation-education p {
+		margin: 0;
+	}
+	.recommendation-education h3 {
+		font-size: 0.98rem;
+	}
+	.recommendation-education p {
+		margin-top: 0.22rem;
+		color: var(--color-text-muted);
+		line-height: 1.42;
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 
 	.browse-section {
@@ -1085,6 +1290,27 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		}
 		.subhead { font-size: 0.95rem; line-height: 1.45; max-width: 36ch; }
 
+		.onboarding-welcome,
+		.recommendation-education {
+			grid-template-columns: 1fr;
+			display: grid;
+		}
+		.onboarding-actions,
+		.goal-options {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			align-items: stretch;
+		}
+		.onboarding-primary,
+		.onboarding-secondary,
+		.reading-goal-prompt button,
+		.recommendation-education button {
+			width: 100%;
+		}
+		.onboarding-checklist ul {
+			grid-template-columns: 1fr;
+		}
+
 		.book-grid,
 		.featured-collection-grid {
 			grid-template-columns: 1fr;
@@ -1138,11 +1364,27 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 	const feedbackTimers = new WeakMap();
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	const onboardingChecklist = document.querySelector("[data-onboarding-checklist]");
-	const onboardingDismissKey = "dogeared:onboarding-checklist:dismissed";
+	const onboardingWelcome = document.querySelector("[data-onboarding-welcome]");
+	const readingGoalPrompt = document.querySelector("[data-reading-goal-prompt]");
+	const recommendationEducation = document.querySelector("[data-recommendation-education]");
 	initRatingControls();
-	if (onboardingChecklist instanceof HTMLElement) {
-		const dismissed = localStorage.getItem(onboardingDismissKey) === "1";
-		if (dismissed) onboardingChecklist.hidden = true;
+
+	async function postGuidanceAction(payload) {
+		try {
+			const response = await fetch("/api/guidance/status", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				credentials: "same-origin",
+				body: JSON.stringify(payload)
+			});
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) throw new Error(String(data?.error || "Could not update onboarding."));
+			window.dispatchEvent(new CustomEvent("dogeared:reading-data-changed"));
+			return data;
+		} catch (error) {
+			console.warn("DogEared onboarding update failed.", error);
+			return null;
+		}
 	}
 
 	function normalizeText(value) {
@@ -1447,6 +1689,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 					const latest = loadShelfEntries();
 					mergeServerEntry(latest, existing, serverEntry);
 					saveShelfEntries(latest);
+					void postGuidanceAction({ action: "mark-onboarding-action", actionId: "first-book-added" });
 					syncExistingState();
 				} else if (!result.ok && result.message) {
 					showShelfFeedback(dropdown, result.message, feedbackTimers);
@@ -1491,6 +1734,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 				const latest = loadShelfEntries();
 				mergeServerEntry(latest, next, serverEntry);
 				saveShelfEntries(latest);
+				void postGuidanceAction({ action: "mark-onboarding-action", actionId: "first-book-added" });
 				syncExistingState();
 			} else if (!result.ok && result.message) {
 				showShelfFeedback(dropdown, result.message, feedbackTimers);
@@ -1587,6 +1831,48 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			void createMockShelf(createShelfButton);
 			return;
 		}
+		const completeWelcomeLink = target.closest('[data-action="complete-onboarding-welcome"]');
+		if (completeWelcomeLink instanceof HTMLAnchorElement) {
+			void postGuidanceAction({ action: "complete-welcome" });
+			return;
+		}
+		const skipWelcomeButton = target.closest('[data-action="skip-onboarding-welcome"]');
+		if (skipWelcomeButton instanceof HTMLButtonElement) {
+			event.preventDefault();
+			if (onboardingWelcome instanceof HTMLElement) onboardingWelcome.hidden = true;
+			void postGuidanceAction({ action: "complete-welcome" });
+			return;
+		}
+		const goalButton = target.closest("[data-reading-goal]");
+		if (goalButton instanceof HTMLButtonElement) {
+			event.preventDefault();
+			const rawGoal = String(goalButton.dataset.readingGoal || "").trim();
+			const chosenGoal = rawGoal === "custom"
+				? window.prompt("How many books would you like to read this year?")
+				: rawGoal;
+			const readingGoal = Math.max(0, Math.floor(Number(chosenGoal || 0) || 0));
+			if (readingGoal <= 0) return;
+			goalButton.disabled = true;
+			void postGuidanceAction({ action: "set-reading-goal", readingGoal }).then((result) => {
+				if (result && readingGoalPrompt instanceof HTMLElement) readingGoalPrompt.hidden = true;
+				goalButton.disabled = false;
+			});
+			return;
+		}
+		const dismissGoalButton = target.closest('[data-action="dismiss-reading-goal"]');
+		if (dismissGoalButton instanceof HTMLButtonElement) {
+			event.preventDefault();
+			if (readingGoalPrompt instanceof HTMLElement) readingGoalPrompt.hidden = true;
+			void postGuidanceAction({ action: "dismiss-goal-prompt" });
+			return;
+		}
+		const dismissRecommendationEducationButton = target.closest('[data-action="dismiss-recommendation-education"]');
+		if (dismissRecommendationEducationButton instanceof HTMLButtonElement) {
+			event.preventDefault();
+			if (recommendationEducation instanceof HTMLElement) recommendationEducation.hidden = true;
+			void postGuidanceAction({ action: "dismiss-recommendation-education" });
+			return;
+		}
 		const followButton = target.closest('[data-action="follow-reader"]');
 		if (followButton instanceof HTMLButtonElement) {
 			event.preventDefault();
@@ -1618,6 +1904,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 						return;
 					}
 					followButton.textContent = "Following";
+					void postGuidanceAction({ action: "mark-onboarding-action", actionId: "first-follow" });
 					if (feedback instanceof HTMLElement) feedback.textContent = "Added to Following.";
 				} catch {
 					followButton.disabled = false;
@@ -1628,8 +1915,9 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		}
 		const dismissChecklistButton = target.closest('[data-action="dismiss-onboarding-checklist"]');
 		if (dismissChecklistButton instanceof HTMLButtonElement && onboardingChecklist instanceof HTMLElement) {
+			event.preventDefault();
 			onboardingChecklist.hidden = true;
-			localStorage.setItem(onboardingDismissKey, "1");
+			void postGuidanceAction({ action: "dismiss-checklist" });
 			return;
 		}
 		if (target.closest(".shelf-dropdown")) return;

@@ -377,7 +377,7 @@ Limitations: Notification settings exist for browser/release/weekly preferences,
 
 Status: Beta
 
-Home surfaces featured editorial collections, explainable community discovery sections, discovery jump links, reader suggestions, onboarding checklist, and custom shelf ideas.
+Home surfaces featured editorial collections, explainable community discovery sections, discovery jump links, reader suggestions, first-run welcome, onboarding checklist, reading goal prompt, recommendation education, and custom shelf ideas.
 
 Limitations: Section quality depends on catalog, shelf, rating, review, and activity volume. Some shelf ideas are prompts that create custom shelves.
 
@@ -385,11 +385,15 @@ Limitations: Section quality depends on catalog, shelf, rating, review, and acti
 
 Status: Complete
 
-Signed-in readers can receive contextual first-time tips instead of a traditional onboarding wizard. Tips are lightweight callouts that point at relevant areas, include a title, explanation, optional icon, primary action, and dismiss control, and are keyboard accessible. Fresh-user guidance starts on Home. The current tip set covers Home, Search, book detail shelf controls, first book added, Currently Reading progress, first progress update, Reading Journal privacy, first finished book review guidance, and Settings Learning controls.
+Signed-in readers receive optional first-run onboarding instead of a traditional wizard. Home can show a welcome card, a dismissible checklist, a one-time yearly reading goal prompt, and short recommendation education. The checklist tracks six high-signal actions: add a first book, update reading progress, rate a book, write a first journal note, follow another reader, and explore Discover.
 
-DogEared chooses tips from transparent reader state: shelf count, Currently Reading count, finished books, reviews, progress updates, and journal entries. Only one tip appears at a time. Completed or dismissed tips are stored per user and do not reappear. Settings includes Learning controls to turn helpful tips on or off and reset the guided tour.
+Contextual tips remain lightweight callouts that point at relevant areas, include a title, explanation, optional icon, primary action, and dismiss control, and are keyboard accessible. Fresh-user guidance starts on Home. The current tip set covers Home, Search, book detail shelf controls, first book added, Currently Reading progress, first progress update, Reading Journal privacy, Discover recommendation education, first finished book review guidance, and Settings Learning controls.
+
+DogEared chooses onboarding from transparent reader state: shelf count, Currently Reading count, finished books, ratings, reviews, progress updates, journal entries, follows, recommendation feedback, reading goal status, and explicit completed actions. Only one contextual tip appears at a time. Completed or dismissed tips are stored per user and do not reappear. Settings includes Learning controls to turn helpful tips on or off, reset the guided tour, restart onboarding, and hide the onboarding checklist.
 
 Journal-specific tips appear only on the Journal route or after a progress update. The broader guidance path stays focused on learning DogEared as a whole: finding a book, saving it, tracking reading, finishing, reviewing, and managing preferences.
+
+Onboarding state is extensible and stored under `profile_data.settings.guidedTour.onboarding`. It includes welcome completion, checklist dismissal, reading goal prompt dismissal, recommendation education dismissal, completed actions, and celebrated milestones. Future onboarding ideas can add more action IDs without changing page-level APIs.
 
 Limitations: Guided tips are state-based and contextual, not a multi-step wizard. They currently cover first-use learning moments only.
 
@@ -403,7 +407,7 @@ Success and error messages are intentionally plain and recoverable. Examples inc
 
 Reusable UI behavior belongs inside shared components or shared client utilities whenever practical. Recommendation feedback is owned by BookCard. Shelf feedback timing, loading persistence, and error styling are owned by the ShelfDropdown helper path. Pages should opt into these shared behaviors instead of rebuilding equivalent markup, CSS, or JavaScript.
 
-Limitations: The beta readiness pass improves existing flows but does not add centralized telemetry, a device-lab QA matrix, server-persisted onboarding checklist dismissal, or a full assistive-technology audit.
+Limitations: The beta readiness pass improves existing flows but does not add centralized telemetry, a device-lab QA matrix, or a full assistive-technology audit.
 
 ### Editorial Collections
 

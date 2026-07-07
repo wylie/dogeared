@@ -7,6 +7,12 @@ test("home page includes onboarding checklist guidance", () => {
 	assert.equal(source.includes("Getting Started"), true);
 	assert.equal(source.includes("data-onboarding-checklist"), true);
 	assert.equal(source.includes("dismiss-onboarding-checklist"), true);
+	assert.equal(source.includes("Welcome to DogEared."), true);
+	assert.equal(source.includes("DogEared is designed to help you build a reading life you'll actually remember."), true);
+	assert.equal(source.includes("Update reading progress"), true);
+	assert.equal(source.includes("Explore Discover"), true);
+	assert.equal(source.includes("data-reading-goal-prompt"), true);
+	assert.equal(source.includes("data-recommendation-education"), true);
 });
 
 test("home page includes recommendation fallback section", () => {
