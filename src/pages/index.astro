@@ -489,9 +489,9 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 								<h2>{sectionIndex === 1 ? "Readers You Might Like" : "Custom Shelf Ideas"}</h2>
 							</div>
 							{sectionIndex === 1 ? (
-								<ul class="community-suggestion-grid" data-reader-suggestions aria-busy="true">
+								<ul class="people-strip reader-suggestion-strip" data-reader-suggestions aria-busy="true">
 									{Array.from({ length: 3 }, () => (
-										<li class="community-suggestion-card community-suggestion-skeleton" aria-hidden="true">
+										<li class="people-strip-card people-strip-card-skeleton" aria-hidden="true">
 											<span></span>
 											<span></span>
 											<span></span>
@@ -985,6 +985,9 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 	.community-discovery-section {
 		margin-top: 1.15rem;
 	}
+	.reader-suggestion-strip {
+		grid-auto-columns: minmax(220px, 255px);
+	}
 	.community-suggestion-grid {
 		list-style: none;
 		margin: 0;
@@ -999,25 +1002,25 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		padding: 0.95rem;
 		border: var(--border-subtle);
 	}
-	.community-suggestion-skeleton {
+	.people-strip-card-skeleton {
 		display: grid;
 		gap: 0.55rem;
 		min-height: 150px;
 	}
-	.community-suggestion-skeleton span {
+	.people-strip-card-skeleton span {
 		display: block;
 		height: 0.8rem;
 		border-radius: var(--radius-pill);
 		background: rgba(82, 96, 109, 0.14);
 	}
-	.community-suggestion-skeleton span:first-child {
+	.people-strip-card-skeleton span:first-child {
 		width: 58%;
 		height: 1rem;
 	}
-	.community-suggestion-skeleton span:nth-child(2) {
+	.people-strip-card-skeleton span:nth-child(2) {
 		width: 92%;
 	}
-	.community-suggestion-skeleton span:last-child {
+	.people-strip-card-skeleton span:last-child {
 		width: 74%;
 	}
 	.community-suggestion-card h3 {
@@ -1035,33 +1038,6 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.35rem;
-	}
-	.reader-follow-button {
-		margin-top: 0.65rem;
-		border: none;
-		border-radius: var(--radius-pill);
-		padding: 0.46rem 0.78rem;
-		background: #151515;
-		color: #fff;
-		font: inherit;
-		font-size: 0.84rem;
-		font-weight: 700;
-		cursor: pointer;
-	}
-	.reader-follow-button:disabled {
-		opacity: 0.72;
-		cursor: not-allowed;
-	}
-	.reader-feedback {
-		margin: 0.35rem 0 0;
-		min-height: 1.05rem;
-		color: #2f8f57;
-		font-size: 0.82rem;
-		font-weight: 700;
-	}
-	.reader-feedback[hidden] {
-		display: block;
-		visibility: hidden;
 	}
 	.mock-shelf-add-button {
 		margin-top: 0.65rem;
@@ -1522,40 +1498,6 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		}
 	}
 
-	function escapeHtml(value) {
-		return String(value || "")
-			.replace(/&/g, "&amp;")
-			.replace(/</g, "&lt;")
-			.replace(/>/g, "&gt;")
-			.replace(/"/g, "&quot;")
-			.replace(/'/g, "&#39;");
-	}
-
-	function renderSuggestionChip(label) {
-		const text = String(label || "").trim();
-		if (!text) return "";
-		return `<span class="chip chip--highlight chip--static shelf-count-badge">${escapeHtml(text)}</span>`;
-	}
-
-	function renderReaderSuggestion(reader) {
-		const username = String(reader?.username || "").trim();
-		if (!username) return "";
-		const chips = [
-			renderSuggestionChip(reader?.favoriteAuthor),
-			renderSuggestionChip(reader?.favoriteBook),
-			renderSuggestionChip(reader?.location)
-		].join("");
-		return `
-			<li class="community-suggestion-card" data-reader-card>
-				<h3><a href="/profile/${encodeURIComponent(username)}">@${escapeHtml(username)}</a></h3>
-				<p>${escapeHtml(reader?.blurb || "Public profile with recent reading activity.")}</p>
-				${chips ? `<div class="suggestion-chip-row">${chips}</div>` : ""}
-				<button type="button" class="reader-follow-button" data-action="follow-reader" data-username="${escapeHtml(username)}">Follow</button>
-				<p class="reader-feedback" data-reader-feedback role="status" aria-live="polite" hidden></p>
-			</li>
-		`;
-	}
-
 	async function loadReaderSuggestions() {
 		const list = document.querySelector("[data-reader-suggestions]");
 		if (!(list instanceof HTMLElement)) return;
@@ -1568,11 +1510,12 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			const response = await fetch("/api/home/reader-suggestions", { credentials: "same-origin" });
 			const data = await response.json().catch(() => ({}));
 			const readers = Array.isArray(data?.readers) ? data.readers : [];
-			if (!response.ok || readers.length === 0) {
+			const html = String(data?.html || "").trim();
+			if (!response.ok || readers.length === 0 || !html) {
 				list.closest(".community-discovery-section")?.remove();
 				return;
 			}
-			list.innerHTML = readers.map(renderReaderSuggestion).join("");
+			list.innerHTML = html;
 			list.setAttribute("aria-busy", "false");
 		} catch {
 			list.closest(".community-discovery-section")?.remove();

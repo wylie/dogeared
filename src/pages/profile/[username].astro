@@ -2048,10 +2048,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 															data-google-books-id={item.googleBooksId}
 															data-total-pages={String(Math.max(0, Number(item.totalPages || 0)))}
 															data-current-page={String(Math.max(0, Number(item.currentPage || 0)))}
-															aria-label="Mark as Finished"
+															aria-label="Mark as finished"
 															title="Mark as Finished"
 														>
-															<span class="material-icons" aria-hidden="true">done_all</span>
+															Complete
 														</button>
 													</div>
 												</div>
@@ -3477,6 +3477,23 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		color: var(--color-text);
 		background-color: #fff;
 		box-sizing: border-box;
+		background: #fff;
+		color: var(--color-text);
+	}
+	.progress-inline-type {
+		flex: 0 0 98px;
+		width: 98px;
+	}
+	.progress-inline-input {
+		width: 92px;
+		flex: 1 1 92px;
+	}
+	.progress-inline-type {
+		padding-top: 0.34rem;
+		padding-bottom: 0.34rem;
+	}
+	.progress-inline-input {
+		padding: 0 0.48rem;
 	}
 	.progress-inline-type {
 		padding-top: 0.34rem;
@@ -3514,11 +3531,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		width: 34px;
 		padding: 0;
 		background: var(--palette-4);
-	}
-	.progress-inline-finish .material-icons {
-		font-size: 1rem;
-		line-height: 1;
-		font-variation-settings: "FILL" 1, "wght" 700, "GRAD" 0, "opsz" 24;
 	}
 	.progress-inline-finish:hover {
 		filter: brightness(0.95);
@@ -3907,6 +3919,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			display: grid;
 			grid-template-columns: minmax(0, 1fr) minmax(82px, 0.68fr) minmax(54px, auto) 34px;
 			align-items: center;
+			gap: 0.4rem;
 		}
 		.progress-inline-type,
 		.progress-inline-input {
@@ -4608,6 +4621,14 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	for (const select of Array.from(document.querySelectorAll(".progress-inline-type"))) {
 		updateProgressInputPlaceholder(select);
 		select.addEventListener("change", () => updateProgressInputPlaceholder(select));
+	}
+
+	function valueForSelectedProgressType(input) {
+		const raw = String(input?.value || "").trim();
+		const card = input?.closest(".book-card");
+		const type = card?.querySelector(".progress-inline-type");
+		if (!(type instanceof HTMLSelectElement) || type.value !== "percent") return raw;
+		return raw && !raw.endsWith("%") ? `${raw}%` : raw;
 	}
 
 	function safeFormatActivityDate(value) {

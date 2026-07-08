@@ -97,7 +97,9 @@ test("temporary feedback messages avoid layout shifts and announce status", () =
 	const index = readFileSync("src/pages/index.astro", "utf8");
 	const book = readFileSync("src/pages/book.astro", "utf8");
 	const following = readFileSync("src/pages/following.astro", "utf8");
+	const readerCard = readFileSync("src/lib/readerCard.ts", "utf8");
 	const profile = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const global = readFileSync("src/assets/global.css", "utf8");
 	assert.equal(rating.includes('role="status" aria-live="polite"'), true);
 	assert.equal(rating.includes(".rating-feedback[hidden]"), true);
 	assert.equal(rating.includes("min-height: 1rem"), true);
@@ -107,7 +109,7 @@ test("temporary feedback messages avoid layout shifts and announce status", () =
 	assert.equal(shelf.includes(".shelf-feedback.is-busy"), true);
 	assert.equal(shelf.includes("min-height: 2.1rem"), true);
 	assert.equal(shelf.includes("width: 100%"), true);
-	for (const source of [index, book, following, profile]) {
+	for (const source of [`${index}\n${readerCard}\n${global}`, `${book}\n${global}`, `${following}\n${readerCard}\n${global}`, `${profile}\n${global}`]) {
 		assert.equal(source.includes('role="status" aria-live="polite"'), true);
 		assert.equal(source.includes("[hidden]"), true);
 		assert.equal(source.includes("visibility: hidden"), true);

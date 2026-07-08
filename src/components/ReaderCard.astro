@@ -1,0 +1,20 @@
+---
+import { renderReaderCardHtml } from "../lib/readerCard";
+import type { PublicReaderSuggestion } from "../lib/feed";
+
+type Props = {
+	reader: PublicReaderSuggestion;
+	action?: "follow" | "unfollow";
+	extraClass?: string;
+	extraAttrs?: Record<string, string | boolean | undefined>;
+};
+
+const {
+	reader,
+	action = "follow",
+	extraClass = "",
+	extraAttrs = {}
+} = Astro.props as Props;
+---
+
+<Fragment set:html={renderReaderCardHtml(reader, { action, extraClass, extraAttrs })} />
