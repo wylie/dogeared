@@ -173,6 +173,20 @@ Shows reliability proxies for imports and shelf consistency:
 - Finished books without date.
 - Currently Reading entries with zero progress.
 
+## Metadata Review Queue
+
+Route: `/admin/data-health`
+
+Shows books that need quick admin review after imports or metadata backfills:
+
+- Missing cover.
+- Missing author.
+- Missing description.
+- Missing page count.
+- Possible missing series.
+
+The queue links admins back into search for quick catalog inspection. It does not block reader imports.
+
 ## Duplicate Risk
 
 Route: `/admin/data-health`

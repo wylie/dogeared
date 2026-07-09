@@ -159,3 +159,9 @@ Baseline schema is in `db/neon-schema.sql`, migrations are in `db/migrations/`, 
 ## External Data
 
 DogEared uses Google Books and Open Library for search, metadata, covers, and enrichment. Once a book is shelved or imported, DogEared stores a local catalog record and can serve it from its own database.
+
+## Import Experience
+
+Goodreads import planning lives in `src/lib/goodreadsImport.ts`. Settings composes that shared parser/planner into the Import Dashboard so preview, final report, duplicate explanations, metadata review reasons, and resumable failed syncs all derive from the same plan. The page writes shelf changes through `saveShelfEntryWithRetry` and stores browser-local import history/recovery state for reader-facing transparency.
+
+Admin metadata review lives on `/admin/data-health` and queries catalog gaps separately from reader import execution. Import cleanup should remain operational and non-blocking for readers.

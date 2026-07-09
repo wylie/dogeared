@@ -539,17 +539,17 @@ Limitations: It is informational, not interactive.
 
 Status: Complete
 
-Readers can upload Goodreads CSV exports. Imports support dry-run preview, merge mode, replace mode, import summaries, server sync, and local cache fallback.
+Readers can upload Goodreads CSV exports from the Settings Import Dashboard. Imports support preview before writing, merge mode, replace mode, duplicate explanations, estimated time, series detection, post-import reports, report export, server sync, local cache fallback, import history, and resumable failed syncs.
 
 Limitations: Goodreads shelves are mapped to the three implemented default statuses; non-status shelves can become genre candidates unless filtered.
 
-### Import Controls
+### Import Dashboard
 
 Status: Complete
 
-Readers can choose default import mode and whether to preview before writing.
+Readers can see current import status, books imported, books skipped, duplicates merged, missing metadata, series matched, import preview, duplicate resolution details, import report, recovery state, and import history.
 
-Limitations: Controls apply to the Settings import workflow.
+Limitations: Import history and recovery state are browser-local. Metadata review is surfaced for admins in Data Health rather than blocking the reader import.
 
 ### JSON Data Export
 

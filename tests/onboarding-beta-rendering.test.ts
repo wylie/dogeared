@@ -60,6 +60,24 @@ test("settings import flow points beta readers to their profile", () => {
 	assert.equal(source.includes("Import canceled. Your shelves were not changed."), true);
 });
 
+test("settings import dashboard previews, reports, and resumes imports", () => {
+	const source = readFileSync("src/pages/settings.astro", "utf8");
+	const importLib = readFileSync("src/lib/goodreadsImport.ts", "utf8");
+	const dataHealth = readFileSync("src/pages/admin/data-health.astro", "utf8");
+	assert.equal(source.includes("Import Dashboard"), true);
+	assert.equal(source.includes("Duplicate Resolution"), true);
+	assert.equal(source.includes("Metadata Review Queue"), true);
+	assert.equal(source.includes("Resume Failed Sync"), true);
+	assert.equal(source.includes("dogeared:import-recovery"), true);
+	assert.equal(source.includes("Export Report"), true);
+	assert.equal(source.includes("buildGoodreadsImportPreview"), true);
+	assert.equal(importLib.includes("duplicateExplanations"), true);
+	assert.equal(importLib.includes("estimatedLabel"), true);
+	assert.equal(dataHealth.includes("metadata-review"), true);
+	assert.equal(dataHealth.includes("Missing cover"), true);
+	assert.equal(dataHealth.includes("Import Dashboard"), true);
+});
+
 test("following page empty states explain next steps", () => {
 	const source = readFileSync("src/pages/following.astro", "utf8");
 	const publicReaderPolicySource = readFileSync("src/lib/publicReaderPolicy.ts", "utf8");

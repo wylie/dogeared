@@ -21,6 +21,7 @@ const [
 	authorCoverageResult,
 	importHealthResult,
 	duplicateGroupsResult,
+	metadataReviewResult,
 	recentBackfillResult,
 	unresolvedPageCountResult,
 	unresolvedPublisherResult
@@ -106,6 +107,39 @@ const [
 		order by books desc, latest_update_at desc
 		limit 25
 	`, []),
+	safeAdminLoad("Metadata review queue", () => sql<Array<{
+		id: number;
+		title: string;
+		primary_author: string;
+		cover_url: string;
+		synopsis: string;
+		page_count: number;
+		series_name: string;
+		updated_at: string;
+	}>>`
+		select
+			b.id,
+			b.title,
+			b.primary_author,
+			coalesce(b.cover_url, '') as cover_url,
+			coalesce(b.synopsis, '') as synopsis,
+			coalesce(b.page_count, 0)::int as page_count,
+			coalesce(s.name, '') as series_name,
+			b.updated_at::text as updated_at
+		from book b
+		left join series_book sb on sb.book_id = b.id
+		left join series s on s.id = sb.series_id
+		where trim(coalesce(b.cover_url, '')) = ''
+			or trim(coalesce(b.primary_author, '')) = ''
+			or trim(coalesce(b.synopsis, '')) = ''
+			or coalesce(b.page_count, 0) <= 0
+			or (
+				(lower(b.title) ~ '(#|book [0-9]|series|trilogy|saga|chronicles)')
+				and trim(coalesce(s.name, '')) = ''
+			)
+		order by b.updated_at desc, b.id desc
+		limit 50
+	`, []),
 	safeAdminLoad("Backfill movement", () => sql<Array<{
 		updated_books_24h: number;
 		updated_books_7d: number;
@@ -169,6 +203,7 @@ const genreCoverageRows = safeArray(genreCoverageResult.data);
 const authorCoverageRows = safeArray(authorCoverageResult.data);
 const importHealthRows = safeArray(importHealthResult.data);
 const duplicateGroupsRows = safeArray(duplicateGroupsResult.data);
+const metadataReviewRows = safeArray(metadataReviewResult.data);
 const recentBackfillRows = safeArray(recentBackfillResult.data);
 const unresolvedPageCountRows = safeArray(unresolvedPageCountResult.data);
 const unresolvedPublisherRows = safeArray(unresolvedPublisherResult.data);
@@ -179,6 +214,7 @@ const adminWarnings = [
 	authorCoverageResult.warning,
 	importHealthResult.warning,
 	duplicateGroupsResult.warning,
+	metadataReviewResult.warning,
 	recentBackfillResult.warning,
 	unresolvedPageCountResult.warning,
 	unresolvedPublisherResult.warning
@@ -188,6 +224,7 @@ const sectionLinks = [
 	{ id: "overview", label: "Overview" },
 	{ id: "metadata-gaps", label: "Metadata Gaps" },
 	{ id: "import-health", label: "Import Health" },
+	{ id: "metadata-review", label: "Review Queue" },
 	{ id: "duplicates", label: "Duplicates" },
 	{ id: "backfills", label: "Backfills" },
 	{ id: "page-count-gaps", label: "Page Counts" },
@@ -196,6 +233,16 @@ const sectionLinks = [
 
 function countWithPct(count: unknown, total: unknown) {
 	return `${formatNumber(count)} (${percentOf(count, total)}%)`;
+}
+
+function reviewReasons(row: { cover_url?: string; primary_author?: string; synopsis?: string; page_count?: number; series_name?: string; title?: string }) {
+	const reasons: string[] = [];
+	if (!String(row.cover_url || "").trim()) reasons.push("Missing cover");
+	if (!String(row.primary_author || "").trim()) reasons.push("Missing author");
+	if (!String(row.synopsis || "").trim()) reasons.push("Missing description");
+	if (Number(row.page_count || 0) <= 0) reasons.push("Missing page count");
+	if (/(#|book [0-9]|series|trilogy|saga|chronicles)/i.test(String(row.title || "")) && !String(row.series_name || "").trim()) reasons.push("Possible missing series");
+	return reasons;
 }
 
 const books = bookCoverageRows[0] || {
@@ -318,6 +365,34 @@ const backfills = recentBackfillRows[0] || {
 			<p class="note">These are reliability proxies for import quality and shelf consistency.</p>
 		</section>
 
+		<section class="panel" id="metadata-review">
+			<div class="panel-head">
+				<h2>Metadata Review Queue</h2>
+				<p>{formatNumber(metadataReviewRows.length)} books needing quick admin review (up to 50 newest updates).</p>
+			</div>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr><th>Book</th><th>Author</th><th>Needs attention</th><th>Updated</th><th>Review</th></tr>
+					</thead>
+					<tbody>
+						{metadataReviewRows.length === 0 ? (
+							<tr><td colspan="5">No metadata review items detected.</td></tr>
+						) : metadataReviewRows.map((row) => (
+							<tr>
+								<td>{row.title || "Untitled"}</td>
+								<td>{row.primary_author || "Unknown"}</td>
+								<td>{reviewReasons(row).join(", ") || "Metadata check"}</td>
+								<td>{formatDate(row.updated_at)}</td>
+								<td><a href={`/search?q=${encodeURIComponent(row.title || "")}`}>Review</a></td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+			<p class="note">Use this queue after imports to review missing covers, authors, descriptions, series, and page counts without blocking readers from using their shelves.</p>
+		</section>
+
 		<section class="panel" id="duplicates">
 			<div class="panel-head">
 				<h2>Duplicate Clusters</h2>
@@ -369,7 +444,7 @@ const backfills = recentBackfillRows[0] || {
 			</div>
 			<div class="actions">
 				<a href="/roadmap">Roadmap</a>
-				<a href="/settings#import-controls">Import Controls</a>
+				<a href="/settings#import-dashboard">Import Dashboard</a>
 			</div>
 		</section>
 

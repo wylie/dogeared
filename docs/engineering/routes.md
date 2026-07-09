@@ -32,7 +32,7 @@ Authentication requirements:
 | `/journal` | Authenticated | Private reading journal for creating, viewing, searching, filtering, editing, and deleting the signed-in reader's own notes. | `readingJournal` helper, newest-first paginated timeline, search, searchable saved-book picker, date filters, new-entry form, inline detail view, edit/delete controls, local draft recovery, book links to `#reading-journal`. |
 | `/feed` | Redirect | Legacy route for feed. | Redirects to `/following`. |
 | `/myreads` | Redirect | Legacy reader library route. | Redirects signed-in users to their profile; otherwise settings. |
-| `/settings` | Authenticated | Account, auth, email change, helpful-tip controls, privacy, import, export, API references, sessions, preferences. | Settings scripts, Goodreads import helpers, guided tour settings, account APIs, shelf APIs. |
+| `/settings` | Authenticated | Account, auth, email change, helpful-tip controls, privacy, import dashboard, export, API references, sessions, preferences. | Settings scripts, Goodreads import helpers, guided tour settings, account APIs, shelf APIs. |
 | `/welcome` | Authenticated | New-reader username setup. | Username validation/save API. |
 | `/account/email/verify` | Public token route | Verifies pending email changes. | Account email-change table, email notices. |
 | `/metrics` | Public with personal sections when signed in | Personal/community reading metrics, taste graph, charts, drill-down, comparison views. | ECharts, Neon aggregate queries, sample fallback. |
@@ -48,7 +48,7 @@ Authentication requirements:
 | `/admin/founding-readers` | Admin | Manage Founding Reader access mode, capacity, waitlist approvals, invitations, declines, removals, and active reader review. | `foundingReaders` helper, `founding_reader_config`, `founding_reader_waitlist`, active reader table. |
 | `/admin/beta-users` | Admin redirect | Compatibility redirect to `/admin/founding-readers`. | Redirect only. |
 | `/admin/releases` | Admin | Create, edit, preview, publish, and archive releases. | `releases` helper, `admin_release_note`. |
-| `/admin/data-health` | Admin | Metadata, import, duplicate, backfill, page count, and publisher health. | Neon diagnostic queries. |
+| `/admin/data-health` | Admin | Metadata, import, metadata review queue, duplicate, backfill, page count, and publisher health. | Neon diagnostic queries. |
 | `/admin/users` | Admin | Search users and delete users from list. | `searchAdminUsers`, `deleteAdminUser`. |
 | `/admin/users/[username]` | Admin | User detail counts and delete-user flow. | `loadAdminUserDetail`, `deleteAdminUser`. |
 | `/robots.txt` | Public | Robots directives. | Astro endpoint. |

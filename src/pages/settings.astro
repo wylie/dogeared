@@ -17,8 +17,7 @@ const sectionLinks = [
 	{ id: "privacy-settings", label: "Privacy" },
 	{ id: "reading-defaults", label: "Reading Defaults" },
 	{ id: "personalization-settings", label: "Personalization" },
-	{ id: "goodreads-import", label: "Import Goodreads" },
-	{ id: "import-controls", label: "Import Controls" },
+	{ id: "import-dashboard", label: "Import" },
 	{ id: "data-export", label: "Data Export" },
 	{ id: "api-settings", label: "API" },
 	{ id: "security-settings", label: "Security" },
@@ -76,45 +75,73 @@ const sectionLinks = [
 			<p id="email-change-feedback" class="feedback" hidden></p>
 		</section>
 
-		<section class="settings-section" id="goodreads-import" aria-labelledby="goodreads-import-title">
-			<h2 id="goodreads-import-title">Import Goodreads Data</h2>
+		<section class="settings-section import-dashboard" id="import-dashboard" aria-labelledby="import-dashboard-title">
+			<h2 id="import-dashboard-title">Import Dashboard</h2>
 			<p class="section-copy">
-				Upload your Goodreads library export CSV to bring your existing shelves into DogEared. If you are starting fresh, you can skip import and add books from Search.
+				Bring your Goodreads shelves into DogEared with a preview first, a clear report after, and a way to resume if a sync is interrupted. If you are starting fresh, you can skip import and add books from Search.
 			</p>
-			<ol class="steps">
-				<li>In Goodreads, go to My Books and export your library as CSV.</li>
-				<li>Upload that CSV file here.</li>
-				<li>Review the import summary, then open your <a href="/profile">Profile</a> to see your shelves.</li>
-			</ol>
-
-			<form id="goodreads-import-form" class="import-form">
-				<label for="goodreads-csv">Goodreads CSV</label>
-				<input id="goodreads-csv" name="goodreadsCsv" type="file" accept=".csv,text/csv" required />
-				<button type="submit">Import Goodreads CSV</button>
-			</form>
+			<div class="import-status-grid" aria-live="polite">
+				<article class="import-stat">
+					<span>Current status</span>
+					<strong id="import-current-status">Ready</strong>
+				</article>
+				<article class="import-stat">
+					<span>Books imported</span>
+					<strong id="import-books-imported">0</strong>
+				</article>
+				<article class="import-stat">
+					<span>Books skipped</span>
+					<strong id="import-books-skipped">0</strong>
+				</article>
+				<article class="import-stat">
+					<span>Duplicates merged</span>
+					<strong id="import-duplicates-merged">0</strong>
+				</article>
+				<article class="import-stat">
+					<span>Missing metadata</span>
+					<strong id="import-missing-metadata">0</strong>
+				</article>
+				<article class="import-stat">
+					<span>Series matched</span>
+					<strong id="import-series-matched">0</strong>
+				</article>
+			</div>
+			<div class="import-workflow">
+				<form id="goodreads-import-form" class="import-form">
+					<label for="goodreads-csv">Goodreads CSV</label>
+					<input id="goodreads-csv" name="goodreadsCsv" type="file" accept=".csv,text/csv" required />
+					<div class="import-controls-row">
+						<label for="import-mode">Import mode</label>
+						<select id="import-mode">
+							<option value="merge">Merge with existing shelf</option>
+							<option value="replace">Replace existing shelf</option>
+						</select>
+					</div>
+					<label class="checkbox-row">
+						<input type="checkbox" id="import-dry-run-first" checked />
+						<span>Always show preview before importing</span>
+					</label>
+					<div class="account-actions account-actions-wrap">
+						<button type="button" id="preview-import-button" class="secondary">Preview Import</button>
+						<button type="submit">Continue Import</button>
+						<button type="button" id="cancel-import-button" class="secondary" hidden>Cancel</button>
+						<button type="button" id="resume-import-button" class="secondary" hidden>Resume Failed Sync</button>
+					</div>
+				</form>
+				<div class="import-help">
+					<h3>What DogEared checks</h3>
+					<p>DogEared reads the file, matches likely duplicate works, keeps your strongest shelf state, and flags books that may need metadata review.</p>
+				</div>
+			</div>
 
 			<p id="import-feedback" class="feedback" hidden></p>
-			<div id="import-summary" class="summary" hidden></div>
-		</section>
-
-		<section class="settings-section" id="import-controls" aria-labelledby="import-controls-title">
-			<h2 id="import-controls-title">Import Controls</h2>
-			<p class="section-copy">
-				Preview incoming rows and choose whether imports merge with existing shelf entries or replace them.
-			</p>
-			<div class="danger-form">
-				<label for="import-mode">Default import mode</label>
-				<select id="import-mode">
-					<option value="merge">Merge with existing shelf</option>
-					<option value="replace">Replace existing shelf</option>
-				</select>
-				<label class="checkbox-row">
-					<input type="checkbox" id="import-dry-run-first" checked />
-					<span>Show dry-run preview before writing data</span>
-				</label>
-				<button type="button" id="preview-import-button" class="secondary">Preview Current CSV</button>
-			</div>
 			<p id="import-controls-feedback" class="feedback" hidden></p>
+			<div id="import-preview" class="summary import-preview" hidden></div>
+			<div id="import-summary" class="summary import-report" hidden></div>
+			<div class="summary import-history" id="import-history">
+				<h3>Import History</h3>
+				<div id="import-history-list"><p>No imports have run in this browser yet.</p></div>
+			</div>
 		</section>
 
 		<section class="settings-section" id="auth-settings" aria-labelledby="auth-settings-title">
@@ -373,12 +400,11 @@ const sectionLinks = [
 	#privacy-settings { order: 7; }
 	#reading-defaults { order: 8; }
 	#personalization-settings { order: 9; }
-	#goodreads-import { order: 10; }
-	#import-controls { order: 11; }
-	#data-export { order: 12; }
-	#api-settings { order: 13; }
-	#security-settings { order: 14; }
-	#danger-zone-settings { order: 15; }
+	#import-dashboard { order: 10; }
+	#data-export { order: 11; }
+	#api-settings { order: 12; }
+	#security-settings { order: 13; }
+	#danger-zone-settings { order: 14; }
 
 	.settings-section {
 		border: var(--border-subtle);
@@ -496,6 +522,119 @@ const sectionLinks = [
 
 	.summary p {
 		margin: 0.2rem 0;
+	}
+
+	.import-status-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.55rem;
+		margin: 0.8rem 0 1rem;
+	}
+
+	.import-stat {
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.56);
+		padding: 0.65rem;
+	}
+
+	.import-stat span {
+		display: block;
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+
+	.import-stat strong {
+		display: block;
+		margin-top: 0.2rem;
+		font-size: 1.18rem;
+	}
+
+	.import-workflow {
+		display: grid;
+		grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
+		gap: 1rem;
+		align-items: start;
+	}
+
+	.import-controls-row {
+		display: grid;
+		grid-template-columns: 140px minmax(0, 1fr);
+		gap: 0.55rem;
+		align-items: center;
+		max-width: 520px;
+	}
+
+	.import-help {
+		border-left: var(--border-subtle);
+		padding-left: 0.9rem;
+		color: var(--color-text-muted);
+	}
+
+	.import-help h3,
+	.import-history h3,
+	.import-preview h3,
+	.import-report h3 {
+		margin: 0 0 0.45rem;
+		font-size: 1rem;
+	}
+
+	.import-preview-grid,
+	.import-report-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.45rem;
+		margin: 0.7rem 0;
+	}
+
+	.import-mini-stat {
+		border-top: var(--border-subtle);
+		padding-top: 0.45rem;
+	}
+
+	.import-mini-stat span {
+		display: block;
+		color: var(--color-text-muted);
+		font-size: 0.8rem;
+	}
+
+	.import-mini-stat strong {
+		display: block;
+		margin-top: 0.15rem;
+	}
+
+	.import-list {
+		margin: 0.55rem 0 0;
+		padding: 0;
+		list-style: none;
+		display: grid;
+		gap: 0.45rem;
+	}
+
+	.import-list li {
+		border-top: var(--border-subtle);
+		padding-top: 0.45rem;
+	}
+
+	.import-list strong {
+		display: block;
+	}
+
+	.import-list span,
+	.import-list small {
+		display: block;
+		color: var(--color-text-muted);
+		line-height: 1.4;
+	}
+
+	.import-history-item {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.75rem;
+		border-top: var(--border-subtle);
+		padding-top: 0.5rem;
+		margin-top: 0.5rem;
 	}
 
 	.secondary {
@@ -658,14 +797,29 @@ const sectionLinks = [
 	}
 
 	@media (max-width: 640px) {
+		.import-status-grid,
+		.import-preview-grid,
+		.import-report-grid,
+		.import-workflow,
 		.api-url-row {
 			grid-template-columns: 1fr;
+		}
+
+		.import-controls-row {
+			grid-template-columns: 1fr;
+		}
+
+		.import-help {
+			border-left: 0;
+			border-top: var(--border-subtle);
+			padding: 0.8rem 0 0;
 		}
 	}
 </style>
 
 <script>
 	import {
+		buildGoodreadsImportPreview,
 		buildGoodreadsImportPlan,
 		parseGoodreadsImportCsv,
 		summarizeGoodreadsImportPlan
@@ -674,10 +828,20 @@ const sectionLinks = [
 
 	const STORAGE_KEY = "dogeared:myreads";
 	const UPDATES_KEY = "dogeared:updates";
+	const IMPORT_HISTORY_KEY = "dogeared:import-history";
+	const IMPORT_RECOVERY_KEY = "dogeared:import-recovery";
 	const importForm = document.getElementById("goodreads-import-form");
 	const csvInput = document.getElementById("goodreads-csv");
 	const feedback = document.getElementById("import-feedback");
 	const summary = document.getElementById("import-summary");
+	const importPreview = document.getElementById("import-preview");
+	const importHistoryList = document.getElementById("import-history-list");
+	const importCurrentStatus = document.getElementById("import-current-status");
+	const importBooksImported = document.getElementById("import-books-imported");
+	const importBooksSkipped = document.getElementById("import-books-skipped");
+	const importDuplicatesMerged = document.getElementById("import-duplicates-merged");
+	const importMissingMetadata = document.getElementById("import-missing-metadata");
+	const importSeriesMatched = document.getElementById("import-series-matched");
 	const accountFeedback = document.getElementById("account-feedback");
 	const accountSignedInState = document.getElementById("account-signed-in-state");
 	const accountDangerZone = document.getElementById("account-danger-zone");
@@ -708,6 +872,8 @@ const sectionLinks = [
 	const importModeSelect = document.getElementById("import-mode");
 	const importDryRunFirst = document.getElementById("import-dry-run-first");
 	const previewImportButton = document.getElementById("preview-import-button");
+	const cancelImportButton = document.getElementById("cancel-import-button");
+	const resumeImportButton = document.getElementById("resume-import-button");
 	const importControlsFeedback = document.getElementById("import-controls-feedback");
 	const profileVisibilitySelect = document.getElementById("profile-visibility");
 	const shareLocationCheckbox = document.getElementById("share-location");
@@ -745,24 +911,170 @@ const sectionLinks = [
 			celebratedMilestones: []
 		}
 	};
+	let previewReadySignature = "";
+
+	function fileSignature(file, mode) {
+		if (!file) return "";
+		return `${mode}:${file.name}:${file.size}:${file.lastModified}`;
+	}
 
 	function showFeedback(message, isError = false) {
 		feedback.textContent = message;
 		feedback.hidden = false;
 		feedback.classList.toggle("error", isError);
+		if (importCurrentStatus instanceof HTMLElement && message) {
+			importCurrentStatus.textContent = isError ? "Needs attention" : message.replace(/\.+$/, "");
+		}
 	}
 
 	function showSummary(result) {
 		summary.innerHTML = `
+			<h3>Import Report</h3>
 			${Number.isFinite(Number(result.totalRows)) ? `<p><strong>Rows:</strong> ${result.totalRows} total, ${result.importableRows || result.imported + result.updated} importable</p>` : ""}
 			<p><strong>Imported:</strong> ${result.imported} books</p>
-			<p><strong>Updated:</strong> ${result.updated} books</p>
+			<p><strong>Works merged:</strong> ${result.updated} works</p>
 			<p><strong>Skipped:</strong> ${result.skipped} rows</p>
-			${result.duplicateRows ? `<p><strong>Duplicates collapsed:</strong> ${result.duplicateRows} rows</p>` : ""}
+			${Number.isFinite(Number(result.duplicateRows)) ? `<p><strong>Duplicates merged:</strong> ${result.duplicateRows} rows</p>` : ""}
+			${Number.isFinite(Number(result.seriesDetected)) ? `<p><strong>Series detected:</strong> ${result.seriesDetected}</p>` : ""}
+			${Number.isFinite(Number(result.metadataCompleted)) ? `<p><strong>Metadata completed:</strong> ${result.metadataCompleted} books</p>` : ""}
+			${Number.isFinite(Number(result.coversReady)) ? `<p><strong>Covers downloaded:</strong> ${result.coversReady} cover links prepared</p>` : ""}
+			${Number.isFinite(Number(result.booksRequiringReview)) ? `<p><strong>Books requiring review:</strong> ${result.booksRequiringReview}</p>` : ""}
 			${result.syncFailed ? `<p><strong>Sync failed:</strong> ${result.syncFailed} books</p>` : ""}
 			<p><strong>Shelves:</strong> Want to Read (${result.wantToRead}), Currently Reading (${result.reading}), Read (${result.finished})</p>
+			<div class="account-actions account-actions-wrap">
+				<button type="button" class="secondary" id="export-import-report-button">Export Report</button>
+				<a class="button-link secondary" href="/profile">Open Profile</a>
+			</div>
 		`;
 		summary.hidden = false;
+		updateImportDashboard(result, result.syncFailed ? "Needs attention" : "Complete");
+		saveImportHistory(result);
+		const exportButton = document.getElementById("export-import-report-button");
+		exportButton?.addEventListener("click", () => exportImportReport(result));
+	}
+
+	function escapeHtml(value) {
+		return String(value || "").replace(/[&<>"']/g, (char) => ({
+			"&": "&amp;",
+			"<": "&lt;",
+			">": "&gt;",
+			'"': "&quot;",
+			"'": "&#39;"
+		})[char] || char);
+	}
+
+	function updateImportDashboard(result = {}, status = "Ready") {
+		const setText = (element, value) => {
+			if (element instanceof HTMLElement) element.textContent = String(value);
+		};
+		setText(importCurrentStatus, status);
+		setText(importBooksImported, Number(result.imported || 0));
+		setText(importBooksSkipped, Number(result.skipped || 0));
+		setText(importDuplicatesMerged, Number(result.duplicateRows || result.potentialDuplicates || 0));
+		setText(importMissingMetadata, Number(result.missingMetadata || result.booksRequiringReview || 0));
+		setText(importSeriesMatched, Number(result.seriesDetected || 0));
+	}
+
+	function renderPreview(preview) {
+		if (!(importPreview instanceof HTMLElement)) return;
+		const duplicateItems = Array.isArray(preview.duplicateExplanations) && preview.duplicateExplanations.length > 0
+			? preview.duplicateExplanations.map((item) => `
+				<li>
+					<strong>${escapeHtml(item.title || "Untitled")}</strong>
+					<span>Existing Work: ${escapeHtml(item.existingWork || "DogEared work")}</span>
+					<span>Imported Edition: ${escapeHtml(item.importedEdition || "Goodreads row")}</span>
+					<small>${escapeHtml(item.action || "Merged into existing work")} because ${escapeHtml(item.reason || "the records describe the same book.")}</small>
+				</li>
+			`).join("")
+			: `<li><span>No likely duplicate works found in this preview.</span></li>`;
+		const reviewItems = Array.isArray(preview.reviewReasons) && preview.reviewReasons.length > 0
+			? preview.reviewReasons.map((item) => `
+				<li>
+					<strong>${escapeHtml(item.title || "Untitled")}</strong>
+					<span>${escapeHtml(item.author || "Unknown author")}</span>
+					<small>${escapeHtml((item.reasons || []).join(", "))}</small>
+				</li>
+			`).join("")
+			: `<li><span>No books need metadata review in this preview.</span></li>`;
+		importPreview.innerHTML = `
+			<h3>Import Preview</h3>
+			<p>DogEared found ${preview.importableRows} books to import. Estimated time: ${escapeHtml(preview.estimatedLabel)}.</p>
+			<div class="import-preview-grid">
+				<div class="import-mini-stat"><span>Books to import</span><strong>${preview.imported}</strong></div>
+				<div class="import-mini-stat"><span>Already in DogEared</span><strong>${preview.alreadyInDogeared}</strong></div>
+				<div class="import-mini-stat"><span>Potential duplicates</span><strong>${preview.potentialDuplicates}</strong></div>
+				<div class="import-mini-stat"><span>Series detected</span><strong>${preview.seriesDetected}</strong></div>
+				<div class="import-mini-stat"><span>Missing metadata</span><strong>${preview.missingMetadata}</strong></div>
+				<div class="import-mini-stat"><span>Skipped rows</span><strong>${preview.skipped}</strong></div>
+			</div>
+			<h3>Duplicate Resolution</h3>
+			<ul class="import-list">${duplicateItems}</ul>
+			<h3>Metadata Review Queue</h3>
+			<ul class="import-list">${reviewItems}</ul>
+			<p>Continue to save these changes, or cancel to leave your shelves exactly as they are.</p>
+		`;
+		importPreview.hidden = false;
+		updateImportDashboard(preview, "Preview ready");
+	}
+
+	function loadImportHistory() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(IMPORT_HISTORY_KEY) || "[]");
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function saveImportHistory(item) {
+		const history = loadImportHistory();
+		history.unshift({ ...item, createdAt: new Date().toISOString() });
+		localStorage.setItem(IMPORT_HISTORY_KEY, JSON.stringify(history.slice(0, 8)));
+		renderImportHistory();
+	}
+
+	function renderImportHistory() {
+		if (!(importHistoryList instanceof HTMLElement)) return;
+		const history = loadImportHistory();
+		if (history.length === 0) {
+			importHistoryList.innerHTML = "<p>No imports have run in this browser yet.</p>";
+			return;
+		}
+		importHistoryList.innerHTML = history.map((item) => `
+			<div class="import-history-item">
+				<span>${escapeHtml(new Date(item.createdAt).toLocaleString())}</span>
+				<strong>${Number(item.imported || 0)} imported, ${Number(item.updated || 0)} merged, ${Number(item.skipped || 0)} skipped</strong>
+			</div>
+		`).join("");
+	}
+
+	function saveImportRecovery(entries) {
+		if (!Array.isArray(entries) || entries.length === 0) {
+			localStorage.removeItem(IMPORT_RECOVERY_KEY);
+			if (resumeImportButton instanceof HTMLElement) resumeImportButton.hidden = true;
+			return;
+		}
+		localStorage.setItem(IMPORT_RECOVERY_KEY, JSON.stringify(entries));
+		if (resumeImportButton instanceof HTMLElement) resumeImportButton.hidden = false;
+	}
+
+	function loadImportRecovery() {
+		try {
+			const parsed = JSON.parse(localStorage.getItem(IMPORT_RECOVERY_KEY) || "[]");
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function exportImportReport(result) {
+		const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
+		const url = URL.createObjectURL(blob);
+		const anchor = document.createElement("a");
+		anchor.href = url;
+		anchor.download = `dogeared-import-report-${new Date().toISOString().slice(0, 10)}.json`;
+		anchor.click();
+		URL.revokeObjectURL(url);
 	}
 
 	function showAccountFeedback(message, isError = false) {
@@ -828,175 +1140,6 @@ const sectionLinks = [
 		const n = Number(value);
 		if (!Number.isFinite(n) || n < 0) return 0;
 		return Math.floor(n);
-	}
-
-	function normalizeIsbn(value) {
-		return String(value || "").replace(/[^0-9Xx]/g, "").toUpperCase();
-	}
-
-	function coverFromIsbn(isbn13, isbn10, size = "M") {
-		const clean13 = normalizeIsbn(isbn13);
-		const clean10 = normalizeIsbn(isbn10);
-		if (clean13.length === 13) return `https://covers.openlibrary.org/b/isbn/${clean13}-${size}.jpg`;
-		if (clean10.length === 10) return `https://covers.openlibrary.org/b/isbn/${clean10}-${size}.jpg`;
-		return "";
-	}
-
-	function canonicalizeTitle(value) {
-		return normalizeText(value)
-			.toLowerCase()
-			.normalize("NFKD")
-			.replace(/[\u0300-\u036f]/g, "")
-			.replace(/\([^)]*\)/g, " ")
-			.replace(/\b(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition)\b/g, " ")
-			.split(":")[0]
-			.replace(/^(the|a|an)\s+/g, "")
-			.replace(/[^a-z0-9\s]/g, " ")
-			.replace(/\s+/g, " ")
-			.trim();
-	}
-
-	function canonicalizeAuthor(value) {
-		return normalizeText(value)
-			.toLowerCase()
-			.normalize("NFKD")
-			.replace(/[\u0300-\u036f]/g, "")
-			.replace(/^(by\s+)/, "")
-			.replace(/[^a-z0-9\s]/g, " ")
-			.replace(/\s+/g, " ")
-			.trim();
-	}
-
-	function canonicalWorkKey(entry) {
-		const isbn13 = normalizeIsbn(entry.isbn13);
-		const isbn10 = normalizeIsbn(entry.isbn10);
-		if (isbn13) return `isbn13:${isbn13}`;
-		if (isbn10) return `isbn10:${isbn10}`;
-		return `title_author:${canonicalizeTitle(entry.title)}|${canonicalizeAuthor(entry.author)}`;
-	}
-
-	function parseCsv(text) {
-		const rows = [];
-		let row = [];
-		let cell = "";
-		let inQuotes = false;
-
-		for (let i = 0; i < text.length; i += 1) {
-			const char = text[i];
-			const next = text[i + 1];
-
-			if (char === '"') {
-				if (inQuotes && next === '"') {
-					cell += '"';
-					i += 1;
-				} else {
-					inQuotes = !inQuotes;
-				}
-				continue;
-			}
-
-			if (!inQuotes && char === ",") {
-				row.push(cell);
-				cell = "";
-				continue;
-			}
-
-			if (!inQuotes && (char === "\n" || char === "\r")) {
-				if (char === "\r" && next === "\n") i += 1;
-				row.push(cell);
-				rows.push(row);
-				row = [];
-				cell = "";
-				continue;
-			}
-
-			cell += char;
-		}
-
-		if (cell.length > 0 || row.length > 0) {
-			row.push(cell);
-			rows.push(row);
-		}
-
-		return rows;
-	}
-
-	function toHeaderMap(headers) {
-		const map = new Map();
-		headers.forEach((header, index) => {
-			map.set(normalizeText(header).toLowerCase(), index);
-		});
-		return map;
-	}
-
-	function getValue(row, headerMap, headerName) {
-		const index = headerMap.get(headerName.toLowerCase());
-		if (index === undefined) return "";
-		return normalizeText(row[index]);
-	}
-
-	function mapGoodreadsShelfToStatus(value) {
-		const shelf = normalizeText(value).toLowerCase();
-		if (shelf === "currently-reading") return "reading";
-		if (shelf === "read") return "finished";
-		return "want_to_read";
-	}
-
-	const NON_GENRE_SHELVES = new Set([
-		"",
-		"all",
-		"book-club",
-		"books-i-own",
-		"default",
-		"did-not-finish",
-		"dnf",
-		"faves",
-		"favorites",
-		"fiction",
-		"general",
-		"kindle",
-		"library",
-		"maybe",
-		"owned",
-		"physical",
-		"read",
-		"re-read",
-		"reread",
-		"tbr",
-		"to-buy",
-		"to-read",
-		"currently-reading",
-		"want-to-buy",
-		"want-to-own"
-	]);
-
-	function slugifyShelf(value) {
-		return normalizeText(value)
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, "-")
-			.replace(/^-+|-+$/g, "");
-	}
-
-	function isGenreShelf(slug) {
-		if (!slug || NON_GENRE_SHELVES.has(slug)) return false;
-		if (/^\d{4}(-reads)?$/.test(slug)) return false;
-		if (/^\d+$/.test(slug)) return false;
-		return true;
-	}
-
-	function parseGenres(value) {
-		if (!value) return [];
-		return value.split(",")
-			.map((item) => normalizeText(item))
-			.filter((item) => isGenreShelf(slugifyShelf(item)));
-	}
-
-	function parseDate(value) {
-		const text = normalizeText(value);
-		if (!text) return "";
-		const parsed = new Date(text);
-		if (!Number.isFinite(parsed.getTime())) return "";
-		return parsed.toISOString().slice(0, 10);
 	}
 
 	function loadEntries() {
@@ -1300,86 +1443,6 @@ const sectionLinks = [
 		return failed;
 	}
 
-	function applyStatus(entry, status, options = { setFinishedDateWhenMissing: true }) {
-		entry.status = status;
-		if (status === "finished") {
-			if (normalizeNumber(entry.totalPages) > 0) {
-				entry.currentPage = normalizeNumber(entry.totalPages);
-			}
-			if (options.setFinishedDateWhenMissing) {
-				entry.finishedDate = entry.finishedDate || new Date().toISOString().slice(0, 10);
-			}
-			return;
-		}
-		if (status === "reading") {
-			entry.currentPage = Math.max(0, normalizeNumber(entry.currentPage));
-			entry.finishedDate = "";
-			return;
-		}
-		entry.currentPage = 0;
-		entry.finishedDate = "";
-	}
-
-	function normalizeImportedEntry(raw) {
-		const status = mapGoodreadsShelfToStatus(raw.exclusiveShelf);
-		const totalPages = normalizeNumber(raw.pages);
-		const finishedDate = status === "finished" ? parseDate(raw.dateRead) : "";
-		const categories = parseGenres(raw.bookshelves);
-		const isbn10 = normalizeIsbn(raw.isbn);
-		const isbn13 = normalizeIsbn(raw.isbn13);
-		const entry = {
-			id: `book_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-			title: normalizeText(raw.title),
-			author: normalizeText(raw.author),
-			totalPages,
-			currentPage: 0,
-			status,
-			finishedDate,
-			coverUrl: coverFromIsbn(isbn13, isbn10),
-			format: normalizeText(raw.binding),
-			language: "",
-			publisher: normalizeText(raw.publisher),
-			publishedDate: normalizeText(raw.yearPublished),
-			isbn10,
-			isbn13,
-			categories,
-			updatedAt: Date.now()
-		};
-		applyStatus(entry, status, { setFinishedDateWhenMissing: false });
-		entry.finishedDate = finishedDate || "";
-		return entry;
-	}
-
-	function toImportCandidates(csvText) {
-		const rows = parseCsv(csvText);
-		if (rows.length < 2) return [];
-		const headers = rows[0];
-		const headerMap = toHeaderMap(headers);
-		const results = [];
-
-		for (let i = 1; i < rows.length; i += 1) {
-			const row = rows[i];
-			const title = getValue(row, headerMap, "Title");
-			const author = getValue(row, headerMap, "Author");
-			if (!title) continue;
-			results.push(normalizeImportedEntry({
-				title,
-				author,
-				exclusiveShelf: getValue(row, headerMap, "Exclusive Shelf"),
-				pages: getValue(row, headerMap, "Number of Pages"),
-				dateRead: getValue(row, headerMap, "Date Read"),
-				bookshelves: getValue(row, headerMap, "Bookshelves"),
-				binding: getValue(row, headerMap, "Binding"),
-				publisher: getValue(row, headerMap, "Publisher"),
-				yearPublished: getValue(row, headerMap, "Year Published"),
-				isbn: getValue(row, headerMap, "ISBN"),
-				isbn13: getValue(row, headerMap, "ISBN13")
-			}));
-		}
-
-		return results;
-	}
-
 	async function clearShelfOnServer() {
 		const response = await fetch("/api/account/clear-shelf", {
 			method: "POST",
@@ -1393,16 +1456,6 @@ const sectionLinks = [
 		return response.ok;
 	}
 
-	function buildImportSummary(candidates) {
-		const totals = { total: candidates.length, wantToRead: 0, reading: 0, finished: 0 };
-		for (const row of candidates) {
-			if (row.status === "reading") totals.reading += 1;
-			else if (row.status === "finished") totals.finished += 1;
-			else totals.wantToRead += 1;
-		}
-		return totals;
-	}
-
 	async function importGoodreadsCsv(file, options = { mode: "merge", dryRun: false }) {
 		const text = await file.text();
 		const parseResult = parseGoodreadsImportCsv(text);
@@ -1413,13 +1466,15 @@ const sectionLinks = [
 		const existingEntries = mode === "replace" ? [] : loadEntries();
 		const plan = buildGoodreadsImportPlan(parseResult, existingEntries, mode);
 		const summary = summarizeGoodreadsImportPlan(plan);
+		const preview = buildGoodreadsImportPreview(plan);
 		if (options?.dryRun) {
 			return {
-				...summary,
+				...preview,
 				localCache: "full",
 				syncFailed: 0,
 				previewOnly: true,
-				totalPreview: summary.importableRows
+				totalPreview: summary.importableRows,
+				changedEntries: plan.changedEntries
 			};
 		}
 
@@ -1436,8 +1491,9 @@ const sectionLinks = [
 		const syncFailed = await syncEntriesToServer(plan.changedEntries, (completed, total) => {
 			showFeedback(`Syncing imported books: ${completed}/${total} saved...`);
 		});
+		saveImportRecovery(syncFailed > 0 ? plan.changedEntries.slice(-syncFailed) : []);
 
-		return { ...summary, localCache, syncFailed, previewOnly: false };
+		return { ...preview, localCache, syncFailed, previewOnly: false };
 	}
 
 	function setEmailChangeModal(open) {
@@ -1505,26 +1561,16 @@ const sectionLinks = [
 		}
 		const mode = importModeSelect instanceof HTMLSelectElement && importModeSelect.value === "replace" ? "replace" : "merge";
 		const dryRunFirst = importDryRunFirst instanceof HTMLInputElement ? importDryRunFirst.checked : false;
-			showFeedback(dryRunFirst ? "Checking your Goodreads CSV before importing..." : "Importing Goodreads data...");
+		const signature = fileSignature(file, mode);
+		showFeedback(dryRunFirst && previewReadySignature !== signature ? "Checking your Goodreads CSV before importing..." : "Importing Goodreads data...");
 		try {
-			if (dryRunFirst) {
+			if (dryRunFirst && previewReadySignature !== signature) {
 				const preview = await importGoodreadsCsv(file, { mode, dryRun: true });
-				showSummary({
-					imported: preview.totalPreview,
-					updated: 0,
-					skipped: preview.skipped,
-					duplicateRows: preview.duplicateRows,
-					wantToRead: preview.wantToRead,
-					reading: preview.reading,
-					finished: preview.finished,
-					totalRows: preview.totalRows,
-					importableRows: preview.importableRows
-				});
-				const proceed = window.confirm(`Preview found ${preview.totalPreview} importable books. Continue with ${mode === "replace" ? "replace" : "merge"} import?`);
-				if (!proceed) {
-					showFeedback("Import canceled. Your shelves were not changed.");
-					return;
-				}
+				renderPreview(preview);
+				previewReadySignature = signature;
+				if (cancelImportButton instanceof HTMLElement) cancelImportButton.hidden = false;
+				showFeedback("Preview ready. Review the details, then choose Continue Import when you are ready.");
+				return;
 			}
 			const result = await importGoodreadsCsv(file, { mode, dryRun: false });
 			const statusParts = [
@@ -1542,6 +1588,9 @@ const sectionLinks = [
 				showFeedback(`Import complete: ${statusParts.join(", ")}. Open Profile to review your shelves.`);
 			}
 			showSummary(result);
+			previewReadySignature = "";
+			if (importPreview instanceof HTMLElement) importPreview.hidden = true;
+			if (cancelImportButton instanceof HTMLElement) cancelImportButton.hidden = true;
 			importForm.reset();
 		} catch (error) {
 			showFeedback(error instanceof Error ? error.message : "Unable to import this CSV. Confirm it is a Goodreads export, then try again.", true);
@@ -1558,20 +1607,46 @@ const sectionLinks = [
 		try {
 			const mode = importModeSelect instanceof HTMLSelectElement && importModeSelect.value === "replace" ? "replace" : "merge";
 			const preview = await importGoodreadsCsv(file, { mode, dryRun: true });
-			showSummary({
-				imported: preview.totalPreview,
-				updated: 0,
-				skipped: preview.skipped,
-				duplicateRows: preview.duplicateRows,
-				wantToRead: preview.wantToRead,
-				reading: preview.reading,
-				finished: preview.finished,
-				totalRows: preview.totalRows,
-				importableRows: preview.importableRows
-			});
+			renderPreview(preview);
+			previewReadySignature = fileSignature(file, mode);
+			if (cancelImportButton instanceof HTMLElement) cancelImportButton.hidden = false;
 			showImportControlsFeedback(`Preview ready: ${preview.totalPreview} importable books detected.`);
 		} catch (error) {
 			showImportControlsFeedback(error instanceof Error ? error.message : "Unable to preview this CSV. Confirm it is a Goodreads export, then try again.", true);
+		}
+	});
+
+	cancelImportButton?.addEventListener("click", () => {
+		previewReadySignature = "";
+		if (importPreview instanceof HTMLElement) importPreview.hidden = true;
+		if (summary instanceof HTMLElement) summary.hidden = true;
+		if (cancelImportButton instanceof HTMLElement) cancelImportButton.hidden = true;
+		showFeedback("Import canceled. Your shelves were not changed.");
+		updateImportDashboard({}, "Canceled");
+	});
+
+	resumeImportButton?.addEventListener("click", async () => {
+		const recoveryEntries = loadImportRecovery();
+		if (recoveryEntries.length === 0) {
+			showFeedback("There is no interrupted import to resume.", true);
+			if (resumeImportButton instanceof HTMLElement) resumeImportButton.hidden = true;
+			return;
+		}
+		showFeedback(`Resuming sync for ${recoveryEntries.length} books...`);
+		try {
+			const syncFailed = await syncEntriesToServer(recoveryEntries, (completed, total) => {
+				showFeedback(`Resuming imported books: ${completed}/${total} saved...`);
+			});
+			if (syncFailed > 0) {
+				saveImportRecovery(recoveryEntries.slice(-syncFailed));
+				showFeedback(`${syncFailed} books still need another retry. You can resume again.`, true);
+				return;
+			}
+			saveImportRecovery([]);
+			showFeedback("Import sync resumed and completed.");
+			updateImportDashboard({ imported: recoveryEntries.length, skipped: 0, duplicateRows: 0 }, "Complete");
+		} catch {
+			showFeedback("Unable to resume right now. Your recovery list is still saved.", true);
 		}
 	});
 
@@ -1899,6 +1974,9 @@ const sectionLinks = [
 	});
 
 	populateApiEndpoints();
+	renderImportHistory();
+	updateImportDashboard({}, loadImportRecovery().length > 0 ? "Resume available" : "Ready");
+	if (resumeImportButton instanceof HTMLElement) resumeImportButton.hidden = loadImportRecovery().length === 0;
 	void loadAuthState();
 	void loadPreferences();
 	void loadSecurityView();

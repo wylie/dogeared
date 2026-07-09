@@ -45,7 +45,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Reading Journal: private searchable notebook for what a reader was thinking while reading, including dated entries, optional book context, one optional reading position, moods, and personal tags.
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
-- Settings: profile/account entry points, magic-link auth, email changes, Goodreads import, preferences, privacy, notifications, Learning controls for helpful tips, data export, shelf clearing, API endpoint references, and sessions.
+- Settings: profile/account entry points, magic-link auth, email changes, Goodreads import dashboard, preferences, privacy, notifications, Learning controls for helpful tips, data export, shelf clearing, API endpoint references, and sessions.
 - Admin: operational overview, privacy-friendly product analytics, Founding Reader access controls, release workflow, feedback dashboard, data health, user search, user detail, and admin delete-user tools.
 - Mission, Roadmap, Release Notes, Privacy, Support: public product context, shipped changes, and project direction.
 
@@ -73,7 +73,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Social reading: follow readers, view following activity, like activity, comment on activity, and receive activity notifications.
 - Profile management: update name, avatar, location, birth year, goal text, favorite book, favorite author, blurb, and genres.
 - Privacy management: set public/private profile visibility and control location, activity, discovery, and follow availability.
-- Import/export: import Goodreads CSV data with preview/merge/replace controls, export account data as JSON, and clear shelf entries.
+- Import/export: import Goodreads CSV data with dashboard status, preview, duplicate explanations, merge/replace controls, reports, resumable failed syncs, export account data as JSON, and clear shelf entries.
 - Admin operations: inspect site statistics, aggregate product analytics, Founding Reader access, releases, feedback and bug reports, metadata coverage, import health, duplicate risk, backfill movement, and user accounts.
 
 ## Current Capabilities
@@ -248,7 +248,17 @@ The Releases dashboard owns DogEared's release lifecycle. Admins create draft re
 
 ### Settings
 
-Settings includes profile/account links, email change, magic-link auth, notifications preferences, Learning controls for guided tips, privacy preferences, reading defaults, personalization preferences, Goodreads import, import controls, API endpoint references, JSON export, shelf clearing, and security/session controls. Self-service delete account is not exposed in Settings, even though a backend endpoint exists.
+Settings includes profile/account links, email change, magic-link auth, notifications preferences, Learning controls for guided tips, privacy preferences, reading defaults, personalization preferences, a Goodreads import dashboard, API endpoint references, JSON export, shelf clearing, and security/session controls. Self-service delete account is not exposed in Settings, even though a backend endpoint exists.
+
+### Import Experience
+
+DogEared's import experience is designed to be transparent and forgiving. The Settings Import Dashboard shows current import status, books imported, skipped rows, duplicates merged, missing metadata, series matches, import history, and recovery state.
+
+Before writing shelf changes, readers can preview the Goodreads CSV. Preview explains how many books will import, which works already exist in DogEared, likely duplicate rows, possible series matches, estimated time, and books that may need metadata review. Duplicate resolution copy names the Existing Work, Imported Edition, and action, such as "Merged into existing work," so merges are never silent.
+
+After import, DogEared shows an Import Report with books imported, works merged, series detected, metadata completed, covers prepared, books requiring review, skipped rows, sync failures, and shelf totals. Reports can be exported as JSON from the browser. If server sync fails after local planning, DogEared stores a browser-local recovery list and offers Resume Failed Sync instead of forcing the reader to restart from zero.
+
+Admins review metadata quality from `/admin/data-health`, including missing covers, authors, descriptions, page counts, and likely series gaps. Reader imports should not be blocked on metadata cleanup.
 
 ### Metrics
 

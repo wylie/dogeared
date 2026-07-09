@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
 	buildGoodreadsImportPlan,
+	buildGoodreadsImportPreview,
 	canonicalWorkKey,
 	dedupeGoodreadsCandidates,
 	parseGoodreadsImportCsv,
@@ -131,4 +132,32 @@ test("buildGoodreadsImportPlan replace mode ignores existing shelf entries", () 
 	assert.equal(plan.updated, 0);
 	assert.equal(plan.nextEntries.length, 1);
 	assert.equal(plan.nextEntries[0].title, "Replacement");
+});
+
+test("buildGoodreadsImportPreview explains duplicates, timing, and metadata review", () => {
+	const existing = entry({
+		id: "book_existing",
+		title: "Dune",
+		author: "Frank Herbert",
+		status: "want_to_read",
+		isbn13: "9780441172719"
+	});
+	const parseResult = {
+		totalRows: 2,
+		skippedRows: 1,
+		candidates: [
+			entry({ title: "Dune", author: "Frank Herbert", status: "finished", isbn13: "9780441172719", totalPages: 0, coverUrl: "", finishedDate: "2024-01-01" }),
+			entry({ title: "The Test Saga Book 2", author: "", status: "want_to_read", isbn13: "" })
+		]
+	};
+
+	const plan = buildGoodreadsImportPlan(parseResult, [existing], "merge");
+	const preview = buildGoodreadsImportPreview(plan);
+
+	assert.equal(preview.alreadyInDogeared, 1);
+	assert.equal(preview.potentialDuplicates >= 1, true);
+	assert.equal(preview.seriesDetected, 1);
+	assert.equal(preview.booksRequiringReview >= 1, true);
+	assert.equal(preview.duplicateExplanations[0].action, "Merged into existing work");
+	assert.equal(preview.estimatedLabel.length > 0, true);
 });

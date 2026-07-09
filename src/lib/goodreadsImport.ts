@@ -49,6 +49,27 @@ export type GoodreadsImportSummary = {
 	importableRows: number;
 };
 
+export type GoodreadsImportPreview = GoodreadsImportSummary & {
+	estimatedSeconds: number;
+	estimatedLabel: string;
+	potentialDuplicates: number;
+	alreadyInDogeared: number;
+	seriesDetected: number;
+	missingMetadata: number;
+	booksRequiringReview: number;
+	metadataCompleted: number;
+	coversReady: number;
+	duplicateExplanations: Array<{
+		title: string;
+		author: string;
+		reason: string;
+		existingWork: string;
+		importedEdition: string;
+		action: string;
+	}>;
+	reviewReasons: Array<{ title: string; author: string; reasons: string[] }>;
+};
+
 export function normalizeText(value: unknown) {
 	return String(value || "").trim();
 }
@@ -469,5 +490,66 @@ export function summarizeGoodreadsImportPlan(plan: GoodreadsImportPlan): Goodrea
 		finished: statusTotals.finished,
 		totalRows: plan.totalRows,
 		importableRows: plan.importableRows
+	};
+}
+
+function hasSeriesSignal(entry: Partial<GoodreadsImportEntry>) {
+	const text = `${entry.title || ""} ${Array.isArray(entry.categories) ? entry.categories.join(" ") : ""}`.toLowerCase();
+	return /\b(series|book\s+\d+|#\d+|trilogy|saga|chronicles)\b/.test(text);
+}
+
+function metadataReviewReasons(entry: Partial<GoodreadsImportEntry>) {
+	const reasons: string[] = [];
+	if (!normalizeText(entry.coverUrl)) reasons.push("Missing cover");
+	if (!normalizeText(entry.author)) reasons.push("Missing author");
+	if (normalizeNumber(entry.totalPages) <= 0) reasons.push("Missing page count");
+	if (!normalizeText(entry.publishedDate)) reasons.push("Missing publication detail");
+	if (!normalizeText(entry.isbn13) && !normalizeText(entry.isbn10)) reasons.push("Missing ISBN");
+	if (hasSeriesSignal(entry)) reasons.push("Possible series match");
+	return reasons;
+}
+
+function formatEstimatedTime(bookCount: number) {
+	const seconds = Math.max(10, Math.ceil(bookCount / 12) * 10);
+	if (seconds < 60) return { estimatedSeconds: seconds, estimatedLabel: "under a minute" };
+	const minutes = Math.ceil(seconds / 60);
+	return { estimatedSeconds: seconds, estimatedLabel: `${minutes} minute${minutes === 1 ? "" : "s"}` };
+}
+
+export function buildGoodreadsImportPreview(plan: GoodreadsImportPlan): GoodreadsImportPreview {
+	const summary = summarizeGoodreadsImportPlan(plan);
+	const changedEntries = Array.isArray(plan.changedEntries) ? plan.changedEntries : [];
+	const duplicateExplanations = changedEntries
+		.slice(0, 12)
+		.filter((entry) => plan.updated > 0 && normalizeText(entry.title))
+		.map((entry) => ({
+			title: entry.title,
+			author: entry.author,
+			reason: "DogEared found the same work by title and author, or by matching edition identifiers.",
+			existingWork: `${entry.title}${entry.author ? ` by ${entry.author}` : ""}`,
+			importedEdition: entry.isbn13 || entry.isbn10 || entry.format || "Imported Goodreads row",
+			action: "Merged into existing work"
+		}));
+	const reviewReasons = changedEntries
+		.map((entry) => ({ title: entry.title, author: entry.author, reasons: metadataReviewReasons(entry) }))
+		.filter((item) => item.reasons.length > 0)
+		.slice(0, 12);
+	const seriesDetected = changedEntries.filter(hasSeriesSignal).length;
+	const missingMetadata = changedEntries.filter((entry) => metadataReviewReasons(entry).some((reason) => reason !== "Possible series match")).length;
+	const coversReady = changedEntries.filter((entry) => normalizeText(entry.coverUrl)).length;
+	const time = formatEstimatedTime(changedEntries.length);
+
+	return {
+		...summary,
+		...time,
+		potentialDuplicates: summary.duplicateRows + summary.updated,
+		alreadyInDogeared: summary.updated,
+		seriesDetected,
+		missingMetadata,
+		booksRequiringReview: reviewReasons.length,
+		metadataCompleted: Math.max(0, changedEntries.length - missingMetadata),
+		coversReady,
+		duplicateExplanations,
+		reviewReasons
 	};
 }
