@@ -754,12 +754,53 @@ const adminNavItems: NavItem[] = [
     }
     #left-hand-nav .sidebar-footer {
       grid-area: footer;
-      margin-top: 0.35rem;
-      padding-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      margin-top: 0.22rem;
+      padding: 0.28rem 0 0;
+      min-width: 0;
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      white-space: nowrap;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
       font-size: 0.76rem;
     }
+    #left-hand-nav .sidebar-footer::-webkit-scrollbar {
+      display: none;
+    }
+    #left-hand-nav .sidebar-footer p,
     #left-hand-nav .sidebar-footer nav {
-      gap: 0.35rem 0.6rem;
+      flex: 0 0 auto;
+    }
+    #left-hand-nav .sidebar-footer p + p::before,
+    #left-hand-nav .sidebar-footer nav::before {
+      content: "·";
+      margin-right: 0.45rem;
+      color: var(--color-border);
+    }
+    #left-hand-nav .footer-program-meta {
+      display: inline-flex;
+      flex-wrap: nowrap;
+      gap: 0.28rem;
+      margin-top: 0 !important;
+      font-size: inherit;
+    }
+    #left-hand-nav .footer-program-meta a::before {
+      content: "";
+      margin-right: 0;
+    }
+    #left-hand-nav .sidebar-footer nav {
+      display: inline-flex;
+      flex-wrap: nowrap;
+      gap: 0.45rem;
+      margin-top: 0;
+    }
+    #left-hand-nav .sidebar-footer nav a {
+      min-height: 32px;
+      align-items: center;
     }
   }
   @media (max-width: 680px) {

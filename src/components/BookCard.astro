@@ -431,13 +431,21 @@ function renderAverageStars(value: number) {
 		border: 1px solid var(--color-border-soft);
 		background: var(--color-surface);
 		color: var(--color-text-muted);
-		padding: 0.32rem 0.58rem;
+		padding: 0.28rem 0.34rem;
 		font: inherit;
-		font-size: 0.78rem;
+		font-size: 0.76rem;
 		font-weight: 750;
-		line-height: 1.2;
+		line-height: 1;
 		text-decoration: none;
 		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: clip;
+		box-sizing: border-box;
 	}
 	.recommendation-feedback button[data-feedback="interesting"] {
 		border-color: rgba(175, 124, 39, 0.32);
@@ -500,6 +508,16 @@ function renderAverageStars(value: number) {
 		.cover-actions :global(.shelf-dropdown) {
 			--shelf-trigger-height: 30px;
 			--shelf-trigger-min-height: 30px;
+		}
+		.recommendation-feedback {
+			gap: 0.26rem;
+			margin-top: 0.24rem;
+		}
+		.recommendation-feedback button {
+			min-height: 30px;
+			padding-inline: 0.2rem;
+			font-size: 0.71rem;
+			letter-spacing: 0;
 		}
 		.card-body h3 {
 			padding-right: 1.55rem;

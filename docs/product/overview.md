@@ -139,6 +139,8 @@ Empty states are expected to answer "What should I do next?" Owner views on Prof
 
 Launch polish keeps async feedback visible while work is in flight. Shelf saves, recommendation feedback, and progress updates should expose busy states through disabled controls, `aria-busy` where helpful, and live status messages that do not collapse card layout. Developer diagnostics may log failing progress requests, but normal successful use should not create console errors.
 
+Mobile layout polish treats the small-screen interface as its own reading surface. Dense discovery sections use compact sticky section headers, horizontally scrollable no-wrap jump links, and single-row compressed navigation metadata where it reduces repeated vertical space. Recommendation feedback buttons remain shared BookCard controls and must stay centered, single-line, and readable at common phone widths.
+
 The launch-readiness stance is documented in `docs/beta-readiness.md`. Remaining early-access risks are mostly operational: real-device mobile QA, assistive-technology review, and centralized monitoring.
 
 ### Editorial Collections
