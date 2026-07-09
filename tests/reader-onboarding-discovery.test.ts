@@ -152,9 +152,9 @@ test("mobile progress updater keeps controls readable and touch sized", () => {
 	const mobileStart = source.indexOf("@media (max-width: 520px)");
 	assert.ok(mobileStart > -1);
 	assert.ok(source.indexOf("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)", mobileStart) > mobileStart);
-	assert.ok(source.indexOf('"type type"', mobileStart) > mobileStart);
-	assert.ok(source.indexOf('"input input"', mobileStart) > mobileStart);
+	assert.ok(source.indexOf('"type input"', mobileStart) > mobileStart);
 	assert.ok(source.indexOf('"save finish"', mobileStart) > mobileStart);
+	assert.ok(source.indexOf("@media (max-width: 319px)") > mobileStart);
 	assert.ok(source.indexOf("height: 44px", mobileStart) > mobileStart);
 	assert.ok(source.indexOf("progress-inline-save", mobileStart) > mobileStart);
 	assert.ok(source.indexOf("progress-inline-finish", mobileStart) > mobileStart);

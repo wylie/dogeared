@@ -33,6 +33,7 @@ test("profile progress updater uses equal Save and Finish action columns", () =>
 	assert.equal(profileSource.includes("grid-area: save;"), true);
 	assert.equal(profileSource.includes("grid-area: finish;"), true);
 	assert.equal(profileSource.includes("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);"), true);
+	assert.equal(profileSource.includes("@media (max-width: 319px)"), true);
 	assert.equal(profileSource.includes("width: 44px;"), false);
 	assert.equal(profileSource.includes(">Complete\n"), false);
 	assert.equal(overviewSource.includes("Save, and Finish actions"), true);

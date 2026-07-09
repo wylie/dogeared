@@ -3696,23 +3696,22 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		.progress-inline-controls {
 			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 			grid-template-areas:
-				"type type"
-				"input input"
+				"type input"
 				"save finish";
-			gap: 0.42rem;
-			padding: 0.42rem;
+			gap: 0.34rem;
+			padding: 0.36rem;
 		}
 		.progress-inline-type,
 		.progress-inline-input {
 			height: 44px;
 			min-height: 44px;
-			font-size: 0.9rem;
+			font-size: 0.86rem;
 		}
 		.progress-inline-type {
-			padding: 0 2rem 0 0.72rem;
+			padding: 0 1.65rem 0 0.58rem;
 		}
 		.progress-inline-input {
-			padding: 0 0.72rem;
+			padding: 0 0.58rem;
 		}
 		.progress-inline-save {
 			height: 44px;
@@ -3736,6 +3735,14 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			width: 100%;
 			justify-content: flex-start;
 			flex-wrap: wrap;
+		}
+	}
+	@media (max-width: 319px) {
+		.progress-inline-controls {
+			grid-template-areas:
+				"type type"
+				"input input"
+				"save finish";
 		}
 	}
 </style>
