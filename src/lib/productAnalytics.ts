@@ -57,6 +57,35 @@ export type AdminProductAnalytics = {
 	featureAdoption: AnalyticsTableRow[];
 };
 
+export function emptyAdminProductAnalytics(): AdminProductAnalytics {
+	return {
+		generatedAt: new Date().toISOString(),
+		growth: [],
+		reading: [],
+		community: [],
+		search: {
+			totalSearches30d: 0,
+			noResultSearches30d: 0,
+			noResultRate30d: 0,
+			topBooks: [],
+			topAuthors: [],
+			topGenres: [],
+			noResultQueries: []
+		},
+		discovery: {
+			impressions30d: 0,
+			clicks30d: 0,
+			interesting30d: 0,
+			hidden30d: 0,
+			addToShelf30d: 0,
+			ctr30d: 0,
+			topSources: []
+		},
+		funnel: [],
+		featureAdoption: []
+	};
+}
+
 function normalizeText(value: unknown, max = 160) {
 	return String(value || "").trim().slice(0, max);
 }

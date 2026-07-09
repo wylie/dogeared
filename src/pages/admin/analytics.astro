@@ -2,7 +2,8 @@
 import Layout from "../../layouts/Layout.astro";
 import { resolveAdminSession } from "../../lib/admin";
 import { getNeonSql } from "../../lib/neon";
-import { loadAdminProductAnalytics } from "../../lib/productAnalytics";
+import { emptyAdminProductAnalytics, loadAdminProductAnalytics } from "../../lib/productAnalytics";
+import { formatDate, formatNumber, safeAdminLoad, safeArray, safePercent } from "../../lib/adminFormatting";
 
 export const prerender = false;
 
@@ -10,7 +11,12 @@ const admin = await resolveAdminSession(Astro.request);
 if (!admin.isAdmin) return Astro.redirect("/");
 
 const sql = getNeonSql();
-const analytics = await loadAdminProductAnalytics(sql);
+const analyticsResult = await safeAdminLoad(
+	"Product analytics",
+	() => loadAdminProductAnalytics(sql),
+	emptyAdminProductAnalytics()
+);
+const analytics = analyticsResult.data;
 
 const sectionLinks = [
 	{ id: "growth", label: "Growth" },
@@ -22,27 +28,22 @@ const sectionLinks = [
 	{ id: "features", label: "Features" }
 ];
 
-function formatNumber(value: number) {
-	return Math.max(0, Number(value || 0) || 0).toLocaleString();
-}
-
-function formatTrend(value: number) {
+function formatTrend(value: unknown) {
 	const count = Number(value || 0) || 0;
-	if (count > 0) return `+${count.toLocaleString()}`;
-	return count.toLocaleString();
-}
-
-function formatPercent(value: number) {
-	return `${Math.max(0, Number(value || 0) || 0).toFixed(1).replace(/\.0$/, "")}%`;
+	if (count > 0) return `+${formatNumber(count)}`;
+	return formatNumber(count);
 }
 
 const searchTables = [
-	{ title: "Books", rows: analytics.search.topBooks, empty: "Book searches will appear after readers search." },
-	{ title: "Authors", rows: analytics.search.topAuthors, empty: "Author searches will appear after readers search." },
-	{ title: "Genres", rows: analytics.search.topGenres, empty: "Genre searches will appear after readers search." },
-	{ title: "No Results", rows: analytics.search.noResultQueries, empty: "No-result searches will appear here." }
+	{ title: "Books", rows: safeArray(analytics.search.topBooks), empty: "Book searches will appear after readers search." },
+	{ title: "Authors", rows: safeArray(analytics.search.topAuthors), empty: "Author searches will appear after readers search." },
+	{ title: "Genres", rows: safeArray(analytics.search.topGenres), empty: "Genre searches will appear after readers search." },
+	{ title: "No Results", rows: safeArray(analytics.search.noResultQueries), empty: "No-result searches will appear here." }
 ];
-const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...rows.map((row) => Math.max(0, Number(row.value || 0) || 0)));
+const topSources = safeArray(analytics.discovery.topSources);
+const funnel = safeArray(analytics.funnel);
+const featureAdoption = safeArray(analytics.featureAdoption);
+const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...safeArray(rows).map((row) => Math.max(0, Number(row.value || 0) || 0)));
 ---
 
 <Layout title="Admin Analytics" sectionLinks={sectionLinks} robots="noindex,nofollow">
@@ -53,7 +54,8 @@ const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...rows.map((
 			</nav>
 			<h1>Product Analytics</h1>
 			<p>Aggregate product signals for improving DogEared. No private journal content, passwords, or reader-level reports are shown here.</p>
-			<p class="timestamp">Generated {new Date(analytics.generatedAt).toLocaleString()}</p>
+			<p class="timestamp">Generated {formatDate(analytics.generatedAt)}</p>
+			{analyticsResult.warning && <p class="warning" role="status">{analyticsResult.warning}</p>}
 		</header>
 
 		<section id="growth" class="panel">
@@ -62,7 +64,7 @@ const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...rows.map((
 				<p>New and returning reader activity across the past day and week.</p>
 			</div>
 			<div class="metric-grid">
-				{analytics.growth.map((metric) => (
+				{safeArray(analytics.growth).map((metric) => (
 					<article class="metric-card">
 						<p>{metric.label}</p>
 						<strong>{formatNumber(metric.value)}</strong>
@@ -78,7 +80,7 @@ const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...rows.map((
 				<p>Core reading actions from the last 7 days.</p>
 			</div>
 			<div class="metric-grid">
-				{analytics.reading.map((metric) => (
+				{safeArray(analytics.reading).map((metric) => (
 					<article class="metric-card">
 						<p>{metric.label}</p>
 						<strong>{formatNumber(metric.value)}</strong>
@@ -93,7 +95,7 @@ const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...rows.map((
 				<p>Lightweight social and recommendation feedback activity from the last 7 days.</p>
 			</div>
 			<div class="metric-grid metric-grid-three">
-				{analytics.community.map((metric) => (
+				{safeArray(analytics.community).map((metric) => (
 					<article class="metric-card">
 						<p>{metric.label}</p>
 						<strong>{formatNumber(metric.value)}</strong>
@@ -111,7 +113,7 @@ const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...rows.map((
 				<div class="summary-pill">
 					<strong>{formatNumber(analytics.search.totalSearches30d)}</strong>
 					<span>searches</span>
-					<strong>{formatPercent(analytics.search.noResultRate30d)}</strong>
+					<strong>{safePercent(analytics.search.noResultRate30d)}</strong>
 					<span>no results</span>
 				</div>
 			</div>
@@ -155,7 +157,7 @@ const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...rows.map((
 					<p>Recommendation impressions, clicks, and feedback from the last 30 days.</p>
 				</div>
 				<div class="summary-pill">
-					<strong>{formatPercent(analytics.discovery.ctr30d)}</strong>
+					<strong>{safePercent(analytics.discovery.ctr30d)}</strong>
 					<span>CTR</span>
 				</div>
 			</div>
@@ -168,15 +170,15 @@ const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...rows.map((
 			</div>
 			<div class="subsection">
 				<h3>Top Sources</h3>
-				{analytics.discovery.topSources.length > 0 ? (
+				{topSources.length > 0 ? (
 					<div class="analytics-table" role="table">
 						<div class="analytics-row analytics-row-head" role="row">
 							<span role="columnheader">Source</span>
 							<span role="columnheader">30 days</span>
 							<span role="columnheader">Trend</span>
 						</div>
-						{analytics.discovery.topSources.map((row) => {
-							const max = maxByTable(analytics.discovery.topSources);
+						{topSources.map((row) => {
+							const max = maxByTable(topSources);
 							return (
 								<div class="analytics-row" role="row">
 									<span role="cell">{row.label}</span>
@@ -201,14 +203,16 @@ const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...rows.map((
 				<p>Aggregate beta onboarding progression from visits, accounts, reading actions, reflection, and return behavior.</p>
 			</div>
 			<div class="funnel-list">
-				{analytics.funnel.map((step) => (
+				{funnel.length === 0 ? (
+					<p class="empty">Funnel data will appear after onboarding events are recorded.</p>
+				) : funnel.map((step) => (
 					<div class="funnel-step">
 						<div>
 							<strong>{step.label}</strong>
 							<span>{formatNumber(step.value)} readers/events</span>
 						</div>
 						<div class="funnel-bar" style={`--bar-width: ${Math.max(2, Math.round(step.percent))}%`}><span></span></div>
-						<em>{formatPercent(step.percent)}</em>
+						<em>{safePercent(step.percent)}</em>
 					</div>
 				))}
 			</div>
@@ -225,8 +229,10 @@ const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...rows.map((
 					<span role="columnheader">30 days</span>
 					<span role="columnheader">Trend</span>
 				</div>
-				{analytics.featureAdoption.map((row) => {
-					const max = maxByTable(analytics.featureAdoption);
+				{featureAdoption.length === 0 ? (
+					<p class="empty">Feature adoption data will appear after events are recorded.</p>
+				) : featureAdoption.map((row) => {
+					const max = maxByTable(featureAdoption);
 					return (
 						<div class="analytics-row" role="row">
 							<span role="cell">{row.label}</span>

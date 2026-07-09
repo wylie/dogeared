@@ -10,6 +10,7 @@ import {
 	type CollectionDetail,
 	type CollectionRecord
 } from "../../lib/collections";
+import { formatNumber, safeArray } from "../../lib/adminFormatting";
 
 export const prerender = false;
 
@@ -69,7 +70,7 @@ const sectionLinks = [
 ];
 
 function booksTextarea(collection: CollectionDetail | null) {
-	return (collection?.books || [])
+	return safeArray(collection?.books)
 		.map((book) => `${book.bookId} | ${book.editorNote} | ${book.featuredQuote} | ${book.sortOrder}`)
 		.join("\n");
 }
@@ -122,7 +123,7 @@ function booksTextarea(collection: CollectionDetail | null) {
 		<section id="collection-list" class="panel">
 			<div class="panel-head">
 				<h2>Collections</h2>
-				<p>{collections.length.toLocaleString()} total</p>
+				<p>{formatNumber(collections.length)} total</p>
 			</div>
 			{collections.length === 0 ? (
 				<p>No collections yet.</p>
@@ -147,8 +148,8 @@ function booksTextarea(collection: CollectionDetail | null) {
 								</td>
 								<td>{collection.publicationState}</td>
 								<td>{collection.featured ? "Yes" : "No"}</td>
-								<td>{collection.bookCount.toLocaleString()}</td>
-								<td>{collection.sortOrder.toLocaleString()}</td>
+								<td>{formatNumber(collection.bookCount)}</td>
+								<td>{formatNumber(collection.sortOrder)}</td>
 								<td><a href={`/admin/collections?id=${encodeURIComponent(String(collection.id))}`}>Edit</a></td>
 							</tr>
 						))}

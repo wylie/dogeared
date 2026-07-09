@@ -2,7 +2,13 @@
 import Layout from "../layouts/Layout.astro";
 import { resolveAdminSession } from "../lib/admin";
 import { getNeonSql } from "../lib/neon";
-import { loadAdminOperationsSummary, loadAdminOverviewStats } from "../lib/adminData";
+import {
+	emptyAdminOperationsSummary,
+	emptyAdminOverviewStats,
+	loadAdminOperationsSummary,
+	loadAdminOverviewStats
+} from "../lib/adminData";
+import { formatNumber, safeAdminLoad } from "../lib/adminFormatting";
 
 export const prerender = false;
 
@@ -10,10 +16,13 @@ const admin = await resolveAdminSession(Astro.request);
 if (!admin.isAdmin) return Astro.redirect("/");
 
 const sql = getNeonSql();
-const [stats, operations] = await Promise.all([
-	loadAdminOverviewStats(sql),
-	loadAdminOperationsSummary(sql)
+const [statsResult, operationsResult] = await Promise.all([
+	safeAdminLoad("Site statistics", () => loadAdminOverviewStats(sql), emptyAdminOverviewStats()),
+	safeAdminLoad("Operations snapshot", () => loadAdminOperationsSummary(sql), emptyAdminOperationsSummary())
 ]);
+const stats = statsResult.data;
+const operations = operationsResult.data;
+const adminWarnings = [statsResult.warning, operationsResult.warning].filter(Boolean);
 
 const sectionLinks = [
 	{ id: "overview", label: "Overview" },
@@ -34,14 +43,15 @@ const statCards = [
 ];
 
 const quickLinks = [
-	{ href: "/admin", label: "Admin Overview", copy: "Site health and administration summary." },
-	{ href: "/admin/analytics", label: "Analytics", copy: "Review aggregate product usage, discovery, search, funnel, and feature adoption." },
-	{ href: "/admin/collections", label: "Collections", copy: "Create, edit, reorder, publish, and archive editorial collections." },
-	{ href: "/admin/feedback", label: "Feedback", copy: "Review beta feedback, bug reports, screenshots, diagnostics, and resolution notes." },
-	{ href: "/admin/data-health", label: "Data Health", copy: "Metadata coverage, duplicate risk, and import quality." },
-	{ href: "/admin/users", label: "Users", copy: "Search readers, view account counts, and manage accounts." },
-	{ href: "/metrics", label: "Metrics", copy: "Community reading and catalog metrics." },
-	{ href: "/roadmap", label: "Roadmap", copy: "Public product priorities and completed work." }
+	{ href: "/admin/beta-users", label: "Growth", value: operations.growth.totalUsers, copy: "Beta readers and onboarding readiness." },
+	{ href: "/admin/analytics#community", label: "Engagement", value: operations.engagement.activeUsersWeek, copy: "Active readers, activity, comments, and social signals." },
+	{ href: "/admin/data-health", label: "Content", value: operations.content.totalBooks, copy: "Catalog depth, metadata gaps, and duplicate risk." },
+	{ href: "/admin/feedback", label: "Feedback", value: operations.feedback.open, copy: "Open beta reports and operational follow-up." },
+	{ href: "/admin/operations#notifications", label: "Notifications", value: operations.notifications.unread, copy: "Unread in-app notification state." },
+	{ href: "/admin/operations#recommendations", label: "Recommendations", value: operations.recommendations.clicks, copy: "Recommendation telemetry and source health." },
+	{ href: "/admin/analytics#search", label: "Search", value: operations.search.indexedBooks, copy: "Search coverage and no-result diagnostics." },
+	{ href: "/admin/operations#imports", label: "Imports", value: operations.imports.missingMetadata, copy: "Shelf import quality and missing metadata." },
+	{ href: "/admin/operations#system-health", label: "System Health", value: operations.system.failedJobs, copy: "API, email, jobs, search indexing, and cache status." }
 ];
 ---
 
@@ -52,6 +62,12 @@ const quickLinks = [
 			<p>A calm control surface for DogEared operations.</p>
 		</header>
 
+		{adminWarnings.length > 0 && (
+			<div class="warning-list" role="status">
+				{adminWarnings.map((warning) => <p>{warning}</p>)}
+			</div>
+		)}
+
 		<section class="panel" id="site-statistics">
 			<div class="panel-head">
 				<h2>Site Statistics</h2>
@@ -60,7 +76,7 @@ const quickLinks = [
 				{statCards.map((card) => (
 					<article class="stat">
 						<p>{card.label}</p>
-						<strong>{card.value.toLocaleString()}</strong>
+						<strong>{formatNumber(card.value)}</strong>
 					</article>
 				))}
 			</div>
@@ -75,7 +91,7 @@ const quickLinks = [
 				{quickLinks.map((link) => (
 					<a class="quick-link" href={link.href}>
 						<span>{link.label}</span>
-						<strong>{link.value.toLocaleString()}</strong>
+						<strong>{formatNumber(link.value)}</strong>
 						<span>{link.copy}</span>
 					</a>
 				))}
@@ -90,15 +106,15 @@ const quickLinks = [
 			<div class="grid recent-grid">
 				<article class="stat">
 					<p>New users this week</p>
-					<strong>{stats.newUsersThisWeek.toLocaleString()}</strong>
+					<strong>{formatNumber(stats.newUsersThisWeek)}</strong>
 				</article>
 				<article class="stat">
 					<p>New books added this week</p>
-					<strong>{stats.newBooksThisWeek.toLocaleString()}</strong>
+					<strong>{formatNumber(stats.newBooksThisWeek)}</strong>
 				</article>
 				<article class="stat">
 					<p>Reviews added this week</p>
-					<strong>{stats.reviewsThisWeek.toLocaleString()}</strong>
+					<strong>{formatNumber(stats.reviewsThisWeek)}</strong>
 				</article>
 			</div>
 		</section>
@@ -109,6 +125,16 @@ const quickLinks = [
 	.admin-page { max-width: 980px; }
 	.hero h1 { margin: 0; }
 	.hero p { margin: 0.35rem 0 0; color: var(--color-text-muted); }
+	.warning-list {
+		margin-top: 1rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: #fffaf0;
+		color: #6b3f0a;
+		padding: 0.65rem 0.75rem;
+	}
+	.warning-list p { margin: 0; }
+	.warning-list p + p { margin-top: 0.3rem; }
 	.panel { margin-top: 1rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
 	.panel-head h2 { margin: 0; }
 	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }

@@ -10,6 +10,7 @@ import {
 	normalizeFeedbackSeverity,
 	normalizeFeedbackStatus
 } from "../../lib/feedback";
+import { formatDate, formatNumber, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
 
 export const prerender = false;
 
@@ -17,43 +18,56 @@ const admin = await resolveAdminSession(Astro.request);
 if (!admin.isAdmin) return Astro.redirect("/");
 
 const sql = getNeonSql();
-await ensureBetaFeedbackSchema(sql);
+let actionMessage = "";
+let actionError = false;
+const schemaResult = await safeAdminLoad("Feedback schema", async () => {
+	await ensureBetaFeedbackSchema(sql);
+	return true;
+}, false);
 
 function text(value: unknown, max = 500) {
 	return String(value || "").trim().slice(0, max);
 }
 
 if (Astro.request.method === "POST") {
-	const form = await Astro.request.formData();
-	const id = Math.max(0, Math.floor(Number(form.get("id") || 0) || 0));
-	const status = normalizeFeedbackStatus(form.get("status"));
-	const adminNotes = text(form.get("adminNotes"), 8000);
-	const needsReply = form.get("needsReply") === "on";
-	const needsReproduction = form.get("needsReproduction") === "on";
-	const isDuplicate = form.get("isDuplicate") === "on";
-	const duplicateOf = text(form.get("duplicateOf"), 80);
-	const resolvedInVersion = text(form.get("resolvedInVersion"), 80);
-	const shouldResolve = status === "fixed" || status === "closed" || !!resolvedInVersion;
-	if (id > 0) {
-		await sql`
-			update feedback_submission
-			set
-				status = ${status},
-				admin_notes = ${adminNotes},
-				needs_reply = ${needsReply},
-				needs_reproduction = ${needsReproduction},
-				is_duplicate = ${isDuplicate},
-				duplicate_of = ${duplicateOf},
-				resolved_in_version = ${resolvedInVersion},
-				resolved_at = case
-					when ${shouldResolve}::boolean then coalesce(resolved_at, now())
-					else resolved_at
-				end,
-				updated_at = now()
-			where id = ${id}
-		`;
+	try {
+		const form = await Astro.request.formData();
+		const id = Math.max(0, Math.floor(Number(form.get("id") || 0) || 0));
+		const status = normalizeFeedbackStatus(form.get("status"));
+		const adminNotes = text(form.get("adminNotes"), 8000);
+		const needsReply = form.get("needsReply") === "on";
+		const needsReproduction = form.get("needsReproduction") === "on";
+		const isDuplicate = form.get("isDuplicate") === "on";
+		const duplicateOf = text(form.get("duplicateOf"), 80);
+		const resolvedInVersion = text(form.get("resolvedInVersion"), 80);
+		const shouldResolve = status === "fixed" || status === "closed" || !!resolvedInVersion;
+		if (id > 0) {
+			await sql`
+				update feedback_submission
+				set
+					status = ${status},
+					admin_notes = ${adminNotes},
+					needs_reply = ${needsReply},
+					needs_reproduction = ${needsReproduction},
+					is_duplicate = ${isDuplicate},
+					duplicate_of = ${duplicateOf},
+					resolved_in_version = ${resolvedInVersion},
+					resolved_at = case
+						when ${shouldResolve}::boolean then coalesce(resolved_at, now())
+						else resolved_at
+					end,
+					updated_at = now()
+				where id = ${id}
+			`;
+		}
+		return Astro.redirect(`/admin/feedback${Astro.url.search || ""}#report-${id}`);
+	} catch (error) {
+		if (import.meta.env.DEV) {
+			console.warn("[admin.feedback.post.failed]", error instanceof Error ? error.message : error);
+		}
+		actionMessage = "Feedback workflow could not be saved.";
+		actionError = true;
 	}
-	return Astro.redirect(`/admin/feedback${Astro.url.search || ""}#report-${id}`);
 }
 
 const typeFilter = text(Astro.url.searchParams.get("type"), 40);
@@ -118,7 +132,7 @@ type FeedbackReport = {
 	updated_at: string;
 };
 
-const reports = await sql<FeedbackReport[]>`
+const reportsResult = await safeAdminLoad("Feedback reports", () => sql<FeedbackReport[]>`
 	select
 		fs.id,
 		fs.tracking_number,
@@ -182,15 +196,18 @@ const reports = await sql<FeedbackReport[]>`
 		)
 	order by fs.created_at desc
 	limit 100
-`;
+`, []);
+const reports = safeArray(reportsResult.data);
 
-const summaryRows = await sql<Array<{ status: string; count: number }>>`
+const summaryResult = await safeAdminLoad("Feedback summary", () => sql<Array<{ status: string; count: number }>>`
 	select status, count(*)::int as count
 	from feedback_submission
 	group by status
 	order by status asc
-`;
+`, []);
+const summaryRows = safeArray(summaryResult.data);
 const statusCounts = new Map(summaryRows.map((row) => [row.status, Number(row.count || 0)]));
+const adminWarnings = [schemaResult.warning, reportsResult.warning, summaryResult.warning].filter(Boolean);
 
 const sectionLinks = [
 	{ id: "filters", label: "Filters" },
@@ -199,19 +216,6 @@ const sectionLinks = [
 
 function labelFor(map: Record<string, string>, value: string, fallback = "Not set") {
 	return map[value] || fallback;
-}
-
-function formatDate(value: string | null) {
-	if (!value) return "Not set";
-	const date = new Date(value);
-	if (!Number.isFinite(date.getTime())) return value;
-	return new Intl.DateTimeFormat("en", {
-		month: "short",
-		day: "numeric",
-		year: "numeric",
-		hour: "numeric",
-		minute: "2-digit"
-	}).format(date);
 }
 
 function normalizedScreenshots(value: FeedbackReport["screenshots"]) {
@@ -234,11 +238,18 @@ function normalizedScreenshots(value: FeedbackReport["screenshots"]) {
 			<p>Beta reader feedback, bug reports, diagnostics, screenshots, and private admin workflow notes.</p>
 		</header>
 
+		{adminWarnings.length > 0 && (
+			<div class="warning-list" role="status">
+				{adminWarnings.map((warning) => <p>{warning}</p>)}
+			</div>
+		)}
+		{actionMessage && <p class={`admin-message${actionError ? " error" : ""}`} role="status">{actionMessage}</p>}
+
 		<section class="panel summary-panel" aria-label="Feedback status summary">
 			{Object.entries(feedbackStatusLabels).map(([status, label]) => (
 				<article>
 					<p>{label}</p>
-					<strong>{(statusCounts.get(status) || 0).toLocaleString()}</strong>
+					<strong>{formatNumber(statusCounts.get(status))}</strong>
 				</article>
 			))}
 		</section>
@@ -293,7 +304,7 @@ function normalizedScreenshots(value: FeedbackReport["screenshots"]) {
 		<section class="panel" id="reports" aria-labelledby="reports-title">
 			<div class="panel-head">
 				<h2 id="reports-title">Reports</h2>
-				<p>{reports.length.toLocaleString()} shown</p>
+				<p>{formatNumber(reports.length)} shown</p>
 			</div>
 			{reports.length === 0 ? (
 				<p class="empty">No feedback reports match these filters.</p>
@@ -406,6 +417,22 @@ function normalizedScreenshots(value: FeedbackReport["screenshots"]) {
 		background: var(--color-surface-raised);
 		padding: 1rem;
 	}
+	.warning-list {
+		margin-top: 1rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: #fffaf0;
+		color: #6b3f0a;
+		padding: 0.65rem 0.75rem;
+	}
+	.warning-list p { margin: 0; }
+	.warning-list p + p { margin-top: 0.3rem; }
+	.admin-message {
+		margin: 0.8rem 0 0;
+		color: var(--color-primary);
+		font-weight: 700;
+	}
+	.admin-message.error { color: #991b1b; }
 	.panel-head {
 		display: flex;
 		align-items: center;

@@ -104,6 +104,36 @@ export type AdminUserDetail = AdminUserSummary & {
 	followingCount: number;
 };
 
+export function emptyAdminOverviewStats(): AdminOverviewStats {
+	return {
+		totalBooks: 0,
+		totalAuthors: 0,
+		totalUsers: 0,
+		totalShelfEntries: 0,
+		totalReviews: 0,
+		totalComments: 0,
+		totalCurrentlyReading: 0,
+		totalCompleted: 0,
+		newUsersThisWeek: 0,
+		newBooksThisWeek: 0,
+		reviewsThisWeek: 0
+	};
+}
+
+export function emptyAdminOperationsSummary(): AdminOperationsSummary {
+	return {
+		growth: { totalUsers: 0, newUsersThisWeek: 0, newUsersThisMonth: 0 },
+		engagement: { activeUsersWeek: 0, activeUsersMonth: 0, activitiesWeek: 0, commentsWeek: 0 },
+		content: { totalBooks: 0, totalAuthors: 0, missingCovers: 0, duplicateWorks: 0 },
+		feedback: { total: 0, open: 0, resolved: 0, duplicates: 0 },
+		notifications: { total: 0, unread: 0, lastCreatedAt: "" },
+		recommendations: { impressions: 0, clicks: 0, hides: 0, interesting: 0, ctr: 0, instrumented: false },
+		search: { indexedBooks: 0, indexedAuthors: 0, missingCanonicalWorks: 0 },
+		imports: { shelfEntries: 0, readers: 0, duplicateWorks: 0, missingMetadata: 0, coverIssues: 0 },
+		system: { apiFailures: 0, emailFailures: 0, failedJobs: 0, cacheStatus: "Unknown" }
+	};
+}
+
 function normalizeText(value: unknown, maxLength = 500) {
 	return String(value || "").trim().slice(0, maxLength);
 }

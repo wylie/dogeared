@@ -44,10 +44,12 @@ test("admin overview displays real site statistics and quick links", () => {
 		assert.equal(page.includes(label), true);
 	}
 	assert.equal(page.includes('href: "/admin/data-health"'), true);
-	assert.equal(page.includes('href: "/admin/analytics"'), true);
+	assert.equal(page.includes('href: "/admin/analytics#community"'), true);
 	assert.equal(page.includes('href: "/admin/feedback"'), true);
-	assert.equal(page.includes('href: "/admin/users"'), true);
-	assert.equal(page.includes('href: "/metrics"'), true);
+	assert.equal(page.includes('href: "/admin/beta-users"'), true);
+	assert.equal(page.includes("safeAdminLoad"), true);
+	assert.equal(page.includes("formatNumber(link.value)"), true);
+	assert.equal(page.includes("link.value.toLocaleString"), false);
 	assert.equal(data.includes("loadAdminOverviewStats"), true);
 	assert.equal(data.includes("loadAdminOperationsSummary"), true);
 	assert.equal(data.includes("from user_activity_comment"), true);
@@ -80,6 +82,31 @@ test("admin operations center includes beta control surfaces", () => {
 	assert.equal(leftHand.includes("hidden={isAuthenticated || !allowAuthPrompt}"), true);
 	assert.equal(leftHand.includes("{allowAuthPrompt && ("), true);
 	assert.equal(readFileSync("src/components/ReaderGuidance.astro", "utf8").includes("allowGuidance"), true);
+});
+
+test("admin pages use defensive loaders and formatting", () => {
+	const formatting = readFileSync("src/lib/adminFormatting.ts", "utf8");
+	const dashboard = readFileSync("src/pages/admin.astro", "utf8");
+	const analytics = readFileSync("src/pages/admin/analytics.astro", "utf8");
+	const operations = readFileSync("src/pages/admin/operations.astro", "utf8");
+	const feedback = readFileSync("src/pages/admin/feedback.astro", "utf8");
+	const dataHealth = readFileSync("src/pages/admin/data-health.astro", "utf8");
+	const users = readFileSync("src/pages/admin/users.astro", "utf8");
+	const betaUsers = readFileSync("src/pages/admin/beta-users.astro", "utf8");
+	const detail = readFileSync("src/pages/admin/users/[username].astro", "utf8");
+	for (const helper of ["formatNumber", "formatDate", "safePercent", "percentOf", "safeAdminLoad"]) {
+		assert.equal(formatting.includes(`function ${helper}`), true);
+	}
+	for (const source of [dashboard, analytics, operations, feedback, dataHealth, users, betaUsers, detail]) {
+		assert.equal(source.includes("safeAdminLoad"), true);
+	}
+	assert.equal(analytics.includes("emptyAdminProductAnalytics"), true);
+	assert.equal(operations.includes("emptyAdminOperationsSummary"), true);
+	assert.equal(feedback.includes("[admin.feedback.post.failed]"), true);
+	assert.equal(dataHealth.includes("Publisher schema"), true);
+	assert.equal(dataHealth.includes("warning-list"), true);
+	assert.equal(users.includes("[admin.users.post.failed]"), true);
+	assert.equal(detail.includes("[admin.user-detail.post.failed]"), true);
 });
 
 test("admin beta users page exposes requested account operations", () => {

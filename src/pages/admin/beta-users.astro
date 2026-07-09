@@ -3,6 +3,7 @@ import Layout from "../../layouts/Layout.astro";
 import { resolveAdminSession } from "../../lib/admin";
 import { getNeonSql } from "../../lib/neon";
 import { loadAdminBetaUsers } from "../../lib/adminData";
+import { formatDate, formatNumber, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
 
 export const prerender = false;
 
@@ -11,7 +12,8 @@ if (!admin.isAdmin) return Astro.redirect("/");
 
 const query = String(Astro.url.searchParams.get("q") || "").trim();
 const sql = getNeonSql();
-const users = await loadAdminBetaUsers(sql, query);
+const usersResult = await safeAdminLoad("Beta users", () => loadAdminBetaUsers(sql, query), []);
+const users = safeArray(usersResult.data);
 
 const sectionLinks = [
 	{ id: "overview", label: "Overview" },
@@ -19,11 +21,6 @@ const sectionLinks = [
 	{ id: "beta-user-list", label: "Beta Users" }
 ];
 
-function formatDate(value: string) {
-	const parsed = new Date(value);
-	if (!Number.isFinite(parsed.getTime())) return "Unknown";
-	return parsed.toLocaleString();
-}
 ---
 
 <Layout title="Admin Beta Users" sectionLinks={sectionLinks} robots="noindex,nofollow">
@@ -50,8 +47,9 @@ function formatDate(value: string) {
 		<section class="panel" id="beta-user-list">
 			<div class="panel-head">
 				<h2>Users</h2>
-				<p>{users.length.toLocaleString()} {users.length === 1 ? "reader" : "readers"} shown.</p>
+				<p>{formatNumber(users.length)} {users.length === 1 ? "reader" : "readers"} shown.</p>
 			</div>
+			{usersResult.warning && <p class="admin-message error" role="status">{usersResult.warning}</p>}
 			<div class="table-wrap">
 				<table>
 					<thead>
@@ -80,10 +78,10 @@ function formatDate(value: string) {
 								<td>{user.email || "Unknown"}</td>
 								<td>{formatDate(user.joinedAt)}</td>
 								<td>{user.lastActiveAt ? formatDate(user.lastActiveAt) : "No activity"}</td>
-								<td>{user.books.toLocaleString()}</td>
-								<td>{user.reviews.toLocaleString()}</td>
-								<td>{user.journalEntries.toLocaleString()}</td>
-								<td>{user.readingStreak.toLocaleString()}</td>
+								<td>{formatNumber(user.books)}</td>
+								<td>{formatNumber(user.reviews)}</td>
+								<td>{formatNumber(user.journalEntries)}</td>
+								<td>{formatNumber(user.readingStreak)}</td>
 								<td><span class="status-pill">{user.status}</span></td>
 								<td>
 									<div class="action-stack" aria-label={`Actions for ${user.username || user.email || "reader"}`}>
@@ -119,6 +117,13 @@ function formatDate(value: string) {
 	.table-link { color: var(--color-nav); font-weight: 700; text-decoration: none; }
 	.secondary-link:hover,
 	.table-link:hover { color: var(--color-nav-hover); text-decoration: underline; }
+	.admin-message {
+		margin: 0.7rem 0 0;
+		min-height: 1.2rem;
+		color: var(--color-primary);
+		font-weight: 700;
+	}
+	.admin-message.error { color: #991b1b; }
 	.table-wrap { margin-top: 0.7rem; overflow-x: auto; }
 	table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 	th, td { text-align: left; padding: 0.45rem; border-bottom: var(--border-subtle); vertical-align: top; }

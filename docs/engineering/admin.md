@@ -28,6 +28,27 @@ Admin routes:
 
 The Admin Overview quick-links point admins to the operational drill-down pages and public context pages where useful.
 
+## Defensive Rendering
+
+Admin pages must degrade gracefully. Operational data is useful during beta, but it should never be required for the page itself to render.
+
+Rules:
+
+- Use `src/lib/adminFormatting.ts` for defensive display helpers such as `formatNumber`, `formatDate`, `safePercent`, `percentOf`, `safeText`, and `safeArray`.
+- Wrap admin data loads in `safeAdminLoad` when a failed query should not block the rest of the page.
+- Render a lightweight in-page warning for the failed card, table, or section.
+- Use neutral fallbacks such as `0`, `—`, `Unknown`, or `No data`.
+- Avoid calling `.toLocaleString()`, `.toLocaleDateString()`, `.map()`, or object properties on values that may be null or undefined.
+- Log admin load failures in development only. Do not expose raw database errors in production UI.
+- POST actions should use `try/catch`; failed admin actions should show a clear status message instead of throwing.
+
+Expected behavior:
+
+- One failed analytics widget does not prevent the Admin Overview from rendering.
+- Empty databases render empty states and zeros.
+- Partial migrations render warnings where relevant while still showing unaffected sections.
+- Admin pages remain `noindex,nofollow`.
+
 ## Release Operations
 
 Before a private beta release, admins and maintainers should use `docs/release-checklist.md`.

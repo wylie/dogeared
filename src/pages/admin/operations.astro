@@ -13,6 +13,14 @@ import {
 	updateAdminFeatureFlags,
 	updateAdminFeedbackIssue
 } from "../../lib/adminData";
+import {
+	emptyAdminOperationsSummary,
+	type AdminAnnouncement,
+	type AdminFeatureFlag,
+	type AdminFeedbackIssue,
+	type AdminReleaseNote
+} from "../../lib/adminData";
+import { formatDate, formatNumber, safeAdminLoad, safeArray, safePercent, safeText } from "../../lib/adminFormatting";
 
 export const prerender = false;
 
@@ -24,54 +32,74 @@ let actionMessage = "";
 let actionError = false;
 
 if (Astro.request.method === "POST") {
-	const form = await Astro.request.formData();
-	const intent = String(form.get("intent") || "").trim();
-	if (intent === "update-feedback") {
-		const result = await updateAdminFeedbackIssue(sql, {
-			id: form.get("issueId"),
-			status: form.get("status"),
-			assignee: form.get("assignee"),
-			internalNotes: form.get("internalNotes"),
-			resolutionVersion: form.get("resolutionVersion"),
-			duplicateOf: form.get("duplicateOf")
-		});
-		actionMessage = result.message;
-		actionError = !result.ok;
-	} else if (intent === "update-flags") {
-		const result = await updateAdminFeatureFlags(sql, form.getAll("enabledFlags").map(String));
-		actionMessage = result.message;
-		actionError = !result.ok;
-	} else if (intent === "save-announcement") {
-		const result = await saveAdminAnnouncement(sql, {
-			title: form.get("title"),
-			body: form.get("body"),
-			status: form.get("status"),
-			dismissible: form.get("dismissible")
-		});
-		actionMessage = result.message;
-		actionError = !result.ok;
-	} else if (intent === "save-release-note") {
-		const result = await saveAdminReleaseNote(sql, {
-			version: form.get("version"),
-			title: form.get("title"),
-			body: form.get("body")
-		});
-		actionMessage = result.message;
-		actionError = !result.ok;
-	} else {
-		actionMessage = "Invalid admin action.";
+	try {
+		const form = await Astro.request.formData();
+		const intent = String(form.get("intent") || "").trim();
+		if (intent === "update-feedback") {
+			const result = await updateAdminFeedbackIssue(sql, {
+				id: form.get("issueId"),
+				status: form.get("status"),
+				assignee: form.get("assignee"),
+				internalNotes: form.get("internalNotes"),
+				resolutionVersion: form.get("resolutionVersion"),
+				duplicateOf: form.get("duplicateOf")
+			});
+			actionMessage = result.message;
+			actionError = !result.ok;
+		} else if (intent === "update-flags") {
+			const result = await updateAdminFeatureFlags(sql, form.getAll("enabledFlags").map(String));
+			actionMessage = result.message;
+			actionError = !result.ok;
+		} else if (intent === "save-announcement") {
+			const result = await saveAdminAnnouncement(sql, {
+				title: form.get("title"),
+				body: form.get("body"),
+				status: form.get("status"),
+				dismissible: form.get("dismissible")
+			});
+			actionMessage = result.message;
+			actionError = !result.ok;
+		} else if (intent === "save-release-note") {
+			const result = await saveAdminReleaseNote(sql, {
+				version: form.get("version"),
+				title: form.get("title"),
+				body: form.get("body")
+			});
+			actionMessage = result.message;
+			actionError = !result.ok;
+		} else {
+			actionMessage = "Invalid admin action.";
+			actionError = true;
+		}
+	} catch (error) {
+		if (import.meta.env.DEV) {
+			console.warn("[admin.operations.post.failed]", error instanceof Error ? error.message : error);
+		}
+		actionMessage = "Admin action could not be completed.";
 		actionError = true;
 	}
 }
 
 const statusFilter = String(Astro.url.searchParams.get("status") || "").trim().toLowerCase();
-const [summary, feedbackIssues, featureFlags, announcements, releaseNotes] = await Promise.all([
-	loadAdminOperationsSummary(sql),
-	loadAdminFeedbackIssues(sql, statusFilter),
-	loadAdminFeatureFlags(sql),
-	loadAdminAnnouncements(sql),
-	loadAdminReleaseNotes(sql)
+const [summaryResult, feedbackResult, flagsResult, announcementsResult, releaseNotesResult] = await Promise.all([
+	safeAdminLoad("Operations summary", () => loadAdminOperationsSummary(sql), emptyAdminOperationsSummary()),
+	safeAdminLoad<AdminFeedbackIssue[]>("Feedback issues", () => loadAdminFeedbackIssues(sql, statusFilter), []),
+	safeAdminLoad<AdminFeatureFlag[]>("Feature flags", () => loadAdminFeatureFlags(sql), []),
+	safeAdminLoad<AdminAnnouncement[]>("Announcements", () => loadAdminAnnouncements(sql), []),
+	safeAdminLoad<AdminReleaseNote[]>("Release notes", () => loadAdminReleaseNotes(sql), [])
 ]);
+const summary = summaryResult.data;
+const feedbackIssues = safeArray(feedbackResult.data);
+const featureFlags = safeArray(flagsResult.data);
+const announcements = safeArray(announcementsResult.data);
+const releaseNotes = safeArray(releaseNotesResult.data);
+const adminWarnings = [
+	summaryResult.warning,
+	feedbackResult.warning,
+	flagsResult.warning,
+	announcementsResult.warning,
+	releaseNotesResult.warning
+].filter(Boolean);
 
 const sectionLinks = [
 	{ id: "overview", label: "Overview" },
@@ -85,15 +113,6 @@ const sectionLinks = [
 	{ id: "release-notes", label: "Releases" }
 ];
 
-function formatDate(value: string) {
-	const parsed = new Date(value);
-	if (!Number.isFinite(parsed.getTime())) return "Unknown";
-	return parsed.toLocaleString();
-}
-
-function pct(value: number) {
-	return `${(Number(value || 0) * 100).toFixed(1)}%`;
-}
 ---
 
 <Layout title="Admin Operations" sectionLinks={sectionLinks} robots="noindex,nofollow">
@@ -104,25 +123,30 @@ function pct(value: number) {
 		</header>
 
 		{actionMessage && <p class={`admin-message${actionError ? " error" : ""}`} role="status">{actionMessage}</p>}
+		{adminWarnings.length > 0 && (
+			<div class="warning-list" role="status">
+				{adminWarnings.map((warning) => <p>{warning}</p>)}
+			</div>
+		)}
 
 		<section class="panel">
 			<div class="panel-head">
 				<h2>Operating Snapshot</h2>
 			</div>
 			<div class="card-grid">
-				<article class="stat"><p>New readers (7d)</p><strong>{summary.growth.newUsersThisWeek.toLocaleString()}</strong></article>
-				<article class="stat"><p>Active readers (7d)</p><strong>{summary.engagement.activeUsersWeek.toLocaleString()}</strong></article>
-				<article class="stat"><p>Open feedback</p><strong>{summary.feedback.open.toLocaleString()}</strong></article>
-				<article class="stat"><p>Unread notifications</p><strong>{summary.notifications.unread.toLocaleString()}</strong></article>
-				<article class="stat"><p>Missing metadata</p><strong>{summary.imports.missingMetadata.toLocaleString()}</strong></article>
-				<article class="stat"><p>Cache status</p><strong>{summary.system.cacheStatus}</strong></article>
+				<article class="stat"><p>New readers (7d)</p><strong>{formatNumber(summary.growth.newUsersThisWeek)}</strong></article>
+				<article class="stat"><p>Active readers (7d)</p><strong>{formatNumber(summary.engagement.activeUsersWeek)}</strong></article>
+				<article class="stat"><p>Open feedback</p><strong>{formatNumber(summary.feedback.open)}</strong></article>
+				<article class="stat"><p>Unread notifications</p><strong>{formatNumber(summary.notifications.unread)}</strong></article>
+				<article class="stat"><p>Missing metadata</p><strong>{formatNumber(summary.imports.missingMetadata)}</strong></article>
+				<article class="stat"><p>Cache status</p><strong>{safeText(summary.system.cacheStatus, "Unknown")}</strong></article>
 			</div>
 		</section>
 
 		<section class="panel" id="feedback">
 			<div class="panel-head">
 				<h2>Feedback</h2>
-				<p>{summary.feedback.open.toLocaleString()} open, {summary.feedback.resolved.toLocaleString()} resolved, {summary.feedback.duplicates.toLocaleString()} duplicates.</p>
+				<p>{formatNumber(summary.feedback.open)} open, {formatNumber(summary.feedback.resolved)} resolved, {formatNumber(summary.feedback.duplicates)} duplicates.</p>
 			</div>
 			<form class="filter-row" method="get" action="/admin/operations">
 				<label for="feedback-status">Status</label>
@@ -175,8 +199,8 @@ function pct(value: number) {
 				<p>Delivery and unread state for in-app social notifications.</p>
 			</div>
 			<div class="card-grid">
-				<article class="stat"><p>Total notifications</p><strong>{summary.notifications.total.toLocaleString()}</strong></article>
-				<article class="stat"><p>Unread notifications</p><strong>{summary.notifications.unread.toLocaleString()}</strong></article>
+				<article class="stat"><p>Total notifications</p><strong>{formatNumber(summary.notifications.total)}</strong></article>
+				<article class="stat"><p>Unread notifications</p><strong>{formatNumber(summary.notifications.unread)}</strong></article>
 				<article class="stat"><p>Last notification</p><strong>{summary.notifications.lastCreatedAt ? formatDate(summary.notifications.lastCreatedAt) : "None"}</strong></article>
 			</div>
 		</section>
@@ -187,11 +211,11 @@ function pct(value: number) {
 				<p>Recommendation telemetry is future-ready; public filtering is active.</p>
 			</div>
 			<div class="card-grid">
-				<article class="stat"><p>Impressions</p><strong>{summary.recommendations.impressions.toLocaleString()}</strong></article>
-				<article class="stat"><p>Clicks</p><strong>{summary.recommendations.clicks.toLocaleString()}</strong></article>
-				<article class="stat"><p>Hides</p><strong>{summary.recommendations.hides.toLocaleString()}</strong></article>
-				<article class="stat"><p>Interesting</p><strong>{summary.recommendations.interesting.toLocaleString()}</strong></article>
-				<article class="stat"><p>CTR</p><strong>{pct(summary.recommendations.ctr)}</strong></article>
+				<article class="stat"><p>Impressions</p><strong>{formatNumber(summary.recommendations.impressions)}</strong></article>
+				<article class="stat"><p>Clicks</p><strong>{formatNumber(summary.recommendations.clicks)}</strong></article>
+				<article class="stat"><p>Hides</p><strong>{formatNumber(summary.recommendations.hides)}</strong></article>
+				<article class="stat"><p>Interesting</p><strong>{formatNumber(summary.recommendations.interesting)}</strong></article>
+				<article class="stat"><p>CTR</p><strong>{safePercent(Number(summary.recommendations.ctr || 0) * 100)}</strong></article>
 				<article class="stat"><p>Low-performing sources</p><strong>{summary.recommendations.instrumented ? "Review table" : "Not instrumented"}</strong></article>
 			</div>
 		</section>
@@ -202,12 +226,12 @@ function pct(value: number) {
 				<p>Signals from shelf entries, catalog metadata, and duplicate work keys.</p>
 			</div>
 			<div class="card-grid">
-				<article class="stat"><p>Recent import entries</p><strong>{summary.imports.shelfEntries.toLocaleString()}</strong></article>
-				<article class="stat"><p>Import readers</p><strong>{summary.imports.readers.toLocaleString()}</strong></article>
-				<article class="stat"><p>Duplicate works</p><strong>{summary.imports.duplicateWorks.toLocaleString()}</strong></article>
-				<article class="stat"><p>Missing metadata</p><strong>{summary.imports.missingMetadata.toLocaleString()}</strong></article>
+				<article class="stat"><p>Recent import entries</p><strong>{formatNumber(summary.imports.shelfEntries)}</strong></article>
+				<article class="stat"><p>Import readers</p><strong>{formatNumber(summary.imports.readers)}</strong></article>
+				<article class="stat"><p>Duplicate works</p><strong>{formatNumber(summary.imports.duplicateWorks)}</strong></article>
+				<article class="stat"><p>Missing metadata</p><strong>{formatNumber(summary.imports.missingMetadata)}</strong></article>
 				<article class="stat"><p>Series issues</p><strong>Not instrumented</strong></article>
-				<article class="stat"><p>Cover issues</p><strong>{summary.imports.coverIssues.toLocaleString()}</strong></article>
+				<article class="stat"><p>Cover issues</p><strong>{formatNumber(summary.imports.coverIssues)}</strong></article>
 			</div>
 		</section>
 
@@ -216,12 +240,12 @@ function pct(value: number) {
 				<h2>System Health</h2>
 			</div>
 			<div class="card-grid">
-				<article class="stat"><p>API failures</p><strong>{summary.system.apiFailures.toLocaleString()}</strong></article>
-				<article class="stat"><p>Email failures</p><strong>{summary.system.emailFailures.toLocaleString()}</strong></article>
-				<article class="stat"><p>Failed jobs</p><strong>{summary.system.failedJobs.toLocaleString()}</strong></article>
-				<article class="stat"><p>Search indexed books</p><strong>{summary.search.indexedBooks.toLocaleString()}</strong></article>
-				<article class="stat"><p>Search gaps</p><strong>{summary.search.missingCanonicalWorks.toLocaleString()}</strong></article>
-				<article class="stat"><p>Cache</p><strong>{summary.system.cacheStatus}</strong></article>
+				<article class="stat"><p>API failures</p><strong>{formatNumber(summary.system.apiFailures)}</strong></article>
+				<article class="stat"><p>Email failures</p><strong>{formatNumber(summary.system.emailFailures)}</strong></article>
+				<article class="stat"><p>Failed jobs</p><strong>{formatNumber(summary.system.failedJobs)}</strong></article>
+				<article class="stat"><p>Search indexed books</p><strong>{formatNumber(summary.search.indexedBooks)}</strong></article>
+				<article class="stat"><p>Search gaps</p><strong>{formatNumber(summary.search.missingCanonicalWorks)}</strong></article>
+				<article class="stat"><p>Cache</p><strong>{safeText(summary.system.cacheStatus, "Unknown")}</strong></article>
 			</div>
 		</section>
 
@@ -306,6 +330,16 @@ function pct(value: number) {
 	.panel-head p, .meta, .empty { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }
 	.admin-message { margin: 0.8rem 0 0; color: var(--color-primary); font-weight: 700; }
 	.admin-message.error { color: #991b1b; }
+	.warning-list {
+		margin-top: 0.8rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: #fffaf0;
+		color: #6b3f0a;
+		padding: 0.65rem 0.75rem;
+	}
+	.warning-list p { margin: 0; }
+	.warning-list p + p { margin-top: 0.3rem; }
 	.card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; margin-top: 0.75rem; }
 	.stat { border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.56); padding: 0.65rem; }
 	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }

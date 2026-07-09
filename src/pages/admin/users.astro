@@ -3,6 +3,7 @@ import Layout from "../../layouts/Layout.astro";
 import { resolveAdminSession } from "../../lib/admin";
 import { getNeonSql } from "../../lib/neon";
 import { deleteAdminUser, searchAdminUsers } from "../../lib/adminData";
+import { formatDate, formatNumber, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
 
 export const prerender = false;
 
@@ -15,20 +16,29 @@ let actionMessage = Astro.url.searchParams.get("deleted") === "1" ? "User delete
 let actionError = false;
 
 if (Astro.request.method === "POST") {
-	const form = await Astro.request.formData();
-	const intent = String(form.get("intent") || "").trim();
-	const userId = String(form.get("userId") || "").trim();
-	if (intent !== "delete-user") {
-		actionMessage = "Invalid admin action.";
+	try {
+		const form = await Astro.request.formData();
+		const intent = String(form.get("intent") || "").trim();
+		const userId = String(form.get("userId") || "").trim();
+		if (intent !== "delete-user") {
+			actionMessage = "Invalid admin action.";
+			actionError = true;
+		} else {
+			const result = await deleteAdminUser(sql, userId, admin.userId);
+			actionMessage = result.message;
+			actionError = !result.ok;
+		}
+	} catch (error) {
+		if (import.meta.env.DEV) {
+			console.warn("[admin.users.post.failed]", error instanceof Error ? error.message : error);
+		}
+		actionMessage = "User action could not be completed.";
 		actionError = true;
-	} else {
-		const result = await deleteAdminUser(sql, userId, admin.userId);
-		actionMessage = result.message;
-		actionError = !result.ok;
 	}
 }
 
-const users = await searchAdminUsers(sql, query);
+const usersResult = await safeAdminLoad("Admin users", () => searchAdminUsers(sql, query), []);
+const users = safeArray(usersResult.data);
 
 const sectionLinks = [
 	{ id: "overview", label: "Overview" },
@@ -36,11 +46,6 @@ const sectionLinks = [
 	{ id: "user-list", label: "Users" }
 ];
 
-function formatDate(value: string) {
-	const parsed = new Date(value);
-	if (!Number.isFinite(parsed.getTime())) return "Unknown";
-	return parsed.toLocaleString();
-}
 ---
 
 <Layout title="Admin Users" sectionLinks={sectionLinks} robots="noindex,nofollow">
@@ -67,10 +72,11 @@ function formatDate(value: string) {
 		<section class="panel" id="user-list">
 			<div class="panel-head">
 				<h2>Users</h2>
-				<p>{users.length.toLocaleString()} {users.length === 1 ? "user" : "users"} shown.</p>
+				<p>{formatNumber(users.length)} {users.length === 1 ? "user" : "users"} shown.</p>
 			</div>
 			<p class="danger-note">Books on shelves are shelf entries from reader accounts, not distinct shelf names. Deleting a user removes reader-owned data including shelves, ratings, reviews, progress, activity, comments, follows, notifications, sessions, magic links, custom shelves, and pending email changes. Catalog books and authors are preserved.</p>
 			{actionMessage && <p class={`admin-message${actionError ? " error" : ""}`} role="status">{actionMessage}</p>}
+			{usersResult.warning && <p class="admin-message error" role="status">{usersResult.warning}</p>}
 			<div class="table-wrap">
 				<table>
 					<thead>
@@ -99,8 +105,8 @@ function formatDate(value: string) {
 								<td>{user.email || "Unknown"}</td>
 								<td>{formatDate(user.joinedAt)}</td>
 								<td>{user.lastActivityAt ? formatDate(user.lastActivityAt) : "No activity"}</td>
-								<td>{user.shelfEntryCount.toLocaleString()}</td>
-								<td>{user.reviewCount.toLocaleString()}</td>
+								<td>{formatNumber(user.shelfEntryCount)}</td>
+								<td>{formatNumber(user.reviewCount)}</td>
 								<td>
 									{user.id === admin.userId ? (
 										<span class="muted">Current admin</span>
