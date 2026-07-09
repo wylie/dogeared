@@ -57,7 +57,8 @@ test("navigation shows a subtle unread notification badge outside profile", () =
 	const nav = readFileSync("src/components/LeftHand.astro", "utf8");
 	const profile = readFileSync("src/pages/profile/[username].astro", "utf8");
 	assert.equal(nav.includes("left-hand-notifications-item"), true);
-	assert.equal(nav.includes('href={isNotificationsPage ? undefined : \'/notifications\'}'), true);
+	assert.equal(nav.includes('{ href: "/notifications", label: "Notifications"'), true);
+	assert.equal(nav.includes("navItemHref(item)"), true);
 	assert.equal(nav.includes("left-hand-notification-badge"), true);
 	assert.equal(nav.includes("/api/notifications/count"), true);
 	assert.equal(nav.includes("dogeared:notifications-updated"), true);

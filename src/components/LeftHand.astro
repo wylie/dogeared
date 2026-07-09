@@ -1,6 +1,16 @@
 ---
 import Widget from "./Widget.astro"
 type SectionLink = { id: string; label: string };
+type NavMatch = "exact" | "prefix";
+type NavItem = {
+  href: string;
+  label: string;
+  id?: string;
+  match?: NavMatch;
+  aliases?: string[];
+  className?: string;
+  sectionAriaLabel?: string;
+};
 const {
   current = "/",
   sectionLinks = [],
@@ -21,24 +31,56 @@ const {
   releaseVersion?: string;
 };
 const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
-const isActive = (href: string) => normalize(current) === normalize(href);
 const currentNormalized = normalize(current);
-const isProfilePage = currentNormalized === "/profile" || currentNormalized.startsWith("/profile/");
-const isReadingLifePage = currentNormalized === "/reading-life";
-const isJournalPage = currentNormalized === "/journal";
-const isNotificationsPage = currentNormalized === "/notifications";
-const isDiscoverPage = currentNormalized === "/discover";
-const isHomePage = currentNormalized === "/";
-const isAdminDashboardPage = currentNormalized === "/admin";
-const isAdminAnalyticsPage = currentNormalized === "/admin/analytics";
-const isAdminCollectionsPage = currentNormalized === "/admin/collections";
-const isAdminUsersPage = currentNormalized === "/admin/users" || currentNormalized.startsWith("/admin/users/");
-const isAdminFeedbackPage = currentNormalized === "/admin/feedback";
-const isAdminFoundingReadersPage = currentNormalized === "/admin/founding-readers" || currentNormalized === "/admin/beta-users";
-const isAdminReleasesPage = currentNormalized === "/admin/releases";
-const isAdminOperationsPage = currentNormalized === "/admin/operations";
+const routeMatches = (href: string, match: NavMatch = "exact") => {
+  const normalizedHref = normalize(href);
+  if (match === "prefix") return currentNormalized === normalizedHref || currentNormalized.startsWith(`${normalizedHref}/`);
+  return currentNormalized === normalizedHref;
+};
+const isNavItemActive = (item: Pick<NavItem, "href" | "match" | "aliases">) => {
+  const match = item.match || "exact";
+  return [item.href, ...(item.aliases || [])].some((href) => routeMatches(href, match));
+};
+const navItemHref = (item: NavItem) => isNavItemActive(item) ? undefined : item.href;
+const navItemClass = (item: NavItem) => {
+  const stateClass = isNavItemActive(item) ? "active" : "hover";
+  return [stateClass, item.className].filter(Boolean).join(" ");
+};
+const navItemAriaCurrent = (item: NavItem) => isNavItemActive(item) ? "page" : undefined;
+const showSectionLinks = (item: NavItem) => isNavItemActive(item) && sectionLinks.length > 0;
 const query = Astro.url.searchParams.get("q") ?? "";
 const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].includes(foundingReaderMode) ? foundingReaderMode : "open";
+const youNavItems: NavItem[] = [
+  { href: "/profile", label: "Profile", id: "left-hand-profile-item", match: "prefix" },
+  { href: "/reading-life", label: "My Reading Life", id: "left-hand-reading-life-item" },
+  { href: "/journal", label: "Reading Journal", id: "left-hand-journal-item" },
+  { href: "/notifications", label: "Notifications", id: "left-hand-notifications-item", className: "notification-nav-link" },
+  { href: "/settings", label: "Settings", id: "left-hand-settings-item" }
+];
+const exploreNavItems: NavItem[] = [
+  { href: "/discover", label: "Discover" },
+  { href: "/books", label: "Books" },
+  { href: "/authors", label: "Authors" },
+  { href: "/following", label: "Following", id: "left-hand-following-item" }
+];
+const aboutNavItems: NavItem[] = [
+  { href: "/mission", label: "Mission" },
+  { href: "/metrics", label: "Metrics" },
+  { href: "/roadmap", label: "Roadmap" },
+  { href: "/release-notes", label: "Release Notes" }
+];
+const adminNavItems: NavItem[] = [
+  { href: "/admin", label: "Dashboard" },
+  { href: "/admin/analytics", label: "Analytics" },
+  { href: "/admin/collections", label: "Collections" },
+  { href: "/admin/feedback", label: "Feedback", sectionAriaLabel: "Admin Feedback sections" },
+  { href: "/admin/notifications", label: "Notifications" },
+  { href: "/admin/data-health", label: "Data Health" },
+  { href: "/admin/founding-readers", label: "Founding Readers", aliases: ["/admin/beta-users"] },
+  { href: "/admin/releases", label: "Releases" },
+  { href: "/admin/operations", label: "Operations" },
+  { href: "/admin/users", label: "Users", match: "prefix" }
+];
 ---
 
 <Widget style="height: 100%; padding: 0; overflow: visible;" background={true}>
@@ -79,59 +121,21 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
         <h3 class="nav-group-title">You</h3>
         <ul>
           <li id="left-hand-login-item" hidden={isAuthenticated || !allowAuthPrompt}><button type="button" class="nav-text-button hover">Log In</button></li>
-          <li id="left-hand-profile-item" hidden={!isAuthenticated}>
-            <a href="/profile" class={isProfilePage ? 'active' : 'hover'} aria-current={isProfilePage ? 'page' : undefined}>Profile</a>
-            {isProfilePage && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-          <li id="left-hand-reading-life-item" hidden={!isAuthenticated}>
-            <a href={isReadingLifePage ? undefined : '/reading-life'} class={isReadingLifePage ? 'active' : 'hover'} aria-current={isReadingLifePage ? 'page' : undefined}>My Reading Life</a>
-            {isReadingLifePage && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-          <li id="left-hand-journal-item" hidden={!isAuthenticated}>
-            <a href={isJournalPage ? undefined : '/journal'} class={isJournalPage ? 'active' : 'hover'} aria-current={isJournalPage ? 'page' : undefined}>Reading Journal</a>
-            {isJournalPage && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-          <li id="left-hand-notifications-item" hidden={!isAuthenticated}>
-            <a href={isNotificationsPage ? undefined : '/notifications'} class={isNotificationsPage ? 'active notification-nav-link' : 'hover notification-nav-link'} aria-current={isNotificationsPage ? 'page' : undefined}>
-              <span>Notifications</span>
-              <span id="left-hand-notification-badge" class="notification-badge" aria-label="0 unread notifications" hidden>0</span>
-            </a>
-            {isNotificationsPage && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-          <li id="left-hand-settings-item" hidden={!isAuthenticated}>
-            <a href={isActive('/settings') ? undefined : '/settings'} class={isActive('/settings') ? 'active' : 'hover'} aria-current={isActive('/settings') ? 'page' : undefined}>Settings</a>
-            {isActive('/settings') && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
+          {youNavItems.map((item) => (
+            <li id={item.id} hidden={!isAuthenticated}>
+              <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
+                <span>{item.label}</span>
+                {item.href === "/notifications" && <span id="left-hand-notification-badge" class="notification-badge" aria-label="0 unread notifications" hidden>0</span>}
+              </a>
+              {showSectionLinks(item) && (
+                <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
           <li id="left-hand-logout-item" hidden={!isAuthenticated}><button type="button" class="nav-text-button hover">Log Out</button></li>
         </ul>
       </section>
@@ -139,92 +143,36 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
       <section class="nav-group nav-group-explore">
         <h3 class="nav-group-title">Explore</h3>
         <ul>
-          <li>
-            <a href={isDiscoverPage ? undefined : '/discover'} class={isDiscoverPage ? 'active' : 'hover'} aria-current={isDiscoverPage ? 'page' : undefined}>Discover</a>
-            {isDiscoverPage && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-          <li>
-            <a href={isActive('/books') ? undefined : '/books'} class={isActive('/books') ? 'active' : 'hover'} aria-current={isActive('/books') ? 'page' : undefined}>Books</a>
-            {isActive('/books') && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-          <li>
-            <a href={isActive('/authors') ? undefined : '/authors'} class={isActive('/authors') ? 'active' : 'hover'} aria-current={isActive('/authors') ? 'page' : undefined}>Authors</a>
-            {isActive('/authors') && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-          <li id="left-hand-following-item" hidden={!isAuthenticated}>
-            <a href={isActive('/following') ? undefined : '/following'} class={isActive('/following') ? 'active' : 'hover'} aria-current={isActive('/following') ? 'page' : undefined}>Following</a>
-            {isActive('/following') && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
+          {exploreNavItems.map((item) => (
+            <li id={item.id} hidden={item.href === "/following" && !isAuthenticated}>
+              <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>{item.label}</a>
+              {showSectionLinks(item) && (
+                <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
         </ul>
       </section>
 
       <section class="nav-group nav-group-about">
         <h3 class="nav-group-title">About</h3>
         <ul>
-          <li>
-            <a href={isActive('/mission') ? undefined : '/mission'} class={isActive('/mission') ? 'active' : 'hover'} aria-current={isActive('/mission') ? 'page' : undefined}>Mission</a>
-            {isActive('/mission') && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-          <li>
-            <a href={isActive('/metrics') ? undefined : '/metrics'} class={isActive('/metrics') ? 'active' : 'hover'} aria-current={isActive('/metrics') ? 'page' : undefined}>Metrics</a>
-            {isActive('/metrics') && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-          <li>
-            <a href={isActive('/roadmap') ? undefined : '/roadmap'} class={isActive('/roadmap') ? 'active' : 'hover'} aria-current={isActive('/roadmap') ? 'page' : undefined}>Roadmap</a>
-            {isActive('/roadmap') && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-          <li>
-            <a href={isActive('/release-notes') ? undefined : '/release-notes'} class={isActive('/release-notes') ? 'active' : 'hover'} aria-current={isActive('/release-notes') ? 'page' : undefined}>Release Notes</a>
-            {isActive('/release-notes') && sectionLinks.length > 0 && (
-              <ul class="section-links-nested">
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
+          {aboutNavItems.map((item) => (
+            <li>
+              <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>{item.label}</a>
+              {showSectionLinks(item) && (
+                <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
         </ul>
       </section>
 
@@ -232,106 +180,18 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
         <section class="nav-group nav-group-admin">
           <h3 class="nav-group-title">Admin</h3>
           <ul>
-            <li>
-              <a href={isAdminDashboardPage ? undefined : '/admin'} class={isAdminDashboardPage ? 'active' : 'hover'} aria-current={isAdminDashboardPage ? 'page' : undefined}>Dashboard</a>
-              {isAdminDashboardPage && sectionLinks.length > 0 && (
-                <ul class="section-links-nested">
-                  {sectionLinks.map((link) => (
-                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                  ))}
-                </ul>
-              )}
-            </li>
-            <li>
-              <a href={isAdminAnalyticsPage ? undefined : '/admin/analytics'} class={isAdminAnalyticsPage ? 'active' : 'hover'} aria-current={isAdminAnalyticsPage ? 'page' : undefined}>Analytics</a>
-              {isAdminAnalyticsPage && sectionLinks.length > 0 && (
-                <ul class="section-links-nested">
-                  {sectionLinks.map((link) => (
-                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                  ))}
-                </ul>
-              )}
-            </li>
-            <li>
-              <a href={isAdminCollectionsPage ? undefined : '/admin/collections'} class={isAdminCollectionsPage ? 'active' : 'hover'} aria-current={isAdminCollectionsPage ? 'page' : undefined}>Collections</a>
-              {isAdminCollectionsPage && sectionLinks.length > 0 && (
-                <ul class="section-links-nested">
-                  {sectionLinks.map((link) => (
-                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                  ))}
-                </ul>
-              )}
-            </li>
-            <li>
-              <a href={isAdminFeedbackPage ? undefined : '/admin/feedback'} class={isAdminFeedbackPage ? 'active' : 'hover'} aria-current={isAdminFeedbackPage ? 'page' : undefined}>Feedback</a>
-              {isAdminFeedbackPage && sectionLinks.length > 0 && (
-                <ul class="section-links-nested" aria-label="Admin Feedback sections">
-                  {sectionLinks.map((link) => (
-                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                  ))}
-                </ul>
-              )}
-            </li>
-            <li>
-              <a href={isAdminNotificationsPage ? undefined : '/admin/notifications'} class={isAdminNotificationsPage ? 'active' : 'hover'} aria-current={isAdminNotificationsPage ? 'page' : undefined}>Notifications</a>
-              {isAdminNotificationsPage && sectionLinks.length > 0 && (
-                <ul class="section-links-nested">
-                  {sectionLinks.map((link) => (
-                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                  ))}
-                </ul>
-              )}
-            </li>
-            <li>
-              <a href={isActive('/admin/data-health') ? undefined : '/admin/data-health'} class={isActive('/admin/data-health') ? 'active' : 'hover'} aria-current={isActive('/admin/data-health') ? 'page' : undefined}>Data Health</a>
-              {isActive('/admin/data-health') && sectionLinks.length > 0 && (
-                <ul class="section-links-nested">
-                  {sectionLinks.map((link) => (
-                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                  ))}
-                </ul>
-              )}
-            </li>
-            <li>
-              <a href={isAdminFoundingReadersPage ? undefined : '/admin/founding-readers'} class={isAdminFoundingReadersPage ? 'active' : 'hover'} aria-current={isAdminFoundingReadersPage ? 'page' : undefined}>Founding Readers</a>
-              {isAdminFoundingReadersPage && sectionLinks.length > 0 && (
-                <ul class="section-links-nested">
-                  {sectionLinks.map((link) => (
-                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                  ))}
-                </ul>
-              )}
-            </li>
-            <li>
-              <a href={isAdminReleasesPage ? undefined : '/admin/releases'} class={isAdminReleasesPage ? 'active' : 'hover'} aria-current={isAdminReleasesPage ? 'page' : undefined}>Releases</a>
-              {isAdminReleasesPage && sectionLinks.length > 0 && (
-                <ul class="section-links-nested">
-                  {sectionLinks.map((link) => (
-                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                  ))}
-                </ul>
-              )}
-            </li>
-            <li>
-              <a href={isAdminOperationsPage ? undefined : '/admin/operations'} class={isAdminOperationsPage ? 'active' : 'hover'} aria-current={isAdminOperationsPage ? 'page' : undefined}>Operations</a>
-              {isAdminOperationsPage && sectionLinks.length > 0 && (
-                <ul class="section-links-nested">
-                  {sectionLinks.map((link) => (
-                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                  ))}
-                </ul>
-              )}
-            </li>
-            <li>
-              <a href={isAdminUsersPage ? undefined : '/admin/users'} class={isAdminUsersPage ? 'active' : 'hover'} aria-current={isAdminUsersPage ? 'page' : undefined}>Users</a>
-              {isAdminUsersPage && sectionLinks.length > 0 && (
-                <ul class="section-links-nested">
-                  {sectionLinks.map((link) => (
-                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                  ))}
-                </ul>
-              )}
-            </li>
+            {adminNavItems.map((item) => (
+              <li id={item.id}>
+                <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>{item.label}</a>
+                {showSectionLinks(item) && (
+                  <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
+                    {sectionLinks.map((link) => (
+                      <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
           </ul>
         </section>
       )}
@@ -350,8 +210,8 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
         <a href="/release-notes">{releaseVersion || appVersion}</a>
       </p>
       <nav aria-label="Site links">
-        <a href="/privacy" class={isActive('/privacy') ? 'active' : 'hover'} aria-current={isActive('/privacy') ? 'page' : undefined}>Privacy</a>
-        <a href="/support" class={isActive('/support') ? 'active' : 'hover'} aria-current={isActive('/support') ? 'page' : undefined}>Support DogEared</a>
+        <a href="/privacy" class={routeMatches('/privacy') ? 'active' : 'hover'} aria-current={routeMatches('/privacy') ? 'page' : undefined}>Privacy</a>
+        <a href="/support" class={routeMatches('/support') ? 'active' : 'hover'} aria-current={routeMatches('/support') ? 'page' : undefined}>Support DogEared</a>
       </nav>
     </footer>
   </div>

@@ -45,8 +45,9 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Reading Journal: private searchable notebook for what a reader was thinking while reading, including dated entries, optional book context, one optional reading position, moods, and personal tags.
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
+- Notifications: dedicated low-noise notification center grouped by Today, This Week, and Earlier for meaningful community, reading, discovery, milestone, and system updates.
 - Settings: profile/account entry points, magic-link auth, email changes, Goodreads import dashboard, preferences, privacy, notifications, Learning controls for helpful tips, data export, shelf clearing, API endpoint references, and sessions.
-- Admin: operational overview, privacy-friendly product analytics, Founding Reader access controls, release workflow, feedback dashboard, data health, user search, user detail, and admin delete-user tools.
+- Admin: operational overview, privacy-friendly product analytics, notification operations, Founding Reader access controls, release workflow, feedback dashboard, data health, user search, user detail, and admin delete-user tools.
 - Mission, Roadmap, Release Notes, Privacy, Support: public product context, shipped changes, and project direction.
 
 ## Current Information Architecture
@@ -242,7 +243,7 @@ Smart grouping uses a notification `group_key` and configurable window so bursts
 
 ### Admin
 
-Admins are recognized by username through `ADMIN_USERNAMES`. Admin pages include an overview, product analytics dashboard, Founding Reader access controls, release management, feedback dashboard, data-health view, user search, user detail, and delete-user controls. Admin pages redirect non-admins to home.
+Admins are recognized by username through `ADMIN_USERNAMES`. Admin pages include an overview, product analytics dashboard, notification operations dashboard, Founding Reader access controls, release management, feedback dashboard, data-health view, user search, user detail, and delete-user controls. Admin pages redirect non-admins to home.
 
 The Founding Readers dashboard manages Open, Waitlist, and Invite Only access modes, target capacity, automatic Open-to-Waitlist behavior, waitlist approvals, invitations, declines, removals, and current reader review. The public experience should use Founding Reader language instead of "beta tester" language, because these readers are early collaborators rather than instability testers.
 

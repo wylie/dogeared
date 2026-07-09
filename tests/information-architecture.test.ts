@@ -5,18 +5,22 @@ import test from "node:test";
 test("signed-in navigation separates personal, discovery, and settings destinations", () => {
 	const nav = readFileSync("src/components/LeftHand.astro", "utf8");
 
-	const youGroup = nav.slice(nav.indexOf("nav-group-you"), nav.indexOf("nav-group-explore"));
-	assert.ok(youGroup.indexOf("left-hand-profile-item") < youGroup.indexOf("left-hand-reading-life-item"));
-	assert.ok(youGroup.indexOf("left-hand-reading-life-item") < youGroup.indexOf("left-hand-journal-item"));
-	assert.ok(youGroup.indexOf("left-hand-journal-item") < youGroup.indexOf("left-hand-notifications-item"));
-	assert.ok(youGroup.indexOf("left-hand-notifications-item") < youGroup.indexOf("left-hand-settings-item"));
-	assert.ok(youGroup.indexOf("left-hand-settings-item") < youGroup.indexOf("left-hand-logout-item"));
-	assert.match(youGroup, /\/notifications/);
-	assert.doesNotMatch(youGroup, /Following/);
-	assert.doesNotMatch(youGroup, /Reading Timeline/);
+	assert.match(nav, /const routeMatches/);
+	assert.match(nav, /const adminNavItems/);
+	assert.doesNotMatch(nav, /const is[A-Z][A-Za-z]+Page/);
+	const youItems = nav.slice(nav.indexOf("const youNavItems"), nav.indexOf("const exploreNavItems"));
+	assert.ok(youItems.indexOf("left-hand-profile-item") < youItems.indexOf("left-hand-reading-life-item"));
+	assert.ok(youItems.indexOf("left-hand-reading-life-item") < youItems.indexOf("left-hand-journal-item"));
+	assert.ok(youItems.indexOf("left-hand-journal-item") < youItems.indexOf("left-hand-notifications-item"));
+	assert.ok(youItems.indexOf("left-hand-notifications-item") < youItems.indexOf("left-hand-settings-item"));
+	assert.match(youItems, /\/notifications/);
+	assert.doesNotMatch(youItems, /Following/);
+	assert.doesNotMatch(youItems, /Reading Timeline/);
 
-	const exploreGroup = nav.slice(nav.indexOf("nav-group-explore"), nav.indexOf("nav-group-about"));
-	assert.match(exploreGroup, /Following/);
+	const exploreItems = nav.slice(nav.indexOf("const exploreNavItems"), nav.indexOf("const aboutNavItems"));
+	assert.match(exploreItems, /Following/);
+	const youGroup = nav.slice(nav.indexOf("nav-group-you"), nav.indexOf("nav-group-explore"));
+	assert.ok(youGroup.indexOf("left-hand-login-item") < youGroup.indexOf("left-hand-logout-item"));
 });
 
 test("profile stays focused on reader identity and current reading state", () => {

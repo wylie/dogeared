@@ -169,5 +169,6 @@ test("journal UI is wired into book, private journal page, navigation, and autos
 	assert.match(journalPage, /journal-pagination/);
 	assert.match(journalPage, /robots="noindex,nofollow"/);
 	assert.match(nav, /Reading Journal/);
-	assert.match(nav, /isJournalPage/);
+	assert.match(nav, /routeMatches/);
+	assert.match(nav, /showSectionLinks/);
 });
