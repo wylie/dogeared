@@ -37,7 +37,8 @@ Authentication requirements:
 | `/account/email/verify` | Public token route | Verifies pending email changes. | Account email-change table, email notices. |
 | `/metrics` | Public with personal sections when signed in | Personal/community reading metrics, taste graph, charts, drill-down, comparison views. | ECharts, Neon aggregate queries, sample fallback. |
 | `/mission` | Public | Product mission and principles. | Static Astro page. |
-| `/roadmap` | Public | Current, next, later, and completed roadmap items. | `src/lib/roadmap`. |
+| `/roadmap` | Public | Current, next, later, recently shipped, and completed roadmap items. | `src/lib/roadmap`, published releases. |
+| `/release-notes` | Public | Newest-first release notes with highlights, bug fixes, known issues, and roadmap link. | `releases` helper, `admin_release_note`. |
 | `/privacy` | Public | Privacy explanation. | Static Astro page. |
 | `/support` | Public | Support project context. | Static Astro page. |
 | `/admin` | Admin | Admin overview and site statistics. | `resolveAdminSession`, `loadAdminOverviewStats`. |
@@ -46,6 +47,7 @@ Authentication requirements:
 | `/admin/feedback` | Admin | Search, filter, triage, annotate, and resolve Founding Reader feedback and bug reports. | `feedback` helper, `feedback_submission`, admin workflow form. |
 | `/admin/founding-readers` | Admin | Manage Founding Reader access mode, capacity, waitlist approvals, invitations, declines, removals, and active reader review. | `foundingReaders` helper, `founding_reader_config`, `founding_reader_waitlist`, active reader table. |
 | `/admin/beta-users` | Admin redirect | Compatibility redirect to `/admin/founding-readers`. | Redirect only. |
+| `/admin/releases` | Admin | Create, edit, preview, publish, and archive releases. | `releases` helper, `admin_release_note`. |
 | `/admin/data-health` | Admin | Metadata, import, duplicate, backfill, page count, and publisher health. | Neon diagnostic queries. |
 | `/admin/users` | Admin | Search users and delete users from list. | `searchAdminUsers`, `deleteAdminUser`. |
 | `/admin/users/[username]` | Admin | User detail counts and delete-user flow. | `loadAdminUserDetail`, `deleteAdminUser`. |

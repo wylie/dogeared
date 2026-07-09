@@ -14,6 +14,8 @@ import type { FeedbackUserContext } from "../../lib/feedback";
 import { getNeonSql } from "../../lib/neon";
 import { sendDogearedEmail } from "../../lib/email";
 import { recordAdminFeedbackIssue } from "../../lib/adminData";
+import { loadLatestPublishedRelease } from "../../lib/releases";
+import { resolveAppVersion, resolveGitCommit } from "../../lib/versionInfo";
 
 export const prerender = false;
 
@@ -77,20 +79,20 @@ async function recordFeedbackEvent(input: { userId: string; ipHash: string; type
 }
 
 function resolveServerAppVersion() {
-	return String(import.meta.env.PUBLIC_APP_VERSION || import.meta.env.npm_package_version || "0.1.1").trim();
+	return resolveAppVersion();
 }
 
 function resolveServerGitCommit() {
-	return String(
-		import.meta.env.VERCEL_GIT_COMMIT_SHA
-		|| import.meta.env.PUBLIC_GIT_COMMIT
-		|| import.meta.env.GIT_COMMIT
-		|| ""
-	).trim();
+	return resolveGitCommit();
 }
 
 function resolveServerEnvironment() {
 	return String(import.meta.env.VERCEL_ENV || import.meta.env.MODE || "development").trim();
+}
+
+async function resolveServerReleaseVersion(sql: ReturnType<typeof getNeonSql>) {
+	const latestRelease = await loadLatestPublishedRelease(sql).catch(() => null);
+	return latestRelease?.version || resolveServerAppVersion();
 }
 
 export const POST: APIRoute = async ({ request }) => {
@@ -132,6 +134,7 @@ export const POST: APIRoute = async ({ request }) => {
 		const metadata = {
 			...validation.metadata,
 			appVersion: validation.metadata.appVersion || resolveServerAppVersion(),
+			releaseVersion: validation.metadata.releaseVersion || await resolveServerReleaseVersion(sql),
 			gitCommit: validation.metadata.gitCommit || resolveServerGitCommit(),
 			environment: validation.metadata.environment || resolveServerEnvironment()
 		};

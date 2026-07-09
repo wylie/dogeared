@@ -4,13 +4,16 @@ import FloatingActions from '../components/FloatingActions.astro';
 import GuidedTip from '../components/GuidedTip.astro';
 import OnboardingMilestones from '../components/OnboardingMilestones.astro';
 import ReaderGuidance from '../components/ReaderGuidance.astro';
+import WhatsNewModal from '../components/WhatsNewModal.astro';
 import { resolveAdminSession } from '../lib/admin';
 import { loadActiveAnnouncement } from '../lib/adminAnnouncements';
 import { resolveUserBySession } from '../lib/auth';
 import { DEFAULT_FOUNDING_READER_CONFIG, loadFoundingReaderConfig } from '../lib/foundingReaders';
 import { DEFAULT_SOCIAL_IMAGE, METADATA_ICON_LINKS, SITE_THEME_COLOR } from '../lib/metadataAssets';
 import { getNeonSql } from '../lib/neon';
+import { loadLatestPublishedRelease } from '../lib/releases';
 import { buildSeoMetadata } from '../lib/seo';
+import { resolveAppVersion, resolveGitCommit } from '../lib/versionInfo';
 type SectionLink = { id: string; label: string };
 const {
 	title = "DogEared",
@@ -50,9 +53,10 @@ const adminSession = isAuthenticated ? await resolveAdminSession(Astro.request) 
 const isAdmin = !!adminSession.isAdmin;
 const activeAnnouncement = await loadActiveAnnouncement();
 const foundingReaderConfig = await loadFoundingReaderConfig(getNeonSql()).catch(() => DEFAULT_FOUNDING_READER_CONFIG);
-const rawAppVersion = String(import.meta.env.PUBLIC_APP_VERSION || import.meta.env.npm_package_version || "0.1.1").trim();
-const normalizedAppVersion = rawAppVersion.startsWith("v") ? rawAppVersion : `v${rawAppVersion}`;
-const appVersion = normalizedAppVersion.includes("beta") ? normalizedAppVersion : `${normalizedAppVersion}-beta`;
+const appVersion = resolveAppVersion();
+const latestRelease = await loadLatestPublishedRelease(getNeonSql()).catch(() => null);
+const releaseVersion = latestRelease && latestRelease.version ? latestRelease.version : appVersion;
+const gitCommit = resolveGitCommit();
 const seo = buildSeoMetadata({
 	title,
 	description: metaDescription,
@@ -100,8 +104,6 @@ import '../assets/global.css';
 		<meta property="og:url" content={canonicalHref} />
 		<meta property="og:image" content={ogImageUrl} />
 		<meta property="og:image:alt" content={socialImageAlt} />
-		{seo.imageIsDefault ? <meta property="og:image:width" content="1200" /> : null}
-		{seo.imageIsDefault ? <meta property="og:image:height" content="630" /> : null}
 		<meta name="twitter:card" content="summary_large_image" />
 		<meta name="twitter:title" content={pageTitle} />
 		<meta name="twitter:description" content={seo.description} />
@@ -118,7 +120,7 @@ import '../assets/global.css';
 			<link href={iconStylesheetHref} rel="stylesheet">
 		</noscript>
 	</head>
-		<body>
+		<body data-app-version={appVersion} data-release-version={releaseVersion} data-git-commit={gitCommit}>
 			<a class="skip-link" href="#main-content">Skip to main content</a>
 			<div class="container">
 				<div class="column" style="padding-bottom: 0;">
@@ -131,6 +133,7 @@ import '../assets/global.css';
 							allowAuthPrompt={allowAuthPrompt}
 							foundingReaderMode={foundingReaderConfig.effectiveMode}
 							appVersion={appVersion}
+							releaseVersion={releaseVersion}
 						/>
 					</slot>
 				</div>
@@ -157,6 +160,7 @@ import '../assets/global.css';
 			<GuidedTip isAuthenticated={isAuthenticated} />
 			<OnboardingMilestones isAuthenticated={isAuthenticated} />
 			<FloatingActions isAuthenticated={isAuthenticated} />
+			<WhatsNewModal release={latestRelease} />
 			<script define:vars={{ currentPath }}>
 				(() => {
 					const endpoint = "/api/analytics/event";

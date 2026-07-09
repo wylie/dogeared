@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 test("admin dashboard and users pages require admin session", () => {
-	for (const path of ["src/pages/admin.astro", "src/pages/admin/analytics.astro", "src/pages/admin/users.astro", "src/pages/admin/users/[username].astro", "src/pages/admin/founding-readers.astro"]) {
+	for (const path of ["src/pages/admin.astro", "src/pages/admin/analytics.astro", "src/pages/admin/users.astro", "src/pages/admin/users/[username].astro", "src/pages/admin/founding-readers.astro", "src/pages/admin/releases.astro"]) {
 		const source = readFileSync(path, "utf8");
 		assert.equal(source.includes("resolveAdminSession"), true);
 		assert.equal(source.includes("if (!admin.isAdmin) return Astro.redirect(\"/\")"), true);
@@ -25,6 +25,8 @@ test("admin navigation is rendered only for admin sessions", () => {
 	assert.equal(nav.includes("/admin/data-health"), true);
 	assert.equal(nav.includes("/admin/founding-readers"), true);
 	assert.equal(nav.includes("Founding Readers"), true);
+	assert.equal(nav.includes("/admin/releases"), true);
+	assert.equal(nav.includes("Releases"), true);
 	assert.equal(nav.includes("/admin/operations"), true);
 	assert.equal(nav.includes("/admin/users"), true);
 });
@@ -56,7 +58,7 @@ test("admin overview displays real site statistics and quick links", () => {
 	assert.equal(data.includes("from user_activity_comment"), true);
 });
 
-test("admin operations center includes beta control surfaces", () => {
+test("admin operations center includes Founding Reader control surfaces", () => {
 	const source = readFileSync("src/pages/admin/operations.astro", "utf8");
 	const data = readFileSync("src/lib/adminData.ts", "utf8");
 	const layout = readFileSync("src/layouts/Layout.astro", "utf8");
@@ -66,7 +68,7 @@ test("admin operations center includes beta control surfaces", () => {
 	assert.equal(source.includes("System Health"), true);
 	assert.equal(source.includes("Feature Flags"), true);
 	assert.equal(source.includes("Announcement Banner"), true);
-	assert.equal(source.includes("Release Notes"), true);
+	assert.equal(source.includes("Release Notes"), false);
 	assert.equal(source.includes("updateAdminFeedbackIssue"), true);
 	assert.equal(data.includes("admin_feedback_issue"), true);
 	assert.equal(data.includes("admin_feature_flag"), true);
@@ -94,11 +96,12 @@ test("admin pages use defensive loaders and formatting", () => {
 	const dataHealth = readFileSync("src/pages/admin/data-health.astro", "utf8");
 	const users = readFileSync("src/pages/admin/users.astro", "utf8");
 	const foundingReaders = readFileSync("src/pages/admin/founding-readers.astro", "utf8");
+	const releases = readFileSync("src/pages/admin/releases.astro", "utf8");
 	const detail = readFileSync("src/pages/admin/users/[username].astro", "utf8");
 	for (const helper of ["formatNumber", "formatDate", "safePercent", "percentOf", "safeAdminLoad"]) {
 		assert.equal(formatting.includes(`function ${helper}`), true);
 	}
-	for (const source of [dashboard, analytics, operations, feedback, dataHealth, users, foundingReaders, detail]) {
+	for (const source of [dashboard, analytics, operations, feedback, dataHealth, users, foundingReaders, releases, detail]) {
 		assert.equal(source.includes("safeAdminLoad"), true);
 	}
 	assert.equal(analytics.includes("emptyAdminProductAnalytics"), true);
@@ -140,6 +143,34 @@ test("admin founding readers page exposes access controls and requested account 
 	assert.equal(auth.includes("waitlist: true"), true);
 	assert.equal(migration.includes("founding_reader_config"), true);
 	assert.equal(migration.includes("founding_reader_waitlist"), true);
+});
+
+test("admin releases page owns release workflow", () => {
+	const page = readFileSync("src/pages/admin/releases.astro", "utf8");
+	const releaseLib = readFileSync("src/lib/releases.ts", "utf8");
+	const migration = readFileSync("db/migrations/2026-07-09-release-management-v1.sql", "utf8");
+	const publicPage = readFileSync("src/pages/release-notes.astro", "utf8");
+	const layout = readFileSync("src/layouts/Layout.astro", "utf8");
+	const whatsNewModal = readFileSync("src/components/WhatsNewModal.astro", "utf8");
+	const leftHand = readFileSync("src/components/LeftHand.astro", "utf8");
+	assert.equal(page.includes("saveRelease"), true);
+	assert.equal(page.includes("publishRelease"), true);
+	assert.equal(page.includes("archiveRelease"), true);
+	assert.equal(page.includes("Preview"), true);
+	for (const field of ["version", "title", "summary", "release_date", "published", "highlights", "bug_fixes", "known_issues", "migration_notes"]) {
+		assert.equal(releaseLib.includes(field), true);
+		assert.equal(migration.includes(field), true);
+	}
+	assert.equal(publicPage.includes("loadPublishedReleases"), true);
+	assert.equal(publicPage.includes("Highlights"), true);
+	assert.equal(publicPage.includes("Bug fixes"), true);
+	assert.equal(publicPage.includes("Known issues"), true);
+	assert.equal(publicPage.includes('href="/roadmap"'), true);
+	assert.equal(layout.includes("loadLatestPublishedRelease"), true);
+	assert.equal(whatsNewModal.includes("data-whats-new-modal"), true);
+	assert.equal(whatsNewModal.includes("dogeared:release-seen"), true);
+	assert.equal(leftHand.includes("/release-notes"), true);
+	assert.equal(leftHand.includes("DogEared Beta"), true);
 });
 
 test("admin users support search, detail counts, and safe deletion", () => {

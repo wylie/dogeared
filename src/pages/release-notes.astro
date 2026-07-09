@@ -1,0 +1,143 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getNeonSql } from "../lib/neon";
+import { loadPublishedReleases, releaseLines, type ReleaseRecord } from "../lib/releases";
+import { buildBreadcrumbList } from "../lib/seo";
+
+export const prerender = false;
+
+const releases = await loadPublishedReleases(getNeonSql(), 30).catch(() => [] as ReleaseRecord[]);
+const sectionLinks = [
+	{ id: "latest", label: "Latest" },
+	{ id: "history", label: "History" }
+];
+const structuredData = JSON.stringify(buildBreadcrumbList([
+	{ name: "Home", item: "/" },
+	{ name: "Release Notes", item: "/release-notes" }
+], { site: Astro.site ?? Astro.url, logErrors: import.meta.env.DEV }));
+---
+
+<Layout
+	title="Release Notes"
+	sectionLinks={sectionLinks}
+	metaDescription="See what is new, fixed, and coming next in DogEared."
+	canonicalUrl="/release-notes"
+	structuredData={structuredData}
+>
+	<div slot="right" class="release-notes-page">
+		<header class="release-hero" id="latest">
+			<p class="eyebrow">Release Notes</p>
+			<h1>What's new in DogEared.</h1>
+			<p>Recent improvements, bug fixes, known issues, and where the roadmap is heading next.</p>
+		</header>
+
+		<section id="history" class="release-list" aria-label="Release history">
+			{releases.length === 0 ? (
+				<article class="empty-card">
+					<h2>No release notes yet</h2>
+					<p>Published release notes will appear here as DogEared moves through the Founding Reader phase.</p>
+					<a href="/roadmap">View the roadmap</a>
+				</article>
+			) : releases.map((release) => (
+				<article class="release-card">
+					<div class="release-head">
+						<p class="release-version">{release.version}</p>
+						<p class="release-date">{release.releaseDate || release.publishedAt ? new Date(release.releaseDate || release.publishedAt).toLocaleDateString() : "Recently shipped"}</p>
+					</div>
+					<h2>{release.title}</h2>
+					<p class="summary">{release.summary}</p>
+
+					{releaseLines(release.highlights).length > 0 && (
+						<section>
+							<h3>Highlights</h3>
+							<ul>{releaseLines(release.highlights).map((item) => <li>{item}</li>)}</ul>
+						</section>
+					)}
+					{releaseLines(release.bugFixes).length > 0 && (
+						<section>
+							<h3>Bug fixes</h3>
+							<ul>{releaseLines(release.bugFixes).map((item) => <li>{item}</li>)}</ul>
+						</section>
+					)}
+					{releaseLines(release.knownIssues).length > 0 && (
+						<section>
+							<h3>Known issues</h3>
+							<ul>{releaseLines(release.knownIssues).map((item) => <li>{item}</li>)}</ul>
+						</section>
+					)}
+					{release.migrationNotes && (
+						<section>
+							<h3>Migration notes</h3>
+							<p>{release.migrationNotes}</p>
+						</section>
+					)}
+					<a class="roadmap-link" href="/roadmap">View what's coming next</a>
+				</article>
+			))}
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.release-notes-page { max-width: 900px; }
+	.release-hero { padding: 0.25rem 0 1.35rem; border-bottom: var(--border-subtle); }
+	.eyebrow {
+		margin: 0 0 0.4rem;
+		font-size: 0.76rem;
+		font-weight: 760;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--color-text-subtle);
+	}
+	.release-hero h1 {
+		margin: 0;
+		max-width: 12ch;
+		font-size: clamp(2.2rem, 4vw, 3.6rem);
+		font-weight: 580;
+		line-height: 1.04;
+	}
+	.release-hero p:last-child {
+		margin: 0.85rem 0 0;
+		max-width: 62ch;
+		color: var(--color-text-muted);
+		font-size: 1.02rem;
+		line-height: 1.65;
+	}
+	.release-list { display: grid; gap: 0.95rem; margin-top: 1.1rem; }
+	.release-card,
+	.empty-card {
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.72);
+		box-shadow: var(--shadow-xs);
+		padding: 1rem;
+	}
+	.release-head { display: flex; justify-content: space-between; gap: 0.75rem; align-items: center; }
+	.release-version {
+		margin: 0;
+		display: inline-flex;
+		align-items: center;
+		min-height: 26px;
+		border-radius: 999px;
+		background: var(--color-nav-surface);
+		color: var(--color-nav-active);
+		padding: 0 0.62rem;
+		font-size: 0.78rem;
+		font-weight: 800;
+	}
+	.release-date { margin: 0; color: var(--color-text-subtle); font-size: 0.86rem; font-weight: 700; }
+	.release-card h2,
+	.empty-card h2 { margin: 0.7rem 0 0; color: var(--color-text); font-size: 1.35rem; }
+	.summary,
+	.empty-card p,
+	.release-card section p { margin: 0.45rem 0 0; color: var(--color-text-muted); line-height: 1.58; }
+	.release-card section { margin-top: 0.9rem; }
+	.release-card h3 { margin: 0; color: var(--color-text); font-size: 1rem; }
+	.release-card ul { margin: 0.45rem 0 0; padding-left: 1.2rem; color: var(--color-text-muted); line-height: 1.55; }
+	.roadmap-link,
+	.empty-card a { display: inline-flex; margin-top: 0.95rem; color: var(--color-nav); font-weight: 800; text-decoration: none; }
+	.roadmap-link:hover,
+	.empty-card a:hover { color: var(--color-nav-hover); text-decoration: underline; }
+	@media (max-width: 640px) {
+		.release-head { align-items: flex-start; flex-direction: column; }
+	}
+</style>

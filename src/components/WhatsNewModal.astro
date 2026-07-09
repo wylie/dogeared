@@ -1,0 +1,145 @@
+---
+import { releaseLines, type ReleaseRecord } from "../lib/releases";
+
+type Props = { release: ReleaseRecord | null };
+const { release } = Astro.props as Props;
+---
+
+{release ? (
+	<div class="whats-new-modal" data-whats-new-modal data-release-version={release.version} hidden>
+		<div class="whats-new-backdrop" data-whats-new-dismiss></div>
+		<section class="whats-new-panel" role="dialog" aria-modal="true" aria-labelledby="whats-new-title" aria-describedby="whats-new-summary" tabindex="-1">
+			<p class="whats-new-kicker">New</p>
+			<h2 id="whats-new-title">Welcome to {release.version}</h2>
+			<p id="whats-new-summary">{release.summary}</p>
+			{releaseLines(release.highlights).length > 0 ? (
+				<ul>
+					{releaseLines(release.highlights).slice(0, 4).map((item) => <li>{item}</li>)}
+				</ul>
+			) : null}
+			<div class="whats-new-actions">
+				<a href="/release-notes">View full release notes</a>
+				<button type="button" data-whats-new-dismiss>Dismiss</button>
+			</div>
+		</section>
+	</div>
+) : null}
+
+<script>
+	const modal = document.querySelector("[data-whats-new-modal]");
+	if (modal instanceof HTMLElement) {
+		const version = String(modal.dataset.releaseVersion || "").trim();
+		const key = "dogeared:release-seen:" + version;
+		let alreadySeen = true;
+		try {
+			alreadySeen = !version || window.localStorage.getItem(key) === "true";
+		} catch {
+			alreadySeen = true;
+		}
+		if (!alreadySeen) {
+			const panel = modal.querySelector(".whats-new-panel");
+			const dismiss = () => {
+				modal.hidden = true;
+				try {
+					window.localStorage.setItem(key, "true");
+				} catch {
+					// Release reminders should never interrupt the app.
+				}
+			};
+			modal.hidden = false;
+			window.setTimeout(() => {
+				if (panel instanceof HTMLElement) panel.focus();
+			}, 0);
+			modal.querySelectorAll("[data-whats-new-dismiss]").forEach((button) => button.addEventListener("click", dismiss));
+			document.addEventListener("keydown", (event) => {
+				if (event.key === "Escape" && !modal.hidden) dismiss();
+			});
+		}
+	}
+</script>
+
+<style>
+	.whats-new-modal[hidden] {
+		display: none !important;
+	}
+	.whats-new-modal {
+		position: fixed;
+		inset: 0;
+		z-index: 13000;
+		display: grid;
+		place-items: center;
+		padding: 1rem;
+	}
+	.whats-new-backdrop {
+		position: absolute;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.36);
+	}
+	.whats-new-panel {
+		position: relative;
+		z-index: 1;
+		width: min(430px, calc(100vw - 2rem));
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: #fff;
+		box-shadow: var(--shadow-popover);
+		padding: 1rem;
+		outline: none;
+	}
+	.whats-new-panel:focus-visible {
+		outline: 3px solid var(--color-primary);
+		outline-offset: 3px;
+	}
+	.whats-new-kicker {
+		margin: 0 0 0.35rem;
+		color: var(--color-text-subtle);
+		font-size: 0.74rem;
+		font-weight: 800;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+	.whats-new-panel h2 {
+		margin: 0;
+		color: var(--color-text);
+		font-size: 1.45rem;
+	}
+	.whats-new-panel p:not(.whats-new-kicker) {
+		margin: 0.5rem 0 0;
+		color: var(--color-text-muted);
+		line-height: 1.5;
+	}
+	.whats-new-panel ul {
+		margin: 0.75rem 0 0;
+		padding-left: 1.2rem;
+		color: var(--color-text-muted);
+		line-height: 1.5;
+	}
+	.whats-new-actions {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.65rem;
+		align-items: center;
+		flex-wrap: wrap;
+		margin-top: 1rem;
+	}
+	.whats-new-actions a {
+		color: var(--color-nav);
+		font-weight: 800;
+		text-decoration: none;
+	}
+	.whats-new-actions a:hover {
+		color: var(--color-nav-hover);
+		text-decoration: underline;
+	}
+	.whats-new-actions button {
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: #fff;
+		color: var(--color-nav);
+		min-height: 34px;
+		padding: 0 0.75rem;
+		font: inherit;
+		font-weight: 800;
+		cursor: pointer;
+	}
+</style>

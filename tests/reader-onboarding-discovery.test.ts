@@ -207,6 +207,8 @@ test("sidebar footer carries ownership and support metadata", () => {
 	assert.equal(nav.includes("Argon Collective LLC"), true);
 	assert.equal(nav.includes('href="/privacy"'), true);
 	assert.equal(nav.includes('href="/support"'), true);
+	assert.equal(nav.includes("DogEared Beta"), true);
+	assert.equal(nav.includes('href="/release-notes"'), true);
 	assert.equal(mission.includes("Argon Collective LLC"), false);
 	assert.equal(support.includes("Argon Collective LLC"), true);
 });

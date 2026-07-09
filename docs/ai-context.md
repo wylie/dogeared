@@ -163,7 +163,8 @@ Admin architecture:
 - `/admin/founding-readers` is the Founding Reader control surface for access mode, waitlist approvals, capacity, onboarding, activity, and future account operations.
 - `/admin/users` remains the direct account management surface for search, detail review, and deletion.
 - `/admin/data-health` owns catalog and import-quality diagnostics.
-- `/admin/operations` owns feedback triage, recommendation health, import/system status, feature flags, announcements, and release notes.
+- `/admin/releases` owns release creation, editing, publishing, archiving, and previews.
+- `/admin/operations` owns feedback triage, recommendation health, import/system status, feature flags, and announcements.
 
 Operational pages must be admin-only and marked `noindex,nofollow`.
 
@@ -200,6 +201,9 @@ Release notes:
 
 - Release notes are lightweight early-access history, not marketing pages.
 - Notes should describe meaningful user-facing or operational changes in concise language.
+- Public release notes live at `/release-notes` and are sourced from published admin releases.
+- Readers see a lightweight What's New modal once per published release version.
+- Roadmap Recently Shipped should be sourced from release notes instead of duplicated by hand.
 
 ---
 

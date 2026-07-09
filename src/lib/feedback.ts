@@ -56,6 +56,7 @@ export type FeedbackMetadata = {
 	route: string;
 	timestamp: string;
 	appVersion: string;
+	releaseVersion: string;
 	gitCommit: string;
 	userAgent: string;
 	browser: string;
@@ -157,6 +158,7 @@ export function normalizeFeedbackMetadata(value: unknown): FeedbackMetadata {
 		route: normalizeText(source.route, 240),
 		timestamp: normalizeText(source.timestamp, 80),
 		appVersion: normalizeText(source.appVersion, 80),
+		releaseVersion: normalizeText(source.releaseVersion, 80),
 		gitCommit: normalizeText(source.gitCommit, 80),
 		userAgent: normalizeText(source.userAgent, 500),
 		browser: normalizeText(source.browser, 160),
@@ -286,6 +288,7 @@ export function buildFeedbackEmail(input: {
 		[
 			"Environment:",
 			`App version: ${input.metadata.appVersion || "Not provided"}`,
+			`Release version: ${input.metadata.releaseVersion || "Not provided"}`,
 			`Git commit: ${input.metadata.gitCommit || "Not provided"}`,
 			`Environment: ${input.metadata.environment || "Not provided"}`,
 			`Viewport: ${input.metadata.viewport || "Not provided"}`,
@@ -325,6 +328,7 @@ export function buildFeedbackEmail(input: {
 		${input.stepsToReproduce ? `<p><strong>Steps to reproduce:</strong></p><pre style="white-space:pre-wrap;font-family:inherit;">${escapeEmailHtml(input.stepsToReproduce)}</pre>` : ""}
 		<p><strong>Environment:</strong><br>
 			App version: ${escapeEmailHtml(input.metadata.appVersion || "Not provided")}<br>
+			Release version: ${escapeEmailHtml(input.metadata.releaseVersion || "Not provided")}<br>
 			Git commit: ${escapeEmailHtml(input.metadata.gitCommit || "Not provided")}<br>
 			Environment: ${escapeEmailHtml(input.metadata.environment || "Not provided")}<br>
 			Viewport: ${escapeEmailHtml(input.metadata.viewport || "Not provided")}<br>

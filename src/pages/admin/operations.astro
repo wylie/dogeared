@@ -7,9 +7,7 @@ import {
 	loadAdminFeatureFlags,
 	loadAdminFeedbackIssues,
 	loadAdminOperationsSummary,
-	loadAdminReleaseNotes,
 	saveAdminAnnouncement,
-	saveAdminReleaseNote,
 	updateAdminFeatureFlags,
 	updateAdminFeedbackIssue
 } from "../../lib/adminData";
@@ -17,8 +15,7 @@ import {
 	emptyAdminOperationsSummary,
 	type AdminAnnouncement,
 	type AdminFeatureFlag,
-	type AdminFeedbackIssue,
-	type AdminReleaseNote
+	type AdminFeedbackIssue
 } from "../../lib/adminData";
 import { formatDate, formatNumber, safeAdminLoad, safeArray, safePercent, safeText } from "../../lib/adminFormatting";
 
@@ -59,14 +56,6 @@ if (Astro.request.method === "POST") {
 			});
 			actionMessage = result.message;
 			actionError = !result.ok;
-		} else if (intent === "save-release-note") {
-			const result = await saveAdminReleaseNote(sql, {
-				version: form.get("version"),
-				title: form.get("title"),
-				body: form.get("body")
-			});
-			actionMessage = result.message;
-			actionError = !result.ok;
 		} else {
 			actionMessage = "Invalid admin action.";
 			actionError = true;
@@ -81,24 +70,21 @@ if (Astro.request.method === "POST") {
 }
 
 const statusFilter = String(Astro.url.searchParams.get("status") || "").trim().toLowerCase();
-const [summaryResult, feedbackResult, flagsResult, announcementsResult, releaseNotesResult] = await Promise.all([
+const [summaryResult, feedbackResult, flagsResult, announcementsResult] = await Promise.all([
 	safeAdminLoad("Operations summary", () => loadAdminOperationsSummary(sql), emptyAdminOperationsSummary()),
 	safeAdminLoad<AdminFeedbackIssue[]>("Feedback issues", () => loadAdminFeedbackIssues(sql, statusFilter), []),
 	safeAdminLoad<AdminFeatureFlag[]>("Feature flags", () => loadAdminFeatureFlags(sql), []),
-	safeAdminLoad<AdminAnnouncement[]>("Announcements", () => loadAdminAnnouncements(sql), []),
-	safeAdminLoad<AdminReleaseNote[]>("Release notes", () => loadAdminReleaseNotes(sql), [])
+	safeAdminLoad<AdminAnnouncement[]>("Announcements", () => loadAdminAnnouncements(sql), [])
 ]);
 const summary = summaryResult.data;
 const feedbackIssues = safeArray(feedbackResult.data);
 const featureFlags = safeArray(flagsResult.data);
 const announcements = safeArray(announcementsResult.data);
-const releaseNotes = safeArray(releaseNotesResult.data);
 const adminWarnings = [
 	summaryResult.warning,
 	feedbackResult.warning,
 	flagsResult.warning,
-	announcementsResult.warning,
-	releaseNotesResult.warning
+	announcementsResult.warning
 ].filter(Boolean);
 
 const sectionLinks = [
@@ -109,8 +95,7 @@ const sectionLinks = [
 	{ id: "imports", label: "Imports" },
 	{ id: "system-health", label: "System" },
 	{ id: "feature-flags", label: "Flags" },
-	{ id: "announcements", label: "Announcements" },
-	{ id: "release-notes", label: "Releases" }
+	{ id: "announcements", label: "Announcements" }
 ];
 
 ---
@@ -119,7 +104,7 @@ const sectionLinks = [
 	<div slot="right" class="admin-operations-page">
 		<header id="overview" class="hero">
 			<h1>Operations</h1>
-			<p>Beta control center for feedback, recommendations, imports, system status, flags, announcements, and releases.</p>
+			<p>Founding Reader control center for feedback, recommendations, imports, system status, flags, and announcements.</p>
 		</header>
 
 		{actionMessage && <p class={`admin-message${actionError ? " error" : ""}`} role="status">{actionMessage}</p>}
@@ -252,7 +237,7 @@ const sectionLinks = [
 		<section class="panel" id="feature-flags">
 			<div class="panel-head">
 				<h2>Feature Flags</h2>
-				<p>Simple toggles for beta rollout planning.</p>
+				<p>Simple toggles for Founding Reader rollout planning.</p>
 			</div>
 			<form class="flag-list" method="post">
 				<input type="hidden" name="intent" value="update-flags" />
@@ -269,7 +254,7 @@ const sectionLinks = [
 		<section class="panel" id="announcements">
 			<div class="panel-head">
 				<h2>Announcement Banner</h2>
-				<p>Create dismissible app-wide beta updates. Rendering is controlled by the announcement feature flag.</p>
+				<p>Create dismissible app-wide Founding Reader updates. Rendering is controlled by the announcement feature flag.</p>
 			</div>
 			<form class="admin-form" method="post">
 				<input type="hidden" name="intent" value="save-announcement" />
@@ -294,28 +279,6 @@ const sectionLinks = [
 						))}
 					</tbody>
 				</table>
-			</div>
-		</section>
-
-		<section class="panel" id="release-notes">
-			<div class="panel-head">
-				<h2>Release Notes</h2>
-			</div>
-			<form class="admin-form" method="post">
-				<input type="hidden" name="intent" value="save-release-note" />
-				<label>Version<input name="version" maxlength="80" placeholder="v0.2.0" /></label>
-				<label>Title<input name="title" maxlength="160" required /></label>
-				<label class="wide">Notes<textarea name="body" rows="4" maxlength="2000" required></textarea></label>
-				<button type="submit">Publish Note</button>
-			</form>
-			<div class="release-list">
-				{releaseNotes.length === 0 ? <p class="empty">No release notes yet.</p> : releaseNotes.map((note) => (
-					<article class="release-card">
-						<h3>{note.version ? `${note.version} · ${note.title}` : note.title}</h3>
-						<p class="meta">{formatDate(note.publishedAt || note.createdAt)}</p>
-						<p>{note.body}</p>
-					</article>
-				))}
 			</div>
 		</section>
 	</div>
@@ -353,10 +316,10 @@ const sectionLinks = [
 		background: #fff;
 	}
 	button { min-height: 34px; border: none; border-radius: 8px; padding: 0 0.8rem; background: var(--color-primary); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
-	.issue-list, .release-list { display: grid; gap: 0.75rem; margin-top: 0.85rem; }
-	.issue-card, .release-card { border: var(--border-subtle); border-radius: var(--radius-md); background: #fff; padding: 0.8rem; }
+	.issue-list { display: grid; gap: 0.75rem; margin-top: 0.85rem; }
+	.issue-card { border: var(--border-subtle); border-radius: var(--radius-md); background: #fff; padding: 0.8rem; }
 	.issue-head { display: flex; justify-content: space-between; gap: 0.7rem; align-items: flex-start; }
-	.issue-head h3, .release-card h3 { margin: 0; font-size: 1rem; }
+	.issue-head h3 { margin: 0; font-size: 1rem; }
 	.issue-head p { margin: 0.2rem 0 0; color: #575757; font-size: 0.86rem; }
 	.issue-message { white-space: pre-wrap; line-height: 1.45; }
 	.status-pill { display: inline-flex; min-height: 24px; align-items: center; border-radius: 999px; border: var(--border-subtle); padding: 0 0.5rem; background: #f7fafc; font-size: 0.78rem; font-weight: 700; }

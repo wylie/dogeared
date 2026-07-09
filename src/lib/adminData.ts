@@ -1,5 +1,6 @@
 import type { NeonQueryFunction } from "@neondatabase/serverless";
 import { getEncryptionKey } from "./auth";
+import { ensureReleaseSchema, loadReleases, saveRelease, type ReleaseRecord } from "./releases";
 
 export type AdminOverviewStats = {
 	totalBooks: number;
@@ -76,14 +77,7 @@ export type AdminAnnouncement = {
 	updatedAt: string;
 };
 
-export type AdminReleaseNote = {
-	id: number;
-	version: string;
-	title: string;
-	body: string;
-	publishedAt: string;
-	createdAt: string;
-};
+export type AdminReleaseNote = ReleaseRecord;
 
 export type AdminUserSummary = {
 	id: string;
@@ -282,6 +276,7 @@ export async function ensureAdminOperationsSchema(sql: NeonQueryFunction<false, 
 			created_at timestamptz not null default now()
 		)
 	`;
+	await ensureReleaseSchema(sql);
 	await sql`create index if not exists idx_admin_release_note_published on admin_release_note(published_at desc, created_at desc)`;
 }
 
@@ -747,21 +742,7 @@ export async function saveAdminAnnouncement(sql: NeonQueryFunction<false, false>
 }
 
 export async function loadAdminReleaseNotes(sql: NeonQueryFunction<false, false>): Promise<AdminReleaseNote[]> {
-	await ensureAdminOperationsSchema(sql);
-	const rows = await sql<Array<{ id: number; version: string; title: string; body: string; published_at: string | null; created_at: string }>>`
-		select id, version, title, body, published_at::text as published_at, created_at::text as created_at
-		from admin_release_note
-		order by coalesce(published_at, created_at) desc, id desc
-		limit 30
-	`;
-	return rows.map((row) => ({
-		id: toCount(row.id),
-		version: normalizeText(row.version, 80),
-		title: normalizeText(row.title, 160),
-		body: normalizeText(row.body, 2000),
-		publishedAt: normalizeText(row.published_at),
-		createdAt: normalizeText(row.created_at)
-	}));
+	return loadReleases(sql, { limit: 30 });
 }
 
 export async function saveAdminReleaseNote(sql: NeonQueryFunction<false, false>, input: {
@@ -769,15 +750,13 @@ export async function saveAdminReleaseNote(sql: NeonQueryFunction<false, false>,
 	title: unknown;
 	body: unknown;
 }) {
-	await ensureAdminOperationsSchema(sql);
-	const title = normalizeText(input.title, 160);
-	const body = normalizeText(input.body, 2000);
-	if (!title || !body) return { ok: false, message: "Release title and notes are required." };
-	await sql`
-		insert into admin_release_note (version, title, body, published_at)
-		values (${normalizeText(input.version, 80)}, ${title}, ${body}, now())
-	`;
-	return { ok: true, message: "Release note saved." };
+	return saveRelease(sql, {
+		version: input.version,
+		title: input.title,
+		summary: input.body,
+		status: "published",
+		published: true
+	});
 }
 
 export async function loadAdminUserDetail(sql: NeonQueryFunction<false, false>, username: string): Promise<AdminUserDetail | null> {

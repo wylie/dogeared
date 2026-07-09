@@ -8,7 +8,8 @@ const {
   isAdmin = false,
   allowAuthPrompt = true,
   foundingReaderMode = "open",
-  appVersion = "v0.1.1-beta"
+  appVersion = "v0.1.1-beta",
+  releaseVersion = appVersion
 } = Astro.props as {
   current?: string;
   sectionLinks?: SectionLink[];
@@ -17,6 +18,7 @@ const {
   allowAuthPrompt?: boolean;
   foundingReaderMode?: string;
   appVersion?: string;
+  releaseVersion?: string;
 };
 const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
 const isActive = (href: string) => normalize(current) === normalize(href);
@@ -32,6 +34,7 @@ const isAdminCollectionsPage = currentNormalized === "/admin/collections";
 const isAdminUsersPage = currentNormalized === "/admin/users" || currentNormalized.startsWith("/admin/users/");
 const isAdminFeedbackPage = currentNormalized === "/admin/feedback";
 const isAdminFoundingReadersPage = currentNormalized === "/admin/founding-readers" || currentNormalized === "/admin/beta-users";
+const isAdminReleasesPage = currentNormalized === "/admin/releases";
 const isAdminOperationsPage = currentNormalized === "/admin/operations";
 const query = Astro.url.searchParams.get("q") ?? "";
 const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].includes(foundingReaderMode) ? foundingReaderMode : "open";
@@ -198,6 +201,16 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
               </ul>
             )}
           </li>
+          <li>
+            <a href={isActive('/release-notes') ? undefined : '/release-notes'} class={isActive('/release-notes') ? 'active' : 'hover'} aria-current={isActive('/release-notes') ? 'page' : undefined}>Release Notes</a>
+            {isActive('/release-notes') && sectionLinks.length > 0 && (
+              <ul class="section-links-nested">
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
         </ul>
       </section>
 
@@ -266,6 +279,16 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
               )}
             </li>
             <li>
+              <a href={isAdminReleasesPage ? undefined : '/admin/releases'} class={isAdminReleasesPage ? 'active' : 'hover'} aria-current={isAdminReleasesPage ? 'page' : undefined}>Releases</a>
+              {isAdminReleasesPage && sectionLinks.length > 0 && (
+                <ul class="section-links-nested">
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+            <li>
               <a href={isAdminOperationsPage ? undefined : '/admin/operations'} class={isAdminOperationsPage ? 'active' : 'hover'} aria-current={isAdminOperationsPage ? 'page' : undefined}>Operations</a>
               {isAdminOperationsPage && sectionLinks.length > 0 && (
                 <ul class="section-links-nested">
@@ -299,9 +322,8 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
     <footer class="sidebar-footer" aria-label="Site information">
       <p>Built by <a href="https://argoncollective.com" target="_blank" rel="noopener noreferrer">Argon Collective LLC</a></p>
       <p class="footer-program-meta">
-        <span>DogEared</span>
-        <span>Founding Reader Program</span>
-        <span>{appVersion}</span>
+        <span>DogEared Beta</span>
+        <a href="/release-notes">{releaseVersion || appVersion}</a>
       </p>
       <nav aria-label="Site links">
         <a href="/privacy" class={isActive('/privacy') ? 'active' : 'hover'} aria-current={isActive('/privacy') ? 'page' : undefined}>Privacy</a>
@@ -416,7 +438,17 @@ const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].include
     color: var(--color-text-subtle);
     font-size: 0.72rem;
   }
-  .footer-program-meta span + span::before {
+  .footer-program-meta a {
+    color: var(--color-nav);
+    font-weight: 760;
+    text-decoration: none;
+  }
+  .footer-program-meta a:hover,
+  .footer-program-meta a:focus-visible {
+    color: var(--color-nav-hover);
+    text-decoration: underline;
+  }
+  .footer-program-meta a::before {
     content: "·";
     margin-right: 0.45rem;
     color: var(--color-border);

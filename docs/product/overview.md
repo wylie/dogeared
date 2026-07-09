@@ -46,8 +46,8 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
 - Settings: profile/account entry points, magic-link auth, email changes, Goodreads import, preferences, privacy, notifications, Learning controls for helpful tips, data export, shelf clearing, API endpoint references, and sessions.
-- Admin: operational overview, privacy-friendly product analytics, Founding Reader access controls, feedback dashboard, data health, user search, user detail, and admin delete-user tools.
-- Mission, Roadmap, Privacy, Support: public product context and project direction.
+- Admin: operational overview, privacy-friendly product analytics, Founding Reader access controls, release workflow, feedback dashboard, data health, user search, user detail, and admin delete-user tools.
+- Mission, Roadmap, Release Notes, Privacy, Support: public product context, shipped changes, and project direction.
 
 ## Current Information Architecture
 
@@ -74,7 +74,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Profile management: update name, avatar, location, birth year, goal text, favorite book, favorite author, blurb, and genres.
 - Privacy management: set public/private profile visibility and control location, activity, discovery, and follow availability.
 - Import/export: import Goodreads CSV data with preview/merge/replace controls, export account data as JSON, and clear shelf entries.
-- Admin operations: inspect site statistics, aggregate product analytics, Founding Reader access, feedback and bug reports, metadata coverage, import health, duplicate risk, backfill movement, and user accounts.
+- Admin operations: inspect site statistics, aggregate product analytics, Founding Reader access, releases, feedback and bug reports, metadata coverage, import health, duplicate risk, backfill movement, and user accounts.
 
 ## Current Capabilities
 
@@ -236,13 +236,15 @@ Notifications exist for activity likes and comments. Profile owners see a notifi
 
 ### Admin
 
-Admins are recognized by username through `ADMIN_USERNAMES`. Admin pages include an overview, product analytics dashboard, Founding Reader access controls, feedback dashboard, data-health view, user search, user detail, and delete-user controls. Admin pages redirect non-admins to home.
+Admins are recognized by username through `ADMIN_USERNAMES`. Admin pages include an overview, product analytics dashboard, Founding Reader access controls, release management, feedback dashboard, data-health view, user search, user detail, and delete-user controls. Admin pages redirect non-admins to home.
 
 The Founding Readers dashboard manages Open, Waitlist, and Invite Only access modes, target capacity, automatic Open-to-Waitlist behavior, waitlist approvals, invitations, declines, removals, and current reader review. The public experience should use Founding Reader language instead of "beta tester" language, because these readers are early collaborators rather than instability testers.
 
 The Product Analytics dashboard is first-party and product-focused rather than marketing-focused. It records small aggregate events such as page views, feature views, search queries with result counts, recommendation impressions, recommendation clicks, recommendation feedback, and recommendation add-to-shelf intent. Admins see aggregate growth, reading, community, search, discovery, first-run funnel, and feature-adoption metrics. The dashboard does not show private journal content, passwords, reader-level behavioral reports, or unnecessary personal information.
 
 The Feedback dashboard is the Founding Reader bug-reporting workflow. It stores user-submitted reports with tracking numbers, type, optional severity, subject, description, bug details, screenshots, diagnostic context, status, private internal notes, follow-up flags, duplicate markers, resolved version, and resolution dates. Diagnostic context is limited to page and environment details useful for debugging; private journal content, passwords, and sensitive personal information are intentionally excluded.
+
+The Releases dashboard owns DogEared's release lifecycle. Admins create draft releases, edit version/title/summary/release date/highlights/bug fixes/known issues/migration notes, preview the reader-facing content, publish releases, and archive old notes. Published releases appear newest-first on `/release-notes`, feed the Roadmap's Recently Shipped section, and power the once-per-version What's New modal. Draft and archived releases are admin-only.
 
 ### Settings
 
@@ -258,7 +260,13 @@ The Mission page explains the product vision: less noise, more memory, better ta
 
 ### Roadmap
 
-The Roadmap page groups product direction into Now, Next, Later, and recently completed work. It is maintained in `src/lib/roadmap.ts`.
+The Roadmap page groups product direction into Now, Next, Later, Recently Shipped, and recently completed work. Future direction is maintained in `src/lib/roadmap.ts`; Recently Shipped is automatically sourced from published release notes so shipped work is not duplicated by hand.
+
+### Release Notes
+
+Release Notes live at `/release-notes`. They help Founding Readers understand what is new, what was fixed, what known issues remain, and where the roadmap is heading next. Each Release stores version, title, summary, release date, publication state, highlights, bug fixes, known issues, and optional migration notes.
+
+Versioning follows DogEared's package/app version where practical, with release versions displayed in the footer as `DogEared Beta` plus the current published release version. The footer version links to `/release-notes`. When a new published release is deployed, DogEared shows readers a lightweight What's New modal once for that version and stores the dismissal locally so the same release does not reappear.
 
 ### Search
 

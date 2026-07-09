@@ -40,6 +40,7 @@ test("feedback validation accepts useful messages and optional valid email", () 
 			route: "/book",
 			timestamp: "2026-06-16T12:00:00.000Z",
 			appVersion: "",
+			releaseVersion: "",
 			gitCommit: "",
 			userAgent: "Test Browser",
 			browser: "Test Browser",
@@ -163,6 +164,8 @@ test("feedback widget opens an accessible modal and attaches hidden metadata", (
 	assert.equal(source.includes("pageUrl: window.location.href"), true);
 	assert.equal(source.includes("route: routeForPath()"), true);
 	assert.equal(source.includes("timestamp: new Date().toISOString()"), true);
+	assert.equal(source.includes("releaseVersion:"), true);
+	assert.equal(source.includes("document.body?.dataset.releaseVersion"), true);
 	assert.equal(source.includes("userAgent: navigator.userAgent"), true);
 	assert.equal(source.includes("screenSize: collectScreenSize()"), true);
 	assert.equal(source.includes("bookId:"), true);
@@ -174,6 +177,8 @@ test("feedback widget opens an accessible modal and attaches hidden metadata", (
 	assert.equal(source.includes("viewport: collectViewport()"), true);
 	assert.equal(source.includes("Submitting as:"), true);
 	assert.equal(source.includes("We do not collect passwords, private journal content"), true);
+	assert.equal(readFileSync("src/pages/api/feedback.ts", "utf8").includes("resolveServerReleaseVersion"), true);
+	assert.equal(readFileSync("src/lib/feedback.ts", "utf8").includes("Release version:"), true);
 });
 
 test("feedback and support actions render as compact floating action buttons", () => {

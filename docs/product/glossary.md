@@ -148,6 +148,14 @@ A DogEared user with an account and, usually, a username/profile.
 
 A private signal a signed-in reader gives on a recommended book. Current UI actions are Interesting and Hide. Hiding stores `not_interested` feedback and removes the book from future personal recommendation results.
 
+## Release
+
+A published or draft DogEared version note with version, title, summary, release date, publication state, highlights, bug fixes, known issues, and optional migration notes. Published releases appear on `/release-notes`, feed Roadmap Recently Shipped, and power the once-per-version What's New modal.
+
+## Release Status
+
+Admin lifecycle state for a Release: Draft, Published, or Archived. Only Published releases are visible to readers.
+
 ## Recommended For You
 
 DogEared's personalized recommendation section. It uses transparent reader activity such as shelves, ratings, completed books, favorite genres, enjoyed authors, and similar books, with a visible reason on every card.

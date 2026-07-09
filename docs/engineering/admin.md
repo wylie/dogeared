@@ -20,10 +20,11 @@ Admin routes:
 - `/admin/analytics`: aggregate product analytics.
 - `/admin/founding-readers`: Founding Reader access, capacity, waitlist, and active reader control surface.
 - `/admin/beta-users`: compatibility redirect to `/admin/founding-readers`.
+- `/admin/releases`: release creation, editing, publishing, archiving, and previews.
 - `/admin/collections`: editorial collection management.
 - `/admin/data-health`: data health.
 - `/admin/feedback`: Founding Reader feedback triage.
-- `/admin/operations`: early-access operations control center for feedback workflow, recommendation/import/system health, feature flags, announcements, and release notes.
+- `/admin/operations`: early-access operations control center for feedback workflow, recommendation/import/system health, feature flags, and announcements.
 - `/admin/users`: user search and management.
 - `/admin/users/[username]`: user detail and delete flow.
 
@@ -99,6 +100,20 @@ Admins can:
 Data comes from `src/lib/foundingReaders.ts`, `founding_reader_config`, `founding_reader_waitlist`, and the active reader summary query in `loadAdminBetaUsers`.
 
 Public-facing copy should use "Founding Reader" rather than "Beta Tester". Development or seed accounts should remain hidden from production reader surfaces under the shared public reader policy.
+
+## Release Management
+
+Route: `/admin/releases`
+
+Admins can:
+
+- Create draft releases.
+- Edit version, title, summary, release date, highlights, bug fixes, known issues, and migration notes.
+- Preview release content before publishing.
+- Publish a release for readers.
+- Archive a release when it should no longer appear publicly.
+
+Published releases appear on `/release-notes`, feed the Roadmap Recently Shipped section, and drive the once-per-version What's New modal. Draft and archived releases remain admin-only.
 
 ## Collection Management
 

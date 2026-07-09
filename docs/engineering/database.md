@@ -563,6 +563,27 @@ Runtime rule: `/api/auth/request-magic-link` must check Founding Reader access b
 
 Capacity rule: when automatic capacity management is enabled and current reader count meets the target capacity, Open mode is treated as Waitlist without requiring a deployment.
 
+## Releases
+
+Entity: `admin_release_note`
+
+Stores admin-managed release notes:
+
+- Version.
+- Title.
+- Summary.
+- Release date.
+- Published boolean and lifecycle status: `draft`, `published`, or `archived`.
+- Highlights.
+- Bug fixes.
+- Known issues.
+- Optional migration notes.
+- Published, archived, created, and updated timestamps.
+
+Reader-facing rule: only releases with `published = true` and `status = 'published'` appear on `/release-notes`, Roadmap Recently Shipped, and the What's New modal.
+
+Workflow rule: Admins create or edit draft releases from `/admin/releases`, publish them when they should be visible, and archive old notes when they should no longer appear publicly. Release data is sourced from the same table everywhere; public pages should not duplicate release content.
+
 ## Product Analytics Events
 
 Entity: `product_analytics_event`

@@ -1,0 +1,270 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { resolveAdminSession } from "../../lib/admin";
+import { formatDate, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
+import { getNeonSql } from "../../lib/neon";
+import { RELEASE_STATUSES, archiveRelease, loadReleases, publishRelease, releaseLines, saveRelease, type ReleaseRecord } from "../../lib/releases";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const sql = getNeonSql();
+let actionMessage = "";
+let actionError = false;
+
+if (Astro.request.method === "POST") {
+	try {
+		const form = await Astro.request.formData();
+		const intent = String(form.get("intent") || "").trim();
+		if (intent === "save-release") {
+			const result = await saveRelease(sql, {
+				id: form.get("releaseId"),
+				version: form.get("version"),
+				title: form.get("title"),
+				summary: form.get("summary"),
+				releaseDate: form.get("releaseDate"),
+				status: form.get("status"),
+				highlights: form.get("highlights"),
+				bugFixes: form.get("bugFixes"),
+				knownIssues: form.get("knownIssues"),
+				migrationNotes: form.get("migrationNotes")
+			});
+			actionMessage = result.message;
+			actionError = !result.ok;
+		} else if (intent === "publish-release") {
+			const result = await publishRelease(sql, form.get("releaseId"));
+			actionMessage = result.message;
+			actionError = !result.ok;
+		} else if (intent === "archive-release") {
+			const result = await archiveRelease(sql, form.get("releaseId"));
+			actionMessage = result.message;
+			actionError = !result.ok;
+		} else {
+			actionMessage = "Invalid release action.";
+			actionError = true;
+		}
+	} catch (error) {
+		if (import.meta.env.DEV) console.warn("[admin.releases.post.failed]", error instanceof Error ? error.message : error);
+		actionMessage = "Release action could not be completed.";
+		actionError = true;
+	}
+}
+
+const releasesResult = await safeAdminLoad<ReleaseRecord[]>("Releases", () => loadReleases(sql, { limit: 80 }), []);
+const releases = safeArray(releasesResult.data);
+const latestPublished = releases.find((release) => release.status === "published" && release.published);
+
+const statusLabels = {
+	draft: "Draft",
+	published: "Published",
+	archived: "Archived"
+};
+
+const sectionLinks = [
+	{ id: "overview", label: "Overview" },
+	{ id: "create-release", label: "Create" },
+	{ id: "release-list", label: "Releases" }
+];
+---
+
+<Layout title="Admin Releases" sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="admin-releases-page">
+		<header id="overview" class="hero">
+			<h1>Releases</h1>
+			<p>Create, preview, publish, and archive the in-app release notes readers see.</p>
+		</header>
+
+		{actionMessage && <p class={`admin-message${actionError ? " error" : ""}`} role="status">{actionMessage}</p>}
+		{releasesResult.warning && <p class="admin-message error" role="status">{releasesResult.warning}</p>}
+
+		<section class="panel release-overview" aria-label="Release overview">
+			<article>
+				<span>Latest Published</span>
+				<strong>{latestPublished?.version || "None"}</strong>
+				<p>{latestPublished?.title || "Publish a release when the next build is ready."}</p>
+			</article>
+			<article>
+				<span>Workflow</span>
+				<strong>Draft → Published → Archived</strong>
+				<p>Readers only see published releases.</p>
+			</article>
+		</section>
+
+		<section class="panel" id="create-release">
+			<div class="panel-head">
+				<h2>Create Release</h2>
+				<p>Write reader-facing notes with clear highlights, fixes, and known issues.</p>
+			</div>
+			<form class="release-form" method="post">
+				<input type="hidden" name="intent" value="save-release" />
+				<label>Version<input name="version" maxlength="80" placeholder="v0.10.5" required /></label>
+				<label>Release date<input name="releaseDate" type="date" /></label>
+				<label>Status
+					<select name="status">
+						{RELEASE_STATUSES.map((status) => <option value={status}>{statusLabels[status]}</option>)}
+					</select>
+				</label>
+				<label class="wide">Title<input name="title" maxlength="160" placeholder="A calmer release for Founding Readers" required /></label>
+				<label class="wide">Summary<textarea name="summary" rows="3" maxlength="2000" required></textarea></label>
+				<label>Highlights<textarea name="highlights" rows="5" maxlength="5000" placeholder="One item per line"></textarea></label>
+				<label>Bug fixes<textarea name="bugFixes" rows="5" maxlength="5000" placeholder="One item per line"></textarea></label>
+				<label>Known issues<textarea name="knownIssues" rows="5" maxlength="5000" placeholder="One item per line"></textarea></label>
+				<label class="wide">Migration notes <span>(optional)</span><textarea name="migrationNotes" rows="3" maxlength="5000"></textarea></label>
+				<button type="submit">Save Release</button>
+			</form>
+		</section>
+
+		<section class="panel" id="release-list">
+			<div class="panel-head">
+				<h2>Release History</h2>
+				<p>Edit existing releases, publish drafts, archive old notes, and preview reader-facing content.</p>
+			</div>
+			<div class="release-list">
+				{releases.length === 0 ? (
+					<p class="empty">No releases yet.</p>
+				) : releases.map((release) => (
+					<article class="release-card">
+						<div class="release-head">
+							<div>
+								<span class={`status-pill status-${release.status}`}>{statusLabels[release.status]}</span>
+								<h3>{release.version} · {release.title}</h3>
+								<p>{release.releaseDate ? formatDate(release.releaseDate) : formatDate(release.publishedAt || release.createdAt)}</p>
+							</div>
+							<div class="quick-actions">
+								<form method="post">
+									<input type="hidden" name="intent" value="publish-release" />
+									<input type="hidden" name="releaseId" value={release.id} />
+									<button type="submit" disabled={release.status === "published"}>Publish</button>
+								</form>
+								<form method="post">
+									<input type="hidden" name="intent" value="archive-release" />
+									<input type="hidden" name="releaseId" value={release.id} />
+									<button type="submit" class="secondary" disabled={release.status === "archived"}>Archive</button>
+								</form>
+							</div>
+						</div>
+
+						<details>
+							<summary>Edit</summary>
+							<form class="release-form compact" method="post">
+								<input type="hidden" name="intent" value="save-release" />
+								<input type="hidden" name="releaseId" value={release.id} />
+								<label>Version<input name="version" maxlength="80" value={release.version} required /></label>
+								<label>Release date<input name="releaseDate" type="date" value={release.releaseDate} /></label>
+								<label>Status
+									<select name="status">
+										{RELEASE_STATUSES.map((status) => <option value={status} selected={release.status === status}>{statusLabels[status]}</option>)}
+									</select>
+								</label>
+								<label class="wide">Title<input name="title" maxlength="160" value={release.title} required /></label>
+								<label class="wide">Summary<textarea name="summary" rows="3" maxlength="2000" required>{release.summary}</textarea></label>
+								<label>Highlights<textarea name="highlights" rows="5" maxlength="5000">{release.highlights}</textarea></label>
+								<label>Bug fixes<textarea name="bugFixes" rows="5" maxlength="5000">{release.bugFixes}</textarea></label>
+								<label>Known issues<textarea name="knownIssues" rows="5" maxlength="5000">{release.knownIssues}</textarea></label>
+								<label class="wide">Migration notes <span>(optional)</span><textarea name="migrationNotes" rows="3" maxlength="5000">{release.migrationNotes}</textarea></label>
+								<button type="submit">Save Changes</button>
+							</form>
+						</details>
+
+						<details>
+							<summary>Preview</summary>
+							<div class="release-preview">
+								<p>{release.summary}</p>
+								{releaseLines(release.highlights).length > 0 && (
+									<section>
+										<h4>Highlights</h4>
+										<ul>{releaseLines(release.highlights).map((item) => <li>{item}</li>)}</ul>
+									</section>
+								)}
+								{releaseLines(release.bugFixes).length > 0 && (
+									<section>
+										<h4>Bug fixes</h4>
+										<ul>{releaseLines(release.bugFixes).map((item) => <li>{item}</li>)}</ul>
+									</section>
+								)}
+								{releaseLines(release.knownIssues).length > 0 && (
+									<section>
+										<h4>Known issues</h4>
+										<ul>{releaseLines(release.knownIssues).map((item) => <li>{item}</li>)}</ul>
+									</section>
+								)}
+								{release.migrationNotes && <p class="migration-note"><strong>Migration notes:</strong> {release.migrationNotes}</p>}
+							</div>
+						</details>
+					</article>
+				))}
+			</div>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.admin-releases-page { max-width: 1080px; }
+	.hero h1 { margin: 0; }
+	.hero p { margin: 0.35rem 0 0; color: var(--color-text-muted); }
+	.panel { margin-top: 1rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
+	.panel-head h2 { margin: 0; }
+	.panel-head p, .empty, .release-head p { margin: 0.3rem 0 0; color: var(--color-text-muted); font-size: 0.9rem; }
+	.admin-message { margin: 0.8rem 0 0; color: var(--color-primary); font-weight: 700; }
+	.admin-message.error { color: #991b1b; }
+	.release-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+	.release-overview article { border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.58); padding: 0.75rem; }
+	.release-overview span { color: var(--color-text-muted); font-size: 0.82rem; font-weight: 700; }
+	.release-overview strong { display: block; margin-top: 0.25rem; color: var(--color-text); }
+	.release-overview p { margin: 0.25rem 0 0; color: var(--color-text-muted); }
+	.release-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.7rem; margin-top: 0.75rem; }
+	.release-form.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.release-form label { display: grid; gap: 0.3rem; font-weight: 700; color: var(--color-text); font-size: 0.9rem; }
+	.release-form label span { color: var(--color-text-muted); font-weight: 600; }
+	.release-form .wide { grid-column: 1 / -1; }
+	.release-form input,
+	.release-form select,
+	.release-form textarea {
+		border: var(--border-strong);
+		border-radius: var(--radius-sm);
+		background: #fff;
+		color: var(--color-text);
+		font: inherit;
+		padding: 0.5rem 0.6rem;
+		box-sizing: border-box;
+	}
+	.release-form button,
+	.quick-actions button {
+		min-height: 36px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: var(--color-primary);
+		color: #fff;
+		font: inherit;
+		font-weight: 700;
+		padding: 0 0.8rem;
+		cursor: pointer;
+	}
+	.quick-actions button.secondary { border: var(--border-subtle); background: #fff; color: var(--color-nav); }
+	.quick-actions button:disabled { opacity: 0.55; cursor: not-allowed; }
+	.release-list { display: grid; gap: 0.85rem; margin-top: 0.85rem; }
+	.release-card { border: var(--border-subtle); border-radius: var(--radius-md); background: #fff; padding: 0.85rem; }
+	.release-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.85rem; }
+	.release-head h3 { margin: 0.35rem 0 0; color: var(--color-text); font-size: 1.05rem; }
+	.quick-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+	.quick-actions form { margin: 0; }
+	.status-pill { display: inline-flex; align-items: center; min-height: 24px; border-radius: 999px; padding: 0 0.58rem; font-size: 0.74rem; font-weight: 720; }
+	.status-draft { background: #eef1f2; color: #4f5e66; }
+	.status-published { background: #edf4e8; color: #1f5138; }
+	.status-archived { background: #f5ead3; color: #73521a; }
+	details { margin-top: 0.75rem; }
+	summary { cursor: pointer; color: var(--color-nav); font-weight: 800; }
+	.release-preview { margin-top: 0.6rem; border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.62); padding: 0.8rem; }
+	.release-preview p { margin: 0; color: var(--color-text-muted); line-height: 1.5; }
+	.release-preview h4 { margin: 0.75rem 0 0.35rem; color: var(--color-text); }
+	.release-preview ul { margin: 0; padding-left: 1.2rem; color: var(--color-text-muted); line-height: 1.5; }
+	.migration-note { margin-top: 0.75rem !important; }
+	@media (max-width: 760px) {
+		.release-overview,
+		.release-form,
+		.release-form.compact { grid-template-columns: 1fr; }
+		.release-head { display: grid; }
+	}
+</style>

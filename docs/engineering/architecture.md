@@ -8,9 +8,9 @@ This is a high-level overview only. Implementation details should be read from t
 
 Routes live in `src/pages/`.
 
-- Content and product pages: home, books, authors, book detail, author detail, editorial collections, related, mission, roadmap, privacy, support.
+- Content and product pages: home, books, authors, book detail, author detail, editorial collections, related, mission, roadmap, release notes, privacy, support.
 - Authenticated reader pages: profile, following, My Reading Life, Reading Journal, settings, welcome, metrics.
-- Admin pages: admin overview, product analytics, collections, Founding Readers, feedback, data health, users, user detail.
+- Admin pages: admin overview, product analytics, collections, Founding Readers, releases, feedback, data health, users, user detail.
 - Compatibility redirects: discover, feed, myreads, profile index, author query redirect, reading timeline, legacy `/u/[username]`.
 - System routes: robots and sitemap.
 
@@ -50,7 +50,7 @@ Shared product/data logic lives in `src/lib/`.
 - Reader/product logic: `shelfClient`, `shelfStorage`, `customShelves`, `readingGoal`, `readingLife`, `readingJournal`, `guidedTour`, `momentumPrediction`, `goodreadsImport`, `bookReviews`, `recommendations`.
 - Discovery logic: `discoveryProviders` exposes the discovery service and reusable Home providers; `homeSections` loads cached aggregate signals and maps provider output to book cards.
 - Community and privacy: `feed`, `publicProfile`, `privacy`, `followPolicy`, `demoVisibility`.
-- Operations: `admin`, `adminData`, `monitoring`, `feedback`, `productAnalytics`, `runtimeCache`, `indexing`, `seo`, `roadmap`, `homeSections`.
+- Operations: `admin`, `adminData`, `monitoring`, `feedback`, `productAnalytics`, `runtimeCache`, `indexing`, `seo`, `roadmap`, `releases`, `homeSections`.
 
 ## Utilities
 
@@ -127,6 +127,8 @@ Recommendation feedback is stored through `/api/recommendations/feedback`; the H
 Founding Reader feedback and bug reporting are handled by `FeedbackWidget`, `/api/feedback`, `feedback_submission`, and `/admin/feedback`. The widget owns the reader-facing form, bug-only fields, screenshot preview, privacy copy, context capture, and opt-in client-error prompt. The API validates input, rate-limits by user/IP hash, stores the report with a tracking number and diagnostics, and sends a best-effort notification email when configured. The admin dashboard owns triage status, internal notes, follow-up flags, duplicate markers, resolved version, and resolution dates.
 
 Founding Reader access is handled by `src/lib/foundingReaders.ts`, `/api/auth/request-magic-link`, and `/admin/founding-readers`. The access service owns Open, Waitlist, and Invite Only rules, capacity checks, waitlist storage, and joined-state updates. Magic-link account creation checks this service before inserting an `app_user` record, so Waitlist and Invite Only modes can collect requests without creating accounts.
+
+Release management is handled by `src/lib/releases.ts`, `/admin/releases`, `/release-notes`, Roadmap Recently Shipped, and the global What's New modal in `Layout`. Admin releases use the existing `admin_release_note` table with additive structured fields for summary, release date, status, highlights, bug fixes, known issues, and migration notes. Only published releases are reader-facing. The feedback flow includes app version, latest release version, and commit hash in diagnostic metadata.
 
 Product analytics live in `src/lib/productAnalytics`, `/api/analytics/event`, and `/admin/analytics`. The system is first-party and aggregate-focused: server routes record durable events for search and recommendation feedback, while Layout records small non-blocking client events for page views, feature views, recommendation impressions, recommendation clicks, and recommendation add-to-shelf intent. Admin analytics uses cached aggregate queries and existing product tables for growth, reading, community, search, discovery, first-run funnel, and feature adoption. It does not collect private journal content, passwords, sensitive profile text, or expose reader-level behavior reports.
 

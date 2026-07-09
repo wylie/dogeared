@@ -1,5 +1,7 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import { getNeonSql } from "../lib/neon";
+import { loadPublishedReleases, releaseLines, type ReleaseRecord } from "../lib/releases";
 import { ROADMAP_ITEMS, ROADMAP_SECTIONS, RECENTLY_COMPLETED_ITEMS, type RoadmapCategory, type RoadmapItem } from "../lib/roadmap";
 import { buildBreadcrumbList } from "../lib/seo";
 
@@ -9,8 +11,10 @@ const sectionLinks = [
 	{ id: "now", label: "Now" },
 	{ id: "next", label: "Next" },
 	{ id: "later", label: "Later" },
+	{ id: "recently-shipped", label: "Shipped" },
 	{ id: "recently-completed", label: "Completed" }
 ];
+const shippedReleases = await loadPublishedReleases(getNeonSql(), 3).catch(() => [] as ReleaseRecord[]);
 
 const roadmapStructuredData = JSON.stringify(buildBreadcrumbList([
 	{ name: "Home", item: "/" },
@@ -67,6 +71,37 @@ const itemsByCategory = ROADMAP_ITEMS.reduce((groups, item) => {
 				);
 			})}
 		</div>
+
+		<section id="recently-shipped" class="completed-section">
+			<div class="section-head">
+				<p class="section-kicker">Recently Shipped</p>
+				<h2>What readers can use now</h2>
+				<p>Automatically sourced from published release notes.</p>
+			</div>
+			<div class="shipped-grid">
+				{shippedReleases.length === 0 ? (
+					<article class="completed-card">
+						<span class="completed-mark" aria-hidden="true">✓</span>
+						<div>
+							<h3>Release notes are coming online</h3>
+							<p>Published releases will appear here as DogEared moves through the Founding Reader phase.</p>
+						</div>
+					</article>
+				) : shippedReleases.map((release) => (
+					<article class="roadmap-card shipped-card">
+						<div class="card-topline">
+							<span class="status-badge status-completed">{release.version}</span>
+							<a href="/release-notes">Release notes</a>
+						</div>
+						<h3>{release.title}</h3>
+						<p>{release.summary}</p>
+						{releaseLines(release.highlights).length > 0 && (
+							<ul>{releaseLines(release.highlights).slice(0, 3).map((item) => <li>{item}</li>)}</ul>
+						)}
+					</article>
+				))}
+			</div>
+		</section>
 
 		<section id="recently-completed" class="completed-section">
 			<div class="section-head">
@@ -239,6 +274,31 @@ const itemsByCategory = ROADMAP_ITEMS.reduce((groups, item) => {
 		gap: 0.58rem;
 		margin-top: 0.78rem;
 	}
+	.shipped-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.72rem;
+		margin-top: 0.78rem;
+	}
+	.shipped-card {
+		min-height: 0;
+	}
+	.shipped-card a {
+		color: var(--color-nav);
+		font-size: 0.78rem;
+		font-weight: 800;
+		text-decoration: none;
+	}
+	.shipped-card a:hover {
+		color: var(--color-nav-hover);
+		text-decoration: underline;
+	}
+	.shipped-card ul {
+		margin: 0.5rem 0 0;
+		padding-left: 1.1rem;
+		color: var(--color-text-muted);
+		line-height: 1.45;
+	}
 	.completed-card {
 		display: grid;
 		grid-template-columns: 28px minmax(0, 1fr);
@@ -267,6 +327,9 @@ const itemsByCategory = ROADMAP_ITEMS.reduce((groups, item) => {
 			max-width: none;
 		}
 		.roadmap-grid {
+			grid-template-columns: 1fr;
+		}
+		.shipped-grid {
 			grid-template-columns: 1fr;
 		}
 		.card-topline {

@@ -42,6 +42,7 @@ export const GET: APIRoute = async ({ request }) => {
 		{ loc: toUrl(base, "/authors"), changefreq: "daily", priority: "0.85" },
 		{ loc: toUrl(base, "/collections"), changefreq: "weekly", priority: "0.8" },
 		{ loc: toUrl(base, "/roadmap"), changefreq: "monthly", priority: "0.5" },
+		{ loc: toUrl(base, "/release-notes"), changefreq: "monthly", priority: "0.5" },
 		{ loc: toUrl(base, "/mission"), changefreq: "monthly", priority: "0.5" },
 		{ loc: toUrl(base, "/privacy"), changefreq: "monthly", priority: "0.4" },
 		{ loc: toUrl(base, "/support"), changefreq: "monthly", priority: "0.4" }

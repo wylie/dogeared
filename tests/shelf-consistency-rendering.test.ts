@@ -27,6 +27,7 @@ test("roadmap prioritizes reader-facing ordering", () => {
 	const idxNow = pageSource.indexOf('{ id: "now", label: "Now" }');
 	const idxNext = pageSource.indexOf('{ id: "next", label: "Next" }');
 	const idxLater = pageSource.indexOf('{ id: "later", label: "Later" }');
+	const idxShipped = pageSource.indexOf('{ id: "recently-shipped", label: "Shipped" }');
 	const idxCompleted = pageSource.indexOf('{ id: "recently-completed", label: "Completed" }');
 	assert.ok(pageSource.includes("ROADMAP_ITEMS"));
 	assert.ok(pageSource.includes("ROADMAP_SECTIONS"));
@@ -34,10 +35,14 @@ test("roadmap prioritizes reader-facing ordering", () => {
 	assert.ok(idxNow > -1);
 	assert.ok(idxNext > -1);
 	assert.ok(idxLater > -1);
+	assert.ok(idxShipped > -1);
 	assert.ok(idxCompleted > -1);
 	assert.ok(idxNow < idxNext);
 	assert.ok(idxNext < idxLater);
-	assert.ok(idxLater < idxCompleted);
+	assert.ok(idxLater < idxShipped);
+	assert.ok(idxShipped < idxCompleted);
+	assert.ok(pageSource.includes("loadPublishedReleases"));
+	assert.ok(pageSource.includes("Recently Shipped"));
 	assert.ok(dataSource.includes('category: "now"'));
 	assert.ok(dataSource.includes('category: "next"'));
 	assert.ok(dataSource.includes('category: "later"'));
