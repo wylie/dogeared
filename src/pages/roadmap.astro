@@ -2,19 +2,26 @@
 import Layout from "../layouts/Layout.astro";
 import { getNeonSql } from "../lib/neon";
 import { loadPublishedReleases, releaseLines, type ReleaseRecord } from "../lib/releases";
-import { ROADMAP_ITEMS, ROADMAP_SECTIONS, RECENTLY_COMPLETED_ITEMS, type RoadmapCategory, type RoadmapItem } from "../lib/roadmap";
+import { ROADMAP_ITEMS, ROADMAP_SECTIONS, type RoadmapItem, type RoadmapSectionId } from "../lib/roadmap";
 import { buildBreadcrumbList } from "../lib/seo";
+import { resolveAppVersion } from "../lib/versionInfo";
 
 export const prerender = false;
 
 const sectionLinks = [
-	{ id: "now", label: "Now" },
-	{ id: "next", label: "Next" },
-	{ id: "later", label: "Later" },
+	{ id: "building-now", label: "Now" },
 	{ id: "recently-shipped", label: "Shipped" },
-	{ id: "recently-completed", label: "Completed" }
+	{ id: "coming-next", label: "Next" },
+	{ id: "looking-ahead", label: "Ahead" },
+	{ id: "help-shape", label: "Feedback" }
 ];
-const shippedReleases = await loadPublishedReleases(getNeonSql(), 3).catch(() => [] as ReleaseRecord[]);
+const shippedReleases = await loadPublishedReleases(getNeonSql(), 8).catch(() => [] as ReleaseRecord[]);
+const latestRelease = shippedReleases[0] || null;
+const currentVersion = latestRelease?.version || resolveAppVersion();
+const currentReleaseDate = latestRelease?.releaseDate || latestRelease?.publishedAt || "";
+const currentReleaseLabel = currentReleaseDate
+	? new Date(currentReleaseDate).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+	: "Founding Reader phase";
 
 const roadmapStructuredData = JSON.stringify(buildBreadcrumbList([
 	{ name: "Home", item: "/" },
@@ -26,119 +33,160 @@ const itemsByCategory = ROADMAP_ITEMS.reduce((groups, item) => {
 	current.push(item);
 	groups.set(item.category, current);
 	return groups;
-}, new Map<RoadmapCategory, RoadmapItem[]>());
+}, new Map<RoadmapSectionId, RoadmapItem[]>());
+
+function releaseAnchor(version: string) {
+	return `release-${String(version || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+}
+
+const shippedItems = shippedReleases.flatMap((release) => {
+	const highlights = releaseLines(release.highlights);
+	const lines = highlights.length > 0 ? highlights : [release.title];
+	return lines.slice(0, 4).map((title) => ({
+		title,
+		summary: release.summary,
+		version: release.version,
+		href: `/release-notes#${releaseAnchor(release.version)}`
+	}));
+}).slice(0, 10);
+
+function headingForSection(id: RoadmapSectionId) {
+	if (id === "now") return "building-now";
+	if (id === "next") return "coming-next";
+	return "looking-ahead";
+}
 ---
 
 <Layout
 	title="Roadmap"
 	sectionLinks={sectionLinks}
-	metaDescription="See what DogEared is working on now, what is planned next, and what has recently shipped."
+	metaDescription="See what DogEared is building now, what recently shipped, and where the product is headed next."
 	canonicalUrl="/roadmap"
 	structuredData={roadmapStructuredData}
 >
 	<div slot="right" class="roadmap-page">
 		<header class="roadmap-hero">
-			<p class="eyebrow">Product Roadmap</p>
-			<h1>Building a calmer home for serious readers.</h1>
-			<p class="hero-copy">
-				DogEared is focused on helping readers track books, discover better recommendations, and share reading life without turning it into another feed to manage.
-			</p>
+			<div class="version-panel" aria-label="Current DogEared version">
+				<p>Current Version</p>
+				<strong>DogEared Beta</strong>
+				<span>{currentVersion}</span>
+				<span>Released {currentReleaseLabel}</span>
+				<a href="/release-notes">View Release Notes</a>
+			</div>
+			<div class="hero-copy">
+				<p class="eyebrow">Public Roadmap</p>
+				<h1>DogEared is actively becoming a better place to read.</h1>
+				<p>
+					This roadmap is a high-level look at the direction of the product. It shares what is improving, what recently shipped, and where Founding Reader feedback is shaping the next decisions without promising dates.
+				</p>
+			</div>
 		</header>
 
-		<div class="roadmap-sections" aria-label="Roadmap priorities">
-			{ROADMAP_SECTIONS.map((section) => {
-				const items = itemsByCategory.get(section.id) ?? [];
-				return (
-					<section id={section.id} class="roadmap-section">
-						<div class="section-head">
-							<p class="section-kicker">{section.title}</p>
-							<h2>{section.title === "Now" ? "What we are improving now" : (section.title === "Next" ? "What comes next" : "Ideas for later")}</h2>
-							<p>{section.description}</p>
-						</div>
-						<div class="roadmap-grid">
-							{items.map((item) => (
-								<article class="roadmap-card">
-									<div class="card-topline">
-										<span class={`status-badge status-${item.status.toLowerCase().replace(/\s+/g, "-")}`}>{item.status}</span>
-										{item.priority ? <span class="priority-label">{item.priority}</span> : null}
-									</div>
-									<h3>{item.title}</h3>
-									<p>{item.description}</p>
-								</article>
-							))}
-						</div>
-					</section>
-				);
-			})}
-		</div>
-
-		<section id="recently-shipped" class="completed-section">
+		<section id="building-now" class="roadmap-section section-now">
 			<div class="section-head">
-				<p class="section-kicker">Recently Shipped</p>
-				<h2>What readers can use now</h2>
-				<p>Automatically sourced from published release notes.</p>
+				<p class="section-kicker">Active focus</p>
+				<h2>Building Now</h2>
+				<p>Only the handful of improvements currently receiving the most attention.</p>
 			</div>
-			<div class="shipped-grid">
-				{shippedReleases.length === 0 ? (
-					<article class="completed-card">
-						<span class="completed-mark" aria-hidden="true">✓</span>
-						<div>
-							<h3>Release notes are coming online</h3>
-							<p>Published releases will appear here as DogEared moves through the Founding Reader phase.</p>
+			<div class="feature-grid now-grid">
+				{(itemsByCategory.get("now") ?? []).map((item) => (
+					<article class="feature-card">
+						<h3>{item.title}</h3>
+						<p>{item.description}</p>
+						<div class="why-line">
+							<span>Why it matters</span>
+							<p>{item.why}</p>
 						</div>
-					</article>
-				) : shippedReleases.map((release) => (
-					<article class="roadmap-card shipped-card">
-						<div class="card-topline">
-							<span class="status-badge status-completed">{release.version}</span>
-							<a href="/release-notes">Release notes</a>
-						</div>
-						<h3>{release.title}</h3>
-						<p>{release.summary}</p>
-						{releaseLines(release.highlights).length > 0 && (
-							<ul>{releaseLines(release.highlights).slice(0, 3).map((item) => <li>{item}</li>)}</ul>
-						)}
 					</article>
 				))}
 			</div>
 		</section>
 
-		<section id="recently-completed" class="completed-section">
-			<div class="section-head">
-				<p class="section-kicker">Recently Completed</p>
-				<h2>Meaningful work already shipped</h2>
-				<p>A short snapshot of recent improvements, not a full changelog.</p>
+		<section id="recently-shipped" class="roadmap-section shipped-section">
+			<div class="section-head shipped-head">
+				<div>
+					<p class="section-kicker">Recently Shipped</p>
+					<h2>Recent improvements readers can use now</h2>
+				</div>
+				<a href="/release-notes">Full release history</a>
 			</div>
-			<div class="completed-grid">
-				{RECENTLY_COMPLETED_ITEMS.map((item) => (
-					<article class="completed-card">
-						<span class="completed-mark" aria-hidden="true">✓</span>
+			<div class="shipped-list" aria-label="Recently shipped improvements">
+				{shippedItems.length === 0 ? (
+					<article class="shipped-item">
+						<span aria-hidden="true">✓</span>
 						<div>
-							<div class="card-topline">
-								<h3>{item.title}</h3>
-								<span class="status-badge status-completed">{item.status}</span>
-							</div>
-							<p>{item.description}</p>
+							<h3>Release notes are coming online</h3>
+							<p>Published releases will appear here as DogEared moves through the Founding Reader phase.</p>
 						</div>
 					</article>
+				) : shippedItems.map((item) => (
+					<a class="shipped-item" href={item.href}>
+						<span aria-hidden="true">✓</span>
+						<div>
+							<h3>{item.title}</h3>
+							<p>{item.version} · {item.summary}</p>
+						</div>
+					</a>
 				))}
 			</div>
+		</section>
+
+		{ROADMAP_SECTIONS.filter((section) => section.id !== "now").map((section) => {
+			const items = itemsByCategory.get(section.id) ?? [];
+			return (
+				<section id={headingForSection(section.id)} class={`roadmap-section section-${section.id}`}>
+					<div class="section-head">
+						<p class="section-kicker">{section.kicker}</p>
+						<h2>{section.title}</h2>
+						<p>{section.description}</p>
+					</div>
+					<div class="feature-grid">
+						{items.map((item) => (
+							<article class="feature-card quiet-card">
+								<h3>{item.title}</h3>
+								<p>{item.description}</p>
+								<div class="why-line">
+									<span>Reader outcome</span>
+									<p>{item.why}</p>
+								</div>
+							</article>
+						))}
+					</div>
+				</section>
+			);
+		})}
+
+		<section id="help-shape" class="feedback-section">
+			<p class="section-kicker">Founding Readers</p>
+			<h2>Help Shape DogEared</h2>
+			<p>
+				DogEared is being shaped by a small community of Founding Readers. Every bug report, feature suggestion, and conversation directly influences what gets built next.
+			</p>
+			<p>Thank you for helping shape the future of DogEared.</p>
+			<a href="/support">Send Feedback</a>
 		</section>
 	</div>
 </Layout>
 
 <style>
 	.roadmap-page {
-		max-width: 980px;
+		max-width: 1040px;
 	}
 	.roadmap-hero {
-		padding: 0.25rem 0 1.4rem;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+		gap: clamp(1.25rem, 4vw, 3rem);
+		align-items: end;
+		padding: 0.35rem 0 2.25rem;
 		border-bottom: var(--border-subtle);
+	}
+	.hero-copy {
+		max-width: 720px;
 	}
 	.eyebrow,
 	.section-kicker {
-		margin: 0 0 0.4rem;
-		font-size: 0.76rem;
+		margin: 0 0 0.48rem;
+		font-size: 0.75rem;
 		font-weight: 760;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
@@ -146,166 +194,166 @@ const itemsByCategory = ROADMAP_ITEMS.reduce((groups, item) => {
 	}
 	.roadmap-page h1 {
 		margin: 0;
-		max-width: 12ch;
-		font-size: clamp(2.15rem, 4vw, 3.65rem);
+		max-width: 13ch;
+		font-size: clamp(2.45rem, 6vw, 4.8rem);
 		font-weight: 580;
-		line-height: 1.04;
+		line-height: 0.98;
 	}
-	.hero-copy {
-		margin: 0.85rem 0 0;
-		max-width: 66ch;
+	.hero-copy > p:last-child,
+	.section-head > p:last-child,
+	.feedback-section p {
 		color: var(--color-text-muted);
-		font-size: 1.02rem;
-		line-height: 1.65;
+		line-height: 1.68;
 	}
-	.roadmap-sections {
-		display: grid;
-		gap: 1.35rem;
-		margin-top: 1.35rem;
-	}
-	.roadmap-section,
-	.completed-section {
-		padding-top: 1.2rem;
-		border-top: var(--border-subtle);
-	}
-	.roadmap-section:first-child {
-		padding-top: 0;
-		border-top: 0;
-	}
-	.section-head {
-		display: grid;
-		gap: 0.22rem;
+	.hero-copy > p:last-child {
+		margin: 1rem 0 0;
 		max-width: 68ch;
+		font-size: 1.04rem;
 	}
-	.section-head h2 {
-		margin: 0;
-		color: var(--color-text);
-		font-size: clamp(1.35rem, 2vw, 1.75rem);
-		font-weight: 680;
-		line-height: 1.18;
-	}
-	.section-head p:last-child {
-		margin: 0.15rem 0 0;
-		color: var(--color-text-muted);
-		line-height: 1.55;
-	}
-	.roadmap-grid {
+	.version-panel {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.72rem;
-		margin-top: 0.78rem;
-	}
-	.roadmap-card,
-	.completed-card {
-		background: rgba(255, 255, 255, 0.68);
-		border-radius: var(--radius-md);
+		gap: 0.28rem;
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.72);
 		box-shadow: var(--shadow-xs);
+		padding: 0.95rem;
 	}
-	.roadmap-card {
-		display: flex;
-		flex-direction: column;
-		min-height: 168px;
-		padding: 0.86rem;
-	}
-	.card-topline {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.6rem;
-	}
-	.roadmap-card h3,
-	.completed-card h3 {
+	.version-panel p,
+	.version-panel span {
 		margin: 0;
-		color: var(--color-text);
-		font-size: 1rem;
-		font-weight: 680;
-		line-height: 1.25;
-	}
-	.roadmap-card h3 {
-		margin-top: 0.58rem;
-	}
-	.roadmap-card p,
-	.completed-card p {
-		margin: 0.45rem 0 0;
 		color: var(--color-text-muted);
-		line-height: 1.54;
+		font-size: 0.88rem;
 	}
-	.status-badge,
-	.priority-label {
-		display: inline-flex;
-		align-items: center;
-		min-height: 24px;
-		border-radius: 999px;
-		padding: 0 0.58rem;
-		font-size: 0.74rem;
-		font-weight: 720;
-		line-height: 1;
-		white-space: nowrap;
-	}
-	.status-in-progress {
-		background: var(--color-nav-surface);
-		color: var(--color-nav-active);
-	}
-	.status-planning {
-		background: #f5ead3;
-		color: #73521a;
-	}
-	.status-research {
-		background: #edf5fb;
-		color: #365f7a;
-	}
-	.status-future {
-		background: #eef1f2;
-		color: #4f5e66;
-	}
-	.status-completed {
-		background: #edf4e8;
-		color: #1f5138;
-	}
-	.priority-label {
+	.version-panel p {
 		color: var(--color-text-subtle);
-		background: rgba(255, 255, 255, 0.64);
+		font-size: 0.75rem;
+		font-weight: 780;
+		letter-spacing: 0.07em;
+		text-transform: uppercase;
 	}
-	.completed-section {
-		margin-top: 1.45rem;
+	.version-panel strong {
+		color: var(--color-text);
+		font-size: 1.1rem;
 	}
-	.completed-grid {
-		display: grid;
-		gap: 0.58rem;
-		margin-top: 0.78rem;
-	}
-	.shipped-grid {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 0.72rem;
-		margin-top: 0.78rem;
-	}
-	.shipped-card {
-		min-height: 0;
-	}
-	.shipped-card a {
+	.version-panel a,
+	.shipped-head a,
+	.feedback-section a {
 		color: var(--color-nav);
-		font-size: 0.78rem;
 		font-weight: 800;
 		text-decoration: none;
 	}
-	.shipped-card a:hover {
+	.version-panel a:hover,
+	.shipped-head a:hover,
+	.feedback-section a:hover {
 		color: var(--color-nav-hover);
 		text-decoration: underline;
 	}
-	.shipped-card ul {
-		margin: 0.5rem 0 0;
-		padding-left: 1.1rem;
-		color: var(--color-text-muted);
-		line-height: 1.45;
+	.roadmap-section {
+		padding: clamp(2.2rem, 5vw, 3.75rem) 0 0;
 	}
-	.completed-card {
+	.section-head {
+		display: grid;
+		gap: 0.25rem;
+		max-width: 720px;
+	}
+	.section-head h2,
+	.feedback-section h2 {
+		margin: 0;
+		color: var(--color-text);
+		font-size: clamp(1.65rem, 3vw, 2.35rem);
+		font-weight: 660;
+		line-height: 1.08;
+	}
+	.section-head > p:last-child {
+		margin: 0.2rem 0 0;
+	}
+	.feature-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.8rem;
+		margin-top: 1.05rem;
+	}
+	.now-grid {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+	}
+	.feature-card {
+		display: grid;
+		align-content: start;
+		gap: 0.55rem;
+		min-height: 190px;
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.72);
+		box-shadow: var(--shadow-xs);
+		padding: 0.95rem;
+	}
+	.quiet-card {
+		min-height: 164px;
+		background: rgba(255, 255, 255, 0.58);
+	}
+	.feature-card h3,
+	.shipped-item h3 {
+		margin: 0;
+		color: var(--color-text);
+		font-size: 1.03rem;
+		font-weight: 700;
+		line-height: 1.25;
+	}
+	.feature-card > p,
+	.why-line p,
+	.shipped-item p {
+		margin: 0;
+		color: var(--color-text-muted);
+		line-height: 1.52;
+	}
+	.why-line {
+		margin-top: 0.1rem;
+		padding-top: 0.65rem;
+		border-top: var(--border-subtle);
+	}
+	.why-line span {
+		display: block;
+		margin-bottom: 0.22rem;
+		color: var(--color-text-subtle);
+		font-size: 0.76rem;
+		font-weight: 760;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+	}
+	.shipped-section {
+		margin-top: clamp(2.2rem, 5vw, 3.6rem);
+		padding: clamp(2rem, 5vw, 3.25rem) 0;
+		border-top: var(--border-subtle);
+		border-bottom: var(--border-subtle);
+	}
+	.shipped-head {
+		max-width: none;
+		display: flex;
+		justify-content: space-between;
+		align-items: end;
+		gap: 1rem;
+	}
+	.shipped-list {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.6rem;
+		margin-top: 1.1rem;
+	}
+	.shipped-item {
 		display: grid;
 		grid-template-columns: 28px minmax(0, 1fr);
 		gap: 0.62rem;
-		padding: 0.76rem 0.82rem;
+		align-items: start;
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.62);
+		box-shadow: var(--shadow-xs);
+		padding: 0.78rem 0.86rem;
+		color: inherit;
+		text-decoration: none;
 	}
-	.completed-mark {
+	.shipped-item:hover {
+		background: rgba(255, 255, 255, 0.82);
+	}
+	.shipped-item > span {
 		display: grid;
 		place-items: center;
 		width: 24px;
@@ -316,28 +364,62 @@ const itemsByCategory = ROADMAP_ITEMS.reduce((groups, item) => {
 		font-weight: 800;
 		line-height: 1;
 	}
-	.completed-card .card-topline {
-		align-items: flex-start;
+	.shipped-item p {
+		margin-top: 0.28rem;
+		font-size: 0.92rem;
 	}
-	.completed-card .status-badge {
-		flex: 0 0 auto;
+	.feedback-section {
+		margin-top: clamp(2.4rem, 5vw, 4rem);
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.72);
+		box-shadow: var(--shadow-xs);
+		padding: clamp(1.2rem, 4vw, 2rem);
+	}
+	.feedback-section p {
+		max-width: 70ch;
+		margin: 0.75rem 0 0;
+	}
+	.feedback-section a {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 42px;
+		margin-top: 1rem;
+		border-radius: var(--radius-sm);
+		background: var(--color-primary);
+		color: #fff;
+		padding: 0 0.9rem;
+	}
+	.feedback-section a:hover {
+		background: var(--color-primary-hover);
+		color: #fff;
+		text-decoration: none;
+	}
+	@media (max-width: 980px) {
+		.roadmap-hero,
+		.now-grid {
+			grid-template-columns: 1fr 1fr;
+		}
 	}
 	@media (max-width: 720px) {
+		.roadmap-hero,
+		.feature-grid,
+		.now-grid,
+		.shipped-list {
+			grid-template-columns: 1fr;
+		}
 		.roadmap-page h1 {
 			max-width: none;
 		}
-		.roadmap-grid {
-			grid-template-columns: 1fr;
+		.version-panel {
+			order: -1;
 		}
-		.shipped-grid {
-			grid-template-columns: 1fr;
-		}
-		.card-topline {
+		.shipped-head {
 			align-items: flex-start;
-		}
-		.completed-card .card-topline {
 			flex-direction: column;
-			gap: 0.35rem;
+		}
+		.feature-card {
+			min-height: 0;
 		}
 	}
 </style>

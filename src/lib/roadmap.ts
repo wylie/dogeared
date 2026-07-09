@@ -1,253 +1,115 @@
-export type RoadmapCategory = "now" | "next" | "later" | "completed";
-
-export type RoadmapStatus = "In Progress" | "Planning" | "Research" | "Future" | "Completed";
+export type RoadmapSectionId = "now" | "next" | "later";
 
 export type RoadmapItem = {
 	title: string;
 	description: string;
-	status: RoadmapStatus;
-	category: RoadmapCategory;
-	priority?: "Primary" | "High" | "Medium" | "Low";
+	why: string;
+	category: RoadmapSectionId;
 };
 
 export const ROADMAP_ITEMS: RoadmapItem[] = [
 	{
-		title: "Better reviews and discussion",
-		description: "Reading Reviews v2 is live; next work is making review discussion more useful with readers you trust.",
-		status: "In Progress",
-		category: "now",
-		priority: "Primary"
+		title: "Recommendation improvements",
+		description: "Make book suggestions feel more personal, more explainable, and easier to tune.",
+		why: "Readers should understand why a book appears and feel in control of what DogEared learns from their shelves.",
+		category: "now"
 	},
 	{
-		title: "Import quality improvements",
-		description: "Make moving a reading history into DogEared more reliable, cleaner, and easier to trust.",
-		status: "In Progress",
-		category: "now",
-		priority: "High"
+		title: "Reading discussions",
+		description: "Make reviews and replies feel more like thoughtful book conversation.",
+		why: "Good discussion should help readers decide what to read next without turning DogEared into a noisy feed.",
+		category: "now"
 	},
 	{
-		title: "Performance and accessibility polishing",
-		description: "Keep the app fast, readable, keyboard-friendly, and comfortable across everyday reading workflows.",
-		status: "In Progress",
-		category: "now",
-		priority: "High"
+		title: "Import improvements",
+		description: "Make bringing an existing reading history into DogEared clearer, safer, and easier to recover.",
+		why: "A reader's history is valuable. Imports should explain what changed and never feel like a black box.",
+		category: "now"
 	},
 	{
-		title: "UI modernization",
-		description: "Continue refining the interface so books stay central and the product feels calm, polished, and familiar.",
-		status: "In Progress",
-		category: "now",
-		priority: "Medium"
+		title: "Stability and polish",
+		description: "Keep common reading actions fast, accessible, and predictable across devices.",
+		why: "Trust comes from small details working every time: shelves, progress, search, feedback, and import recovery.",
+		category: "now"
 	},
 	{
-		title: "DNF shelf",
-		description: "Make it possible to stop reading a book cleanly without treating it as unfinished progress.",
-		status: "Planning",
-		category: "next",
-		priority: "High"
+		title: "Notifications",
+		description: "Stay connected to meaningful reading activity without unnecessary noise.",
+		why: "Readers should know when something matters, then get back to reading.",
+		category: "next"
 	},
 	{
-		title: "Better search",
-		description: "Make it dramatically easier to find books, authors, shelves, and reading history.",
-		status: "Planning",
-		category: "next",
-		priority: "High"
+		title: "Series guidance",
+		description: "Easily continue a series and keep track of where you are.",
+		why: "Series reading should feel organized without requiring readers to manage another spreadsheet.",
+		category: "next"
 	},
 	{
-		title: "Discovery refinements",
-		description: "Recommendations & Discovery v1 is live; next work is deeper providers such as awards, staff picks, and richer preference tuning.",
-		status: "Planning",
-		category: "next",
-		priority: "High"
+		title: "Reading timeline",
+		description: "Make it easier to revisit what you read, when you read it, and what it meant at the time.",
+		why: "DogEared should become a durable memory of a reader's reading life.",
+		category: "next"
 	},
 	{
-		title: "Mobile experience improvements",
-		description: "Make common reading actions faster and more comfortable on smaller screens.",
-		status: "Planning",
-		category: "next",
-		priority: "High"
+		title: "Search and discovery",
+		description: "Find books, authors, and reading history with less effort.",
+		why: "Discovery works best when readers can move naturally from memory, curiosity, or recommendation to the right book.",
+		category: "next"
 	},
 	{
-		title: "Author improvements",
-		description: "Make author pages richer, cleaner, and more helpful when readers want to explore a body of work.",
-		status: "Planning",
-		category: "next",
-		priority: "Medium"
+		title: "Reading clubs",
+		description: "Give small groups a calm place to read together at their own pace.",
+		why: "Shared reading should support conversation and accountability without leaderboards or pressure.",
+		category: "later"
 	},
 	{
-		title: "Reading groups and buddy reads",
-		description: "Support small, intentional reading circles for people who want to read together at their own pace.",
-		status: "Future",
-		category: "later",
-		priority: "Medium"
+		title: "Public API",
+		description: "Let readers connect DogEared to personal tools, backups, and reading workflows.",
+		why: "Readers should be able to own and reuse their reading data beyond DogEared.",
+		category: "later"
 	},
 	{
-		title: "Book clubs",
-		description: "Give groups a simple home for selections, timelines, discussion, and shared reading history.",
-		status: "Future",
-		category: "later",
-		priority: "Medium"
+		title: "Mobile apps",
+		description: "Explore dedicated mobile experiences once the web app has fully settled.",
+		why: "The everyday reading workflow should feel natural wherever readers track books.",
+		category: "later"
 	},
 	{
-		title: "Public reading challenges",
-		description: "Let readers join thoughtful challenges that encourage exploration without leaderboard pressure.",
-		status: "Future",
-		category: "later",
-		priority: "Low"
+		title: "Library integrations",
+		description: "Help readers connect personal reading plans with real-world library availability.",
+		why: "Discovery is more useful when it leads to books readers can actually get.",
+		category: "later"
 	},
 	{
-		title: "Reading lists",
-		description: "Make it easy to create and share curated lists for moods, themes, genres, and trusted recommendations.",
-		status: "Future",
-		category: "later",
-		priority: "Medium"
-	},
-	{
-		title: "API and integrations",
-		description: "Open the door for personal tools, backups, automations, and connections to other reading workflows.",
-		status: "Future",
-		category: "later",
-		priority: "Low"
-	},
-	{
-		title: "Email digests",
-		description: "Send occasional, useful summaries of follows, reviews, and books worth noticing.",
-		status: "Future",
-		category: "later",
-		priority: "Low"
-	},
-	{
-		title: "Additional import sources",
-		description: "Help more readers bring their existing libraries with them from other services.",
-		status: "Future",
-		category: "later",
-		priority: "Medium"
-	},
-	{
-		title: "Native mobile apps",
-		description: "Explore dedicated mobile apps once the core web experience is mature enough to carry them well.",
-		status: "Future",
-		category: "later",
-		priority: "Low"
-	},
-	{
-		title: "Modernized interface",
-		description: "Refined the visual system so DogEared feels calmer, lighter, and more book-first.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Reader profiles",
-		description: "Added public profile surfaces for shelves, reading activity, and reader identity.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Reading goal",
-		description: "Introduced annual reading goals with progress that feels informative instead of pressuring.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Reading streaks",
-		description: "Added gentle continuity signals for readers who like seeing their reading rhythm.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Momentum score",
-		description: "Added supportive momentum context for current reads without risk-heavy language.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "My Reading Life",
-		description: "Added a private reflective area for yearly progress, timeline history, calendar patterns, insights, and yearly summaries.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Private Reading Journal",
-		description: "Added private journal entries with optional book context, progress/page snapshots, tags, mood, autosaved drafts, search, filters, inline viewing, editing, deletion, and book/progress prompts.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Guided first experience",
-		description: "Added contextual, dismissible first-time tips with per-user progress and Settings controls.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Community discovery providers",
-		description: "Added explainable Home discovery sections powered by transparent community activity rather than black-box recommendations.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Editorial collections",
-		description: "Added curated collection pages, featured Home placement, author/search surfacing, and admin collection management.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Series support",
-		description: "Added first-class series metadata, book-detail series context, continue-series actions, author grouping, and search labels.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Reader information architecture",
-		description: "Clarified Profile, My Reading Life, and Reading Journal so each personal destination has a single purpose.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Author pages",
-		description: "Added author pages that help readers browse related books and discover more context.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Admin dashboard",
-		description: "Added operational tools that make the product easier to maintain and improve.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Floating actions",
-		description: "Made feedback and support easier to reach without interrupting reading workflows.",
-		status: "Completed",
-		category: "completed"
-	},
-	{
-		title: "Import foundation",
-		description: "Built the first migration paths for bringing existing reading data into DogEared.",
-		status: "Completed",
-		category: "completed"
+		title: "Kindle and Kobo improvements",
+		description: "Make it easier to bring reading progress and notes from dedicated reading devices.",
+		why: "Many readers already read elsewhere. DogEared should respect that instead of forcing duplicate work.",
+		category: "later"
 	}
 ];
 
 export const ROADMAP_SECTIONS: Array<{
-	id: Exclude<RoadmapCategory, "completed">;
+	id: RoadmapSectionId;
 	title: string;
+	kicker: string;
 	description: string;
 }> = [
 	{
 		id: "now",
-		title: "Now",
-		description: "Active work focused on making DogEared more useful, stable, and comfortable for everyday readers."
+		title: "Building Now",
+		kicker: "Active focus",
+		description: "A small set of improvements currently receiving attention for the Founding Reader phase."
 	},
 	{
 		id: "next",
-		title: "Next",
-		description: "Planned improvements that deepen discovery, search, and personal reading context."
+		title: "Coming Next",
+		kicker: "Direction",
+		description: "The next major areas of focus once the current reliability and reader-experience work settles."
 	},
 	{
 		id: "later",
-		title: "Later",
-		description: "Larger ideas that need the core reading experience to be mature before they are ready."
+		title: "Looking Ahead",
+		kicker: "Longer horizon",
+		description: "Aspirational ideas that fit DogEared's direction, but need the core reading experience to mature first."
 	}
 ];
-
-export const RECENTLY_COMPLETED_ITEMS = ROADMAP_ITEMS.filter((item) => item.category === "completed").slice(0, 12);

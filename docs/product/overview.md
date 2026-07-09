@@ -270,7 +270,20 @@ The Mission page explains the product vision: less noise, more memory, better ta
 
 ### Roadmap
 
-The Roadmap page groups product direction into Now, Next, Later, Recently Shipped, and recently completed work. Future direction is maintained in `src/lib/roadmap.ts`; Recently Shipped is automatically sourced from published release notes so shipped work is not duplicated by hand.
+The Roadmap page is a public communication page, not an internal planning surface. It should help readers understand that DogEared is actively improving while avoiding implementation details, ranking labels, timelines, percentages, or internal work-tracking language.
+
+The public roadmap structure is:
+
+- Current Version: DogEared Beta version, release month, and a Release Notes link.
+- Building Now: a small set of active reader-facing improvements with "why it matters" copy.
+- Recently Shipped: recent improvements automatically sourced from published Release Notes.
+- Coming Next: the next major areas of product direction without dates or promises.
+- Looking Ahead: aspirational long-term ideas that fit DogEared's reader-first direction.
+- Help Shape DogEared: Founding Reader messaging and a feedback CTA.
+
+Future direction is maintained in `src/lib/roadmap.ts`. Recently Shipped is sourced from release notes so shipped work is not duplicated by hand. Roadmap copy should focus on reader outcomes, such as "Stay connected to meaningful reading activity without unnecessary noise," rather than implementation language.
+
+Founding Reader messaging should explain that DogEared is shaped by a small reader community and that bug reports, feature suggestions, and conversations directly influence what gets built next.
 
 ### Release Notes
 

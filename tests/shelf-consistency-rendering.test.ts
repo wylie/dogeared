@@ -21,30 +21,46 @@ test("mobile comment form buttons enforce symmetric padding and min width", () =
 	assert.equal(profileSource.includes("padding: 0 0.9rem;"), true);
 });
 
-test("roadmap prioritizes reader-facing ordering", () => {
+test("roadmap reads like a public product direction page", () => {
 	const pageSource = readFileSync("src/pages/roadmap.astro", "utf8");
 	const dataSource = readFileSync("src/lib/roadmap.ts", "utf8");
-	const idxNow = pageSource.indexOf('{ id: "now", label: "Now" }');
-	const idxNext = pageSource.indexOf('{ id: "next", label: "Next" }');
-	const idxLater = pageSource.indexOf('{ id: "later", label: "Later" }');
+	const idxNow = pageSource.indexOf('{ id: "building-now", label: "Now" }');
 	const idxShipped = pageSource.indexOf('{ id: "recently-shipped", label: "Shipped" }');
-	const idxCompleted = pageSource.indexOf('{ id: "recently-completed", label: "Completed" }');
+	const idxNext = pageSource.indexOf('{ id: "coming-next", label: "Next" }');
+	const idxAhead = pageSource.indexOf('{ id: "looking-ahead", label: "Ahead" }');
+	const idxFeedback = pageSource.indexOf('{ id: "help-shape", label: "Feedback" }');
 	assert.ok(pageSource.includes("ROADMAP_ITEMS"));
 	assert.ok(pageSource.includes("ROADMAP_SECTIONS"));
-	assert.ok(pageSource.includes("RECENTLY_COMPLETED_ITEMS"));
 	assert.ok(idxNow > -1);
-	assert.ok(idxNext > -1);
-	assert.ok(idxLater > -1);
 	assert.ok(idxShipped > -1);
-	assert.ok(idxCompleted > -1);
-	assert.ok(idxNow < idxNext);
-	assert.ok(idxNext < idxLater);
-	assert.ok(idxLater < idxShipped);
-	assert.ok(idxShipped < idxCompleted);
+	assert.ok(idxNext > -1);
+	assert.ok(idxAhead > -1);
+	assert.ok(idxFeedback > -1);
+	assert.ok(idxNow < idxShipped);
+	assert.ok(idxShipped < idxNext);
+	assert.ok(idxNext < idxAhead);
+	assert.ok(idxAhead < idxFeedback);
 	assert.ok(pageSource.includes("loadPublishedReleases"));
+	assert.ok(pageSource.includes("Current Version"));
+	assert.ok(pageSource.includes("DogEared Beta"));
+	assert.ok(pageSource.includes("View Release Notes"));
+	assert.ok(pageSource.includes("Building Now"));
 	assert.ok(pageSource.includes("Recently Shipped"));
+	assert.ok(dataSource.includes("Coming Next"));
+	assert.ok(dataSource.includes("Looking Ahead"));
+	assert.ok(pageSource.includes("Help Shape DogEared"));
+	assert.ok(pageSource.includes("Founding Readers"));
+	assert.ok(pageSource.includes("Send Feedback"));
+	assert.equal(pageSource.includes("priority-label"), false);
+	for (const term of ["Priority", "Backlog", "Task", "progress bars", "Completed percentages"]) {
+		assert.equal(pageSource.includes(term), false);
+	}
+	assert.equal(dataSource.includes("priority"), false);
+	assert.equal(dataSource.includes("Primary"), false);
+	assert.equal(dataSource.includes("High"), false);
+	assert.equal(dataSource.includes("Medium"), false);
+	assert.equal(dataSource.includes("Low"), false);
 	assert.ok(dataSource.includes('category: "now"'));
 	assert.ok(dataSource.includes('category: "next"'));
 	assert.ok(dataSource.includes('category: "later"'));
-	assert.ok(dataSource.includes('category: "completed"'));
 });

@@ -521,9 +521,9 @@ Limitations: Requires the database function `get_top_books_by_genre`.
 
 Status: Complete
 
-The Roadmap page exposes Now, Next, Later, and recently completed product priorities.
+The Roadmap page communicates Current Version, Building Now, Recently Shipped, Coming Next, Looking Ahead, and Help Shape DogEared.
 
-Limitations: Roadmap items are not proof of implemented behavior.
+Limitations: Future direction does not promise dates. Recently Shipped is sourced from published Release Notes.
 
 ### Mission Page
 

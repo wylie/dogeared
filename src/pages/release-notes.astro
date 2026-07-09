@@ -15,6 +15,10 @@ const structuredData = JSON.stringify(buildBreadcrumbList([
 	{ name: "Home", item: "/" },
 	{ name: "Release Notes", item: "/release-notes" }
 ], { site: Astro.site ?? Astro.url, logErrors: import.meta.env.DEV }));
+
+function releaseAnchor(version: string) {
+	return `release-${String(version || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+}
 ---
 
 <Layout
@@ -39,7 +43,7 @@ const structuredData = JSON.stringify(buildBreadcrumbList([
 					<a href="/roadmap">View the roadmap</a>
 				</article>
 			) : releases.map((release) => (
-				<article class="release-card">
+				<article class="release-card" id={releaseAnchor(release.version)}>
 					<div class="release-head">
 						<p class="release-version">{release.version}</p>
 						<p class="release-date">{release.releaseDate || release.publishedAt ? new Date(release.releaseDate || release.publishedAt).toLocaleDateString() : "Recently shipped"}</p>
