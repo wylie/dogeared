@@ -4,6 +4,7 @@ import { getNeonSql } from "../../../lib/neon";
 import { resolvePublicProfileBundle } from "../../../lib/publicProfile";
 import { resolveUserBySession } from "../../../lib/auth";
 import { buildBreadcrumbList } from "../../../lib/seo";
+import { isEligiblePublicReaderAccount, publicReaderAccountFilterSql } from "../../../lib/publicReaderPolicy";
 
 export const prerender = false;
 
@@ -36,7 +37,7 @@ const countRows = await sql<Array<{ count: number }>>`
 	from user_follow uf
 	join app_user au on au.id = uf.follower_user_id
 	where uf.followed_user_id = ${bundle.targetUserId}::uuid
-		and nullif(trim(coalesce(au.username, '')), '') is not null
+		${publicReaderAccountFilterSql(sql)}
 		${whereSearchSql}
 `;
 const total = Number(countRows[0]?.count || 0);
@@ -52,7 +53,7 @@ const rows = await sql<Array<{ username: string | null; profile_data: unknown }>
 	from user_follow uf
 	join app_user au on au.id = uf.follower_user_id
 	where uf.followed_user_id = ${bundle.targetUserId}::uuid
-		and nullif(trim(coalesce(au.username, '')), '') is not null
+		${publicReaderAccountFilterSql(sql)}
 		${whereSearchSql}
 	${orderBySql}
 	offset ${pageOffset}
@@ -67,7 +68,10 @@ const readers = rows.map((row) => {
 		name: String(source.name || "").trim().slice(0, 80),
 		avatar: avatarRaw.startsWith("data:image/") || /^https?:\/\//i.test(avatarRaw) ? avatarRaw : ""
 	};
-}).filter((row) => row.username);
+}).filter((row) => isEligiblePublicReaderAccount({
+	username: row.username,
+	profileData: rows.find((source) => String(source.username || "").trim().toLowerCase() === row.username)?.profile_data
+}));
 
 const sectionLinks = [
 	{ id: "followers-list", label: "Followers" }

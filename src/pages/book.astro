@@ -625,6 +625,7 @@ try {
 					where ual.activity_id = ua.id
 				) la on true
 				where ua.book_id = ${book.id}
+					${publicReaderAccountFilterSql(sql, { requireActivitySharing: true })}
 				order by ua.created_at desc, ua.id desc
 				limit 40
 			`;
@@ -654,6 +655,7 @@ try {
 				join app_user au on au.id = ua.user_id
 				left join user_book ub on ub.user_id = ua.user_id and ub.book_id = ua.book_id
 				where ua.book_id = ${book.id}
+					${publicReaderAccountFilterSql(sql, { requireActivitySharing: true })}
 				order by ua.created_at desc, ua.id desc
 				limit 40
 			`;

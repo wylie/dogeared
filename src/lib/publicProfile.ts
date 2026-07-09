@@ -1,6 +1,9 @@
 import { getNeonSql } from "./neon";
 import { resolvePrivacySettings, resolveViewerProfileAccess } from "./privacy";
-import { canViewerSeeDemoTestUser, isDemoTestUsername } from "./demoVisibility";
+import {
+	isEligiblePublicReaderAccount,
+	publicReaderAccountFilterSql
+} from "./publicReaderPolicy";
 
 function normalizeText(value: unknown) {
 	return String(value || "").trim();
@@ -97,7 +100,11 @@ export async function resolvePublicProfileBundle(input: {
 			targetUserId: ""
 		};
 	}
-	if (isDemoTestUsername(user.username) && !(await canViewerSeeDemoTestUser(input.viewerUserId))) {
+	if (!isEligiblePublicReaderAccount({
+		username: user.username,
+		profileData: user.profile_data,
+		requirePublicProfile: false
+	})) {
 		return {
 			status: "not_found",
 			profile: null,
@@ -118,12 +125,16 @@ export async function resolvePublicProfileBundle(input: {
 			sql<Array<{ count: number }>>`
 				select count(*)::int as count
 				from user_follow
+				join app_user au on au.id = user_follow.follower_user_id
 				where followed_user_id = ${user.id}::uuid
+					${publicReaderAccountFilterSql(sql)}
 			`,
 			sql<Array<{ count: number }>>`
 				select count(*)::int as count
 				from user_follow
+				join app_user au on au.id = user_follow.followed_user_id
 				where follower_user_id = ${user.id}::uuid
+					${publicReaderAccountFilterSql(sql)}
 			`,
 			input.viewerUserId
 				? sql<Array<{ exists: number }>>`

@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { resolveUserBySession } from "../../../lib/auth";
 import { getNeonSql } from "../../../lib/neon";
 import { monitorEvent } from "../../../lib/monitoring";
+import { publicReaderAccountFilterSql } from "../../../lib/publicReaderPolicy";
 
 export const prerender = false;
 
@@ -77,6 +78,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			from user_activity_comment uac
 			join app_user au on au.id = uac.user_id
 			where uac.activity_id = ${activityId}
+				${publicReaderAccountFilterSql(sql)}
 			order by uac.created_at asc, uac.id asc
 			limit 100
 		`;

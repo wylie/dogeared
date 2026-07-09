@@ -129,6 +129,30 @@ Low-value activity should be minimized.
 
 ---
 
+## Beta Data Policy
+
+Production-facing reader surfaces must not show development or seed accounts.
+
+This applies to:
+
+- recommendations
+- followers and following
+- public profile discovery
+- public book activity
+- reviews
+- comments
+- notifications
+
+DogEared should exclude accounts that are deleted, hidden, suspended, private where public visibility is required, or marked internally as test, seed, fixture, internal, placeholder, or development data. This includes common flag variants such as `is_test`, `is_seed`, `is_fixture`, `is_internal`, and equivalent camelCase names.
+
+Usernames that clearly identify seed/development accounts, such as `test`, `demo`, `seed`, `fixture`, `placeholder`, `codex-progress-test`, and admin seed users, should not appear in production recommendations or public social surfaces.
+
+If development seed accounts are useful for local QA, gate them behind development-only behavior. Do not fill empty recommendation space with test users. Use a friendly empty state instead.
+
+Recommendation filtering lives in the shared public reader policy so pages do not invent their own exclusion rules.
+
+---
+
 ## Development Rules
 
 Important:

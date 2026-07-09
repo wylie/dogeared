@@ -1526,7 +1526,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			const data = await response.json().catch(() => ({}));
 			const readers = Array.isArray(data?.readers) ? data.readers : [];
 			const html = String(data?.html || "").trim();
-			const emptyMessage = String(data?.message || "More readers will appear here as the DogEared community grows.").trim();
+			const emptyMessage = String(data?.message || "As more readers join DogEared, you'll discover people with similar reading interests.").trim();
 			if (!response.ok || readers.length === 0 || !html) {
 				list.replaceChildren();
 				const emptyItem = document.createElement("li");

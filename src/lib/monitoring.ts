@@ -15,5 +15,6 @@ export function monitorEvent(event: string, details: Record<string, unknown>, le
 		console.warn("[monitor]", payload);
 		return;
 	}
+	if (!(import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) return;
 	console.log("[monitor]", payload);
 }
