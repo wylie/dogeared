@@ -153,6 +153,47 @@ Recommendation filtering lives in the shared public reader policy so pages do no
 
 ---
 
+## Admin Operations
+
+The Admin area is DogEared's beta operations hub.
+
+Admin architecture:
+
+- `/admin` is the executive dashboard with concise operational cards and drill-down links.
+- `/admin/beta-users` is the beta reader control surface for onboarding, activity, and future account operations.
+- `/admin/users` remains the direct account management surface for search, detail review, and deletion.
+- `/admin/data-health` owns catalog and import-quality diagnostics.
+- `/admin/operations` owns feedback triage, recommendation health, import/system status, feature flags, announcements, and release notes.
+
+Operational pages must be admin-only and marked `noindex,nofollow`.
+
+Beta operations should favor honest signals over vanity metrics. If instrumentation does not exist yet, show the gap clearly instead of displaying fake values.
+
+Feedback workflow:
+
+- Feedback submissions create admin feedback issues.
+- Issues support status, future assignee, internal notes, resolution version, and duplicate marking.
+- Admin notes are never public-facing.
+
+Feature flags:
+
+- Flags are simple admin-managed toggles for rollout planning.
+- A disabled flag should be treated as the default unless product code explicitly reads and honors that flag.
+- New flags should include a human-readable label and description.
+
+Announcements:
+
+- Admins can create draft, active, and archived announcements.
+- App-wide rendering should be controlled by an announcement feature flag.
+- Announcements should be dismissible by default.
+
+Release notes:
+
+- Release notes are lightweight beta history, not marketing pages.
+- Notes should describe meaningful user-facing or operational changes in concise language.
+
+---
+
 ## Development Rules
 
 Important:

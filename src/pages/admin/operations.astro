@@ -1,0 +1,344 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { resolveAdminSession } from "../../lib/admin";
+import { getNeonSql } from "../../lib/neon";
+import {
+	loadAdminAnnouncements,
+	loadAdminFeatureFlags,
+	loadAdminFeedbackIssues,
+	loadAdminOperationsSummary,
+	loadAdminReleaseNotes,
+	saveAdminAnnouncement,
+	saveAdminReleaseNote,
+	updateAdminFeatureFlags,
+	updateAdminFeedbackIssue
+} from "../../lib/adminData";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const sql = getNeonSql();
+let actionMessage = "";
+let actionError = false;
+
+if (Astro.request.method === "POST") {
+	const form = await Astro.request.formData();
+	const intent = String(form.get("intent") || "").trim();
+	if (intent === "update-feedback") {
+		const result = await updateAdminFeedbackIssue(sql, {
+			id: form.get("issueId"),
+			status: form.get("status"),
+			assignee: form.get("assignee"),
+			internalNotes: form.get("internalNotes"),
+			resolutionVersion: form.get("resolutionVersion"),
+			duplicateOf: form.get("duplicateOf")
+		});
+		actionMessage = result.message;
+		actionError = !result.ok;
+	} else if (intent === "update-flags") {
+		const result = await updateAdminFeatureFlags(sql, form.getAll("enabledFlags").map(String));
+		actionMessage = result.message;
+		actionError = !result.ok;
+	} else if (intent === "save-announcement") {
+		const result = await saveAdminAnnouncement(sql, {
+			title: form.get("title"),
+			body: form.get("body"),
+			status: form.get("status"),
+			dismissible: form.get("dismissible")
+		});
+		actionMessage = result.message;
+		actionError = !result.ok;
+	} else if (intent === "save-release-note") {
+		const result = await saveAdminReleaseNote(sql, {
+			version: form.get("version"),
+			title: form.get("title"),
+			body: form.get("body")
+		});
+		actionMessage = result.message;
+		actionError = !result.ok;
+	} else {
+		actionMessage = "Invalid admin action.";
+		actionError = true;
+	}
+}
+
+const statusFilter = String(Astro.url.searchParams.get("status") || "").trim().toLowerCase();
+const [summary, feedbackIssues, featureFlags, announcements, releaseNotes] = await Promise.all([
+	loadAdminOperationsSummary(sql),
+	loadAdminFeedbackIssues(sql, statusFilter),
+	loadAdminFeatureFlags(sql),
+	loadAdminAnnouncements(sql),
+	loadAdminReleaseNotes(sql)
+]);
+
+const sectionLinks = [
+	{ id: "overview", label: "Overview" },
+	{ id: "feedback", label: "Feedback" },
+	{ id: "notifications", label: "Notifications" },
+	{ id: "recommendations", label: "Recommendations" },
+	{ id: "imports", label: "Imports" },
+	{ id: "system-health", label: "System" },
+	{ id: "feature-flags", label: "Flags" },
+	{ id: "announcements", label: "Announcements" },
+	{ id: "release-notes", label: "Releases" }
+];
+
+function formatDate(value: string) {
+	const parsed = new Date(value);
+	if (!Number.isFinite(parsed.getTime())) return "Unknown";
+	return parsed.toLocaleString();
+}
+
+function pct(value: number) {
+	return `${(Number(value || 0) * 100).toFixed(1)}%`;
+}
+---
+
+<Layout title="Admin Operations" sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="admin-operations-page">
+		<header id="overview" class="hero">
+			<h1>Operations</h1>
+			<p>Beta control center for feedback, recommendations, imports, system status, flags, announcements, and releases.</p>
+		</header>
+
+		{actionMessage && <p class={`admin-message${actionError ? " error" : ""}`} role="status">{actionMessage}</p>}
+
+		<section class="panel">
+			<div class="panel-head">
+				<h2>Operating Snapshot</h2>
+			</div>
+			<div class="card-grid">
+				<article class="stat"><p>New readers (7d)</p><strong>{summary.growth.newUsersThisWeek.toLocaleString()}</strong></article>
+				<article class="stat"><p>Active readers (7d)</p><strong>{summary.engagement.activeUsersWeek.toLocaleString()}</strong></article>
+				<article class="stat"><p>Open feedback</p><strong>{summary.feedback.open.toLocaleString()}</strong></article>
+				<article class="stat"><p>Unread notifications</p><strong>{summary.notifications.unread.toLocaleString()}</strong></article>
+				<article class="stat"><p>Missing metadata</p><strong>{summary.imports.missingMetadata.toLocaleString()}</strong></article>
+				<article class="stat"><p>Cache status</p><strong>{summary.system.cacheStatus}</strong></article>
+			</div>
+		</section>
+
+		<section class="panel" id="feedback">
+			<div class="panel-head">
+				<h2>Feedback</h2>
+				<p>{summary.feedback.open.toLocaleString()} open, {summary.feedback.resolved.toLocaleString()} resolved, {summary.feedback.duplicates.toLocaleString()} duplicates.</p>
+			</div>
+			<form class="filter-row" method="get" action="/admin/operations">
+				<label for="feedback-status">Status</label>
+				<select id="feedback-status" name="status">
+					<option value="" selected={!statusFilter}>All</option>
+					{["new", "triaged", "in_progress", "resolved", "closed", "duplicate"].map((status) => (
+						<option value={status} selected={statusFilter === status}>{status.replaceAll("_", " ")}</option>
+					))}
+				</select>
+				<button type="submit">Filter</button>
+			</form>
+			<div class="issue-list">
+				{feedbackIssues.length === 0 ? (
+					<p class="empty">No feedback issues found.</p>
+				) : feedbackIssues.map((issue) => (
+					<article class="issue-card">
+						<div class="issue-head">
+							<div>
+								<h3>#{issue.id} {issue.type || "feedback"}</h3>
+								<p>{issue.reporter ? `@${issue.reporter}` : issue.reporterEmail || "Anonymous"} · {formatDate(issue.createdAt)}</p>
+							</div>
+							<span class="status-pill">{issue.status}</span>
+						</div>
+						<p class="issue-message">{issue.message}</p>
+						{issue.pageUrl && <p class="meta">Page: {issue.pageUrl}</p>}
+						<form class="issue-form" method="post">
+							<input type="hidden" name="intent" value="update-feedback" />
+							<input type="hidden" name="issueId" value={issue.id} />
+							<label>Status
+								<select name="status">
+									{["new", "triaged", "in_progress", "resolved", "closed", "duplicate"].map((status) => (
+										<option value={status} selected={issue.status === status}>{status.replaceAll("_", " ")}</option>
+									))}
+								</select>
+							</label>
+							<label>Assignee<input name="assignee" value={issue.assignee} placeholder="Future-ready" /></label>
+							<label>Resolution<input name="resolutionVersion" value={issue.resolutionVersion} placeholder="v0.2.0" /></label>
+							<label>Duplicate of<input name="duplicateOf" value={issue.duplicateOf || ""} inputmode="numeric" placeholder="Issue id" /></label>
+							<label class="wide">Internal notes<textarea name="internalNotes" rows="3">{issue.internalNotes}</textarea></label>
+							<button type="submit">Save Issue</button>
+						</form>
+					</article>
+				))}
+			</div>
+		</section>
+
+		<section class="panel" id="notifications">
+			<div class="panel-head">
+				<h2>Notifications</h2>
+				<p>Delivery and unread state for in-app social notifications.</p>
+			</div>
+			<div class="card-grid">
+				<article class="stat"><p>Total notifications</p><strong>{summary.notifications.total.toLocaleString()}</strong></article>
+				<article class="stat"><p>Unread notifications</p><strong>{summary.notifications.unread.toLocaleString()}</strong></article>
+				<article class="stat"><p>Last notification</p><strong>{summary.notifications.lastCreatedAt ? formatDate(summary.notifications.lastCreatedAt) : "None"}</strong></article>
+			</div>
+		</section>
+
+		<section class="panel" id="recommendations">
+			<div class="panel-head">
+				<h2>Recommendation Health</h2>
+				<p>Recommendation telemetry is future-ready; public filtering is active.</p>
+			</div>
+			<div class="card-grid">
+				<article class="stat"><p>Impressions</p><strong>{summary.recommendations.impressions.toLocaleString()}</strong></article>
+				<article class="stat"><p>Clicks</p><strong>{summary.recommendations.clicks.toLocaleString()}</strong></article>
+				<article class="stat"><p>Hides</p><strong>{summary.recommendations.hides.toLocaleString()}</strong></article>
+				<article class="stat"><p>Interesting</p><strong>{summary.recommendations.interesting.toLocaleString()}</strong></article>
+				<article class="stat"><p>CTR</p><strong>{pct(summary.recommendations.ctr)}</strong></article>
+				<article class="stat"><p>Low-performing sources</p><strong>{summary.recommendations.instrumented ? "Review table" : "Not instrumented"}</strong></article>
+			</div>
+		</section>
+
+		<section class="panel" id="imports">
+			<div class="panel-head">
+				<h2>Import Health</h2>
+				<p>Signals from shelf entries, catalog metadata, and duplicate work keys.</p>
+			</div>
+			<div class="card-grid">
+				<article class="stat"><p>Recent import entries</p><strong>{summary.imports.shelfEntries.toLocaleString()}</strong></article>
+				<article class="stat"><p>Import readers</p><strong>{summary.imports.readers.toLocaleString()}</strong></article>
+				<article class="stat"><p>Duplicate works</p><strong>{summary.imports.duplicateWorks.toLocaleString()}</strong></article>
+				<article class="stat"><p>Missing metadata</p><strong>{summary.imports.missingMetadata.toLocaleString()}</strong></article>
+				<article class="stat"><p>Series issues</p><strong>Not instrumented</strong></article>
+				<article class="stat"><p>Cover issues</p><strong>{summary.imports.coverIssues.toLocaleString()}</strong></article>
+			</div>
+		</section>
+
+		<section class="panel" id="system-health">
+			<div class="panel-head">
+				<h2>System Health</h2>
+			</div>
+			<div class="card-grid">
+				<article class="stat"><p>API failures</p><strong>{summary.system.apiFailures.toLocaleString()}</strong></article>
+				<article class="stat"><p>Email failures</p><strong>{summary.system.emailFailures.toLocaleString()}</strong></article>
+				<article class="stat"><p>Failed jobs</p><strong>{summary.system.failedJobs.toLocaleString()}</strong></article>
+				<article class="stat"><p>Search indexed books</p><strong>{summary.search.indexedBooks.toLocaleString()}</strong></article>
+				<article class="stat"><p>Search gaps</p><strong>{summary.search.missingCanonicalWorks.toLocaleString()}</strong></article>
+				<article class="stat"><p>Cache</p><strong>{summary.system.cacheStatus}</strong></article>
+			</div>
+		</section>
+
+		<section class="panel" id="feature-flags">
+			<div class="panel-head">
+				<h2>Feature Flags</h2>
+				<p>Simple toggles for beta rollout planning.</p>
+			</div>
+			<form class="flag-list" method="post">
+				<input type="hidden" name="intent" value="update-flags" />
+				{featureFlags.map((flag) => (
+					<label class="flag-row">
+						<input type="checkbox" name="enabledFlags" value={flag.key} checked={flag.enabled} />
+						<span><strong>{flag.label}</strong><small>{flag.description}</small></span>
+					</label>
+				))}
+				<button type="submit">Save Flags</button>
+			</form>
+		</section>
+
+		<section class="panel" id="announcements">
+			<div class="panel-head">
+				<h2>Announcement Banner</h2>
+				<p>Create dismissible app-wide beta updates. Rendering is controlled by the announcement feature flag.</p>
+			</div>
+			<form class="admin-form" method="post">
+				<input type="hidden" name="intent" value="save-announcement" />
+				<label>Title<input name="title" maxlength="160" required /></label>
+				<label>Status
+					<select name="status">
+						<option value="draft">Draft</option>
+						<option value="active">Active</option>
+						<option value="archived">Archived</option>
+					</select>
+				</label>
+				<label class="checkbox-label"><input type="checkbox" name="dismissible" value="true" checked /> Dismissible</label>
+				<label class="wide">Body<textarea name="body" rows="3" maxlength="1000" required></textarea></label>
+				<button type="submit">Save Announcement</button>
+			</form>
+			<div class="table-wrap">
+				<table>
+					<thead><tr><th>Title</th><th>Status</th><th>Dismissible</th><th>Updated</th></tr></thead>
+					<tbody>
+						{announcements.length === 0 ? <tr><td colspan="4">No announcements yet.</td></tr> : announcements.map((item) => (
+							<tr><td>{item.title}</td><td>{item.status}</td><td>{item.dismissible ? "Yes" : "No"}</td><td>{formatDate(item.updatedAt)}</td></tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<section class="panel" id="release-notes">
+			<div class="panel-head">
+				<h2>Release Notes</h2>
+			</div>
+			<form class="admin-form" method="post">
+				<input type="hidden" name="intent" value="save-release-note" />
+				<label>Version<input name="version" maxlength="80" placeholder="v0.2.0" /></label>
+				<label>Title<input name="title" maxlength="160" required /></label>
+				<label class="wide">Notes<textarea name="body" rows="4" maxlength="2000" required></textarea></label>
+				<button type="submit">Publish Note</button>
+			</form>
+			<div class="release-list">
+				{releaseNotes.length === 0 ? <p class="empty">No release notes yet.</p> : releaseNotes.map((note) => (
+					<article class="release-card">
+						<h3>{note.version ? `${note.version} · ${note.title}` : note.title}</h3>
+						<p class="meta">{formatDate(note.publishedAt || note.createdAt)}</p>
+						<p>{note.body}</p>
+					</article>
+				))}
+			</div>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.admin-operations-page { max-width: 1080px; }
+	.hero h1 { margin: 0; }
+	.hero p { margin: 0.35rem 0 0; color: var(--color-text-muted); }
+	.panel { margin-top: 1rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
+	.panel-head h2 { margin: 0; }
+	.panel-head p, .meta, .empty { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }
+	.admin-message { margin: 0.8rem 0 0; color: var(--color-primary); font-weight: 700; }
+	.admin-message.error { color: #991b1b; }
+	.card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; margin-top: 0.75rem; }
+	.stat { border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.56); padding: 0.65rem; }
+	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }
+	.stat strong { display: block; margin-top: 0.22rem; font-size: 1.08rem; }
+	.filter-row { margin-top: 0.7rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+	.filter-row select, .filter-row button, .admin-form input, .admin-form select, .admin-form textarea, .issue-form input, .issue-form select, .issue-form textarea {
+		border: var(--border-strong);
+		border-radius: var(--radius-sm);
+		padding: 0.45rem 0.55rem;
+		font: inherit;
+		background: #fff;
+	}
+	button { min-height: 34px; border: none; border-radius: 8px; padding: 0 0.8rem; background: var(--color-primary); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+	.issue-list, .release-list { display: grid; gap: 0.75rem; margin-top: 0.85rem; }
+	.issue-card, .release-card { border: var(--border-subtle); border-radius: var(--radius-md); background: #fff; padding: 0.8rem; }
+	.issue-head { display: flex; justify-content: space-between; gap: 0.7rem; align-items: flex-start; }
+	.issue-head h3, .release-card h3 { margin: 0; font-size: 1rem; }
+	.issue-head p { margin: 0.2rem 0 0; color: #575757; font-size: 0.86rem; }
+	.issue-message { white-space: pre-wrap; line-height: 1.45; }
+	.status-pill { display: inline-flex; min-height: 24px; align-items: center; border-radius: 999px; border: var(--border-subtle); padding: 0 0.5rem; background: #f7fafc; font-size: 0.78rem; font-weight: 700; }
+	.issue-form, .admin-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.55rem; margin-top: 0.7rem; }
+	label { display: grid; gap: 0.25rem; font-weight: 700; font-size: 0.86rem; color: #3f3f3f; }
+	label.wide { grid-column: 1 / -1; }
+	.checkbox-label { display: flex; align-items: center; gap: 0.35rem; }
+	.flag-list { margin-top: 0.75rem; display: grid; gap: 0.55rem; }
+	.flag-row { display: flex; align-items: flex-start; gap: 0.55rem; border: var(--border-subtle); border-radius: var(--radius-md); background: #fff; padding: 0.65rem; }
+	.flag-row span { display: grid; gap: 0.12rem; }
+	.flag-row small { color: #575757; font-weight: 500; }
+	.table-wrap { margin-top: 0.75rem; overflow-x: auto; }
+	table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+	th, td { text-align: left; padding: 0.45rem; border-bottom: var(--border-subtle); vertical-align: top; }
+	th { font-weight: 700; color: #444; }
+	@media (max-width: 900px) {
+		.card-grid, .issue-form, .admin-form { grid-template-columns: 1fr; }
+	}
+</style>

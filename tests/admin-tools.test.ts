@@ -23,6 +23,8 @@ test("admin navigation is rendered only for admin sessions", () => {
 	assert.equal(nav.includes("/admin/analytics"), true);
 	assert.equal(nav.includes("/admin/feedback"), true);
 	assert.equal(nav.includes("/admin/data-health"), true);
+	assert.equal(nav.includes("/admin/beta-users"), true);
+	assert.equal(nav.includes("/admin/operations"), true);
 	assert.equal(nav.includes("/admin/users"), true);
 });
 
@@ -42,13 +44,49 @@ test("admin overview displays real site statistics and quick links", () => {
 		assert.equal(page.includes(label), true);
 	}
 	assert.equal(page.includes('href: "/admin/data-health"'), true);
+<<<<<<< HEAD
 	assert.equal(page.includes('href: "/admin/analytics"'), true);
 	assert.equal(page.includes('href: "/admin/feedback"'), true);
 	assert.equal(page.includes('href: "/admin/users"'), true);
+=======
+	assert.equal(page.includes('href: "/admin/beta-users"'), true);
+	assert.equal(page.includes('href: "/admin/operations#feedback"'), true);
+	assert.equal(page.includes('href: "/admin/operations#recommendations"'), true);
+>>>>>>> 71d97e5 (Build beta operations admin center)
 	assert.equal(page.includes('href: "/metrics"'), true);
-	assert.equal(page.includes('href: "/roadmap"'), true);
 	assert.equal(data.includes("loadAdminOverviewStats"), true);
+	assert.equal(data.includes("loadAdminOperationsSummary"), true);
 	assert.equal(data.includes("from user_activity_comment"), true);
+});
+
+test("admin operations center includes beta control surfaces", () => {
+	const source = readFileSync("src/pages/admin/operations.astro", "utf8");
+	const data = readFileSync("src/lib/adminData.ts", "utf8");
+	const layout = readFileSync("src/layouts/Layout.astro", "utf8");
+	assert.equal(source.includes("Recommendation Health"), true);
+	assert.equal(source.includes("Import Health"), true);
+	assert.equal(source.includes("System Health"), true);
+	assert.equal(source.includes("Feature Flags"), true);
+	assert.equal(source.includes("Announcement Banner"), true);
+	assert.equal(source.includes("Release Notes"), true);
+	assert.equal(source.includes("updateAdminFeedbackIssue"), true);
+	assert.equal(data.includes("admin_feedback_issue"), true);
+	assert.equal(data.includes("admin_feature_flag"), true);
+	assert.equal(data.includes("admin_announcement"), true);
+	assert.equal(data.includes("admin_release_note"), true);
+	assert.equal(layout.includes("loadActiveAnnouncement"), true);
+	assert.equal(layout.includes("data-announcement-id"), true);
+});
+
+test("admin beta users page exposes requested account operations", () => {
+	const source = readFileSync("src/pages/admin/beta-users.astro", "utf8");
+	const data = readFileSync("src/lib/adminData.ts", "utf8");
+	assert.equal(source.includes("loadAdminBetaUsers"), true);
+	assert.equal(source.includes("Impersonate"), true);
+	assert.equal(source.includes("Resend login"), true);
+	assert.equal(source.includes("Deactivate"), true);
+	assert.equal(source.includes("readingStreak"), true);
+	assert.equal(data.includes("reading_streak"), true);
 });
 
 test("admin users support search, detail counts, and safe deletion", () => {

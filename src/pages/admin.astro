@@ -2,7 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import { resolveAdminSession } from "../lib/admin";
 import { getNeonSql } from "../lib/neon";
-import { loadAdminOverviewStats } from "../lib/adminData";
+import { loadAdminOperationsSummary, loadAdminOverviewStats } from "../lib/adminData";
 
 export const prerender = false;
 
@@ -10,13 +10,16 @@ const admin = await resolveAdminSession(Astro.request);
 if (!admin.isAdmin) return Astro.redirect("/");
 
 const sql = getNeonSql();
-const stats = await loadAdminOverviewStats(sql);
+const [stats, operations] = await Promise.all([
+	loadAdminOverviewStats(sql),
+	loadAdminOperationsSummary(sql)
+]);
 
 const sectionLinks = [
 	{ id: "overview", label: "Overview" },
-	{ id: "site-statistics", label: "Site Statistics" },
-	{ id: "quick-links", label: "Quick Links" },
-	{ id: "recent-activity", label: "Recent Activity" }
+	{ id: "operations", label: "Operations" },
+	{ id: "site-statistics", label: "Statistics" },
+	{ id: "recent-activity", label: "Activity" }
 ];
 
 const statCards = [
@@ -63,14 +66,16 @@ const quickLinks = [
 			</div>
 		</section>
 
-		<section class="panel" id="quick-links">
+		<section class="panel" id="operations">
 			<div class="panel-head">
-				<h2>Quick Links</h2>
+				<h2>Operations</h2>
+				<p>Concise beta health cards with drill-down links.</p>
 			</div>
 			<div class="quick-link-grid">
 				{quickLinks.map((link) => (
 					<a class="quick-link" href={link.href}>
-						<strong>{link.label}</strong>
+						<span>{link.label}</span>
+						<strong>{link.value.toLocaleString()}</strong>
 						<span>{link.copy}</span>
 					</a>
 				))}
@@ -113,7 +118,7 @@ const quickLinks = [
 	.stat { border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.56); padding: 0.6rem; }
 	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }
 	.stat strong { display: block; margin-top: 0.2rem; font-size: 1.2rem; }
-	.quick-link-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin-top: 0.7rem; }
+	.quick-link-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; margin-top: 0.7rem; }
 	.quick-link {
 		display: grid;
 		gap: 0.2rem;
@@ -125,7 +130,8 @@ const quickLinks = [
 		border: var(--border-subtle);
 	}
 	.quick-link:hover { border-color: var(--color-border); background: var(--color-nav-surface-hover); }
-	.quick-link strong { color: var(--color-nav); }
+	.quick-link > span:first-child { color: #606060; font-size: 0.82rem; font-weight: 700; }
+	.quick-link strong { color: var(--color-nav); font-size: 1.2rem; }
 	.quick-link span { color: #575757; font-size: 0.88rem; line-height: 1.35; }
 
 	@media (max-width: 900px) {

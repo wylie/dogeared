@@ -13,6 +13,7 @@ import {
 import type { FeedbackUserContext } from "../../lib/feedback";
 import { getNeonSql } from "../../lib/neon";
 import { sendDogearedEmail } from "../../lib/email";
+import { recordAdminFeedbackIssue } from "../../lib/adminData";
 
 export const prerender = false;
 
@@ -67,10 +68,12 @@ async function countRecentFeedbackEvents(input: { ipHash: string; userId: string
 
 async function recordFeedbackEvent(input: { userId: string; ipHash: string; type: string }) {
 	const sql = getNeonSql();
-	await sql`
+	const rows = await sql<Array<{ id: number }>>`
 		insert into feedback_submission_event (user_id, ip_hash, feedback_type)
 		values (${input.userId || null}::uuid, ${input.ipHash}, ${input.type})
+		returning id
 	`;
+	return Number(rows[0]?.id || 0);
 }
 
 function resolveServerAppVersion() {

@@ -228,6 +228,26 @@ const query = Astro.url.searchParams.get("q") ?? "";
               )}
             </li>
             <li>
+              <a href={isAdminBetaUsersPage ? undefined : '/admin/beta-users'} class={isAdminBetaUsersPage ? 'active' : 'hover'} aria-current={isAdminBetaUsersPage ? 'page' : undefined}>Beta Users</a>
+              {isAdminBetaUsersPage && sectionLinks.length > 0 && (
+                <ul class="section-links-nested">
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+            <li>
+              <a href={isAdminOperationsPage ? undefined : '/admin/operations'} class={isAdminOperationsPage ? 'active' : 'hover'} aria-current={isAdminOperationsPage ? 'page' : undefined}>Operations</a>
+              {isAdminOperationsPage && sectionLinks.length > 0 && (
+                <ul class="section-links-nested">
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+            <li>
               <a href={isAdminUsersPage ? undefined : '/admin/users'} class={isAdminUsersPage ? 'active' : 'hover'} aria-current={isAdminUsersPage ? 'page' : undefined}>Users</a>
               {isAdminUsersPage && sectionLinks.length > 0 && (
                 <ul class="section-links-nested">
