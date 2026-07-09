@@ -3,6 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import BookCard from "../components/BookCard.astro";
 import ShelfDropdown from "../components/ShelfDropdown.astro";
 import ReaderCard from "../components/ReaderCard.astro";
+import { authorHref } from "../lib/author";
 import { getNeonSql } from "../lib/neon";
 import { resolveUserBySession } from "../lib/auth";
 import {

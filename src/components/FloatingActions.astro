@@ -10,8 +10,6 @@ const supportActions = [
 		icon: "favorite",
 		label: "Support DogEared",
 		kind: "support",
-		expandedWidth: "174px",
-		labelWidth: "130px",
 		background: "#151515",
 		hoverBackground: "#151515"
 	}
@@ -27,7 +25,7 @@ const supportActions = [
 			target="_blank"
 			rel="noopener noreferrer"
 			aria-label={action.label}
-			style={`--floating-action-bg: ${action.background}; --floating-action-hover-bg: ${action.hoverBackground}; --floating-action-expanded-width: ${action.expandedWidth}; --floating-action-label-width: ${action.labelWidth};`}
+			style={`--floating-action-bg: ${action.background}; --floating-action-hover-bg: ${action.hoverBackground};`}
 		>
 			<span class="material-icons floating-action-icon" aria-hidden="true">{action.icon}</span>
 			<span class="floating-action-label">{action.label}</span>
@@ -68,12 +66,15 @@ const supportActions = [
 		display: contents;
 	}
 	:global(.floating-action) {
+		--floating-action-size: 48px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 0.35rem;
-		width: 48px;
-		height: 48px;
+		gap: 0;
+		width: max-content;
+		min-width: var(--floating-action-size);
+		max-width: var(--floating-action-size);
+		height: var(--floating-action-size);
 		box-sizing: border-box;
 		overflow: hidden;
 		border: none;
@@ -89,14 +90,17 @@ const supportActions = [
 		white-space: nowrap;
 		cursor: pointer;
 		transition:
-			width 180ms ease,
+			max-width 180ms ease,
+			gap 180ms ease,
+			padding 180ms ease,
 			background-color 160ms ease,
 			box-shadow var(--transition-fast);
 	}
 	.floating-actions.is-pointer-active :global(.floating-action:hover),
 	.floating-actions.is-keyboard-active :global(.floating-action:focus) {
-		width: var(--floating-action-expanded-width);
-		padding: 0 0.9rem;
+		max-width: calc(100vw - 2rem);
+		gap: 0.35rem;
+		padding: 0 0.95rem 0 0;
 		background: var(--floating-action-hover-bg);
 		box-shadow: var(--shadow-md);
 	}
@@ -105,9 +109,9 @@ const supportActions = [
 		outline-offset: 3px;
 	}
 	:global(.floating-action-icon) {
-		flex: 0 0 48px;
-		width: 48px;
-		height: 48px;
+		flex: 0 0 var(--floating-action-size);
+		width: var(--floating-action-size);
+		height: var(--floating-action-size);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -122,13 +126,14 @@ const supportActions = [
 		max-width: 0;
 		opacity: 0;
 		overflow: hidden;
+		text-overflow: clip;
 		transition:
 			max-width 180ms ease,
 			opacity 140ms ease;
 	}
 	.floating-actions.is-pointer-active :global(.floating-action:hover .floating-action-label),
 	.floating-actions.is-keyboard-active :global(.floating-action:focus .floating-action-label) {
-		max-width: var(--floating-action-label-width);
+		max-width: 18rem;
 		opacity: 1;
 	}
 	@media (max-width: 900px) {
@@ -138,24 +143,24 @@ const supportActions = [
 			gap: 0.45rem;
 		}
 		:global(.floating-action) {
-			width: 46px;
-			height: 46px;
+			--floating-action-size: 46px;
 			font-size: 0.84rem;
 		}
 		:global(.floating-action-icon) {
-			flex-basis: 46px;
-			width: 46px;
-			height: 46px;
+			flex-basis: var(--floating-action-size);
+			width: var(--floating-action-size);
+			height: var(--floating-action-size);
 		}
 		.floating-actions.is-pointer-active :global(.floating-action:hover),
 		.floating-actions.is-keyboard-active :global(.floating-action:focus) {
-			width: 46px;
-			padding: 0;
+			max-width: calc(100vw - 1.2rem);
+			gap: 0.32rem;
+			padding: 0 0.8rem 0 0;
 		}
 		.floating-actions.is-pointer-active :global(.floating-action:hover .floating-action-label),
 		.floating-actions.is-keyboard-active :global(.floating-action:focus .floating-action-label) {
-			max-width: 0;
-			opacity: 0;
+			max-width: 18rem;
+			opacity: 1;
 		}
 	}
 </style>

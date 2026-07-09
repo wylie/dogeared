@@ -185,8 +185,10 @@ test("feedback and support actions render as compact floating action buttons", (
 	assert.equal(floatingActionsSource.includes('label: "Support DogEared"'), true);
 	assert.equal(floatingActionsSource.includes('icon: "favorite"'), true);
 	assert.equal(floatingActionsSource.includes("supportActions"), true);
-	assert.equal(floatingActionsSource.includes("width: 48px"), true);
-	assert.equal(floatingActionsSource.includes("height: 48px"), true);
+	assert.equal(floatingActionsSource.includes("--floating-action-size: 48px"), true);
+	assert.equal(floatingActionsSource.includes("width: max-content"), true);
+	assert.equal(floatingActionsSource.includes("min-width: var(--floating-action-size)"), true);
+	assert.equal(floatingActionsSource.includes("height: var(--floating-action-size)"), true);
 	assert.equal(floatingActionsSource.includes("align-items: center"), true);
 	assert.equal(floatingActionsSource.includes("justify-content: center"), true);
 	assert.equal(floatingActionsSource.includes("is-pointer-active"), true);
@@ -194,8 +196,11 @@ test("feedback and support actions render as compact floating action buttons", (
 	assert.equal(floatingActionsSource.includes('event.key === "Tab"'), true);
 	assert.equal(floatingActionsSource.includes(".floating-actions.is-pointer-active :global(.floating-action:hover)"), true);
 	assert.equal(floatingActionsSource.includes(".floating-actions.is-keyboard-active :global(.floating-action:focus)"), true);
-	assert.equal(floatingActionsSource.includes("width: 46px"), true);
+	assert.equal(floatingActionsSource.includes("--floating-action-size: 46px"), true);
+	assert.equal(floatingActionsSource.includes("max-width: calc(100vw - 2rem)"), true);
+	assert.equal(floatingActionsSource.includes("max-width: calc(100vw - 1.2rem)"), true);
 	assert.equal(floatingActionsSource.includes("max-width: 0"), true);
+	assert.equal(floatingActionsSource.includes("max-width: 18rem"), true);
 	assert.equal(widgetSource.includes("floating-action-slot"), true);
 	assert.equal(widgetSource.includes("floating-action floating-action-feedback"), true);
 	assert.equal(widgetSource.includes("floating-action-icon"), true);
