@@ -44,15 +44,9 @@ test("admin overview displays real site statistics and quick links", () => {
 		assert.equal(page.includes(label), true);
 	}
 	assert.equal(page.includes('href: "/admin/data-health"'), true);
-<<<<<<< HEAD
 	assert.equal(page.includes('href: "/admin/analytics"'), true);
 	assert.equal(page.includes('href: "/admin/feedback"'), true);
 	assert.equal(page.includes('href: "/admin/users"'), true);
-=======
-	assert.equal(page.includes('href: "/admin/beta-users"'), true);
-	assert.equal(page.includes('href: "/admin/operations#feedback"'), true);
-	assert.equal(page.includes('href: "/admin/operations#recommendations"'), true);
->>>>>>> 71d97e5 (Build beta operations admin center)
 	assert.equal(page.includes('href: "/metrics"'), true);
 	assert.equal(data.includes("loadAdminOverviewStats"), true);
 	assert.equal(data.includes("loadAdminOperationsSummary"), true);
