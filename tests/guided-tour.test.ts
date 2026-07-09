@@ -87,6 +87,22 @@ test("guided tip component keeps one ordered catalog with contextual rules", () 
 	assert.equal(source.includes("dogeared:reading-data-changed"), true);
 });
 
+test("guided tips are anchored coach marks that hide when targets leave view", () => {
+	const source = readFileSync("src/components/GuidedTip.astro", "utf8");
+	assert.equal(source.includes("data-coach-mark"), true);
+	assert.equal(source.includes("position: absolute"), true);
+	assert.equal(source.includes("position: fixed"), false);
+	assert.equal(source.includes("function isAnchorVisible"), true);
+	assert.equal(source.includes("rect.bottom > viewportPadding"), true);
+	assert.equal(source.includes("window.scrollY"), true);
+	assert.equal(source.includes("window.addEventListener(\"scroll\""), true);
+	assert.equal(source.includes("concealTip()"), true);
+	assert.equal(source.includes("root.classList.add(\"is-visible\")"), true);
+	assert.equal(source.includes("aria-hidden"), true);
+	assert.equal(source.includes("setAttribute(\"inert\""), true);
+	assert.equal(source.includes("removeAttribute(\"inert\")"), true);
+});
+
 test("journal guidance is constrained to journal context or a progress update", () => {
 	const source = readFileSync("src/components/GuidedTip.astro", "utf8");
 	assert.match(source, /id: "reading-journal-private"[\s\S]+path: "\/journal"/);

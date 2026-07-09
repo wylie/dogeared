@@ -140,11 +140,13 @@ Current providers:
 
 ## Guided First Experience
 
-Guided first-experience logic lives in `src/lib/guidedTour`, `src/components/GuidedTip.astro`, and `/api/guidance/status`. The helper defines canonical tip IDs, normalizes settings, deduplicates completed/dismissed tips, and derives the signed-in reader state used by contextual rules. The component owns the site-wide tip catalog, route/state conditions, accessible callout rendering, placement, and primary/dismiss actions.
+Guided first-experience logic lives in `src/lib/guidedTour`, `src/components/GuidedTip.astro`, and `/api/guidance/status`. The helper defines canonical tip IDs, normalizes settings, deduplicates completed/dismissed tips, and derives the signed-in reader state used by contextual rules. The component owns the site-wide tip catalog, route/state conditions, accessible anchored coach-mark rendering, placement, and primary/dismiss actions.
 
 Current guided surfaces are Home, Search, book detail shelf controls, first book added, Profile/Currently Reading progress, post-progress Journal suggestion, Reading Journal, first finished book review guidance, and Settings Learning controls. Journal-specific tips are constrained to the Journal route or post-progress context so the first experience remains about learning DogEared as a whole. Orphaned review-vs-journal tooltips are intentionally not mounted on Book Detail.
 
-To add a tip, add a canonical ID in `src/lib/guidedTour.ts`, add the tip definition in `GuidedTip.astro`, and include tests for the new ID and trigger rule. The API stores progress under `app_user.profile_data.settings.guidedTour`, so adding a tip does not require a new table.
+Coach marks must stay visually attached to the component they explain. `GuidedTip.astro` positions the callout with document-anchored absolute coordinates based on the declared anchor selector, updates placement on scroll and resize, and temporarily hides the callout when its target is missing, hidden, or outside the viewport. Do not reintroduce viewport-fixed guided popups for contextual tips.
+
+To add a tip, add a canonical ID in `src/lib/guidedTour.ts`, add the tip definition in `GuidedTip.astro` with an anchor selector, and include tests for the new ID and trigger rule. The API stores progress under `app_user.profile_data.settings.guidedTour`, so adding a tip does not require a new table.
 
 ## Persistence
 

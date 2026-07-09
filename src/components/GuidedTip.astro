@@ -3,7 +3,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 ---
 
 {isAuthenticated && (
-	<aside class="guided-tip" data-guided-tip hidden role="dialog" aria-live="polite" aria-labelledby="guided-tip-title" aria-describedby="guided-tip-description">
+	<aside class="guided-tip" data-guided-tip data-coach-mark hidden role="dialog" aria-live="polite" aria-labelledby="guided-tip-title" aria-describedby="guided-tip-description">
 		<div class="guided-tip-arrow" data-guided-tip-arrow aria-hidden="true"></div>
 		<div class="guided-tip-icon" data-guided-tip-icon aria-hidden="true">auto_stories</div>
 		<div class="guided-tip-body">
@@ -155,6 +155,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		let activeSettings = null;
 		let activeStats = null;
 		let refreshTimer = 0;
+		let positionFrame = 0;
 
 		function isTipAvailable(tip, settings, stats) {
 			if (!settings?.showHelpfulTips) return false;
@@ -175,6 +176,20 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			return document.querySelector("main");
 		}
 
+		function isAnchorVisible(anchor) {
+			if (!(anchor instanceof HTMLElement)) return false;
+			if (anchor.hidden) return false;
+			const style = window.getComputedStyle(anchor);
+			if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity || 1) === 0) return false;
+			const rect = anchor.getBoundingClientRect();
+			if (rect.width <= 0 || rect.height <= 0) return false;
+			const viewportPadding = 8;
+			return rect.bottom > viewportPadding
+				&& rect.right > viewportPadding
+				&& rect.top < window.innerHeight - viewportPadding
+				&& rect.left < window.innerWidth - viewportPadding;
+		}
+
 		function resolvePlacement(tip, rect, width) {
 			const preferred = String(tip?.placement || "").trim();
 			const canBelow = rect.bottom + 14 + 170 < window.innerHeight;
@@ -187,31 +202,41 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			return rect.right + width + 14 < window.innerWidth - 16 ? "right" : (rect.left - width - 14 > 16 ? "left" : "below");
 		}
 
+		function concealTip() {
+			root.classList.remove("is-visible");
+			root.setAttribute("aria-hidden", "true");
+			root.setAttribute("inert", "");
+		}
+
+		function revealTip() {
+			root.hidden = false;
+			root.setAttribute("aria-hidden", "false");
+			root.removeAttribute("inert");
+			window.requestAnimationFrame(() => root.classList.add("is-visible"));
+		}
+
 		function positionTip(anchor) {
-			if (!(anchor instanceof HTMLElement)) return;
-			if (window.matchMedia("(max-width: 720px)").matches) {
-				root.style.left = "0.75rem";
-				root.style.right = "0.75rem";
-				root.style.top = "auto";
-				root.style.bottom = "0.75rem";
-				root.style.maxWidth = "none";
-				root.dataset.placement = "bottom";
+			if (!(anchor instanceof HTMLElement) || !isAnchorVisible(anchor)) {
+				concealTip();
 				return;
 			}
 			const rect = anchor.getBoundingClientRect();
 			const gap = 14;
-			const width = Math.min(360, Math.max(280, window.innerWidth - 32));
+			const isSmallViewport = window.matchMedia("(max-width: 720px)").matches;
+			const width = isSmallViewport
+				? Math.min(360, Math.max(260, window.innerWidth - 24))
+				: Math.min(360, Math.max(280, window.innerWidth - 32));
 			const measuredHeight = root.offsetHeight || 180;
 			const placement = resolvePlacement(activeTip, rect, width);
-			let left = rect.right + gap;
-			let top = rect.top;
+			let left = rect.right + gap + window.scrollX;
+			let top = rect.top + window.scrollY;
 			if (placement === "left") {
-				left = rect.left - width - gap;
+				left = rect.left - width - gap + window.scrollX;
 			} else if (placement === "below" || placement === "above") {
-				left = Math.min(Math.max(rect.left + rect.width / 2 - width / 2, 16), window.innerWidth - width - 16);
-				top = placement === "below" ? rect.bottom + gap : rect.top - measuredHeight - gap;
+				left = Math.min(Math.max(rect.left + rect.width / 2 - width / 2, 12), window.innerWidth - width - 12) + window.scrollX;
+				top = (placement === "below" ? rect.bottom + gap : rect.top - measuredHeight - gap) + window.scrollY;
 			}
-			top = Math.min(Math.max(top, 16), window.innerHeight - measuredHeight - 16);
+			top = Math.min(Math.max(top, window.scrollY + 12), window.scrollY + window.innerHeight - measuredHeight - 12);
 			root.style.left = `${left}px`;
 			root.style.right = "auto";
 			root.style.bottom = "auto";
@@ -220,15 +245,26 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			root.dataset.placement = placement;
 			if (arrowEl instanceof HTMLElement) {
 				if (placement === "below" || placement === "above") {
-					const arrowLeft = Math.min(Math.max(rect.left + rect.width / 2 - left - 8, 18), width - 28);
+					const arrowLeft = Math.min(Math.max(rect.left + window.scrollX + rect.width / 2 - left - 8, 18), width - 28);
 					arrowEl.style.left = `${arrowLeft}px`;
 					arrowEl.style.top = "";
 				} else {
-					const arrowTop = Math.min(Math.max(rect.top + rect.height / 2 - top - 8, 18), measuredHeight - 28);
+					const arrowTop = Math.min(Math.max(rect.top + window.scrollY + rect.height / 2 - top - 8, 18), measuredHeight - 28);
 					arrowEl.style.top = `${arrowTop}px`;
 					arrowEl.style.left = "";
 				}
 			}
+			revealTip();
+		}
+
+		function schedulePosition() {
+			if (!activeTip) return;
+			window.cancelAnimationFrame(positionFrame);
+			positionFrame = window.requestAnimationFrame(() => {
+				const anchor = findAnchor(activeTip);
+				if (anchor instanceof HTMLElement) positionTip(anchor);
+				else concealTip();
+			});
 		}
 
 		function showTip(tip) {
@@ -241,11 +277,17 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			primaryEl.textContent = tip.primaryLabel || "Continue";
 			primaryEl.href = tip.primaryHref || "#";
 			root.hidden = false;
-			window.requestAnimationFrame(() => positionTip(anchor));
+			root.classList.remove("is-visible");
+			root.setAttribute("aria-hidden", "true");
+			root.setAttribute("inert", "");
+			schedulePosition();
 		}
 
 		function hideTip() {
 			activeTip = null;
+			root.classList.remove("is-visible");
+			root.setAttribute("aria-hidden", "true");
+			root.setAttribute("inert", "");
 			root.hidden = true;
 		}
 
@@ -316,9 +358,18 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		});
 
 		window.addEventListener("resize", () => {
-			if (!activeTip || root.hidden) return;
-			const anchor = findAnchor(activeTip);
-			if (anchor instanceof HTMLElement) positionTip(anchor);
+			if (!activeTip) return;
+			schedulePosition();
+		});
+
+		window.addEventListener("scroll", () => {
+			if (!activeTip) return;
+			schedulePosition();
+		}, { passive: true });
+
+		window.addEventListener("hashchange", () => {
+			if (!activeTip) return;
+			window.setTimeout(schedulePosition, 120);
 		});
 
 		window.addEventListener("dogeared:reading-data-changed", () => {
@@ -333,7 +384,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 
 <style>
 	.guided-tip {
-		position: fixed;
+		position: absolute;
 		z-index: 12000;
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);
@@ -346,6 +397,19 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		background: rgba(255, 255, 255, 0.97);
 		box-shadow: var(--shadow-popover);
 		color: var(--color-text);
+		opacity: 0;
+		transform: translateY(4px);
+		pointer-events: none;
+		transition:
+			opacity 180ms ease,
+			transform 180ms ease,
+			top 160ms ease,
+			left 160ms ease;
+	}
+	.guided-tip.is-visible {
+		opacity: 1;
+		transform: translateY(0);
+		pointer-events: auto;
 	}
 	.guided-tip[hidden] {
 		display: none;
@@ -454,6 +518,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		.guided-tip {
 			grid-template-columns: minmax(0, 1fr);
 			padding: 0.9rem;
+			width: calc(100vw - 1.5rem);
 		}
 		.guided-tip-icon {
 			display: none;
