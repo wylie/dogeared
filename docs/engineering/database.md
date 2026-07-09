@@ -16,10 +16,16 @@ Stores the account identity:
 - Hashed and encrypted email fields.
 - Profile/settings JSON.
 - Creation timestamp.
+- Update timestamp used by aggregate analytics and profile-customization reporting.
 
 Relationships:
 
 - Owns sessions, magic links, email changes, shelf entries, reading journal entries, activity, follows, custom shelves, likes, comments, notifications, feedback events, progress events, and first-party product analytics events.
+
+Schema expectation:
+
+- Runtime queries must not assume beta-era columns exist unless a migration or local `ensure*Schema` helper creates them first.
+- `app_user.updated_at` is required for release analytics and is added by the release-blocker schema safety migration.
 
 ## Authentication
 
@@ -556,6 +562,14 @@ Privacy rules:
 - Private journal bodies, passwords, screenshots, sensitive profile text, and reader-level behavioral reports are not analytics data.
 - Search queries are capped and normalized for product improvement, especially no-result searches.
 - Analytics writes are best-effort and must never block shelf saves, feedback, search, or recommendation workflows.
+
+Release migration rules:
+
+- Production releases should apply migrations explicitly before deploy.
+- Lazy `ensure*Schema` helpers are retained as development and one-migration-behind safety nets, not as the primary production migration path.
+- If runtime code queries a column such as `updated_at` or `slug`, that column must be present in a migration or the query must use the real persisted field.
+- Canonical author URLs derive slugs in application code; the `author` table does not currently store a `slug` column.
+- The release-blocker schema safety migration promotes beta support tables for custom shelves, feedback, product analytics, admin operations, announcements, and release notes into explicit migration-managed schema.
 
 ## Settings
 

@@ -101,6 +101,7 @@ function normalizeMetadata(source: Record<string, unknown> | undefined) {
 }
 
 export async function ensureProductAnalyticsSchema(sql: NeonQueryFunction<false, false>) {
+	await sql`alter table app_user add column if not exists updated_at timestamptz not null default now()`;
 	await sql`
 		create table if not exists product_analytics_event (
 			id bigserial primary key,

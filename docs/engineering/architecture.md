@@ -71,6 +71,19 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 11. API routes validate the session, normalize input, mutate Neon, and return JSON.
 12. Client-side UI updates the current card/section and often refreshes shelf/activity state from APIs.
 
+## Global Rendering Rules
+
+Global UI should have explicit rendering rules so release-blocker fixes do not depend on incidental route behavior.
+
+- `LeftHand` owns the sidebar navigation and login dialog markup.
+- `Layout` decides whether the global login prompt is allowed on the current route and passes `allowAuthPrompt` to `LeftHand`.
+- `ReaderGuidance` uses the same route gate through `allowGuidance`, so logged-out visitor guidance does not appear on informational pages.
+- The login prompt is limited to reader/product surfaces where sign-in or account creation is an expected next step, such as Home, Discover, Search, Books, Authors, Book Detail, Collections, Related, and public Profiles.
+- Informational pages such as Mission, Privacy, Roadmap, and Support must not mount the global login modal.
+- Authenticated, admin, settings, journal, and private reading-life surfaces should not show logged-out onboarding prompts.
+- `FloatingActions` remains global for Feedback and Support, but its labels must stay readable and its controls keyboard accessible on desktop and mobile.
+- Announcement banners render only when the admin announcement feature flag allows them and an active announcement exists.
+
 ## Series Support
 
 Series support lives in `src/lib/series`. The helper owns schema readiness, known-series inference, idempotent series attachment, series-book ordering, current-book detection, next-book continuation logic, and author-page grouping. Series are conceptually Work-level. During v1, `series_book.book_id` points at the representative catalog row for that Work, while `book_work.series_id` and `book_work.series_position` store canonical Work ownership. Book detail pages load a series context when a Work belongs to a series. Search attaches stored series labels to catalog results and infers labels for known external results before they are saved. BookCard can render concise series labels, recommendation/discovery queries attach series metadata where available, and author pages group Works by series while keeping standalone Works separate.

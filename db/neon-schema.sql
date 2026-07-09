@@ -10,7 +10,8 @@ create table if not exists app_user (
 	email_hash text unique,
 	email_enc bytea,
 	profile_data jsonb not null default '{}'::jsonb,
-	created_at timestamptz not null default now()
+	created_at timestamptz not null default now(),
+	updated_at timestamptz not null default now()
 );
 
 create unique index if not exists idx_app_user_username_lower on app_user (lower(username)) where username is not null;

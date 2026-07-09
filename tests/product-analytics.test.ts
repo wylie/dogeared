@@ -4,9 +4,17 @@ import { readFileSync } from "node:fs";
 
 test("product analytics schema and helper keep events aggregate and first-party", () => {
 	const source = readFileSync("src/lib/productAnalytics.ts", "utf8");
+	const migration = readFileSync("db/migrations/2026-07-09-release-blocker-schema-safety.sql", "utf8");
+	const baseline = readFileSync("db/neon-schema.sql", "utf8");
 	assert.equal(source.includes("create table if not exists product_analytics_event"), true);
 	assert.equal(source.includes("event_name text not null"), true);
 	assert.equal(source.includes("result_count int not null default 0"), true);
+	assert.equal(source.includes("alter table app_user add column if not exists updated_at"), true);
+	assert.equal(migration.includes("alter table app_user add column if not exists updated_at"), true);
+	assert.equal(migration.includes("create table if not exists product_analytics_event"), true);
+	assert.equal(migration.includes("create table if not exists user_custom_shelf"), true);
+	assert.equal(migration.includes("create table if not exists admin_feature_flag"), true);
+	assert.equal(baseline.includes("updated_at timestamptz not null default now()"), true);
 	assert.equal(source.includes("recordProductAnalyticsEventSafe"), true);
 	assert.equal(source.includes("loadAdminProductAnalytics"), true);
 	assert.equal(source.includes("withRuntimeCache(\"admin:product-analytics:v1\""), true);

@@ -16,6 +16,7 @@ This directory is the entry point for understanding DogEared as it exists today.
 - [Routes](engineering/routes.md): Current page and API routes, including purpose, authentication requirements, and major components.
 - [Database](engineering/database.md): Major data entities and relationships without dumping SQL.
 - [Admin](engineering/admin.md): Admin access, dashboard capabilities, data-health tooling, user management, and expansion points.
+- [Pre-Release Checklist](release-checklist.md): Migration, runtime, console, accessibility, Lighthouse, and responsive checks for beta releases.
 
 ## Source Notes
 

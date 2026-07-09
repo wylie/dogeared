@@ -57,6 +57,7 @@ test("admin operations center includes beta control surfaces", () => {
 	const source = readFileSync("src/pages/admin/operations.astro", "utf8");
 	const data = readFileSync("src/lib/adminData.ts", "utf8");
 	const layout = readFileSync("src/layouts/Layout.astro", "utf8");
+	const leftHand = readFileSync("src/components/LeftHand.astro", "utf8");
 	assert.equal(source.includes("Recommendation Health"), true);
 	assert.equal(source.includes("Import Health"), true);
 	assert.equal(source.includes("System Health"), true);
@@ -68,8 +69,17 @@ test("admin operations center includes beta control surfaces", () => {
 	assert.equal(data.includes("admin_feature_flag"), true);
 	assert.equal(data.includes("admin_announcement"), true);
 	assert.equal(data.includes("admin_release_note"), true);
+	assert.equal(data.includes("coalesce(slug"), false);
+	assert.equal(data.includes("alter table app_user add column if not exists updated_at"), true);
 	assert.equal(layout.includes("loadActiveAnnouncement"), true);
 	assert.equal(layout.includes("data-announcement-id"), true);
+	assert.equal(layout.includes("allowAuthPrompt={allowAuthPrompt}"), true);
+	assert.equal(layout.includes("allowGuidance={allowAuthPrompt}"), true);
+	assert.equal(layout.includes('"/mission"'), false);
+	assert.equal(leftHand.includes("allowAuthPrompt"), true);
+	assert.equal(leftHand.includes("hidden={isAuthenticated || !allowAuthPrompt}"), true);
+	assert.equal(leftHand.includes("{allowAuthPrompt && ("), true);
+	assert.equal(readFileSync("src/components/ReaderGuidance.astro", "utf8").includes("allowGuidance"), true);
 });
 
 test("admin beta users page exposes requested account operations", () => {

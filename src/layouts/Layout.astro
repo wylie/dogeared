@@ -32,10 +32,18 @@ const {
 	structuredData?: string;
 };
 const currentPath = Astro.url.pathname;
+const AUTH_PROMPT_ROUTES = new Set(["/", "/discover", "/search", "/books", "/authors", "/collections", "/related"]);
+const allowsAuthPrompt = (path: string) =>
+	AUTH_PROMPT_ROUTES.has(path)
+	|| path === "/book"
+	|| path.startsWith("/author/")
+	|| path.startsWith("/collections/")
+	|| path.startsWith("/profile/");
 const fontStylesheetHref = "https://fonts.googleapis.com/css2?family=Copse&family=Outfit:wght@100..900&display=swap";
 const iconStylesheetHref = "https://fonts.googleapis.com/icon?family=Material+Icons&display=swap";
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
+const allowAuthPrompt = !isAuthenticated && allowsAuthPrompt(currentPath);
 const adminSession = isAuthenticated ? await resolveAdminSession(Astro.request) : { isAdmin: false };
 const isAdmin = !!adminSession.isAdmin;
 const activeAnnouncement = await loadActiveAnnouncement();
@@ -109,7 +117,7 @@ import '../assets/global.css';
 			<div class="container">
 				<div class="column" style="padding-bottom: 0;">
 					<slot name="left">
-						<LeftHand current={currentPath} sectionLinks={sectionLinks} isAuthenticated={isAuthenticated} isAdmin={isAdmin} />
+						<LeftHand current={currentPath} sectionLinks={sectionLinks} isAuthenticated={isAuthenticated} isAdmin={isAdmin} allowAuthPrompt={allowAuthPrompt} />
 					</slot>
 				</div>
 				<main id="main-content" class="column content-column" tabindex="-1">
@@ -131,7 +139,7 @@ import '../assets/global.css';
 					</slot>
 				</main>
 			</div>
-			<ReaderGuidance isAuthenticated={isAuthenticated} />
+			<ReaderGuidance isAuthenticated={isAuthenticated} allowGuidance={allowAuthPrompt} />
 			<GuidedTip isAuthenticated={isAuthenticated} />
 			<OnboardingMilestones isAuthenticated={isAuthenticated} />
 			<FloatingActions isAuthenticated={isAuthenticated} />

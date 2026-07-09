@@ -122,6 +122,7 @@ function normalizeStatus(value: unknown, allowed: string[], fallback: string) {
 }
 
 export async function ensureAdminSupportSchema(sql: NeonQueryFunction<false, false>) {
+	await sql`alter table app_user add column if not exists updated_at timestamptz not null default now()`;
 	await sql`
 		create table if not exists user_activity_like (
 			activity_id bigint not null references user_activity(id) on delete cascade,
@@ -355,7 +356,7 @@ export async function loadAdminOperationsSummary(sql: NeonQueryFunction<false, f
 			(select count(*)::int from user_notification where read_at is null) as notifications_unread,
 			(select max(created_at)::text from user_notification) as notifications_last_created_at,
 			(select count(*)::int from book where trim(coalesce(canonical_work_key, '')) <> '') as indexed_books,
-			(select count(*)::int from author where trim(coalesce(slug, '')) <> '') as indexed_authors,
+			(select count(*)::int from author where trim(coalesce(name, '')) <> '') as indexed_authors,
 			(select count(*)::int from book where trim(coalesce(canonical_work_key, '')) = '') as missing_canonical_works,
 			(select count(*)::int from user_book) as shelf_entries,
 			(select count(distinct user_id)::int from user_book) as import_readers,

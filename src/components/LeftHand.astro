@@ -1,7 +1,7 @@
 ---
 import Widget from "./Widget.astro"
 type SectionLink = { id: string; label: string };
-const { current = "/", sectionLinks = [], isAuthenticated = false, isAdmin = false } = Astro.props as { current?: string; sectionLinks?: SectionLink[]; isAuthenticated?: boolean; isAdmin?: boolean };
+const { current = "/", sectionLinks = [], isAuthenticated = false, isAdmin = false, allowAuthPrompt = true } = Astro.props as { current?: string; sectionLinks?: SectionLink[]; isAuthenticated?: boolean; isAdmin?: boolean; allowAuthPrompt?: boolean };
 const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
 const isActive = (href: string) => normalize(current) === normalize(href);
 const currentNormalized = normalize(current);
@@ -21,7 +21,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
 ---
 
 <Widget style="height: 100%; padding: 0; overflow: visible;" background={true}>
-  <div id="left-hand-nav" data-current={current} data-ssr-authenticated={String(isAuthenticated)}>
+  <div id="left-hand-nav" data-current={current} data-ssr-authenticated={String(isAuthenticated)} data-auth-prompt={String(allowAuthPrompt)}>
     <div class="mobile-top-row">
       <h2>
         <a href="/" class="special-font">
@@ -48,7 +48,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       <section class="nav-group nav-group-you">
         <h3 class="nav-group-title">You</h3>
         <ul>
-          <li id="left-hand-login-item" hidden={isAuthenticated}><button type="button" class="nav-text-button hover">Log In</button></li>
+          <li id="left-hand-login-item" hidden={isAuthenticated || !allowAuthPrompt}><button type="button" class="nav-text-button hover">Log In</button></li>
           <li id="left-hand-profile-item" hidden={!isAuthenticated}>
             <a href="/profile" class={isProfilePage ? 'active' : 'hover'} aria-current={isProfilePage ? 'page' : undefined}><span id="left-hand-profile-label">Profile</span></a>
             {isProfilePage && sectionLinks.length > 0 && (
@@ -278,20 +278,22 @@ const query = Astro.url.searchParams.get("q") ?? "";
       </nav>
     </footer>
   </div>
+  {allowAuthPrompt && (
     <div id="left-hand-login-modal" class="login-modal" hidden>
-    <div class="login-modal-backdrop" data-action="close-login-modal"></div>
-    <div class="login-modal-panel" role="dialog" aria-modal="true" aria-labelledby="left-hand-login-title">
-      <button type="button" class="login-modal-close" data-action="close-login-modal" aria-label="Close login dialog">×</button>
-      <h3 id="left-hand-login-title">Welcome to DogEared</h3>
-      <p id="left-hand-login-copy" class="login-modal-copy">Enter your email and continue with a magic link.</p>
-      <form id="left-hand-login-form" class="login-modal-form">
-        <label for="left-hand-login-email">Email</label>
-        <input id="left-hand-login-email" type="email" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required placeholder="you@example.com" />
-        <button type="submit" class="login-submit">Continue</button>
-      </form>
-      <p id="left-hand-login-feedback" class="login-feedback" hidden></p>
+      <div class="login-modal-backdrop" data-action="close-login-modal"></div>
+      <div class="login-modal-panel" role="dialog" aria-modal="true" aria-labelledby="left-hand-login-title">
+        <button type="button" class="login-modal-close" data-action="close-login-modal" aria-label="Close login dialog">×</button>
+        <h3 id="left-hand-login-title">Welcome to DogEared</h3>
+        <p id="left-hand-login-copy" class="login-modal-copy">Enter your email and continue with a magic link.</p>
+        <form id="left-hand-login-form" class="login-modal-form">
+          <label for="left-hand-login-email">Email</label>
+          <input id="left-hand-login-email" type="email" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required placeholder="you@example.com" />
+          <button type="submit" class="login-submit">Continue</button>
+        </form>
+        <p id="left-hand-login-feedback" class="login-feedback" hidden></p>
+      </div>
     </div>
-  </div>
+  )}
 </Widget>
 
 <style>
@@ -780,6 +782,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
 
   const leftHandNav = document.getElementById("left-hand-nav");
   const ssrAuthenticated = leftHandNav?.dataset.ssrAuthenticated === "true";
+  const allowAuthPrompt = leftHandNav?.dataset.authPrompt === "true";
   const leftHandMenuToggle = document.getElementById("left-hand-menu-toggle");
   const leftHandPrimaryLinks = document.getElementById("left-hand-primary-links");
   const leftHandLoginItem = document.getElementById("left-hand-login-item");
@@ -863,7 +866,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   }
 
   function applyLeftHandAuthState(authenticated) {
-    if (leftHandLoginItem instanceof HTMLElement) leftHandLoginItem.hidden = authenticated;
+    if (leftHandLoginItem instanceof HTMLElement) leftHandLoginItem.hidden = authenticated || !allowAuthPrompt;
     if (leftHandFollowingItem instanceof HTMLElement) leftHandFollowingItem.hidden = !authenticated;
     if (leftHandProfileItem instanceof HTMLElement) leftHandProfileItem.hidden = !authenticated;
     if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = !authenticated;

@@ -17,12 +17,28 @@ Current limitation:
 Admin routes:
 
 - `/admin`: overview.
+- `/admin/analytics`: aggregate product analytics.
+- `/admin/beta-users`: beta reader control surface.
 - `/admin/collections`: editorial collection management.
 - `/admin/data-health`: data health.
+- `/admin/feedback`: beta feedback triage.
+- `/admin/operations`: beta operations control center for feedback workflow, recommendation/import/system health, feature flags, announcements, and release notes.
 - `/admin/users`: user search and management.
 - `/admin/users/[username]`: user detail and delete flow.
 
-The Admin Overview quick-links also point admins to Collections, Metrics, and Roadmap.
+The Admin Overview quick-links point admins to the operational drill-down pages and public context pages where useful.
+
+## Release Operations
+
+Before a private beta release, admins and maintainers should use `docs/release-checklist.md`.
+
+Release readiness expects:
+
+- Migrations applied before deploy.
+- Zero SSR/runtime/browser console errors on primary routes.
+- Successful tests and production build.
+- Lighthouse, accessibility, and responsive checks.
+- Verification that global login prompts, floating actions, feedback, support, and announcements render only where intended.
 
 ## Current Dashboard
 

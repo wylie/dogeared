@@ -3,6 +3,8 @@ import Layout from "../layouts/Layout.astro";
 import { ROADMAP_ITEMS, ROADMAP_SECTIONS, RECENTLY_COMPLETED_ITEMS, type RoadmapCategory, type RoadmapItem } from "../lib/roadmap";
 import { buildBreadcrumbList } from "../lib/seo";
 
+export const prerender = false;
+
 const sectionLinks = [
 	{ id: "now", label: "Now" },
 	{ id: "next", label: "Next" },

@@ -1,8 +1,9 @@
 ---
-type Props = { isAuthenticated?: boolean };
-const { isAuthenticated = false } = Astro.props as Props;
+type Props = { isAuthenticated?: boolean; allowGuidance?: boolean };
+const { isAuthenticated = false, allowGuidance = true } = Astro.props as Props;
 ---
 
+{allowGuidance && (
 <aside
 	class="reader-guidance"
 	data-reader-guidance
@@ -22,7 +23,9 @@ const { isAuthenticated = false } = Astro.props as Props;
 		<button type="button" class="reader-guidance-dismiss" data-guidance-dismiss aria-label="Dismiss getting started guidance">Dismiss</button>
 	</div>
 </aside>
+)}
 
+{allowGuidance && (
 <script>
 	const guidance = document.querySelector("[data-reader-guidance]");
 
@@ -124,6 +127,7 @@ const { isAuthenticated = false } = Astro.props as Props;
 		window.addEventListener("dogeared:reading-data-changed", () => void refreshReaderStatus());
 	}
 </script>
+)}
 
 <style>
 	.reader-guidance {
