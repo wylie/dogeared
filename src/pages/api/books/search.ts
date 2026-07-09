@@ -6,49 +6,9 @@ import { ensureSeriesSchema, inferKnownSeriesMetadata } from "../../../lib/serie
 import { searchCollections } from "../../../lib/collections";
 import { resolveUserBySession } from "../../../lib/auth";
 import { classifySearchAnalyticsSubject, recordProductAnalyticsEventSafe } from "../../../lib/productAnalytics";
+import { normalizeSearchResult, type SearchResult } from "../../../lib/searchResults";
 
 export const prerender = false;
-
-type SearchResult = {
-	source?: "dbd" | "google_books" | "open_library";
-	title: string;
-	subtitle: string;
-	authors: string[];
-	description: string;
-	publisher: string;
-	publishedDate: string;
-	printType: string;
-	pageCount: number | null;
-	categories: string[];
-	language: string;
-	thumbnail: string;
-	isbn10: string;
-	isbn13: string;
-	googleBooksId: string;
-	bookId?: number;
-	authorId?: number;
-	seriesName?: string;
-	seriesBookOrder?: number;
-	seriesLabel?: string;
-	variantCount?: number;
-	variants?: Array<{
-		title: string;
-		author: string;
-		pageCount: number;
-		thumbnail: string;
-		language: string;
-		publishedDate: string;
-		publisher: string;
-		isbn10: string;
-		isbn13: string;
-		googleBooksId: string;
-		bookId?: number;
-		authorId?: number;
-		format: string;
-		optionLabel: string;
-		detailLabel: string;
-	}>;
-};
 
 type CollectionSearchResult = {
 	title: string;
@@ -118,6 +78,7 @@ function normalizedCoverKey(url: string) {
 }
 
 function toVariant(result: SearchResult) {
+	const authors = Array.isArray(result.authors) ? result.authors : [];
 	const language = String(result.language || "").trim().toUpperCase();
 	const year = String(result.publishedDate || "").match(/\d{4}/)?.[0] || "";
 	const format = detectFormat({
@@ -135,7 +96,7 @@ function toVariant(result: SearchResult) {
 	].filter(Boolean);
 	return {
 		title: result.title,
-		author: result.authors[0] || "",
+		author: authors[0] || "",
 		pageCount: Math.max(0, Number(result.pageCount) || 0),
 		thumbnail: result.thumbnail || "",
 		language: String(result.language || "").trim(),
@@ -240,7 +201,8 @@ function formatSeriesSearchLabel(seriesName: string, bookOrder: number) {
 function dedupeVariants(input: SearchResult[], queryText: string) {
 	const grouped = new Map<string, SearchResult[]>();
 	for (const [index, result] of input.entries()) {
-		const primaryAuthor = result.authors[0] || "";
+		const authors = Array.isArray(result.authors) ? result.authors : [];
+		const primaryAuthor = authors[0] || "";
 		const canonicalTitle = canonicalizeTitle(result.title);
 		const stem = titleStem(result.title);
 		const canonicalAuthor = canonicalizeAuthor(primaryAuthor);
@@ -291,13 +253,15 @@ function dedupeVariants(input: SearchResult[], queryText: string) {
 	// Second-pass merge for near-duplicate editions that differ only by subtitle expansion.
 	const merged: SearchResult[] = [];
 	for (const candidate of sorted) {
-		const candidateAuthor = canonicalizeAuthor(candidate.authors[0] || "");
+		const candidateAuthors = Array.isArray(candidate.authors) ? candidate.authors : [];
+		const candidateAuthor = canonicalizeAuthor(candidateAuthors[0] || "");
 		const candidateTitle = canonicalizeTitle(candidate.title);
 		const candidateStem = titleStem(candidate.title);
 		let matched = false;
 		for (let i = 0; i < merged.length; i += 1) {
 			const existing = merged[i];
-			const existingAuthor = canonicalizeAuthor(existing.authors[0] || "");
+			const existingAuthors = Array.isArray(existing.authors) ? existing.authors : [];
+			const existingAuthor = canonicalizeAuthor(existingAuthors[0] || "");
 			if (!candidateAuthor || !existingAuthor || candidateAuthor !== existingAuthor) continue;
 			const existingTitle = canonicalizeTitle(existing.title);
 			const existingStem = titleStem(existing.title);
@@ -567,7 +531,11 @@ export const GET: APIRoute = async ({ request, url }) => {
 			};
 		});
 
-		const mapped = [...dbdMapped, ...googleMapped, ...openLibraryMapped]
+		const normalizedMapped = [...dbdMapped, ...googleMapped, ...openLibraryMapped]
+			.map((result, index) => normalizeSearchResult(result, { source: "api.books.search", index, query }))
+			.filter((result): result is SearchResult => !!result);
+
+		const mapped = normalizedMapped
 			.filter((result) => isLikelyMatch(result, query))
 			.filter((result) => passesQualityGate(result));
 
@@ -626,7 +594,8 @@ export const GET: APIRoute = async ({ request, url }) => {
 		}
 		const mappedWithIds = mapped.map((item) => {
 			const match = byGoogleId.get(item.googleBooksId) || byIsbn13.get(item.isbn13) || byIsbn10.get(item.isbn10);
-			const inferredSeries = item.seriesName ? null : inferKnownSeriesMetadata({ title: item.title, author: item.authors[0] || "" });
+			const authors = Array.isArray(item.authors) ? item.authors : [];
+			const inferredSeries = item.seriesName ? null : inferKnownSeriesMetadata({ title: item.title, author: authors[0] || "" });
 			const seriesName = item.seriesName || match?.seriesName || inferredSeries?.seriesName || "";
 			const seriesBookOrder = Number(item.seriesBookOrder || 0) > 0
 				? Number(item.seriesBookOrder || 0)
@@ -639,8 +608,12 @@ export const GET: APIRoute = async ({ request, url }) => {
 				seriesBookOrder,
 				seriesLabel: item.seriesLabel || match?.seriesLabel || formatSeriesSearchLabel(seriesName, seriesBookOrder)
 			};
-		});
-		const results = dedupeVariants(mappedWithIds, query);
+		})
+			.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.catalog", index, query }))
+			.filter((result): result is SearchResult => !!result);
+		const results = dedupeVariants(mappedWithIds, query)
+			.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.dedupe", index, query }))
+			.filter((result): result is SearchResult => !!result);
 		const collectionResults = await collectionResultsPromise;
 		const hasMore = dbdRows.length >= pageSize || items.length >= pageSize || openItems.length >= pageSize;
 		const session = await resolveUserBySession(request).catch(() => null);

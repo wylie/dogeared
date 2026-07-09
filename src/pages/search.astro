@@ -7,51 +7,11 @@ import { resolveUserBySession } from '../lib/auth';
 import { authorHref } from '../lib/author';
 import { getNeonSql } from '../lib/neon';
 import { resolveCustomShelfOptions } from '../lib/customShelves';
+import { normalizeSearchResult, summarizeSearchResultForLog, type SearchResult } from '../lib/searchResults';
 
 export const prerender = false;
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
-
-type SearchResult = {
-	source?: "dbd" | "google_books" | "open_library";
-	title: string;
-	subtitle: string;
-	authors: string[];
-	description: string;
-	publisher: string;
-	publishedDate: string;
-	printType: string;
-	pageCount: number | null;
-	categories: string[];
-	language: string;
-	thumbnail: string;
-	isbn10: string;
-	isbn13: string;
-	googleBooksId: string;
-	bookId?: number;
-	authorId?: number;
-	seriesName?: string;
-	seriesBookOrder?: number;
-	seriesLabel?: string;
-	variantCount?: number;
-	variants?: Array<{
-		title: string;
-		author: string;
-		pageCount: number;
-		thumbnail: string;
-		language: string;
-		publishedDate: string;
-		publisher: string;
-		isbn10: string;
-		isbn13: string;
-		googleBooksId: string;
-		bookId?: number;
-		authorId?: number;
-		format: string;
-		optionLabel: string;
-		detailLabel: string;
-	}>;
-};
 
 type CollectionSearchResult = {
 	title: string;
@@ -89,6 +49,28 @@ function publishedYearOnly(value: string) {
 	return match ? match[1] : "";
 }
 
+function summarizeRawResultForLog(value: unknown, index: number) {
+	if (!value || typeof value !== "object") {
+		return { index, valueType: typeof value };
+	}
+	const record = value as Record<string, unknown>;
+	return {
+		index,
+		source: String(record.source || ""),
+		workId: Number(record.bookId || 0) || 0,
+		editionId: String(record.isbn13 || record.isbn10 || record.googleBooksId || ""),
+		bookId: Number(record.bookId || 0) || 0,
+		authorId: Number(record.authorId || 0) || 0,
+		title: String(record.title || ""),
+		authorsType: Array.isArray(record.authors) ? "array" : typeof record.authors,
+		slug: "",
+		cover: String(record.thumbnail || ""),
+		series: String(record.seriesLabel || record.seriesName || ""),
+		genresType: Array.isArray(record.categories) ? "array" : typeof record.categories,
+		hasDescription: !!String(record.description || "")
+	};
+}
+
 if (query) {
 	try {
 		const endpoint = new URL("/api/books/search", Astro.url);
@@ -100,7 +82,27 @@ if (query) {
 			errorMessage = "Unable to search right now. Please try again in a moment.";
 		} else {
 			const payload = await response.json();
-			results = Array.isArray(payload?.results) ? payload.results : [];
+			const rawResults = Array.isArray(payload?.results) ? payload.results : [];
+			results = rawResults
+				.map((result, index) => {
+					const normalized = normalizeSearchResult(result, { source: "search.page", index, query });
+					if (!normalized) {
+						console.warn("[search.result.skipped]", {
+							query,
+							reason: "malformed search result",
+							result: summarizeRawResultForLog(result, index)
+						});
+						return null;
+					}
+					if (import.meta.env.DEV) {
+						console.info("[search.result.renderable]", {
+							query,
+							result: summarizeSearchResultForLog(normalized, index)
+						});
+					}
+					return normalized;
+				})
+				.filter((result): result is SearchResult => !!result);
 			collectionResults = Array.isArray(payload?.collectionResults) ? payload.collectionResults : [];
 			if (session?.userId && results.length > 0) {
 				const bookIds = Array.from(new Set(results.map((result) => Number(result.bookId || 0)).filter((value) => value > 0)));
@@ -201,14 +203,18 @@ if (session?.userId) {
 					const numericBookId = Number(result.bookId || 0);
 					const averageRating = Number(averageRatingByBookId.get(numericBookId) || 0);
 					const ratingCount = Number(ratingCountByBookId.get(numericBookId) || 0);
+					const authors = Array.isArray(result.authors) ? result.authors : [];
+					const primaryAuthor = authors[0] || "Unknown author";
+					const authorForHref = authors[0] || "";
+					const categories = Array.isArray(result.categories) ? result.categories : [];
 					return (
 				<BookCard
 					title={result.title}
 					titleHref={Number(result.bookId || 0) > 0
 						? `/book?bookId=${encodeURIComponent(String(result.bookId || 0))}`
-						: `/book?googleBooksId=${encodeURIComponent(result.googleBooksId || "")}&isbn13=${encodeURIComponent(result.isbn13 || "")}&isbn10=${encodeURIComponent(result.isbn10 || "")}&title=${encodeURIComponent(result.title)}&author=${encodeURIComponent(result.authors[0] ?? "")}`}
-					author={result.authors[0] || "Unknown author"}
-					authorHref={result.authors[0] ? authorHref(result.authors[0], result.authorId || 0) : ""}
+						: `/book?googleBooksId=${encodeURIComponent(result.googleBooksId || "")}&isbn13=${encodeURIComponent(result.isbn13 || "")}&isbn10=${encodeURIComponent(result.isbn10 || "")}&title=${encodeURIComponent(result.title)}&author=${encodeURIComponent(authorForHref)}`}
+					author={primaryAuthor}
+					authorHref={authorForHref ? authorHref(authorForHref, result.authorId || 0) : ""}
 					thumbnail={result.thumbnail}
 					description={truncateDescription(result.description)}
 					readers={0}
@@ -217,7 +223,7 @@ if (session?.userId) {
 					pageCount={result.pageCount || 0}
 					averageRating={averageRating}
 					seriesLabel={result.seriesLabel}
-					genres={result.categories}
+					genres={categories}
 				>
 						<div slot="meta">
 							{result.publisher && <p class="meta">Publisher: {result.publisher}</p>}
@@ -232,7 +238,7 @@ if (session?.userId) {
 						<div slot="actions">
 							<ShelfDropdown attrs={{
 								'data-title': result.title,
-								'data-author': result.authors[0] ?? "",
+								'data-author': authorForHref,
 								'data-description': result.description,
 								'data-pages': String(result.pageCount ?? 0),
 								'data-cover': result.thumbnail,
@@ -246,7 +252,7 @@ if (session?.userId) {
 								'data-source': result.source || (result.googleBooksId ? "google_books" : "open_library"),
 								'data-source-work-id': result.googleBooksId || "",
 								'data-source-url': result.googleBooksId ? `https://books.google.com/books?id=${encodeURIComponent(result.googleBooksId)}` : "",
-								'data-categories': JSON.stringify(result.categories ?? []),
+								'data-categories': JSON.stringify(categories),
 								'data-custom-shelves': customShelfOptionsJson
 							}} />
 						</div>
