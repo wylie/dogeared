@@ -1,6 +1,13 @@
 import { getNeonSql } from "./neon";
 import { resolvePrivacySettings } from "./privacy";
 import { DEMO_TEST_USERNAME, demoVisibleToUsername } from "./demoVisibility";
+import {
+	INELIGIBLE_READER_SUGGESTION_STATUSES,
+	isEligibleReaderSuggestionProfile,
+	isExcludedReaderSuggestionUsername,
+	READER_SUGGESTION_EXCLUDED_USERNAME_PATTERN_SOURCE,
+	READER_SUGGESTIONS_EMPTY_MESSAGE
+} from "./readerSuggestionRules";
 
 function normalizeText(value: unknown) {
 	return String(value || "").trim();
@@ -14,6 +21,8 @@ function normalizeAvatar(value: unknown) {
 	const avatar = normalizeText(value).slice(0, 500000);
 	return avatar.startsWith("data:image/") || /^https?:\/\//i.test(avatar) ? avatar : "";
 }
+
+export { isEligibleReaderSuggestionProfile, isExcludedReaderSuggestionUsername, READER_SUGGESTIONS_EMPTY_MESSAGE };
 
 function normalizeProfilePayload(input: unknown) {
 	const source = input && typeof input === "object" ? input as Record<string, unknown> : {};
@@ -310,17 +319,12 @@ export async function resolvePublicReaderSuggestions(viewerUserId: string, limit
 		from app_user au
 		where au.id <> ${viewerUserId}::uuid
 			and nullif(trim(coalesce(au.username, '')), '') is not null
-			and (
-				lower(coalesce(au.username, '')) <> ${DEMO_TEST_USERNAME}
-				or exists (
-					select 1
-					from app_user viewer
-					where viewer.id = ${viewerUserId}::uuid
-						and lower(coalesce(viewer.username, '')) = ${demoVisibleToUsername()}
-				)
-			)
-			and coalesce(au.profile_data->'settings'->'privacy'->>'profileVisibility', 'public') <> 'private'
-			and coalesce((au.profile_data->'settings'->'privacy'->>'allowDiscovery')::boolean, true) = true
+			and lower(coalesce(au.username, '')) <> ${DEMO_TEST_USERNAME}
+			and lower(coalesce(au.username, '')) !~ ${READER_SUGGESTION_EXCLUDED_USERNAME_PATTERN_SOURCE}
+			and lower(coalesce(au.profile_data #>> '{settings,privacy,profileVisibility}', 'public')) <> 'private'
+			and lower(coalesce(nullif(au.profile_data #>> '{settings,privacy,allowDiscovery}', ''), 'true')) = 'true'
+			and lower(coalesce(au.profile_data->>'accountStatus', au.profile_data->>'status', au.profile_data #>> '{settings,accountStatus}', au.profile_data #>> '{settings,status}', '')) <> all(${INELIGIBLE_READER_SUGGESTION_STATUSES}::text[])
+			and lower(coalesce(nullif(au.profile_data->>'deleted', ''), nullif(au.profile_data->>'isDeleted', ''), nullif(au.profile_data->>'suspended', ''), nullif(au.profile_data->>'isSuspended', ''), nullif(au.profile_data->>'hidden', ''), nullif(au.profile_data->>'isHidden', ''), nullif(au.profile_data->>'internal', ''), nullif(au.profile_data->>'isInternal', ''), nullif(au.profile_data->>'test', ''), nullif(au.profile_data->>'isTest', ''), nullif(au.profile_data->>'development', ''), nullif(au.profile_data->>'isDevelopment', ''), nullif(au.profile_data->>'seed', ''), nullif(au.profile_data->>'isSeed', ''), nullif(au.profile_data->>'fixture', ''), nullif(au.profile_data->>'isFixture', ''), nullif(au.profile_data #>> '{settings,internal}', ''), nullif(au.profile_data #>> '{settings,internal,test}', ''), nullif(au.profile_data #>> '{settings,internal,isTest}', ''), nullif(au.profile_data #>> '{settings,internal,development}', ''), nullif(au.profile_data #>> '{settings,internal,isDevelopment}', ''), nullif(au.profile_data #>> '{settings,internal,seed}', ''), nullif(au.profile_data #>> '{settings,internal,fixture}', ''), 'false')) not in ('1', 'true', 'yes')
 			and not exists (
 				select 1
 				from user_follow uf
@@ -346,7 +350,11 @@ export async function resolvePublicReaderSuggestions(viewerUserId: string, limit
 			favoriteAuthor: profile.favoriteAuthor,
 			blurb: profile.blurb
 		};
-	}).filter((item) => item.username);
+	}).filter((item) => (
+		item.username
+		&& item.userId !== viewerUserId
+		&& !isExcludedReaderSuggestionUsername(item.username)
+	)).filter((item) => isEligibleReaderSuggestionProfile(rows.find((row) => normalizeText(row.id) === item.userId)?.profile_data));
 }
 
 export async function resolveFollowingReaders(viewerUserId: string, limit = 60) {

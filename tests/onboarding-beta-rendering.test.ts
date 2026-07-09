@@ -62,7 +62,9 @@ test("settings import flow points beta readers to their profile", () => {
 
 test("following page empty states explain next steps", () => {
 	const source = readFileSync("src/pages/following.astro", "utf8");
-	assert.equal(source.includes("Add a few books and ratings to get better people-to-follow matches."), true);
+	const readerSuggestionRulesSource = readFileSync("src/lib/readerSuggestionRules.ts", "utf8");
+	assert.equal(source.includes("READER_SUGGESTIONS_EMPTY_MESSAGE"), true);
+	assert.equal(readerSuggestionRulesSource.includes("More readers will appear here as the DogEared community grows."), true);
 	assert.equal(source.includes("Follow a few more readers or check back after your next reading update."), true);
 });
 

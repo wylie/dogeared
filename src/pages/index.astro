@@ -1023,6 +1023,21 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 	.people-strip-card-skeleton span:last-child {
 		width: 74%;
 	}
+	.reader-suggestion-empty {
+		list-style: none;
+		scroll-snap-align: start;
+		background: var(--color-surface-raised);
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		padding: 0.85rem;
+		color: var(--color-text-muted);
+		font-size: 0.92rem;
+		line-height: 1.4;
+		min-height: 120px;
+		display: flex;
+		align-items: center;
+		box-sizing: border-box;
+	}
 	.community-suggestion-card h3 {
 		margin: 0;
 		font-size: 1rem;
@@ -1511,8 +1526,14 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			const data = await response.json().catch(() => ({}));
 			const readers = Array.isArray(data?.readers) ? data.readers : [];
 			const html = String(data?.html || "").trim();
+			const emptyMessage = String(data?.message || "More readers will appear here as the DogEared community grows.").trim();
 			if (!response.ok || readers.length === 0 || !html) {
-				list.closest(".community-discovery-section")?.remove();
+				list.replaceChildren();
+				const emptyItem = document.createElement("li");
+				emptyItem.className = "reader-suggestion-empty";
+				emptyItem.textContent = emptyMessage;
+				list.append(emptyItem);
+				list.setAttribute("aria-busy", "false");
 				return;
 			}
 			list.innerHTML = html;

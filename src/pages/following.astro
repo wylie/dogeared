@@ -13,7 +13,8 @@ import {
 	resolveFollowingFeedActivity,
 	resolveFollowingReaders,
 	resolvePublicReaderSuggestions,
-	resolveViewerStatusByBookId
+	resolveViewerStatusByBookId,
+	READER_SUGGESTIONS_EMPTY_MESSAGE
 } from "../lib/feed";
 
 export const prerender = false;
@@ -75,7 +76,7 @@ const sectionLinks = [
 				Follow other DogEared users to discover books from readers across the community.
 			</p>
 			{peopleToFollow.length === 0 ? (
-				<p class="empty-note">No reader suggestions yet. Add a few books and ratings to get better people-to-follow matches.</p>
+				<p class="empty-note">{READER_SUGGESTIONS_EMPTY_MESSAGE}</p>
 			) : (
 			<ul class="people-strip" aria-label="People to follow">
 				{peopleToFollow.map((reader) => (
