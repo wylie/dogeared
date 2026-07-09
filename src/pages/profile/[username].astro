@@ -1909,9 +1909,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 															data-total-pages={String(Math.max(0, Number(item.totalPages || 0)))}
 															data-current-page={String(Math.max(0, Number(item.currentPage || 0)))}
 															aria-label="Mark as finished"
-															title="Mark as Finished"
+															title="Finish"
 														>
-															Complete
+															<span class="material-icons" aria-hidden="true">check</span>
+															<span>Finish</span>
 														</button>
 													</div>
 												</div>
@@ -3054,7 +3055,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		visibility: hidden;
 	}
 	.progress-inline {
-		margin-top: 0.35rem;
+		margin-top: 0.28rem;
 	}
 	.momentum-panel {
 		margin-top: 0.55rem;
@@ -3172,7 +3173,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		transform: translateY(0);
 	}
 	.momentum-health {
-		margin: 0.3rem 0 0;
+		margin: 0.24rem 0 0;
 		font-size: 0.76rem;
 		font-weight: 600;
 		line-height: 1.25;
@@ -3190,16 +3191,19 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		font-size: 0.78rem;
 		color: #5b6470;
 		font-weight: 700;
-		margin-bottom: 0.22rem;
+		margin-bottom: 0.18rem;
 	}
 	.progress-inline-controls {
 		display: grid;
-		grid-template-columns: minmax(0, 1.1fr) minmax(72px, 0.7fr) minmax(56px, auto) 36px;
+		grid-template-columns: minmax(0, 1fr) minmax(82px, 0.58fr);
+		grid-template-areas:
+			"type input"
+			"save finish";
 		gap: 0.3rem;
-		align-items: center;
+		align-items: stretch;
 		width: 100%;
 		max-width: 100%;
-		padding: 0.25rem;
+		padding: 0.35rem;
 		border: var(--border-subtle);
 		border-radius: var(--radius-sm);
 		background: rgba(255, 255, 255, 0.56);
@@ -3222,9 +3226,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		color: var(--color-text);
 	}
 	.progress-inline-type {
+		grid-area: type;
 		width: 100%;
 	}
 	.progress-inline-input {
+		grid-area: input;
 		width: 100%;
 	}
 	.progress-inline-type {
@@ -3245,7 +3251,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.progress-inline-finish {
 		border: none;
 		border-radius: 8px;
-		height: 34px;
+		height: 38px;
+		min-height: 38px;
 		min-width: 0;
 		padding: 0 0.58rem;
 		background: var(--color-primary);
@@ -3257,9 +3264,14 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		gap: 0.26rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-align: center;
 		width: 100%;
 	}
 	.progress-inline-save {
+		grid-area: save;
 		width: 100%;
 	}
 	.progress-inline-save:disabled {
@@ -3267,9 +3279,14 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		cursor: default;
 	}
 	.progress-inline-finish {
-		width: 34px;
-		padding: 0;
+		grid-area: finish;
+		width: 100%;
+		padding: 0 0.58rem;
 		background: var(--palette-4);
+	}
+	.progress-inline-finish .material-icons {
+		font-size: 1rem;
+		line-height: 1;
 	}
 	.progress-inline-finish:hover {
 		filter: brightness(0.95);
@@ -3656,9 +3673,12 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 		.progress-inline-controls {
 			display: grid;
-			grid-template-columns: minmax(0, 1fr) minmax(82px, 0.68fr) minmax(54px, auto) 34px;
-			align-items: center;
-			gap: 0.4rem;
+			grid-template-columns: minmax(0, 1fr) minmax(82px, 0.62fr);
+			grid-template-areas:
+				"type input"
+				"save finish";
+			align-items: stretch;
+			gap: 0.34rem;
 		}
 		.progress-inline-type,
 		.progress-inline-input {
@@ -3666,21 +3686,24 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			min-width: 0;
 		}
 		.progress-inline-save {
-			padding: 0 0.5rem;
+			padding: 0 0.58rem;
 		}
 		.progress-inline-finish {
-			padding: 0;
+			padding: 0 0.58rem;
 		}
 	}
 	@media (max-width: 520px) {
 		.progress-inline-controls {
-			grid-template-columns: minmax(0, 1fr) 44px;
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+			grid-template-areas:
+				"type type"
+				"input input"
+				"save finish";
 			gap: 0.42rem;
 			padding: 0.42rem;
 		}
 		.progress-inline-type,
 		.progress-inline-input {
-			grid-column: 1 / -1;
 			height: 44px;
 			min-height: 44px;
 			font-size: 0.9rem;
@@ -3692,17 +3715,17 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			padding: 0 0.72rem;
 		}
 		.progress-inline-save {
-			grid-column: 1 / 2;
 			height: 44px;
 			min-height: 44px;
 			padding: 0 0.8rem;
 			font-size: 0.9rem;
 		}
 		.progress-inline-finish {
-			grid-column: 2 / 3;
-			width: 44px;
+			width: 100%;
 			height: 44px;
 			min-height: 44px;
+			padding: 0 0.8rem;
+			font-size: 0.9rem;
 		}
 		.progress-journal-prompt {
 			align-items: flex-start;

@@ -151,10 +151,13 @@ test("mobile progress updater keeps controls readable and touch sized", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	const mobileStart = source.indexOf("@media (max-width: 520px)");
 	assert.ok(mobileStart > -1);
-	assert.ok(source.indexOf("grid-template-columns: minmax(0, 1fr) 44px", mobileStart) > mobileStart);
-	assert.ok(source.indexOf("grid-column: 1 / -1", mobileStart) > mobileStart);
+	assert.ok(source.indexOf("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)", mobileStart) > mobileStart);
+	assert.ok(source.indexOf('"type type"', mobileStart) > mobileStart);
+	assert.ok(source.indexOf('"input input"', mobileStart) > mobileStart);
+	assert.ok(source.indexOf('"save finish"', mobileStart) > mobileStart);
 	assert.ok(source.indexOf("height: 44px", mobileStart) > mobileStart);
 	assert.ok(source.indexOf("progress-inline-save", mobileStart) > mobileStart);
+	assert.ok(source.indexOf("progress-inline-finish", mobileStart) > mobileStart);
 });
 
 test("profile defaults to currently reading, recent activity, then other shelves", () => {

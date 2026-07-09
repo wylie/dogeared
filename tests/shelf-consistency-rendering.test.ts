@@ -21,6 +21,23 @@ test("mobile comment form buttons enforce symmetric padding and min width", () =
 	assert.equal(profileSource.includes("padding: 0 0.9rem;"), true);
 });
 
+test("profile progress updater uses equal Save and Finish action columns", () => {
+	const profileSource = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const overviewSource = readFileSync("docs/product/overview.md", "utf8");
+
+	assert.equal(profileSource.includes("<span>Finish</span>"), true);
+	assert.equal(profileSource.includes('<span class="material-icons" aria-hidden="true">check</span>'), true);
+	assert.equal(profileSource.includes("grid-template-areas:"), true);
+	assert.equal(profileSource.includes('"type input"'), true);
+	assert.equal(profileSource.includes('"save finish"'), true);
+	assert.equal(profileSource.includes("grid-area: save;"), true);
+	assert.equal(profileSource.includes("grid-area: finish;"), true);
+	assert.equal(profileSource.includes("grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);"), true);
+	assert.equal(profileSource.includes("width: 44px;"), false);
+	assert.equal(profileSource.includes(">Complete\n"), false);
+	assert.equal(overviewSource.includes("Save, and Finish actions"), true);
+});
+
 test("roadmap reads like a public product direction page", () => {
 	const pageSource = readFileSync("src/pages/roadmap.astro", "utf8");
 	const dataSource = readFileSync("src/lib/roadmap.ts", "utf8");
