@@ -152,7 +152,8 @@ test("feedback rate limiting blocks after the configured window count", () => {
 test("feedback widget opens an accessible modal and attaches hidden metadata", () => {
 	const source = readFileSync("src/components/FeedbackWidget.astro", "utf8");
 	assert.equal(source.includes('aria-controls="feedback-modal"'), true);
-	assert.equal(source.includes('aria-label="Send feedback"'), true);
+	assert.equal(source.includes('aria-label="Send Founding Reader feedback"'), true);
+	assert.equal(source.includes("Founding Reader Feedback"), true);
 	assert.equal(source.includes('role="dialog"'), true);
 	assert.equal(source.includes("openFeedbackModal"), true);
 	assert.equal(source.includes("data-feedback-bug-fields"), true);

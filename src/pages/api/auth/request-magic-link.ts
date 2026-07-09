@@ -3,6 +3,7 @@ import { getNeonSql } from "../../../lib/neon";
 import { normalizeEmail, randomToken, sha256Hex, upsertUserByEmail } from "../../../lib/auth";
 import { normalizeRequestedIp, resolveMagicLinkRateLimit } from "../../../lib/authHardening";
 import { escapeEmailHtml, sendDogearedEmail } from "../../../lib/email";
+import { markFoundingReaderJoined, resolveFoundingReaderAccess } from "../../../lib/foundingReaders";
 
 export const prerender = false;
 
@@ -30,11 +31,22 @@ export const POST: APIRoute = async ({ request, url }) => {
 			return json(400, { error: "Enter a valid email address." });
 		}
 
-		const userId = await upsertUserByEmail(email);
-		if (!userId) return json(500, { error: "Could not prepare account." });
-
 		const requestedIp = normalizeRequestedIp(request.headers.get("x-forwarded-for"));
 		const sql = getNeonSql();
+		const access = await resolveFoundingReaderAccess(sql, email);
+		if (!access.allowed) {
+			return json(202, {
+				ok: true,
+				waitlist: true,
+				mode: access.config.effectiveMode,
+				message: access.message
+			});
+		}
+
+		const userId = await upsertUserByEmail(email);
+		if (!userId) return json(500, { error: "Could not prepare account." });
+		await markFoundingReaderJoined(sql, email);
+
 		const latestUnusedRows = await sql<Array<{ seconds_until_expiry: number }>>`
 			select greatest(0, floor(extract(epoch from (max(expires_at) - now()))))::int as seconds_until_expiry
 			from auth_magic_link

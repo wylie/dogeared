@@ -525,7 +525,7 @@ Relationships:
 
 Entity: `feedback_submission`
 
-Stores beta feedback and bug reports for admin workflow:
+Stores Founding Reader feedback and bug reports for admin workflow:
 
 - Tracking number.
 - Optional user and follow-up email.
@@ -538,6 +538,30 @@ Stores beta feedback and bug reports for admin workflow:
 - Private admin notes, Needs Reply, Needs Reproduction, Duplicate, Duplicate Of, Resolved In Version, and resolution timestamp.
 
 Privacy rule: feedback diagnostics must not include passwords, private journal content, or sensitive personal information. Admin notes are internal only and are never surfaced to readers.
+
+## Founding Reader Access
+
+Entity: `founding_reader_config`
+
+Stores the global access mode for early reader onboarding:
+
+- Mode: `open`, `waitlist`, or `invite_only`.
+- Target capacity.
+- Whether Open should automatically behave as Waitlist when the target capacity is reached.
+- Updated timestamp.
+
+Entity: `founding_reader_waitlist`
+
+Stores access requests before account creation:
+
+- Email and normalized email.
+- Optional display name.
+- Status: `pending`, `approved`, `invited`, `joined`, or `declined`.
+- Requested, approved, invited, joined, declined, and updated timestamps.
+
+Runtime rule: `/api/auth/request-magic-link` must check Founding Reader access before creating an `app_user` record. Open mode allows normal account creation. Waitlist and Invite Only modes only allow accounts for approved, invited, or joined waitlist entries; otherwise they record a request and return a friendly Founding Reader access message.
+
+Capacity rule: when automatic capacity management is enabled and current reader count meets the target capacity, Open mode is treated as Waitlist without requiring a deployment.
 
 ## Product Analytics Events
 

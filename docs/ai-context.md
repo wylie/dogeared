@@ -129,7 +129,7 @@ Low-value activity should be minimized.
 
 ---
 
-## Beta Data Policy
+## Founding Reader Data Policy
 
 Production-facing reader surfaces must not show development or seed accounts.
 
@@ -155,19 +155,28 @@ Recommendation filtering lives in the shared public reader policy so pages do no
 
 ## Admin Operations
 
-The Admin area is DogEared's beta operations hub.
+The Admin area is DogEared's Founding Reader operations hub.
 
 Admin architecture:
 
 - `/admin` is the executive dashboard with concise operational cards and drill-down links.
-- `/admin/beta-users` is the beta reader control surface for onboarding, activity, and future account operations.
+- `/admin/founding-readers` is the Founding Reader control surface for access mode, waitlist approvals, capacity, onboarding, activity, and future account operations.
 - `/admin/users` remains the direct account management surface for search, detail review, and deletion.
 - `/admin/data-health` owns catalog and import-quality diagnostics.
 - `/admin/operations` owns feedback triage, recommendation health, import/system status, feature flags, announcements, and release notes.
 
 Operational pages must be admin-only and marked `noindex,nofollow`.
 
-Beta operations should favor honest signals over vanity metrics. If instrumentation does not exist yet, show the gap clearly instead of displaying fake values.
+Founding Reader operations should favor honest signals over vanity metrics. If instrumentation does not exist yet, show the gap clearly instead of displaying fake values.
+
+Founding Reader access:
+
+- DogEared supports Open, Waitlist, and Invite Only modes without deployment.
+- Open allows normal magic-link account creation.
+- Waitlist records access requests and lets admins approve or invite readers before account creation.
+- Invite Only explains that DogEared is growing carefully and records access requests without creating accounts.
+- Capacity can automatically treat Open as Waitlist when active readers reach the configured target.
+- Founding Reader configuration lives in `founding_reader_config`; access requests live in `founding_reader_waitlist`.
 
 Feedback workflow:
 
@@ -189,7 +198,7 @@ Announcements:
 
 Release notes:
 
-- Release notes are lightweight beta history, not marketing pages.
+- Release notes are lightweight early-access history, not marketing pages.
 - Notes should describe meaningful user-facing or operational changes in concise language.
 
 ---

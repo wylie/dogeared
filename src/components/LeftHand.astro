@@ -1,7 +1,23 @@
 ---
 import Widget from "./Widget.astro"
 type SectionLink = { id: string; label: string };
-const { current = "/", sectionLinks = [], isAuthenticated = false, isAdmin = false, allowAuthPrompt = true } = Astro.props as { current?: string; sectionLinks?: SectionLink[]; isAuthenticated?: boolean; isAdmin?: boolean; allowAuthPrompt?: boolean };
+const {
+  current = "/",
+  sectionLinks = [],
+  isAuthenticated = false,
+  isAdmin = false,
+  allowAuthPrompt = true,
+  foundingReaderMode = "open",
+  appVersion = "v0.1.1-beta"
+} = Astro.props as {
+  current?: string;
+  sectionLinks?: SectionLink[];
+  isAuthenticated?: boolean;
+  isAdmin?: boolean;
+  allowAuthPrompt?: boolean;
+  foundingReaderMode?: string;
+  appVersion?: string;
+};
 const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
 const isActive = (href: string) => normalize(current) === normalize(href);
 const currentNormalized = normalize(current);
@@ -15,30 +31,40 @@ const isAdminAnalyticsPage = currentNormalized === "/admin/analytics";
 const isAdminCollectionsPage = currentNormalized === "/admin/collections";
 const isAdminUsersPage = currentNormalized === "/admin/users" || currentNormalized.startsWith("/admin/users/");
 const isAdminFeedbackPage = currentNormalized === "/admin/feedback";
-const isAdminBetaUsersPage = currentNormalized === "/admin/beta-users";
+const isAdminFoundingReadersPage = currentNormalized === "/admin/founding-readers" || currentNormalized === "/admin/beta-users";
 const isAdminOperationsPage = currentNormalized === "/admin/operations";
 const query = Astro.url.searchParams.get("q") ?? "";
+const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].includes(foundingReaderMode) ? foundingReaderMode : "open";
 ---
 
 <Widget style="height: 100%; padding: 0; overflow: visible;" background={true}>
-  <div id="left-hand-nav" data-current={current} data-ssr-authenticated={String(isAuthenticated)} data-auth-prompt={String(allowAuthPrompt)}>
+  <div
+    id="left-hand-nav"
+    data-current={current}
+    data-ssr-authenticated={String(isAuthenticated)}
+    data-auth-prompt={String(allowAuthPrompt)}
+    data-founding-reader-mode={normalizedFoundingReaderMode}
+  >
     <div class="mobile-top-row">
-      <h2>
-        <a href="/" class="special-font">
-          <img
-            src="/logo-96.png"
-            sizes="(max-width: 900px) 55px, 50px"
-            alt=""
-            class="title-logo"
-            aria-hidden="true"
-            width="72"
-            height="96"
-            decoding="async"
-            fetchpriority="high"
-          />
-          <span>DogEared</span>
-        </a>
-      </h2>
+      <div class="brand-lockup">
+        <h2>
+          <a href="/" class="special-font">
+            <img
+              src="/logo-96.png"
+              sizes="(max-width: 900px) 55px, 50px"
+              alt=""
+              class="title-logo"
+              aria-hidden="true"
+              width="72"
+              height="96"
+              decoding="async"
+              fetchpriority="high"
+            />
+            <span>DogEared</span>
+          </a>
+        </h2>
+        <p class="founding-reader-badge">Founding Reader</p>
+      </div>
     </div>
     <form action="/search" method="get">
       <label class="visually-hidden" for="left-hand-search">Search books and authors</label>
@@ -230,8 +256,8 @@ const query = Astro.url.searchParams.get("q") ?? "";
               )}
             </li>
             <li>
-              <a href={isAdminBetaUsersPage ? undefined : '/admin/beta-users'} class={isAdminBetaUsersPage ? 'active' : 'hover'} aria-current={isAdminBetaUsersPage ? 'page' : undefined}>Beta Users</a>
-              {isAdminBetaUsersPage && sectionLinks.length > 0 && (
+              <a href={isAdminFoundingReadersPage ? undefined : '/admin/founding-readers'} class={isAdminFoundingReadersPage ? 'active' : 'hover'} aria-current={isAdminFoundingReadersPage ? 'page' : undefined}>Founding Readers</a>
+              {isAdminFoundingReadersPage && sectionLinks.length > 0 && (
                 <ul class="section-links-nested">
                   {sectionLinks.map((link) => (
                     <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
@@ -272,6 +298,11 @@ const query = Astro.url.searchParams.get("q") ?? "";
     )}
     <footer class="sidebar-footer" aria-label="Site information">
       <p>Built by <a href="https://argoncollective.com" target="_blank" rel="noopener noreferrer">Argon Collective LLC</a></p>
+      <p class="footer-program-meta">
+        <span>DogEared</span>
+        <span>Founding Reader Program</span>
+        <span>{appVersion}</span>
+      </p>
       <nav aria-label="Site links">
         <a href="/privacy" class={isActive('/privacy') ? 'active' : 'hover'} aria-current={isActive('/privacy') ? 'page' : undefined}>Privacy</a>
         <a href="/support" class={isActive('/support') ? 'active' : 'hover'} aria-current={isActive('/support') ? 'page' : undefined}>Support DogEared</a>
@@ -284,7 +315,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
       <div class="login-modal-panel" role="dialog" aria-modal="true" aria-labelledby="left-hand-login-title">
         <button type="button" class="login-modal-close" data-action="close-login-modal" aria-label="Close login dialog">×</button>
         <h3 id="left-hand-login-title">Welcome to DogEared</h3>
-        <p id="left-hand-login-copy" class="login-modal-copy">Enter your email and continue with a magic link.</p>
+        <p id="left-hand-login-copy" class="login-modal-copy">Enter your email to continue or request access to the Founding Reader Program.</p>
         <form id="left-hand-login-form" class="login-modal-form">
           <label for="left-hand-login-email">Email</label>
           <input id="left-hand-login-email" type="email" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required placeholder="you@example.com" />
@@ -307,6 +338,22 @@ const query = Astro.url.searchParams.get("q") ?? "";
   }
   .mobile-top-row {
     display: block;
+  }
+  .brand-lockup {
+    display: grid;
+    gap: 0.18rem;
+  }
+  .founding-reader-badge {
+    width: fit-content;
+    margin: -0.25rem 0 0 3.4rem;
+    border: var(--border-subtle);
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.54);
+    color: var(--color-text-muted);
+    padding: 0.12rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 760;
+    line-height: 1.3;
   }
   .primary-links {
     margin: 1.05rem 0 0;
@@ -360,6 +407,19 @@ const query = Astro.url.searchParams.get("q") ?? "";
   }
   .sidebar-footer p {
     margin: 0;
+  }
+  .footer-program-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.18rem 0.45rem;
+    margin-top: 0.5rem !important;
+    color: var(--color-text-subtle);
+    font-size: 0.72rem;
+  }
+  .footer-program-meta span + span::before {
+    content: "·";
+    margin-right: 0.45rem;
+    color: var(--color-border);
   }
   .sidebar-footer nav {
     display: flex;
@@ -484,7 +544,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   }
   h2 {
     width: 100%;
-    margin: 0 0 0.75rem 0;
+    margin: 0;
     container-type: inline-size;
   }
   h2 a.special-font {
@@ -783,6 +843,7 @@ const query = Astro.url.searchParams.get("q") ?? "";
   const leftHandNav = document.getElementById("left-hand-nav");
   const ssrAuthenticated = leftHandNav?.dataset.ssrAuthenticated === "true";
   const allowAuthPrompt = leftHandNav?.dataset.authPrompt === "true";
+  const foundingReaderMode = String(leftHandNav?.dataset.foundingReaderMode || "open");
   const leftHandMenuToggle = document.getElementById("left-hand-menu-toggle");
   const leftHandPrimaryLinks = document.getElementById("left-hand-primary-links");
   const leftHandLoginItem = document.getElementById("left-hand-login-item");
@@ -844,12 +905,18 @@ const query = Astro.url.searchParams.get("q") ?? "";
     if (!(leftHandLoginModal instanceof HTMLElement)) return;
     const creating = mode === "create";
     if (leftHandLoginTitle instanceof HTMLElement) {
-      leftHandLoginTitle.textContent = creating ? "Create your DogEared account" : "Welcome back to DogEared";
+      leftHandLoginTitle.textContent = creating || foundingReaderMode !== "open" ? "Join DogEared" : "Welcome back to DogEared";
     }
     if (leftHandLoginCopy instanceof HTMLElement) {
-      leftHandLoginCopy.textContent = creating
-        ? "Enter your email to save books, build shelves, and get personal recommendations."
-        : "Enter your email and continue with a magic link.";
+      if (foundingReaderMode === "waitlist") {
+        leftHandLoginCopy.textContent = "Join the waitlist for DogEared's Founding Reader Program.";
+      } else if (foundingReaderMode === "invite_only") {
+        leftHandLoginCopy.textContent = "DogEared is growing carefully with invited Founding Readers. Enter your email to request access.";
+      } else {
+        leftHandLoginCopy.textContent = creating
+          ? "Enter your email to save books, build shelves, and get personal recommendations."
+          : "Enter your email and continue with a magic link.";
+      }
     }
     leftHandLoginModal.hidden = false;
     showLoginFeedback("");
@@ -961,6 +1028,10 @@ const query = Astro.url.searchParams.get("q") ?? "";
         return;
       }
       const preview = String(data?.previewUrl || "").trim();
+      if (data?.waitlist) {
+        showLoginFeedback(String(data?.message || "Thanks for requesting access to DogEared's Founding Reader Program."));
+        return;
+      }
       if (preview) {
         showLoginFeedback(`Magic link generated. Open: ${preview}`);
         return;

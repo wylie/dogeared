@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 test("admin dashboard and users pages require admin session", () => {
-	for (const path of ["src/pages/admin.astro", "src/pages/admin/analytics.astro", "src/pages/admin/users.astro", "src/pages/admin/users/[username].astro"]) {
+	for (const path of ["src/pages/admin.astro", "src/pages/admin/analytics.astro", "src/pages/admin/users.astro", "src/pages/admin/users/[username].astro", "src/pages/admin/founding-readers.astro"]) {
 		const source = readFileSync(path, "utf8");
 		assert.equal(source.includes("resolveAdminSession"), true);
 		assert.equal(source.includes("if (!admin.isAdmin) return Astro.redirect(\"/\")"), true);
@@ -23,7 +23,8 @@ test("admin navigation is rendered only for admin sessions", () => {
 	assert.equal(nav.includes("/admin/analytics"), true);
 	assert.equal(nav.includes("/admin/feedback"), true);
 	assert.equal(nav.includes("/admin/data-health"), true);
-	assert.equal(nav.includes("/admin/beta-users"), true);
+	assert.equal(nav.includes("/admin/founding-readers"), true);
+	assert.equal(nav.includes("Founding Readers"), true);
 	assert.equal(nav.includes("/admin/operations"), true);
 	assert.equal(nav.includes("/admin/users"), true);
 });
@@ -46,7 +47,7 @@ test("admin overview displays real site statistics and quick links", () => {
 	assert.equal(page.includes('href: "/admin/data-health"'), true);
 	assert.equal(page.includes('href: "/admin/analytics#community"'), true);
 	assert.equal(page.includes('href: "/admin/feedback"'), true);
-	assert.equal(page.includes('href: "/admin/beta-users"'), true);
+	assert.equal(page.includes('href: "/admin/founding-readers"'), true);
 	assert.equal(page.includes("safeAdminLoad"), true);
 	assert.equal(page.includes("formatNumber(link.value)"), true);
 	assert.equal(page.includes("link.value.toLocaleString"), false);
@@ -92,12 +93,12 @@ test("admin pages use defensive loaders and formatting", () => {
 	const feedback = readFileSync("src/pages/admin/feedback.astro", "utf8");
 	const dataHealth = readFileSync("src/pages/admin/data-health.astro", "utf8");
 	const users = readFileSync("src/pages/admin/users.astro", "utf8");
-	const betaUsers = readFileSync("src/pages/admin/beta-users.astro", "utf8");
+	const foundingReaders = readFileSync("src/pages/admin/founding-readers.astro", "utf8");
 	const detail = readFileSync("src/pages/admin/users/[username].astro", "utf8");
 	for (const helper of ["formatNumber", "formatDate", "safePercent", "percentOf", "safeAdminLoad"]) {
 		assert.equal(formatting.includes(`function ${helper}`), true);
 	}
-	for (const source of [dashboard, analytics, operations, feedback, dataHealth, users, betaUsers, detail]) {
+	for (const source of [dashboard, analytics, operations, feedback, dataHealth, users, foundingReaders, detail]) {
 		assert.equal(source.includes("safeAdminLoad"), true);
 	}
 	assert.equal(analytics.includes("emptyAdminProductAnalytics"), true);
@@ -109,15 +110,36 @@ test("admin pages use defensive loaders and formatting", () => {
 	assert.equal(detail.includes("[admin.user-detail.post.failed]"), true);
 });
 
-test("admin beta users page exposes requested account operations", () => {
-	const source = readFileSync("src/pages/admin/beta-users.astro", "utf8");
+test("admin founding readers page exposes access controls and requested account operations", () => {
+	const source = readFileSync("src/pages/admin/founding-readers.astro", "utf8");
+	const redirect = readFileSync("src/pages/admin/beta-users.astro", "utf8");
 	const data = readFileSync("src/lib/adminData.ts", "utf8");
+	const foundingReaders = readFileSync("src/lib/foundingReaders.ts", "utf8");
+	const auth = readFileSync("src/pages/api/auth/request-magic-link.ts", "utf8");
+	const migration = readFileSync("db/migrations/2026-07-09-founding-readers.sql", "utf8");
+	assert.equal(redirect.includes('Astro.redirect("/admin/founding-readers", 301)'), true);
 	assert.equal(source.includes("loadAdminBetaUsers"), true);
+	assert.equal(source.includes("loadFoundingReaderAdminSummary"), true);
+	assert.equal(source.includes("saveFoundingReaderConfig"), true);
+	assert.equal(source.includes("updateFoundingReaderWaitlistStatus"), true);
+	assert.equal(source.includes("Open"), true);
+	assert.equal(source.includes("Waitlist"), true);
+	assert.equal(source.includes("Invite Only"), true);
+	assert.equal(source.includes("Automatically switch Open to Waitlist"), true);
 	assert.equal(source.includes("Impersonate"), true);
 	assert.equal(source.includes("Resend login"), true);
 	assert.equal(source.includes("Deactivate"), true);
 	assert.equal(source.includes("readingStreak"), true);
 	assert.equal(data.includes("reading_streak"), true);
+	assert.equal(foundingReaders.includes("founding_reader_config"), true);
+	assert.equal(foundingReaders.includes("founding_reader_waitlist"), true);
+	assert.equal(foundingReaders.includes("effectiveMode"), true);
+	assert.equal(foundingReaders.includes("autoWaitlistAtCapacity"), true);
+	assert.equal(auth.includes("resolveFoundingReaderAccess"), true);
+	assert.equal(auth.includes("markFoundingReaderJoined"), true);
+	assert.equal(auth.includes("waitlist: true"), true);
+	assert.equal(migration.includes("founding_reader_config"), true);
+	assert.equal(migration.includes("founding_reader_waitlist"), true);
 });
 
 test("admin users support search, detail counts, and safe deletion", () => {

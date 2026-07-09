@@ -7,7 +7,9 @@ import ReaderGuidance from '../components/ReaderGuidance.astro';
 import { resolveAdminSession } from '../lib/admin';
 import { loadActiveAnnouncement } from '../lib/adminAnnouncements';
 import { resolveUserBySession } from '../lib/auth';
+import { DEFAULT_FOUNDING_READER_CONFIG, loadFoundingReaderConfig } from '../lib/foundingReaders';
 import { DEFAULT_SOCIAL_IMAGE, METADATA_ICON_LINKS, SITE_THEME_COLOR } from '../lib/metadataAssets';
+import { getNeonSql } from '../lib/neon';
 import { buildSeoMetadata } from '../lib/seo';
 type SectionLink = { id: string; label: string };
 const {
@@ -47,6 +49,10 @@ const allowAuthPrompt = !isAuthenticated && allowsAuthPrompt(currentPath);
 const adminSession = isAuthenticated ? await resolveAdminSession(Astro.request) : { isAdmin: false };
 const isAdmin = !!adminSession.isAdmin;
 const activeAnnouncement = await loadActiveAnnouncement();
+const foundingReaderConfig = await loadFoundingReaderConfig(getNeonSql()).catch(() => DEFAULT_FOUNDING_READER_CONFIG);
+const rawAppVersion = String(import.meta.env.PUBLIC_APP_VERSION || import.meta.env.npm_package_version || "0.1.1").trim();
+const normalizedAppVersion = rawAppVersion.startsWith("v") ? rawAppVersion : `v${rawAppVersion}`;
+const appVersion = normalizedAppVersion.includes("beta") ? normalizedAppVersion : `${normalizedAppVersion}-beta`;
 const seo = buildSeoMetadata({
 	title,
 	description: metaDescription,
@@ -117,7 +123,15 @@ import '../assets/global.css';
 			<div class="container">
 				<div class="column" style="padding-bottom: 0;">
 					<slot name="left">
-						<LeftHand current={currentPath} sectionLinks={sectionLinks} isAuthenticated={isAuthenticated} isAdmin={isAdmin} allowAuthPrompt={allowAuthPrompt} />
+						<LeftHand
+							current={currentPath}
+							sectionLinks={sectionLinks}
+							isAuthenticated={isAuthenticated}
+							isAdmin={isAdmin}
+							allowAuthPrompt={allowAuthPrompt}
+							foundingReaderMode={foundingReaderConfig.effectiveMode}
+							appVersion={appVersion}
+						/>
 					</slot>
 				</div>
 				<main id="main-content" class="column content-column" tabindex="-1">

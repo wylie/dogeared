@@ -46,7 +46,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
 - Settings: profile/account entry points, magic-link auth, email changes, Goodreads import, preferences, privacy, notifications, Learning controls for helpful tips, data export, shelf clearing, API endpoint references, and sessions.
-- Admin: operational overview, privacy-friendly product analytics, beta feedback dashboard, data health, user search, user detail, and admin delete-user tools.
+- Admin: operational overview, privacy-friendly product analytics, Founding Reader access controls, feedback dashboard, data health, user search, user detail, and admin delete-user tools.
 - Mission, Roadmap, Privacy, Support: public product context and project direction.
 
 ## Current Information Architecture
@@ -64,7 +64,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Account setup: request a magic link, verify it, set a username, then manage profile and settings.
 - Book discovery: browse Recommended For You, Discover, featured editorial collections, explainable home recommendations, search books with series context, open book pages, browse author pages, or explore related genre/topic/author/book pages.
 - Guided first experience: signed-in readers see one contextual, dismissible tip at a time when it is relevant, starting on Home for fresh users and continuing through Search, book shelves, reading progress, reviews, Settings, and Journal moments.
-- Beta first-time path: new readers move from landing guidance to account creation, username setup, import or manual book search, first shelf save, progress update, recommendation feedback, first review, and return visits through Profile, Home, and Discover.
+- Founding Reader first-time path: new readers move from access request or account creation to username setup, import or manual book search, first shelf save, progress update, recommendation feedback, first review, and return visits through Profile, Home, and Discover.
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and record private progress events for metrics without noisy feed posts.
 - Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, timeline history, milestones, and yearly summaries.
@@ -74,7 +74,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Profile management: update name, avatar, location, birth year, goal text, favorite book, favorite author, blurb, and genres.
 - Privacy management: set public/private profile visibility and control location, activity, discovery, and follow availability.
 - Import/export: import Goodreads CSV data with preview/merge/replace controls, export account data as JSON, and clear shelf entries.
-- Admin operations: inspect site statistics, aggregate product analytics, beta feedback and bug reports, metadata coverage, import health, duplicate risk, backfill movement, and user accounts.
+- Admin operations: inspect site statistics, aggregate product analytics, Founding Reader access, feedback and bug reports, metadata coverage, import health, duplicate risk, backfill movement, and user accounts.
 
 ## Current Capabilities
 
@@ -122,21 +122,29 @@ Journal-specific guidance is intentionally narrow. It appears on the Reading Jou
 
 The onboarding state object lives under `profile_data.settings.guidedTour.onboarding`. It tracks welcome completion, checklist dismissal, reading goal prompt dismissal, recommendation education dismissal, completed onboarding actions, and celebrated milestones. Milestones use subtle success cards or existing toasts, not confetti.
 
-### Beta Launch Readiness
+### Founding Reader Launch Readiness
 
-DogEared is prepared for a limited beta cohort with launch-readiness polish focused on reducing confusion rather than adding major functionality. First-time surfaces use clear language and recoverable error states across username setup, Search, Goodreads import, shelf saves, progress updates, recommendation feedback, reviews, and return visits. Reusable UI behavior should live inside shared components or client utilities whenever practical, so pages compose BookCard, ShelfDropdown, RatingControl, and shared shelf/progress helpers instead of recreating feedback markup, loading state, or retry behavior.
+DogEared is prepared for its first Founding Readers with launch-readiness polish focused on reducing confusion rather than adding major functionality. First-time surfaces use clear language and recoverable error states across access requests, username setup, Search, Goodreads import, shelf saves, progress updates, recommendation feedback, reviews, and return visits. Reusable UI behavior should live inside shared components or client utilities whenever practical, so pages compose BookCard, ShelfDropdown, RatingControl, and shared shelf/progress helpers instead of recreating feedback markup, loading state, or retry behavior.
+
+Founding Reader access is controlled by a global mode that can be changed from Admin without deployment:
+
+- Open: anyone may request a magic link and create an account.
+- Waitlist: readers can request access, but admins approve or invite them before account creation.
+- Invite Only: DogEared explains that the community is growing carefully and records requests without immediate account creation.
+
+Capacity management tracks current readers against a target. When automatic capacity management is enabled, Open behaves as Waitlist once the target is reached. Access configuration is stored in `founding_reader_config`; requests are stored in `founding_reader_waitlist` with Pending, Approved, Invited, Joined, and Declined states.
 
 Empty states are expected to answer "What should I do next?" Owner views on Profile shelves, Recent Activity, Reading Goal, Search, and recommendation areas include direct CTAs such as adding a book, searching again, finding a book to start, or reviewing shelves after import. Success messages stay plain and calm, such as saved shelf, saved rating, progress saved, import complete, preferences saved, and export downloaded. Error messages avoid bare "Error" language and should tell readers what to retry or where to continue.
 
 Launch polish keeps async feedback visible while work is in flight. Shelf saves, recommendation feedback, and progress updates should expose busy states through disabled controls, `aria-busy` where helpful, and live status messages that do not collapse card layout. Developer diagnostics may log failing progress requests, but normal successful use should not create console errors.
 
-The launch-readiness stance is documented in `docs/beta-readiness.md`. Remaining beta risks are mostly operational: real-device mobile QA, assistive-technology review, and centralized monitoring.
+The launch-readiness stance is documented in `docs/beta-readiness.md`. Remaining early-access risks are mostly operational: real-device mobile QA, assistive-technology review, and centralized monitoring.
 
 ### Editorial Collections
 
 DogEared supports first-class editorial collections for curated discovery that does not depend on popularity. Collections have title, slug, subtitle, description, editorial introduction, hero image, category, featured flag, publication state, sort order, and extensible metadata. Books inside collections have custom order, optional editor note, and optional featured quote.
 
-Published collections appear on `/collections` and detail pages at `/collections/[slug]`. Collection pages use larger editorial presentation, a short editor's note, and book cards with covers, title, author, ratings, Add to Shelf controls, and the reason each book belongs. Home shows at most two featured collections so the page stays calm. Author pages show a Featured In section when published collections include that author, and Search returns matching published collections above book results. The left navigation does not currently link to Collections because the beta product should not send readers to an empty or sparse destination.
+Published collections appear on `/collections` and detail pages at `/collections/[slug]`. Collection pages use larger editorial presentation, a short editor's note, and book cards with covers, title, author, ratings, Add to Shelf controls, and the reason each book belongs. Home shows at most two featured collections so the page stays calm. Author pages show a Featured In section when published collections include that author, and Search returns matching published collections above book results. The left navigation does not currently link to Collections because the early-access product should not send readers to an empty or sparse destination.
 
 Admins manage collections from `/admin/collections`, where they can create, edit, reorder, publish, archive, and feature collections.
 
@@ -228,11 +236,13 @@ Notifications exist for activity likes and comments. Profile owners see a notifi
 
 ### Admin
 
-Admins are recognized by username through `ADMIN_USERNAMES`. Admin pages include an overview, product analytics dashboard, beta feedback dashboard, data-health view, user search, user detail, and delete-user controls. Admin pages redirect non-admins to home.
+Admins are recognized by username through `ADMIN_USERNAMES`. Admin pages include an overview, product analytics dashboard, Founding Reader access controls, feedback dashboard, data-health view, user search, user detail, and delete-user controls. Admin pages redirect non-admins to home.
+
+The Founding Readers dashboard manages Open, Waitlist, and Invite Only access modes, target capacity, automatic Open-to-Waitlist behavior, waitlist approvals, invitations, declines, removals, and current reader review. The public experience should use Founding Reader language instead of "beta tester" language, because these readers are early collaborators rather than instability testers.
 
 The Product Analytics dashboard is first-party and product-focused rather than marketing-focused. It records small aggregate events such as page views, feature views, search queries with result counts, recommendation impressions, recommendation clicks, recommendation feedback, and recommendation add-to-shelf intent. Admins see aggregate growth, reading, community, search, discovery, first-run funnel, and feature-adoption metrics. The dashboard does not show private journal content, passwords, reader-level behavioral reports, or unnecessary personal information.
 
-The Feedback dashboard is the beta bug-reporting workflow. It stores user-submitted reports with tracking numbers, type, optional severity, subject, description, bug details, screenshots, diagnostic context, status, private internal notes, follow-up flags, duplicate markers, resolved version, and resolution dates. Diagnostic context is limited to page and environment details useful for debugging; private journal content, passwords, and sensitive personal information are intentionally excluded.
+The Feedback dashboard is the Founding Reader bug-reporting workflow. It stores user-submitted reports with tracking numbers, type, optional severity, subject, description, bug details, screenshots, diagnostic context, status, private internal notes, follow-up flags, duplicate markers, resolved version, and resolution dates. Diagnostic context is limited to page and environment details useful for debugging; private journal content, passwords, and sensitive personal information are intentionally excluded.
 
 ### Settings
 

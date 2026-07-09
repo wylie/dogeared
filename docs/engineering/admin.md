@@ -18,11 +18,12 @@ Admin routes:
 
 - `/admin`: overview.
 - `/admin/analytics`: aggregate product analytics.
-- `/admin/beta-users`: beta reader control surface.
+- `/admin/founding-readers`: Founding Reader access, capacity, waitlist, and active reader control surface.
+- `/admin/beta-users`: compatibility redirect to `/admin/founding-readers`.
 - `/admin/collections`: editorial collection management.
 - `/admin/data-health`: data health.
-- `/admin/feedback`: beta feedback triage.
-- `/admin/operations`: beta operations control center for feedback workflow, recommendation/import/system health, feature flags, announcements, and release notes.
+- `/admin/feedback`: Founding Reader feedback triage.
+- `/admin/operations`: early-access operations control center for feedback workflow, recommendation/import/system health, feature flags, announcements, and release notes.
 - `/admin/users`: user search and management.
 - `/admin/users/[username]`: user detail and delete flow.
 
@@ -30,7 +31,7 @@ The Admin Overview quick-links point admins to the operational drill-down pages 
 
 ## Defensive Rendering
 
-Admin pages must degrade gracefully. Operational data is useful during beta, but it should never be required for the page itself to render.
+Admin pages must degrade gracefully. Operational data is useful during early access, but it should never be required for the page itself to render.
 
 Rules:
 
@@ -51,7 +52,7 @@ Expected behavior:
 
 ## Release Operations
 
-Before a private beta release, admins and maintainers should use `docs/release-checklist.md`.
+Before a Founding Reader or private release, admins and maintainers should use `docs/release-checklist.md`.
 
 Release readiness expects:
 
@@ -80,6 +81,24 @@ Shows:
 - Reviews added this week.
 
 Data comes from `loadAdminOverviewStats`.
+
+## Founding Reader Management
+
+Route: `/admin/founding-readers`
+
+Admins can:
+
+- Switch DogEared between Open, Waitlist, and Invite Only access modes without deployment.
+- Set target reader capacity.
+- Enable or disable automatic Open-to-Waitlist behavior when capacity is reached.
+- Review waitlist requests.
+- Approve, invite, decline, or remove requests.
+- Review active readers with onboarding and activity metrics.
+- Use future-ready account actions: impersonate, resend login link, export, deactivate, and delete.
+
+Data comes from `src/lib/foundingReaders.ts`, `founding_reader_config`, `founding_reader_waitlist`, and the active reader summary query in `loadAdminBetaUsers`.
+
+Public-facing copy should use "Founding Reader" rather than "Beta Tester". Development or seed accounts should remain hidden from production reader surfaces under the shared public reader policy.
 
 ## Collection Management
 

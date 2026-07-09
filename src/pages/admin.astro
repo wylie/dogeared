@@ -43,10 +43,10 @@ const statCards = [
 ];
 
 const quickLinks = [
-	{ href: "/admin/beta-users", label: "Growth", value: operations.growth.totalUsers, copy: "Beta readers and onboarding readiness." },
+	{ href: "/admin/founding-readers", label: "Founding Readers", value: operations.growth.totalUsers, copy: "Access, capacity, and early reader onboarding." },
 	{ href: "/admin/analytics#community", label: "Engagement", value: operations.engagement.activeUsersWeek, copy: "Active readers, activity, comments, and social signals." },
 	{ href: "/admin/data-health", label: "Content", value: operations.content.totalBooks, copy: "Catalog depth, metadata gaps, and duplicate risk." },
-	{ href: "/admin/feedback", label: "Feedback", value: operations.feedback.open, copy: "Open beta reports and operational follow-up." },
+	{ href: "/admin/feedback", label: "Feedback", value: operations.feedback.open, copy: "Open Founding Reader reports and operational follow-up." },
 	{ href: "/admin/operations#notifications", label: "Notifications", value: operations.notifications.unread, copy: "Unread in-app notification state." },
 	{ href: "/admin/operations#recommendations", label: "Recommendations", value: operations.recommendations.clicks, copy: "Recommendation telemetry and source health." },
 	{ href: "/admin/analytics#search", label: "Search", value: operations.search.indexedBooks, copy: "Search coverage and no-result diagnostics." },
@@ -85,7 +85,7 @@ const quickLinks = [
 		<section class="panel" id="operations">
 			<div class="panel-head">
 				<h2>Operations</h2>
-				<p>Concise beta health cards with drill-down links.</p>
+				<p>Concise Founding Reader health cards with drill-down links.</p>
 			</div>
 			<div class="quick-link-grid">
 				{quickLinks.map((link) => (

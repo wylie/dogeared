@@ -10,7 +10,7 @@ const { isAuthenticated = false } = Astro.props as Props;
 		data-feedback-open
 		aria-haspopup="dialog"
 		aria-controls="feedback-modal"
-		aria-label="Send feedback"
+		aria-label="Send Founding Reader feedback"
 		style="--floating-action-bg: var(--color-primary); --floating-action-hover-bg: var(--color-primary-hover);"
 	>
 		<span class="material-icons floating-action-icon" aria-hidden="true">chat_bubble</span>
@@ -29,8 +29,8 @@ const { isAuthenticated = false } = Astro.props as Props;
 		>
 			<div class="feedback-panel-head">
 				<div>
-					<h2 id="feedback-title">Send Feedback</h2>
-					<p id="feedback-intro">Tell us what is broken, confusing, useful, or missing.</p>
+					<h2 id="feedback-title">Founding Reader Feedback</h2>
+					<p id="feedback-intro">Tell us what is broken, confusing, useful, or missing as DogEared grows.</p>
 				</div>
 				<button type="button" class="feedback-close" data-feedback-close aria-label="Close feedback">
 					<span class="material-icons" aria-hidden="true">close</span>
@@ -102,7 +102,7 @@ const { isAuthenticated = false } = Astro.props as Props;
 			</form>
 
 			<div class="feedback-success" data-feedback-success hidden>
-				<p>Thanks for helping improve DogEared.</p>
+				<p>Thanks for helping shape DogEared.</p>
 				<p>Your feedback has been received.</p>
 				<p data-feedback-tracking hidden></p>
 				<button type="button" class="feedback-primary" data-feedback-close>Done</button>

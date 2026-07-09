@@ -1,0 +1,368 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { resolveAdminSession } from "../../lib/admin";
+import { loadAdminBetaUsers } from "../../lib/adminData";
+import { formatDate, formatNumber, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
+import {
+	FOUNDING_READER_MODES,
+	WAITLIST_STATUSES,
+	loadFoundingReaderAdminSummary,
+	removeFoundingReaderWaitlistEntry,
+	saveFoundingReaderConfig,
+	updateFoundingReaderWaitlistStatus
+} from "../../lib/foundingReaders";
+import { getNeonSql } from "../../lib/neon";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const sql = getNeonSql();
+let statusMessage = "";
+let statusError = "";
+
+if (Astro.request.method === "POST") {
+	try {
+		const form = await Astro.request.formData();
+		const intent = String(form.get("intent") || "");
+		if (intent === "save-config") {
+			await saveFoundingReaderConfig(sql, {
+				mode: form.get("mode"),
+				targetCapacity: form.get("targetCapacity"),
+				autoWaitlistAtCapacity: form.get("autoWaitlistAtCapacity")
+			});
+			statusMessage = "Founding Reader settings saved.";
+		} else if (intent === "update-waitlist") {
+			await updateFoundingReaderWaitlistStatus(sql, {
+				id: form.get("id"),
+				status: form.get("status")
+			});
+			statusMessage = "Waitlist request updated.";
+		} else if (intent === "remove-waitlist") {
+			await removeFoundingReaderWaitlistEntry(sql, form.get("id"));
+			statusMessage = "Waitlist request removed.";
+		}
+	} catch (error) {
+		if (import.meta.env.DEV) console.error("[admin.founding-readers.post.failed]", error);
+		statusError = "Founding Reader settings could not be saved. Please try again.";
+	}
+}
+
+const query = String(Astro.url.searchParams.get("q") || "").trim();
+const [summaryResult, usersResult] = await Promise.all([
+	safeAdminLoad("Founding Reader summary", () => loadFoundingReaderAdminSummary(sql), {
+		config: {
+			mode: "open" as const,
+			effectiveMode: "open" as const,
+			targetCapacity: 100,
+			autoWaitlistAtCapacity: true,
+			currentReaders: 0,
+			capacityReached: false
+		},
+		waitlistCount: 0,
+		pendingCount: 0,
+		statusCounts: { pending: 0, approved: 0, invited: 0, joined: 0, declined: 0 },
+		entries: []
+	}),
+	safeAdminLoad("Founding Readers", () => loadAdminBetaUsers(sql, query), [])
+]);
+const summary = summaryResult.data;
+const users = safeArray(usersResult.data);
+const warnings = [summaryResult.warning, usersResult.warning, statusError].filter(Boolean);
+
+const modeLabels = {
+	open: "Open",
+	waitlist: "Waitlist",
+	invite_only: "Invite Only"
+};
+
+const statusLabels = {
+	pending: "Pending",
+	approved: "Approved",
+	invited: "Invited",
+	joined: "Joined",
+	declined: "Declined"
+};
+const waitlistActionStatuses = ["approved", "declined", "invited"] as const;
+
+const sectionLinks = [
+	{ id: "overview", label: "Overview" },
+	{ id: "access-mode", label: "Access Mode" },
+	{ id: "waitlist", label: "Waitlist" },
+	{ id: "active-readers", label: "Active Readers" }
+];
+---
+
+<Layout title="Admin Founding Readers" sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="admin-founding-readers-page">
+		<header id="overview" class="hero">
+			<h1>Founding Readers</h1>
+			<p>Manage access, capacity, invitations, and early reader onboarding.</p>
+		</header>
+
+		{statusMessage && <p class="admin-message" role="status">{statusMessage}</p>}
+		{warnings.length > 0 && (
+			<div class="warning-list" role="status">
+				{warnings.map((warning) => <p>{warning}</p>)}
+			</div>
+		)}
+
+		<section class="summary-grid" aria-label="Founding Reader summary">
+			<article class="summary-card">
+				<span>Current Mode</span>
+				<strong>{modeLabels[summary.config.effectiveMode]}</strong>
+				<p>{summary.config.effectiveMode === summary.config.mode ? "Configured mode" : `Auto-switched from ${modeLabels[summary.config.mode]}`}</p>
+			</article>
+			<article class="summary-card">
+				<span>Active Readers</span>
+				<strong>{formatNumber(summary.config.currentReaders)}</strong>
+				<p>Target {formatNumber(summary.config.targetCapacity)}</p>
+			</article>
+			<article class="summary-card">
+				<span>Waitlist</span>
+				<strong>{formatNumber(summary.waitlistCount)}</strong>
+				<p>{formatNumber(summary.pendingCount)} pending</p>
+			</article>
+			<article class="summary-card">
+				<span>Capacity</span>
+				<strong>{summary.config.capacityReached ? "Reached" : "Available"}</strong>
+				<p>{summary.config.autoWaitlistAtCapacity ? "Auto waitlist enabled" : "Manual mode changes"}</p>
+			</article>
+		</section>
+
+		<section class="panel" id="access-mode">
+			<div class="panel-head">
+				<h2>Access Mode</h2>
+				<p>Change how new readers join without deploying code.</p>
+			</div>
+			<form class="mode-form" method="post">
+				<input type="hidden" name="intent" value="save-config" />
+				<label>
+					<span>Mode</span>
+					<select name="mode">
+						{FOUNDING_READER_MODES.map((mode) => (
+							<option value={mode} selected={summary.config.mode === mode}>{modeLabels[mode]}</option>
+						))}
+					</select>
+				</label>
+				<label>
+					<span>Target readers</span>
+					<input name="targetCapacity" type="number" min="1" step="1" value={summary.config.targetCapacity} />
+				</label>
+				<label class="checkbox-label">
+					<input name="autoWaitlistAtCapacity" type="checkbox" checked={summary.config.autoWaitlistAtCapacity} />
+					<span>Automatically switch Open to Waitlist when target capacity is reached.</span>
+				</label>
+				<button type="submit">Save Settings</button>
+			</form>
+		</section>
+
+		<section class="panel" id="waitlist">
+			<div class="panel-head">
+				<h2>Waitlist</h2>
+				<p>Approve, invite, decline, or remove access requests.</p>
+			</div>
+			<div class="status-row" aria-label="Waitlist status counts">
+				{WAITLIST_STATUSES.map((status) => (
+					<span><strong>{formatNumber(summary.statusCounts[status])}</strong> {statusLabels[status]}</span>
+				))}
+			</div>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>Reader</th>
+							<th>Status</th>
+							<th>Requested</th>
+							<th>Approved</th>
+							<th>Invited</th>
+							<th>Joined</th>
+							<th>Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						{summary.entries.length === 0 ? (
+							<tr><td colspan="7">No waitlist requests yet.</td></tr>
+						) : summary.entries.map((entry) => (
+							<tr>
+								<td>
+									<strong>{entry.displayName || entry.email}</strong>
+									{entry.displayName ? <span class="muted">{entry.email}</span> : null}
+								</td>
+								<td><span class="status-pill">{statusLabels[entry.status]}</span></td>
+								<td>{formatDate(entry.requestedAt)}</td>
+								<td>{formatDate(entry.approvedAt, "—")}</td>
+								<td>{formatDate(entry.invitedAt, "—")}</td>
+								<td>{formatDate(entry.joinedAt, "—")}</td>
+								<td>
+									<div class="action-stack">
+										{waitlistActionStatuses.map((status) => (
+											<form method="post">
+												<input type="hidden" name="intent" value="update-waitlist" />
+												<input type="hidden" name="id" value={entry.id} />
+												<input type="hidden" name="status" value={status} />
+												<button type="submit">{statusLabels[status]}</button>
+											</form>
+										))}
+										<form method="post">
+											<input type="hidden" name="intent" value="remove-waitlist" />
+											<input type="hidden" name="id" value={entry.id} />
+											<button type="submit" class="danger">Remove</button>
+										</form>
+									</div>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<section class="panel" id="active-readers">
+			<div class="panel-head">
+				<h2>Active Readers</h2>
+				<p>{formatNumber(users.length)} {users.length === 1 ? "reader" : "readers"} shown.</p>
+			</div>
+			<form class="search-form" method="get" action="/admin/founding-readers">
+				<label for="founding-reader-search">Name, username, or email</label>
+				<div class="search-row">
+					<input id="founding-reader-search" name="q" type="search" value={query} placeholder="reader@example.com" />
+					<button type="submit">Search</button>
+					{query && <a class="secondary-link" href="/admin/founding-readers">Clear</a>}
+				</div>
+			</form>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>Reader</th>
+							<th>Email</th>
+							<th>Joined</th>
+							<th>Last active</th>
+							<th>Books</th>
+							<th>Reviews</th>
+							<th>Journal</th>
+							<th>Streak</th>
+							<th>Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						{users.length === 0 ? (
+							<tr><td colspan="9">No Founding Readers matched that search.</td></tr>
+						) : users.map((user) => (
+							<tr>
+								<td>
+									<strong>{user.displayName || user.username || "Unnamed reader"}</strong>
+									{user.username ? <a class="table-link" href={`/admin/users/${encodeURIComponent(user.username)}`}>@{user.username}</a> : <span class="muted">No username</span>}
+								</td>
+								<td>{user.email || "Unknown"}</td>
+								<td>{formatDate(user.joinedAt)}</td>
+								<td>{user.lastActiveAt ? formatDate(user.lastActiveAt) : "No activity"}</td>
+								<td>{formatNumber(user.books)}</td>
+								<td>{formatNumber(user.reviews)}</td>
+								<td>{formatNumber(user.journalEntries)}</td>
+								<td>{formatNumber(user.readingStreak)}</td>
+								<td>
+									<div class="action-stack" aria-label={`Actions for ${user.username || user.email || "reader"}`}>
+										<button type="button" disabled>Impersonate</button>
+										<button type="button" disabled>Resend login</button>
+										<button type="button" disabled>Export</button>
+										<button type="button" disabled>Deactivate</button>
+										{user.username ? <a class="danger-link" href={`/admin/users/${encodeURIComponent(user.username)}`}>Delete</a> : <span class="muted">Delete</span>}
+									</div>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.admin-founding-readers-page { max-width: 1100px; }
+	.hero h1 { margin: 0; }
+	.hero p { margin: 0.35rem 0 0; color: var(--color-text-muted); }
+	.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+	.summary-card,
+	.panel { border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
+	.summary-card { display: grid; gap: 0.24rem; }
+	.summary-card span,
+	.panel-head p,
+	.muted { color: var(--color-text-muted); }
+	.summary-card strong { font-size: 1.45rem; color: var(--color-text); }
+	.summary-card p { margin: 0; font-size: 0.9rem; color: var(--color-text-muted); }
+	.panel { margin-top: 1rem; }
+	.panel-head h2 { margin: 0; }
+	.panel-head p { margin: 0.3rem 0 0; font-size: 0.92rem; }
+	.admin-message,
+	.warning-list { margin-top: 1rem; }
+	.admin-message { color: var(--color-primary); font-weight: 700; }
+	.warning-list { border: var(--border-subtle); border-radius: var(--radius-md); background: #fff; padding: 0.65rem 0.8rem; color: #991b1b; }
+	.warning-list p { margin: 0; }
+	.warning-list p + p { margin-top: 0.3rem; }
+	.mode-form,
+	.search-form { display: grid; gap: 0.65rem; margin-top: 0.75rem; }
+	.mode-form { grid-template-columns: repeat(2, minmax(170px, 1fr)); align-items: end; }
+	.mode-form label,
+	.search-form label { display: grid; gap: 0.3rem; font-weight: 700; font-size: 0.9rem; color: var(--color-text); }
+	.mode-form select,
+	.mode-form input[type="number"],
+	.search-row input { height: 38px; border: var(--border-strong); border-radius: var(--radius-sm); padding: 0 0.65rem; background: #fff; color: var(--color-text); font: inherit; box-sizing: border-box; }
+	.checkbox-label { grid-column: 1 / -1; display: flex !important; grid-template-columns: none !important; align-items: center; gap: 0.45rem !important; color: var(--color-text-muted) !important; }
+	.checkbox-label input { width: 18px; height: 18px; }
+	.mode-form button,
+	.search-row button,
+	.action-stack button {
+		min-height: 36px;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: var(--color-primary);
+		color: #fff;
+		font: inherit;
+		font-weight: 700;
+		padding: 0 0.8rem;
+		cursor: pointer;
+	}
+	.status-row { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.75rem; }
+	.status-row span,
+	.status-pill { display: inline-flex; min-height: 24px; align-items: center; border-radius: 999px; border: var(--border-subtle); padding: 0 0.55rem; background: #fff; font-size: 0.78rem; font-weight: 700; color: var(--color-text-muted); }
+	.status-row strong { margin-right: 0.24rem; color: var(--color-text); }
+	.search-row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+	.search-row input { flex: 1 1 260px; min-width: 0; }
+	.secondary-link,
+	.table-link { color: var(--color-nav); font-weight: 700; text-decoration: none; }
+	.secondary-link:hover,
+	.table-link:hover { color: var(--color-nav-hover); text-decoration: underline; }
+	.table-wrap { margin-top: 0.75rem; overflow-x: auto; }
+	table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+	th, td { text-align: left; padding: 0.5rem; border-bottom: var(--border-subtle); vertical-align: top; }
+	th { font-weight: 700; color: var(--color-text-muted); }
+	td strong { display: block; color: var(--color-text); }
+	.action-stack { display: flex; gap: 0.35rem; flex-wrap: wrap; min-width: 220px; }
+	.action-stack form { margin: 0; }
+	.action-stack button,
+	.action-stack a {
+		display: inline-flex;
+		align-items: center;
+		min-height: 30px;
+		border: var(--border-subtle);
+		border-radius: 999px;
+		background: #fff;
+		color: var(--color-nav);
+		font: inherit;
+		font-weight: 700;
+		text-decoration: none;
+		padding: 0 0.55rem;
+	}
+	.action-stack button:disabled { opacity: 0.55; cursor: not-allowed; }
+	.action-stack .danger,
+	.action-stack .danger-link { color: #991b1b; }
+	@media (max-width: 760px) {
+		.mode-form { grid-template-columns: 1fr; }
+		.search-row { align-items: stretch; }
+		.search-row button { flex: 1 1 auto; }
+	}
+</style>
