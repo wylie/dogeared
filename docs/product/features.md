@@ -247,7 +247,7 @@ Status: Complete
 
 Reviews are public finished-Work recommendations stored on the shelf entry. When a reader marks a Work Read, DogEared offers a simple completion flow: rating, optional review, and finish. Reviews support an optional title, optional body, spoiler flag, editing, deletion, and local draft autosave where the editor is available. Reviews belong to the Work, never to an individual Edition.
 
-Book pages show average rating, rating count, recent reviews, spoiler labels, collapsed long reviews, and an owner editor for finished books. Profiles include a Reviews section with latest reviews, sort and spoiler filters, and the same move-up/move-down layout controls used by shelf sections.
+Book pages show average rating, rating count, recent reviews, spoiler labels, collapsed long reviews, and an owner editor for finished books. When the editor is already visible, Book Detail suppresses duplicate write-review CTAs and transitions into the community review area with compact empty-state copy. Profiles include a Reviews section with latest reviews, sort and spoiler filters, and the same move-up/move-down layout controls used by shelf sections.
 
 Limitations: Reviews are public by default. Future privacy settings may add alternate visibility, but current Journal entries remain the private place for notes while reading.
 
@@ -361,7 +361,7 @@ Limitations: Users cannot like their own activity.
 
 Status: Complete
 
-Readers can comment on activity, load comments, and delete their own comments.
+Readers can comment on activity, load comments, and delete their own comments. Comment feedback appears as lightweight inline status text only when a success or error message exists; hidden feedback does not reserve card height.
 
 Limitations: Comments are capped at 500 characters.
 

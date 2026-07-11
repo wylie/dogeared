@@ -108,3 +108,16 @@ test("reading reviews v2 is wired through schema, API, book page, and profile", 
 	assert.match(profilePage, /review_filter/);
 	assert.match(profilePage, /Private thoughts while reading stay in the Reading Journal/);
 });
+
+test("book detail avoids duplicate review CTAs and reserved comment feedback space", () => {
+	const bookPage = readFileSync("src/pages/book.astro", "utf8");
+
+	assert.match(bookPage, /const canViewerWriteReview = isAuthenticated && Number\(book\?\.id \|\| 0\) > 0 && viewerShelfStatus === "finished"/);
+	assert.match(bookPage, /\{canViewerWriteReview && \(\s*<form\s+class="review-editor"/);
+	assert.match(bookPage, /\{canViewerWriteReview \? "No community reviews yet\." : "No written reviews yet\. Reviews help other readers decide what to read next\."\}/);
+	assert.doesNotMatch(bookPage, /Your review form is ready above\./);
+	assert.doesNotMatch(bookPage, /\{canViewerWriteReview \? \(\s*<a href="#reviews">Write your first review<\/a>/);
+	assert.match(bookPage, /\.activity-comment-feedback\[hidden\] \{\s*display: none;\s*\}/);
+	assert.doesNotMatch(bookPage, /\.activity-comment-feedback\[hidden\] \{[\s\S]*visibility: hidden/);
+	assert.doesNotMatch(bookPage, /\.activity-comment-feedback \{[\s\S]*min-height: 1rem/);
+});

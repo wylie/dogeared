@@ -940,6 +940,7 @@ const bookBreadcrumbStructuredData = JSON.stringify(buildBreadcrumbList([
 const bookStructuredDataPayload = bookStructuredData
 	? JSON.stringify([JSON.parse(bookStructuredData), JSON.parse(bookBreadcrumbStructuredData)])
 	: "";
+const canViewerWriteReview = isAuthenticated && Number(book?.id || 0) > 0 && viewerShelfStatus === "finished";
 function seriesSearchHref(title: string, author = "") {
 	const query = [title, author].map((part) => normalizeText(part)).filter(Boolean).join(" ");
 	return `/search?q=${encodeURIComponent(query || title)}`;
@@ -1298,7 +1299,7 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 							</p>
 						</div>
 					</div>
-					{isAuthenticated && book.id > 0 && viewerShelfStatus === "finished" && (
+					{canViewerWriteReview && (
 						<form
 							class="review-editor"
 							data-review-editor
@@ -1344,10 +1345,8 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 					)}
 					{reviews.length === 0 ? (
 						<div class="review-empty">
-							<p>No written reviews yet. Reviews help other readers decide what to read next.</p>
-							{isAuthenticated && book.id > 0 && viewerShelfStatus === "finished" ? (
-								<a href="#reviews">Write your first review</a>
-							) : (
+							<p>{canViewerWriteReview ? "No community reviews yet." : "No written reviews yet. Reviews help other readers decide what to read next."}</p>
+							{!canViewerWriteReview && (
 								<p class="meta">Finish this book to add a public review. Journal entries stay private.</p>
 							)}
 						</div>
@@ -1885,7 +1884,10 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 					continue;
 				}
 				if (!response.ok) {
-					if (feedback instanceof HTMLElement) feedback.textContent = String(data?.error || "Failed to load comments.");
+					if (feedback instanceof HTMLElement) {
+						feedback.hidden = false;
+						feedback.textContent = String(data?.error || "Failed to load comments.");
+					}
 					continue;
 				}
 				if (list instanceof HTMLElement) {
@@ -2753,13 +2755,12 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 	}
 	.activity-comment-feedback {
 		margin: 0;
-		min-height: 1rem;
+		padding-top: 0.12rem;
 		font-size: 0.76rem;
 		color: #8b1d1d;
 	}
 	.activity-comment-feedback[hidden] {
-		display: block;
-		visibility: hidden;
+		display: none;
 	}
 	.error { color: #991b1b; }
 	@media (max-width: 860px) {

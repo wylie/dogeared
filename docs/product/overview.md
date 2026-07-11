@@ -219,13 +219,13 @@ Activity is created for meaningful public reading events: adding a book to Want 
 
 Reviews are public recommendations written after finishing a Work. Ratings and reviews belong to the Work, not to an individual Edition, so the same rating/review context appears regardless of whether a reader originally shelved a hardcover, ebook, audiobook, or paperback. They are represented on `user_book` with optional star rating, optional review title, review body, spoiler flag, and review update timestamp. The finish flow offers rating, optional review, and Finish; reviews are never required.
 
-Book detail pages show aggregate rating context, recent reviews, spoiler labeling, collapsed long reviews, and an editor for the signed-in reader's own finished books. Profiles include a Reviews section with latest reviews, sorting, spoiler filters, and the same owner reorder controls used by shelf sections. Reviews are distinct from Reading Journal entries: reviews are public recommendations after finishing, while journal entries are private notes while reading.
+Book detail pages show aggregate rating context, recent reviews, spoiler labeling, collapsed long reviews, and an editor for the signed-in reader's own finished books. When that editor is visible, Book Detail does not show a duplicate "write review" CTA below it; the page moves into the community review state instead. Profiles include a Reviews section with latest reviews, sorting, spoiler filters, and the same owner reorder controls used by shelf sections. Reviews are distinct from Reading Journal entries: reviews are public recommendations after finishing, while journal entries are private notes while reading.
 
 Recently Reviewed recommendations show a review excerpt, reviewer attribution when a username is available, the reviewer's rating when present, and a direct link to the anchored review card on the book page.
 
 ### Comments
 
-Authenticated users can comment on activity. Comments are limited to 500 characters, can be loaded per activity, and can be deleted by their author.
+Authenticated users can comment on activity. Comments are limited to 500 characters, can be loaded per activity, and can be deleted by their author. Comment success and error feedback is lightweight inline status text that appears only while a message is visible, so activity cards do not reserve extra vertical space in the common case.
 
 ### Likes
 
