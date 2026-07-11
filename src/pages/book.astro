@@ -940,6 +940,22 @@ const bookBreadcrumbStructuredData = JSON.stringify(buildBreadcrumbList([
 const bookStructuredDataPayload = bookStructuredData
 	? JSON.stringify([JSON.parse(bookStructuredData), JSON.parse(bookBreadcrumbStructuredData)])
 	: "";
+function seriesSearchHref(title: string, author = "") {
+	const query = [title, author].map((part) => normalizeText(part)).filter(Boolean).join(" ");
+	return `/search?q=${encodeURIComponent(query || title)}`;
+}
+function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; title?: string }) {
+	const bookId = Number(seriesBook.bookId || 0);
+	if (bookId > 0) return `series-book-${bookId}`;
+	const order = Number(seriesBook.bookOrder || 0);
+	if (order > 0) return `series-book-${order}`;
+	return `series-book-${normalizeText(seriesBook.title).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
+const seriesBooks = seriesContext?.books || [];
+const currentSeriesIndex = seriesBooks.findIndex((seriesBook) => seriesBook.isCurrent);
+const previousSeriesBook = currentSeriesIndex > 0 ? seriesBooks[currentSeriesIndex - 1] : null;
+const nextSeriesBook = currentSeriesIndex >= 0 && currentSeriesIndex < seriesBooks.length - 1 ? seriesBooks[currentSeriesIndex + 1] : null;
+const currentSeriesBookId = seriesContext?.currentBook ? seriesBookDomId(seriesContext.currentBook) : "";
 ---
 
 <Layout
@@ -1066,27 +1082,27 @@ const bookStructuredDataPayload = bookStructuredData
 							</div>
 						</div>
 						<nav class="series-nav" aria-label={`${seriesContext.series.name} navigation`}>
-							{seriesContext.previousBook ? (
-								<a href={seriesContext.previousBook.bookHref}>Previous Book</a>
+							{previousSeriesBook ? (
+								<a href={previousSeriesBook.bookHref || seriesSearchHref(previousSeriesBook.title, previousSeriesBook.author)} aria-label={`Previous Book: ${previousSeriesBook.title}`}>Previous Book</a>
 							) : (
 								<span aria-disabled="true">Previous Book</span>
 							)}
-							{seriesContext.currentBook ? (
-								<a href={`#series-book-${seriesContext.currentBook.bookId}`}>Jump to Current</a>
+							{currentSeriesBookId ? (
+								<a href={`#${currentSeriesBookId}`} data-action="jump-to-current-series-book">Jump to Current</a>
 							) : (
 								<span aria-disabled="true">Jump to Current</span>
 							)}
-							{seriesContext.nextBook ? (
-								<a href={seriesContext.nextBook.bookHref}>Next Book</a>
+							{nextSeriesBook ? (
+								<a href={nextSeriesBook.bookHref || seriesSearchHref(nextSeriesBook.title, nextSeriesBook.author)} aria-label={`Next Book: ${nextSeriesBook.title}`}>Next Book</a>
 							) : (
 								<span aria-disabled="true">Next Book</span>
 							)}
 						</nav>
 						<ol class="series-list">
 							{seriesContext.books.map((seriesBook) => {
-								const seriesBookHref = seriesBook.bookHref || `/search?q=${encodeURIComponent(seriesBook.title)}`;
+								const seriesBookHref = seriesBook.bookHref || seriesSearchHref(seriesBook.title, seriesBook.author);
 								const seriesCardAttrs = {
-									id: `series-book-${seriesBook.bookId || seriesBook.bookOrder || seriesBook.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+									id: seriesBookDomId(seriesBook),
 									"data-current-series-book": seriesBook.isCurrent ? "true" : "false",
 									...(seriesBook.isCurrent ? { "aria-current": "true" } : {})
 								};
@@ -1507,6 +1523,24 @@ const bookStructuredDataPayload = bookStructuredData
 			const profileHref = `/profile/${encodeURIComponent(username)}`;
 			return `<p class="activity-comment-item"${commentId > 0 ? ` data-comment-id="${commentId}"` : ""}><span class="activity-comment-head"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a><span class="activity-comment-meta">${ageLabel ? `<span class="activity-comment-age">${escapeHtml(ageLabel)}</span>` : ""}${isMine ? `<button type="button" class="activity-comment-delete" data-action="delete-comment" data-comment-id="${commentId}" aria-label="Delete comment" title="Delete comment">&times;</button>` : ""}</span></span><span class="activity-comment-body">${escapeHtml(body)}</span></p>`;
 		};
+
+		for (const link of Array.from(document.querySelectorAll('[data-action="jump-to-current-series-book"]'))) {
+			link.addEventListener("click", (event) => {
+				if (!(link instanceof HTMLAnchorElement)) return;
+				const targetId = decodeURIComponent(link.hash || "").replace(/^#/, "");
+				const currentCard = targetId ? document.getElementById(targetId) : document.querySelector('[data-current-series-book="true"]');
+				if (!(currentCard instanceof HTMLElement)) return;
+				event.preventDefault();
+				const rect = currentCard.getBoundingClientRect();
+				const isFullyVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+				if (!isFullyVisible) {
+					currentCard.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+				}
+				if (!currentCard.hasAttribute("tabindex")) currentCard.setAttribute("tabindex", "-1");
+				currentCard.focus({ preventScroll: true });
+				if (link.hash && window.location.hash !== link.hash) history.replaceState(null, "", link.hash);
+			});
+		}
 
 		for (const button of Array.from(document.querySelectorAll('[data-action="expand-review"]'))) {
 			button.addEventListener("click", () => {
@@ -2235,6 +2269,7 @@ const bookStructuredDataPayload = bookStructuredData
 		display: grid;
 		gap: 0.75rem;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+		align-items: start;
 	}
 	@media (min-width: 980px) {
 		.series-list {
@@ -2243,10 +2278,42 @@ const bookStructuredDataPayload = bookStructuredData
 	}
 	:global(.series-list .book-card[data-current-series-book="true"]) {
 		border-color: rgba(31, 122, 69, 0.82);
-		background: linear-gradient(180deg, rgba(31, 122, 69, 0.07), rgba(255, 255, 255, 0.92) 42%);
+		/* background: linear-gradient(180deg, rgba(31, 122, 69, 0.07), rgba(255, 255, 255, 0.92) 42%); */
 		box-shadow:
 			inset 0 0 0 1px rgba(31, 122, 69, 0.62),
 			0 12px 30px rgba(31, 122, 69, 0.13);
+	}
+	:global(.series-list .book-card) {
+		align-self: start;
+		grid-template-columns: 76px minmax(0, 1fr);
+		padding: 0.58rem;
+		gap: 0.58rem;
+	}
+	:global(.series-list .book-card .cover-wrap) {
+		width: 76px;
+		gap: 0.44rem;
+	}
+	:global(.series-list .book-card .cover) {
+		width: 76px;
+		height: 114px;
+	}
+	:global(.series-list .book-card .cover-actions .shelf-dropdown) {
+		--shelf-trigger-height: 30px;
+		--shelf-trigger-min-height: 30px;
+	}
+	:global(.series-list .book-card .card-body) {
+		min-height: 0;
+	}
+	:global(.series-list .book-card h3) {
+		font-size: 0.98rem;
+		line-height: 1.16;
+	}
+	:global(.series-list .book-card .card-tail) {
+		margin-top: 0.2rem;
+		gap: 0.14rem;
+	}
+	:global(.series-list .book-card .meta) {
+		margin: 0.12rem 0;
 	}
 	.series-nav,
 	.series-card-kickers {

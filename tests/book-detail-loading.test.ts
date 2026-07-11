@@ -59,10 +59,25 @@ test("book detail series section reuses BookCard and shared shelf actions", () =
 	assert.match(seriesSection, /Jump to Current/);
 	assert.match(seriesSection, /Next Book/);
 	assert.match(seriesSection, /data-current-series-book/);
+	assert.match(seriesSection, /data-action="jump-to-current-series-book"/);
 	assert.match(seriesSection, /class="series-eyebrow">Series/);
 	assert.match(seriesSection, /<h2 id="series-heading" class="series-name">\{seriesContext\.series\.name\}<\/h2>/);
 	assert.doesNotMatch(seriesSection, /series-add-link/);
 	assert.doesNotMatch(seriesSection, /Add to DogEared/);
 	assert.doesNotMatch(seriesSection, /Current Book/);
 	assert.doesNotMatch(seriesSection, /Shelf: \{/);
+});
+
+test("book detail series navigation and compact card polish are wired", () => {
+	const source = readFileSync("src/pages/book.astro", "utf8");
+
+	assert.match(source, /const previousSeriesBook = currentSeriesIndex > 0 \? seriesBooks\[currentSeriesIndex - 1\] : null/);
+	assert.match(source, /const nextSeriesBook = currentSeriesIndex >= 0 && currentSeriesIndex < seriesBooks\.length - 1 \? seriesBooks\[currentSeriesIndex \+ 1\] : null/);
+	assert.match(source, /previousSeriesBook\.bookHref \|\| seriesSearchHref/);
+	assert.match(source, /nextSeriesBook\.bookHref \|\| seriesSearchHref/);
+	assert.match(source, /scrollIntoView\(\{ behavior: "smooth", block: "center", inline: "nearest" \}\)/);
+	assert.match(source, /const isFullyVisible = rect\.top >= 0 && rect\.bottom <= window\.innerHeight/);
+	assert.match(source, /\.series-list \{[\s\S]+align-items: start/);
+	assert.match(source, /:global\(\.series-list \.book-card\) \{[\s\S]+grid-template-columns: 76px minmax\(0, 1fr\)/);
+	assert.match(source, /:global\(\.series-list \.book-card \.cover\) \{[\s\S]+height: 114px/);
 });
