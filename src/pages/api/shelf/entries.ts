@@ -730,6 +730,8 @@ export const POST: APIRoute = async ({ request }) => {
 		const workEdition = await upsertWorkAndEdition(sql, {
 			bookId,
 			title,
+			canonicalTitle: title,
+			editionTitle: rawTitle,
 			author,
 			authorId,
 			description: synopsis,

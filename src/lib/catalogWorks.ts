@@ -1,11 +1,14 @@
-import { canonicalCatalogEditionKey, canonicalCatalogWorkKey, normalizeCatalogIsbn, normalizeCatalogText, type CatalogSourceInput } from "./catalogKeys";
-import type { getNeonSql } from "./neon";
+import { canonicalCatalogEditionKey, canonicalCatalogWorkKey, normalizeCatalogIsbn, normalizeCatalogText, type CatalogSourceInput } from "./catalogKeys.ts";
+import { normalizeRedundantEditionTitle } from "./canonicalTitles.ts";
+import type { getNeonSql } from "./neon.ts";
 
 type Sql = ReturnType<typeof getNeonSql>;
 
 export type CatalogEditionInput = {
 	bookId: number;
 	title: string;
+	canonicalTitle?: string;
+	editionTitle?: string;
 	author: string;
 	authorId?: number;
 	description?: string;
@@ -280,7 +283,10 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 	await ensureCanonicalWorkSchema(sql);
 	const bookId = Math.max(0, Number(input.bookId || 0) || 0);
 	if (!bookId) return { workId: 0, editionId: 0, representativeBookId: 0 };
-	const workKey = canonicalCatalogWorkKey({ title: input.title, author: input.author });
+	const rawWorkTitle = normalizeCatalogText(input.canonicalTitle || input.title) || "Untitled";
+	const workTitle = normalizeRedundantEditionTitle({ title: rawWorkTitle }).title || rawWorkTitle;
+	const editionTitle = normalizeCatalogText(input.editionTitle || input.title);
+	const workKey = canonicalCatalogWorkKey({ title: workTitle, author: input.author });
 	const genres = Array.from(new Set((input.genres || []).map((item) => normalizeCatalogText(item)).filter(Boolean)));
 	const subjects = Array.from(new Set([...(input.topics || [])].map((item) => normalizeCatalogText(item)).filter(Boolean)));
 	const sources = input.sources || [];
@@ -311,8 +317,8 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 		)
 		values (
 			${workKey},
-			${normalizeCatalogText(input.title) || "Untitled"},
-			${normalizeCatalogText(input.title) || "Untitled"},
+			${workTitle},
+			${workTitle},
 			${normalizeCatalogText(input.author)},
 			${Number(input.authorId || 0) > 0 ? Number(input.authorId || 0) : null},
 			${normalizeCatalogText(input.description)},
@@ -364,7 +370,8 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 			sourceWorkId: normalizeCatalogText(source.sourceWorkId),
 			sourceEditionId: normalizeCatalogText(source.sourceEditionId),
 			sourceUrl: normalizeCatalogText(source.sourceUrl)
-		}))
+		})),
+		editionTitle
 	});
 
 	const existingByBookRows = await sql<Array<{ id: number }>>`
@@ -420,6 +427,7 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 				open_library_work_id = case when ${normalizedOpenLibraryWorkId} <> '' then ${normalizedOpenLibraryWorkId} else open_library_work_id end,
 				open_library_edition_id = case when ${normalizedOpenLibraryEditionId} <> '' then ${normalizedOpenLibraryEditionId} else open_library_edition_id end,
 				external_ids = external_ids || ${normalizedExternalIds}::jsonb,
+				metadata = metadata || jsonb_build_object('editionTitle', ${editionTitle}),
 				updated_at = now()
 			where id = ${targetEditionId}
 			returning id
@@ -443,6 +451,7 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 				open_library_work_id,
 				open_library_edition_id,
 				external_ids,
+				metadata,
 				updated_at
 			)
 			values (
@@ -462,6 +471,7 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 				${normalizedOpenLibraryWorkId},
 				${normalizedOpenLibraryEditionId},
 				${normalizedExternalIds}::jsonb,
+				jsonb_build_object('editionTitle', ${editionTitle}),
 				now()
 			)
 			on conflict (work_id, edition_key) do update set
@@ -479,6 +489,7 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 				open_library_work_id = case when excluded.open_library_work_id <> '' then excluded.open_library_work_id else book_edition.open_library_work_id end,
 				open_library_edition_id = case when excluded.open_library_edition_id <> '' then excluded.open_library_edition_id else book_edition.open_library_edition_id end,
 				external_ids = book_edition.external_ids || excluded.external_ids,
+				metadata = book_edition.metadata || excluded.metadata,
 				updated_at = now()
 			returning id
 		`;

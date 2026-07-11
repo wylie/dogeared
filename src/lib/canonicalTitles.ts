@@ -84,3 +84,42 @@ export function normalizeRedundantSeriesTitle(input: CanonicalSeriesTitleInput):
 		removedSuffix: suffix
 	};
 }
+
+const EDITION_SUFFIXES = new Set([
+	"audio book",
+	"audiobook",
+	"audible audio",
+	"board book",
+	"ebook",
+	"e book",
+	"hardcover",
+	"illustrated edition",
+	"kindle",
+	"kindle edition",
+	"large print",
+	"library binding",
+	"mass market paperback",
+	"nook",
+	"paperback",
+	"trade paperback"
+]);
+
+export function normalizeRedundantEditionTitle(input: { title?: unknown }): CanonicalSeriesTitleResult {
+	const originalTitle = normalizeCatalogText(input.title);
+	const unchanged = { title: originalTitle, changed: false, removedSuffix: "" };
+	if (!originalTitle) return unchanged;
+
+	const match = originalTitle.match(/^(.*?)\s*\(([^()]*)\)\s*$/);
+	if (!match) return unchanged;
+
+	const baseTitle = normalizeCatalogText(match[1]);
+	const suffix = normalizeCatalogText(match[2]);
+	if (!baseTitle || !suffix) return unchanged;
+	if (!EDITION_SUFFIXES.has(normalizeComparable(suffix))) return unchanged;
+
+	return {
+		title: baseTitle,
+		changed: baseTitle !== originalTitle,
+		removedSuffix: suffix
+	};
+}

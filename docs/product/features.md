@@ -93,7 +93,11 @@ Status: Complete
 
 DogEared uses a Work -> Edition catalog model. Reader-facing surfaces resolve to a canonical Work so shelves, ratings, reviews, reading progress, recommendations, search, author pages, series, activity, and Readers Also Enjoyed do not duplicate hardcover, paperback, ebook, audiobook, translated, or publisher-specific editions.
 
-Editions remain available for precision metadata such as ISBN, publisher, format, language, publication date, page count, cover, Open Library IDs, Google Books ID, and external source IDs. Work detail pages show an Available Editions section only when more than one edition is known.
+Canonical Work titles store the published title only. Series suffixes and edition labels are normalized into structured series and edition metadata instead of being appended to Work titles, and cleanup only strips parentheticals when structured metadata proves they are redundant.
+
+Editions remain available for precision metadata such as ISBN, publisher, format, language, publication date, page count, cover, edition title, Open Library IDs, Google Books ID, and external source IDs. Work detail pages show an Available Editions section only when more than one edition is known.
+
+Potential duplicate Works are detected with confidence scoring across canonical title, author, structured series position, ISBNs, edition keys, provider identifiers, and existing Work relationships. Admins review high-confidence suggestions in Data Health and may merge or ignore them. Approved merges preserve reader-owned data, activity, recommendations, custom shelves, journal entries, collection entries, source mappings, and editions; uncertain matches are never silently merged.
 
 Limitations: v1 keeps the existing `book` table as a compatibility representative for routes and older relationships while new `book_work` and `book_edition` records carry the canonical model.
 
@@ -659,9 +663,9 @@ Limitations: This is a simple admin form. It does not yet include rich media upl
 
 Status: Complete
 
-Admins can inspect metadata gaps, genre coverage, author coverage, import quality, duplicate risk, recent backfills, page-count gaps, publisher gaps, and canonical title cleanup candidates. Canonical Title Cleanup reports books whose stored title still includes redundant series parentheticals and provides an admin action to normalize those titles through the same safe metadata-layer matcher used by imports.
+Admins can inspect metadata gaps, genre coverage, author coverage, import quality, duplicate risk, potential duplicate Works, recent backfills, page-count gaps, publisher gaps, missing-series signals, and canonical title cleanup candidates. Potential Duplicate Works provides a review queue with confidence and reasoning, plus merge and ignore actions. The same duplicate detection can run as the repeatable `cleanup:duplicate-works` task, which defaults to dry-run and only applies merges when explicitly requested. Canonical Title Cleanup reports books whose stored title still includes redundant series parentheticals and provides an admin action to normalize those titles through the same safe metadata-layer matcher used by imports.
 
-Limitations: Most backfill execution lives in scripts; canonical title cleanup is available as a targeted admin action because it is deterministic and idempotent.
+Limitations: Most backfill execution lives in scripts. Canonical title cleanup is available as a targeted admin action because it is deterministic and idempotent. Duplicate Work merging is admin-approved rather than automatic because false merges are more damaging than temporary duplicate suggestions.
 
 ### Admin User Management
 

@@ -1,4 +1,4 @@
-import type { getNeonSql } from "./neon";
+import type { getNeonSql } from "./neon.ts";
 
 type Sql = ReturnType<typeof getNeonSql>;
 

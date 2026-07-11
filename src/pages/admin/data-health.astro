@@ -4,6 +4,7 @@ import { getNeonSql } from "../../lib/neon";
 import { resolveAdminSession } from "../../lib/admin";
 import { formatDate, formatNumber, percentOf, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
 import { loadCanonicalTitleCleanupCandidates, normalizeCanonicalSeriesTitles } from "../../lib/canonicalTitleCleanup";
+import { ignorePotentialDuplicateWork, loadPotentialDuplicateWorks, mergeCatalogWorks } from "../../lib/workNormalization";
 
 export const prerender = false;
 
@@ -32,6 +33,32 @@ if (Astro.request.method === "POST") {
 			adminNotices.push(`Canonical Title Cleanup normalized ${formatNumber(cleanupResult.data.updated)} of ${formatNumber(cleanupResult.data.checked)} candidate titles.`);
 		}
 	}
+	if (action === "merge-duplicate-work") {
+		const mergeResult = await safeAdminLoad(
+			"Potential duplicate Work merge",
+			() => mergeCatalogWorks(sql, {
+				groupKey: formData.get("groupKey"),
+				targetBookId: formData.get("targetBookId"),
+				sourceBookId: formData.get("sourceBookId"),
+				reason: formData.get("reason")
+			}),
+			{ ok: false, message: "Merge could not be completed." }
+		);
+		adminNotices.push(mergeResult.warning || mergeResult.data.message);
+	}
+	if (action === "ignore-duplicate-work") {
+		const ignoreResult = await safeAdminLoad(
+			"Potential duplicate Work ignore",
+			() => ignorePotentialDuplicateWork(sql, {
+				groupKey: formData.get("groupKey"),
+				targetBookId: formData.get("targetBookId"),
+				sourceBookId: formData.get("sourceBookId"),
+				reason: formData.get("reason")
+			}),
+			{ ok: false, message: "Duplicate suggestion could not be ignored." }
+		);
+		adminNotices.push(ignoreResult.warning || ignoreResult.data.message);
+	}
 }
 
 const [
@@ -40,6 +67,7 @@ const [
 	authorCoverageResult,
 	importHealthResult,
 	duplicateGroupsResult,
+	potentialDuplicateWorksResult,
 	metadataReviewResult,
 	canonicalTitleCleanupResult,
 	recentBackfillResult,
@@ -55,19 +83,24 @@ const [
 		missing_isbn: number;
 		missing_page_count: number;
 		missing_publisher: number;
+		missing_series: number;
 	}>>`
 		select
 			count(*)::int as total_books,
-			count(*) filter (where trim(coalesce(primary_author, '')) = '')::int as missing_author,
-			count(*) filter (where trim(coalesce(cover_url, '')) = '')::int as missing_cover,
-			count(*) filter (where published_year is null or published_year <= 0)::int as missing_published_year,
-			count(*) filter (where trim(coalesce(synopsis, '')) = '')::int as missing_synopsis,
+			count(*) filter (where trim(coalesce(b.primary_author, '')) = '')::int as missing_author,
+			count(*) filter (where trim(coalesce(b.cover_url, '')) = '')::int as missing_cover,
+			count(*) filter (where b.published_year is null or b.published_year <= 0)::int as missing_published_year,
+			count(*) filter (where trim(coalesce(b.synopsis, '')) = '')::int as missing_synopsis,
 			count(*) filter (
-				where coalesce(trim(coalesce(isbn13, '')), trim(coalesce(isbn10, '')), '') = ''
+				where coalesce(trim(coalesce(b.isbn13, '')), trim(coalesce(b.isbn10, '')), '') = ''
 			)::int as missing_isbn,
-			count(*) filter (where coalesce(page_count, 0) <= 0)::int as missing_page_count,
-			count(*) filter (where trim(coalesce(publisher, '')) = '')::int as missing_publisher
-		from book
+			count(*) filter (where coalesce(b.page_count, 0) <= 0)::int as missing_page_count,
+			count(*) filter (where trim(coalesce(b.publisher, '')) = '')::int as missing_publisher,
+			count(*) filter (
+				where lower(b.title) ~ '(#|book [0-9]|series|trilogy|saga|chronicles)'
+					and not exists (select 1 from series_book sb where sb.book_id = b.id)
+			)::int as missing_series
+		from book b
 	`, []),
 	safeAdminLoad("Genre coverage", () => sql<Array<{ books_without_genres: number; books_with_genres: number }>>`
 		with genre_counts as (
@@ -127,6 +160,7 @@ const [
 		order by books desc, latest_update_at desc
 		limit 25
 	`, []),
+	safeAdminLoad("Potential duplicate Works", () => loadPotentialDuplicateWorks(sql, 25), []),
 	safeAdminLoad("Metadata review queue", () => sql<Array<{
 		id: number;
 		title: string;
@@ -224,6 +258,7 @@ const genreCoverageRows = safeArray(genreCoverageResult.data);
 const authorCoverageRows = safeArray(authorCoverageResult.data);
 const importHealthRows = safeArray(importHealthResult.data);
 const duplicateGroupsRows = safeArray(duplicateGroupsResult.data);
+const potentialDuplicateWorksRows = safeArray(potentialDuplicateWorksResult.data);
 const metadataReviewRows = safeArray(metadataReviewResult.data);
 const canonicalTitleCleanupRows = safeArray(canonicalTitleCleanupResult.data);
 const recentBackfillRows = safeArray(recentBackfillResult.data);
@@ -236,6 +271,7 @@ const adminWarnings = [
 	authorCoverageResult.warning,
 	importHealthResult.warning,
 	duplicateGroupsResult.warning,
+	potentialDuplicateWorksResult.warning,
 	metadataReviewResult.warning,
 	canonicalTitleCleanupResult.warning,
 	recentBackfillResult.warning,
@@ -247,6 +283,7 @@ const sectionLinks = [
 	{ id: "overview", label: "Overview" },
 	{ id: "metadata-gaps", label: "Metadata Gaps" },
 	{ id: "import-health", label: "Import Health" },
+	{ id: "potential-duplicates", label: "Work Duplicates" },
 	{ id: "metadata-review", label: "Review Queue" },
 	{ id: "canonical-title-cleanup", label: "Titles" },
 	{ id: "duplicates", label: "Duplicates" },
@@ -277,7 +314,8 @@ const books = bookCoverageRows[0] || {
 	missing_synopsis: 0,
 	missing_isbn: 0,
 	missing_page_count: 0,
-	missing_publisher: 0
+	missing_publisher: 0,
+	missing_series: 0
 };
 const genres = genreCoverageRows[0] || { books_without_genres: 0, books_with_genres: 0 };
 const authors = authorCoverageRows[0] || { total_authors: 0, authors_without_bio: 0, authors_without_photo: 0 };
@@ -348,6 +386,14 @@ const backfills = recentBackfillRows[0] || {
 					<p>Publisher coverage</p>
 					<strong>{percentOf(books.total_books - books.missing_publisher, books.total_books)}%</strong>
 				</article>
+				<article class="stat">
+					<p>Potential duplicate Works</p>
+					<strong>{formatNumber(potentialDuplicateWorksRows.length)}</strong>
+				</article>
+				<article class="stat">
+					<p>Canonical title cleanup</p>
+					<strong>{formatNumber(canonicalTitleCleanupRows.length)}</strong>
+				</article>
 			</div>
 			<div class="table-wrap">
 				<table>
@@ -362,6 +408,9 @@ const backfills = recentBackfillRows[0] || {
 						<tr><td>Books missing ISBN</td><td>{formatNumber(books.missing_isbn)}</td></tr>
 						<tr><td>Books missing page count</td><td>{formatNumber(books.missing_page_count)}</td></tr>
 						<tr><td>Books missing publisher</td><td>{formatNumber(books.missing_publisher)}</td></tr>
+						<tr><td>Books with possible missing series</td><td>{formatNumber(books.missing_series)}</td></tr>
+						<tr><td>Potential duplicate Works</td><td>{formatNumber(potentialDuplicateWorksRows.length)}</td></tr>
+						<tr><td>Canonical title cleanup candidates</td><td>{formatNumber(canonicalTitleCleanupRows.length)}</td></tr>
 						<tr><td>Books without genres</td><td>{formatNumber(genres.books_without_genres)}</td></tr>
 						<tr><td>Authors without bio</td><td>{countWithPct(authors.authors_without_bio, authors.total_authors)}</td></tr>
 						<tr><td>Authors without photo</td><td>{countWithPct(authors.authors_without_photo, authors.total_authors)}</td></tr>
@@ -393,6 +442,59 @@ const backfills = recentBackfillRows[0] || {
 				</article>
 			</div>
 			<p class="note">These are reliability proxies for import quality and shelf consistency.</p>
+		</section>
+
+		<section class="panel" id="potential-duplicates">
+			<div class="panel-head">
+				<h2>Potential Duplicate Works</h2>
+				<p>{formatNumber(potentialDuplicateWorksRows.length)} high-confidence duplicate Work groups shown for admin review.</p>
+			</div>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr><th>Canonical Work</th><th>Duplicate</th><th>Confidence</th><th>Reasoning</th><th>Action</th></tr>
+					</thead>
+					<tbody>
+						{potentialDuplicateWorksRows.length === 0 ? (
+							<tr><td colspan="5">No high-confidence duplicate Works detected.</td></tr>
+						) : potentialDuplicateWorksRows.flatMap((group) => group.duplicates.map((duplicate) => (
+							<tr>
+								<td>
+									<strong>{group.target.normalizedTitle || group.target.title}</strong><br />
+									<span class="muted">#{group.target.bookId} · {group.target.author || "Unknown"} · {group.target.seriesName ? `${group.target.seriesName}${group.target.seriesBookOrder > 0 ? ` Book ${group.target.seriesBookOrder}` : ""}` : "No series"}</span>
+								</td>
+								<td>
+									<strong>{duplicate.normalizedTitle || duplicate.title}</strong><br />
+									<span class="muted">#{duplicate.bookId} · {duplicate.title}</span>
+								</td>
+								<td>{formatNumber(group.confidenceScore)}%</td>
+								<td>{group.reasons.join(" ")}</td>
+								<td>
+									<div class="row-actions">
+										<form method="post">
+											<input type="hidden" name="action" value="merge-duplicate-work" />
+											<input type="hidden" name="groupKey" value={group.groupKey} />
+											<input type="hidden" name="targetBookId" value={String(group.target.bookId)} />
+											<input type="hidden" name="sourceBookId" value={String(duplicate.bookId)} />
+											<input type="hidden" name="reason" value={group.reasons.join(" ")} />
+											<button type="submit">Merge</button>
+										</form>
+										<form method="post">
+											<input type="hidden" name="action" value="ignore-duplicate-work" />
+											<input type="hidden" name="groupKey" value={group.groupKey} />
+											<input type="hidden" name="targetBookId" value={String(group.target.bookId)} />
+											<input type="hidden" name="sourceBookId" value={String(duplicate.bookId)} />
+											<input type="hidden" name="reason" value="Reviewed from Data Health." />
+											<button class="secondary" type="submit">Ignore</button>
+										</form>
+									</div>
+								</td>
+							</tr>
+						)))}
+					</tbody>
+				</table>
+			</div>
+			<p class="note">Suggestions use canonical title, author, series position, edition identifiers, ISBNs, and provider IDs. Admins approve or ignore each merge; uncertain matches are not merged automatically.</p>
 		</section>
 
 		<section class="panel" id="metadata-review">
@@ -620,6 +722,12 @@ const backfills = recentBackfillRows[0] || {
 	.actions a { color: var(--color-nav); font-weight: 700; text-decoration: none; }
 	.actions a:hover { color: var(--color-nav-hover); text-decoration: underline; }
 	.actions form { margin: 0; }
+	.row-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+	.row-actions form { margin: 0; }
 	.actions button {
 		border: 0;
 		border-radius: var(--radius-pill);
@@ -631,6 +739,24 @@ const backfills = recentBackfillRows[0] || {
 		cursor: pointer;
 	}
 	.actions button:hover { background: var(--color-primary-hover); }
+	.row-actions button {
+		border: 0;
+		border-radius: var(--radius-pill);
+		background: var(--color-primary);
+		color: #fff;
+		font: inherit;
+		font-size: 0.82rem;
+		font-weight: 700;
+		padding: 0.4rem 0.65rem;
+		cursor: pointer;
+	}
+	.row-actions button.secondary {
+		background: rgba(87, 117, 144, 0.12);
+		color: var(--color-text);
+	}
+	.row-actions button:hover { background: var(--color-primary-hover); }
+	.row-actions button.secondary:hover { background: rgba(87, 117, 144, 0.2); }
+	.muted { color: var(--color-text-muted); font-size: 0.82rem; }
 
 	@media (max-width: 900px) {
 		.grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }

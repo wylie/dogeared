@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeRedundantSeriesTitle } from "../src/lib/canonicalTitles.ts";
+import { normalizeRedundantEditionTitle, normalizeRedundantSeriesTitle } from "../src/lib/canonicalTitles.ts";
 import { loadCanonicalTitleCleanupCandidates, normalizeCanonicalSeriesTitles } from "../src/lib/canonicalTitleCleanup.ts";
 
 test("canonical title cleanup removes matching structured series suffixes", () => {
@@ -33,6 +33,16 @@ test("canonical title cleanup preserves unmatched and legitimate parentheticals"
 		assert.equal(result.changed, false);
 		assert.equal(result.title, title);
 	}
+});
+
+test("canonical edition title cleanup removes known format suffixes only", () => {
+	assert.deepEqual(normalizeRedundantEditionTitle({ title: "Project Hail Mary (Hardcover)" }), {
+		title: "Project Hail Mary",
+		changed: true,
+		removedSuffix: "Hardcover"
+	});
+	assert.equal(normalizeRedundantEditionTitle({ title: "A Brief History of Time (Updated Edition)" }).changed, false);
+	assert.equal(normalizeRedundantEditionTitle({ title: "The Dark Secret (Graphic Novel)" }).changed, false);
 });
 
 test("canonical title cleanup candidates use structured series metadata", async () => {

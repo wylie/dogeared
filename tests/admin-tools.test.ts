@@ -114,6 +114,9 @@ test("admin pages use defensive loaders and formatting", () => {
 	assert.equal(dataHealth.includes("canonical-title-cleanup"), true);
 	assert.equal(dataHealth.includes("loadCanonicalTitleCleanupCandidates"), true);
 	assert.equal(dataHealth.includes("normalizeCanonicalSeriesTitles"), true);
+	assert.equal(dataHealth.includes("Potential Duplicate Works"), true);
+	assert.equal(dataHealth.includes("merge-duplicate-work"), true);
+	assert.equal(dataHealth.includes("ignore-duplicate-work"), true);
 	assert.equal(users.includes("[admin.users.post.failed]"), true);
 	assert.equal(detail.includes("[admin.user-detail.post.failed]"), true);
 });

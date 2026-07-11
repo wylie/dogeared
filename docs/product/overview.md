@@ -87,9 +87,11 @@ DogEared uses email magic links for sign-in. Sessions are stored server-side and
 
 DogEared treats the literary Work as the reader-facing catalog identity. A Work represents the intellectual book, such as `Project Hail Mary` or `The Fellowship of the Ring`, and owns title, canonical title, author, description, subjects, genres, series position, original publication year, preferred cover, and rating summary.
 
-Canonical Work titles should contain only the published title. Series context belongs in structured series metadata, not appended parentheticals such as `(Wings of Fire, #5)` or `(Book 3)`. Import and cleanup flows may remove those suffixes only when the Work already has matching series name and book-number metadata.
+Canonical Work titles should contain only the published title. Series context belongs in structured series metadata, not appended parentheticals such as `(Wings of Fire, #5)` or `(Book 3)`, and edition context belongs on the Edition rather than the Work title. Import and cleanup flows may remove those suffixes only when the Work already has matching series name and book-number metadata.
 
-Editions sit beneath a Work. An Edition stores precision metadata such as ISBN-10/ISBN-13, publisher, format, language, publication date, page count, edition cover, Open Library identifiers, Google Books ID, and other external IDs. Book search, recommendations, author pages, series, shelves, ratings, reviews, reading progress, activity, and Readers Also Enjoyed should resolve to the canonical Work so duplicate editions do not fragment the reader experience. Edition details appear only when useful, such as the Available Editions section on Work detail pages.
+Editions sit beneath a Work. An Edition stores precision metadata such as ISBN-10/ISBN-13, publisher, format, language, publication date, page count, edition cover, Open Library identifiers, Google Books ID, edition title, and other external IDs. Book search, recommendations, author pages, series, shelves, ratings, reviews, reading progress, activity, and Readers Also Enjoyed should resolve to the canonical Work so duplicate editions do not fragment the reader experience. Edition details appear only when useful, such as the Available Editions section on Work detail pages.
+
+DogEared detects potential duplicate Works with multiple signals: canonical title, author, structured series name and position, ISBNs, edition keys, external provider identifiers, and existing Work relationships. High-confidence duplicate candidates are shown in Admin Data Health for review with merge reasoning. Admins can merge or ignore suggestions; DogEared does not silently merge uncertain matches. A merge keeps the richer representative Work while preserving shelf assignments, ratings, reviews, reading progress, activity, journal entries, recommendation feedback, custom shelves, collection entries, source mappings, and editions.
 
 The legacy `book` record remains a compatibility catalog row and representative display record while v1 migrates data into `book_work` and `book_edition`.
 
@@ -271,7 +273,7 @@ Before writing shelf changes, readers can preview the Goodreads CSV. Preview exp
 
 After import, DogEared shows an Import Report with books imported, works merged, series detected, metadata completed, covers prepared, books requiring review, skipped rows, sync failures, and shelf totals. Reports can be exported as JSON from the browser. If server sync fails after local planning, DogEared stores a browser-local recovery list and offers Resume Failed Sync instead of forcing the reader to restart from zero.
 
-Admins review metadata quality from `/admin/data-health`, including missing covers, authors, descriptions, page counts, and likely series gaps. Reader imports should not be blocked on metadata cleanup.
+Admins review metadata quality from `/admin/data-health`, including potential duplicate Works, canonical title cleanup, missing covers, authors, descriptions, page counts, and likely series gaps. Duplicate Work review shows the proposed canonical Work, duplicate Work, confidence, and reasoning, then lets admins merge or ignore each suggestion. Reader imports should not be blocked on metadata cleanup.
 
 ### Metrics
 

@@ -27,7 +27,8 @@
     "backfill:report": "node scripts/metadata-quality-report.mjs",
     "backfill:metadata": "node scripts/run-metadata-backfills.mjs",
     "backfill:cleanup-genres-topics": "node scripts/cleanup-book-genres-topics-once.mjs",
-    "cleanup:canonical-titles": "node --experimental-strip-types scripts/normalize-series-canonical-titles.mjs"
+    "cleanup:canonical-titles": "node --experimental-strip-types scripts/normalize-series-canonical-titles.mjs",
+    "cleanup:duplicate-works": "node --experimental-strip-types scripts/normalize-duplicate-works.mjs"
   },
   "dependencies": {
     "@astrojs/vercel": "^10.0.8",

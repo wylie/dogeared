@@ -16,6 +16,10 @@ A reader's target number of finished books for the current year. DogEared calcul
 
 The reader-facing literary Work DogEared uses as the primary catalog identity. A Work represents the intellectual book and owns shelves, ratings, reviews, reading progress, series membership, recommendations, search identity, author-page display, and Readers Also Enjoyed identity.
 
+## Canonical Title
+
+The published title stored on a canonical Work without redundant series or edition suffixes. DogEared only strips parenthetical series metadata when structured series name and book-position metadata already prove the suffix is duplicated.
+
 ## Author
 
 A catalog entity representing a writer. Books may reference an author record through `author_id`.
@@ -31,6 +35,10 @@ A specific publication or format beneath a Work, such as hardcover, paperback, e
 ## Book Source
 
 A source mapping between a DogEared book and an external source such as Google Books, Open Library, or NYT.
+
+## Duplicate Work Candidate
+
+An admin-review suggestion that two or more DogEared Works may represent the same book. Candidates are scored from canonical title, author, series position, ISBNs, edition keys, external identifiers, and existing Work relationships, then either merged or ignored by an administrator.
 
 ## Comment
 
