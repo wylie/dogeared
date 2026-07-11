@@ -951,11 +951,6 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 	if (order > 0) return `series-book-${order}`;
 	return `series-book-${normalizeText(seriesBook.title).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 }
-const seriesBooks = seriesContext?.books || [];
-const currentSeriesIndex = seriesBooks.findIndex((seriesBook) => seriesBook.isCurrent);
-const previousSeriesBook = currentSeriesIndex > 0 ? seriesBooks[currentSeriesIndex - 1] : null;
-const nextSeriesBook = currentSeriesIndex >= 0 && currentSeriesIndex < seriesBooks.length - 1 ? seriesBooks[currentSeriesIndex + 1] : null;
-const currentSeriesBookId = seriesContext?.currentBook ? seriesBookDomId(seriesContext.currentBook) : "";
 ---
 
 <Layout
@@ -1081,23 +1076,6 @@ const currentSeriesBookId = seriesContext?.currentBook ? seriesBookDomId(seriesC
 								{seriesContext.series.description && <p class="series-description">{seriesContext.series.description}</p>}
 							</div>
 						</div>
-						<nav class="series-nav" aria-label={`${seriesContext.series.name} navigation`}>
-							{previousSeriesBook ? (
-								<a href={previousSeriesBook.bookHref || seriesSearchHref(previousSeriesBook.title, previousSeriesBook.author)} aria-label={`Previous Book: ${previousSeriesBook.title}`}>Previous Book</a>
-							) : (
-								<span aria-disabled="true">Previous Book</span>
-							)}
-							{currentSeriesBookId ? (
-								<a href={`#${currentSeriesBookId}`} data-action="jump-to-current-series-book">Jump to Current</a>
-							) : (
-								<span aria-disabled="true">Jump to Current</span>
-							)}
-							{nextSeriesBook ? (
-								<a href={nextSeriesBook.bookHref || seriesSearchHref(nextSeriesBook.title, nextSeriesBook.author)} aria-label={`Next Book: ${nextSeriesBook.title}`}>Next Book</a>
-							) : (
-								<span aria-disabled="true">Next Book</span>
-							)}
-						</nav>
 						<ol class="series-list">
 							{seriesContext.books.map((seriesBook) => {
 								const seriesBookHref = seriesBook.bookHref || seriesSearchHref(seriesBook.title, seriesBook.author);
@@ -1523,24 +1501,6 @@ const currentSeriesBookId = seriesContext?.currentBook ? seriesBookDomId(seriesC
 			const profileHref = `/profile/${encodeURIComponent(username)}`;
 			return `<p class="activity-comment-item"${commentId > 0 ? ` data-comment-id="${commentId}"` : ""}><span class="activity-comment-head"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a><span class="activity-comment-meta">${ageLabel ? `<span class="activity-comment-age">${escapeHtml(ageLabel)}</span>` : ""}${isMine ? `<button type="button" class="activity-comment-delete" data-action="delete-comment" data-comment-id="${commentId}" aria-label="Delete comment" title="Delete comment">&times;</button>` : ""}</span></span><span class="activity-comment-body">${escapeHtml(body)}</span></p>`;
 		};
-
-		for (const link of Array.from(document.querySelectorAll('[data-action="jump-to-current-series-book"]'))) {
-			link.addEventListener("click", (event) => {
-				if (!(link instanceof HTMLAnchorElement)) return;
-				const targetId = decodeURIComponent(link.hash || "").replace(/^#/, "");
-				const currentCard = targetId ? document.getElementById(targetId) : document.querySelector('[data-current-series-book="true"]');
-				if (!(currentCard instanceof HTMLElement)) return;
-				event.preventDefault();
-				const rect = currentCard.getBoundingClientRect();
-				const isFullyVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
-				if (!isFullyVisible) {
-					currentCard.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-				}
-				if (!currentCard.hasAttribute("tabindex")) currentCard.setAttribute("tabindex", "-1");
-				currentCard.focus({ preventScroll: true });
-				if (link.hash && window.location.hash !== link.hash) history.replaceState(null, "", link.hash);
-			});
-		}
 
 		for (const button of Array.from(document.querySelectorAll('[data-action="expand-review"]'))) {
 			button.addEventListener("click", () => {
@@ -2315,18 +2275,12 @@ const currentSeriesBookId = seriesContext?.currentBook ? seriesBookDomId(seriesC
 	:global(.series-list .book-card .meta) {
 		margin: 0.12rem 0;
 	}
-	.series-nav,
 	.series-card-kickers {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.35rem;
 	}
-	.series-nav {
-		margin: -0.1rem 0 0;
-	}
-	.series-nav a,
-	.series-nav span,
 	.series-card-kickers span {
 		border-radius: 999px;
 		border: var(--border-subtle);
@@ -2336,17 +2290,6 @@ const currentSeriesBookId = seriesContext?.currentBook ? seriesBookDomId(seriesC
 		font-weight: 760;
 		line-height: 1.35;
 		text-decoration: none;
-	}
-	.series-nav a {
-		color: var(--color-nav);
-	}
-	.series-nav a:hover,
-	.series-nav a:focus-visible {
-		border-color: var(--color-border);
-		color: var(--color-nav-hover);
-	}
-	.series-nav span {
-		color: var(--color-text-subtle);
 	}
 	.series-card-kickers {
 		margin: 0 0 0.35rem;
