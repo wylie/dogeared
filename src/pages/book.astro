@@ -1103,6 +1103,7 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 										variant="compact-series"
 										attrs={seriesCardAttrs}
 									>
+										{(seriesBook.ratingCount || 0) === 0 && <p slot="meta" class="meta">No ratings yet.</p>}
 										<div slot="actions">
 											<ShelfDropdown attrs={{
 												"data-title": seriesBook.title,

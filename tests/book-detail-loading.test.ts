@@ -56,6 +56,11 @@ test("book detail series section reuses BookCard and shared shelf actions", () =
 	assert.match(seriesSection, /<BookCard/);
 	assert.match(seriesSection, /variant="compact-series"/);
 	assert.match(seriesSection, /seriesLabel=\{seriesBook\.bookOrder > 0 \? `Book \$\{seriesBook\.bookOrder\}` : ""\}/);
+	assert.match(seriesSection, /publishedLabel=\{seriesBook\.publishedYear \? String\(seriesBook\.publishedYear\) : ""\}/);
+	assert.match(seriesSection, /pageCount=\{seriesBook\.pageCount \|\| 0\}/);
+	assert.match(seriesSection, /averageRating=\{seriesBook\.averageRating \|\| 0\}/);
+	assert.match(seriesSection, /<p slot="meta" class="meta">No ratings yet\.<\/p>/);
+	assert.match(seriesSection, /description=""/);
 	assert.match(seriesSection, /<ShelfDropdown/);
 	assert.match(seriesSection, /data-current-series-book/);
 	assert.match(seriesSection, /class="series-eyebrow">Series/);
@@ -71,7 +76,7 @@ test("book detail series section reuses BookCard and shared shelf actions", () =
 	assert.doesNotMatch(seriesSection, /series-card-kickers/);
 	assert.doesNotMatch(seriesSection, /slot="preTitle"/);
 	assert.doesNotMatch(seriesSection, /seriesContext\.series\.name\}\$\{seriesBook\.bookOrder/);
-	assert.doesNotMatch(seriesSection, /No ratings yet\./);
+	assert.doesNotMatch(seriesSection, /review action/i);
 });
 
 test("book detail series cards stay compact without header navigation controls", () => {
