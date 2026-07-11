@@ -97,6 +97,8 @@ DogEared supports first-class series metadata. A series can have a name, descrip
 
 When a book belongs to a series, the book page shows a dedicated Series section that presents ordered entries as reusable BookCards with covers, title, author, series number, publication metadata, rating context, shelf status, and the shared shelf action. The current book is subtly highlighted. Lightweight Previous Book, Jump to Current, and Next Book navigation appears above the cards when those targets exist. Book Detail resolves series from `series_book` first and falls back to canonical Work-level `book_work.series_id` metadata so a representative Work does not lose its series context.
 
+Series cards use DogEared's stored catalog metadata as the source of truth for covers. When a series entry is missing a cover, Book Detail schedules non-blocking metadata enrichment that first checks existing Work, Edition, book, and series-entry metadata, then tries Open Library, then Google Books. Successful covers are saved back to DogEared's catalog tables so later page loads use local metadata. No-cover and failed lookup attempts are cached before retrying, which avoids repeated external requests for titles that providers cannot resolve.
+
 Author pages group books by series when metadata exists and keep standalone books in a separate section. Search results, discovery cards, recommendation cards, author cards, and book detail cards show concise series labels such as series name and book number when that metadata is available.
 
 ### Community Discovery

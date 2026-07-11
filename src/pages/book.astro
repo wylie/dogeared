@@ -17,6 +17,7 @@ import { formatReadingPosition, loadJournalEntriesForBook, type JournalSearchRes
 import { loadReadersAlsoEnjoyed, type RecommendationSection } from "../lib/recommendations";
 import { ensureCanonicalWorkSchema, resolveRepresentativeBookId } from "../lib/catalogWorks";
 import { publicReaderAccountFilterSql } from "../lib/publicReaderPolicy";
+import { enrichMissingSeriesBookCovers } from "../lib/bookCoverEnrichment";
 
 export const prerender = false;
 
@@ -873,6 +874,11 @@ if (book && session?.userId) {
 if (book?.id) {
 	try {
 		seriesContext = await loadBookSeriesContext(sql, book.id, session?.userId || "");
+		if (seriesContext?.books.length) {
+			void enrichMissingSeriesBookCovers(sql, seriesContext.books).catch((error) => {
+				logBookDetailLoadError("series-cover-enrichment", error);
+			});
+		}
 	} catch (error) {
 		logBookDetailLoadError("series", error);
 		seriesContext = null;

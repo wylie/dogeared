@@ -139,6 +139,8 @@ DogEared stores first-class series records with name, optional description, opti
 
 Series membership belongs to the canonical Work, not an Edition. Catalog imports attach known-series metadata during shelf creation, search infers labels for known series before a book is saved, and the known-series backfill migration populates existing catalog rows for Harry Potter, The Lord of the Rings, The Empyrean, Wings of Fire, A Series of Unfortunate Events, and Mistborn. Book Detail also performs a best-effort known-series attachment for recognized Works and resolves display context from `series_book` or canonical Work-level series fields. When source metadata is incomplete and no known-series rule matches, the Work remains standalone until DogEared receives reliable series metadata.
 
+Series cover enrichment is metadata-layer work, not BookCard behavior. If a Series BookCard lacks a cover, Book Detail schedules a bounded background enrichment pass. The enrichment workflow checks existing DogEared book, Work, Edition, and series-entry metadata first, then Open Library, then Google Books. The first valid cover is persisted locally on the relevant catalog records and reused on subsequent page loads. Negative lookups are cached for 30 days and transient failures for 1 day so DogEared does not repeatedly call external providers for unresolved titles.
+
 ### Books Index
 
 Status: Complete

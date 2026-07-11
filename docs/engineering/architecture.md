@@ -90,6 +90,8 @@ Series support lives in `src/lib/series`. The helper owns schema readiness, know
 
 Series ordering prefers explicit `book_order`, then publication order, chronological order, publication year, title, and representative book id. Missing known titles may be represented as `series_book` placeholder rows with `title_override` and no `book_id`; book detail links those placeholders to Search so readers can add the title when a catalog row is not available yet. Recommendations use series context to rank the earliest unread next book after a finished series entry ahead of unrelated recommendations, while avoiding later unread books until earlier available entries have been finished.
 
+Series cover enrichment lives in `src/lib/bookCoverEnrichment`. Book Detail schedules it after rendering a series context rather than blocking the page. The helper checks existing DogEared book, canonical Work, Edition, and series-entry metadata first, then Open Library, then Google Books. Successful covers are persisted back to local catalog records, while no-result and failure attempts are cached in `book_cover_enrichment_cache` with retry windows so external providers are not queried on every page load.
+
 ## Canonical Works And Editions
 
 Work/Edition support lives in `src/lib/catalogWorks` and `src/lib/catalogKeys`.

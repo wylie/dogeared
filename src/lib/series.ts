@@ -83,6 +83,7 @@ type KnownSeries = {
 	name: string;
 	slug: string;
 	totalBooks: number;
+	displayAuthor: string;
 	authors: string[];
 	books: KnownSeriesBook[];
 };
@@ -108,6 +109,7 @@ const KNOWN_SERIES: KnownSeries[] = [
 		name: "Harry Potter",
 		slug: "harry-potter",
 		totalBooks: 7,
+		displayAuthor: "J.K. Rowling",
 		authors: ["j k rowling", "jk rowling"],
 		books: [
 			{ title: "Harry Potter and the Sorcerer's Stone", order: 1, aliases: ["Harry Potter and the Philosopher's Stone"] },
@@ -123,6 +125,7 @@ const KNOWN_SERIES: KnownSeries[] = [
 		name: "The Lord of the Rings",
 		slug: "the-lord-of-the-rings",
 		totalBooks: 3,
+		displayAuthor: "J.R.R. Tolkien",
 		authors: ["j r r tolkien", "jrr tolkien"],
 		books: [
 			{ title: "The Fellowship of the Ring", order: 1, aliases: ["Fellowship of the Ring"] },
@@ -134,6 +137,7 @@ const KNOWN_SERIES: KnownSeries[] = [
 		name: "The Empyrean",
 		slug: "the-empyrean",
 		totalBooks: 3,
+		displayAuthor: "Rebecca Yarros",
 		authors: ["rebecca yarros"],
 		books: [
 			{ title: "Fourth Wing", order: 1 },
@@ -145,6 +149,7 @@ const KNOWN_SERIES: KnownSeries[] = [
 		name: "Wings of Fire",
 		slug: "wings-of-fire",
 		totalBooks: 16,
+		displayAuthor: "Tui T. Sutherland",
 		authors: ["tui t sutherland"],
 		books: [
 			{ title: "The Dragonet Prophecy", order: 1 },
@@ -168,6 +173,7 @@ const KNOWN_SERIES: KnownSeries[] = [
 		name: "A Series of Unfortunate Events",
 		slug: "a-series-of-unfortunate-events",
 		totalBooks: 13,
+		displayAuthor: "Lemony Snicket",
 		authors: ["lemony snicket"],
 		books: [
 			{ title: "The Bad Beginning", order: 1 },
@@ -189,6 +195,7 @@ const KNOWN_SERIES: KnownSeries[] = [
 		name: "Mistborn",
 		slug: "mistborn",
 		totalBooks: 7,
+		displayAuthor: "Brandon Sanderson",
 		authors: ["brandon sanderson"],
 		books: [
 			{ title: "Mistborn: The Final Empire", order: 1, aliases: ["The Final Empire", "Mistborn"] },
@@ -276,6 +283,7 @@ export async function upsertKnownSeriesForBook(
 	`;
 	const seriesId = Number(seriesRows[0]?.id || 0);
 	if (seriesId <= 0) return null;
+	const displayAuthor = knownSeries.displayAuthor || knownSeries.authors[0] || "";
 	for (const book of knownSeries.books) {
 		await sql`
 			update series_book
@@ -284,6 +292,7 @@ export async function upsertKnownSeriesForBook(
 				book_order = ${book.order},
 				publication_order = ${book.order},
 				chronological_order = ${book.order},
+				metadata = metadata || jsonb_build_object('author', ${displayAuthor}::text),
 				updated_at = now()
 			where series_id = ${seriesId}
 				and book_id is null
@@ -306,7 +315,7 @@ export async function upsertKnownSeriesForBook(
 				${book.order},
 				${book.order},
 				${book.order},
-				jsonb_build_object('source', 'known-series-v1')
+				jsonb_build_object('source', 'known-series-v1', 'author', ${displayAuthor}::text)
 			where not exists (
 				select 1
 				from series_book existing
@@ -573,9 +582,15 @@ export async function loadBookSeriesContext(
 				coalesce(nullif(s.total_books, 0), count(*) over (partition by s.id))::int as series_total_books,
 				sb.book_id,
 				coalesce(nullif(trim(b.title), ''), nullif(trim(sb.title_override), ''), 'Untitled') as title,
-				coalesce(nullif(trim(b.primary_author), ''), '') as primary_author,
+				coalesce(nullif(trim(b.primary_author), ''), nullif(trim(sb.metadata ->> 'author'), ''), '') as primary_author,
 				b.author_id,
-				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+				coalesce(
+					nullif(trim(b.cover_url), ''),
+					nullif(trim(bw.preferred_cover_url), ''),
+					nullif(trim(be.cover_url), ''),
+					nullif(trim(sb.metadata ->> 'coverUrl'), ''),
+					''
+				) as cover_url,
 				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 				coalesce(nullif(trim(b.language), ''), '') as language,
 				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
@@ -593,6 +608,18 @@ export async function loadBookSeriesContext(
 			join series s on s.id = cs.series_id
 			join series_book sb on sb.series_id = s.id
 			left join book b on b.id = sb.book_id
+			left join book_work bw on bw.id = b.work_id
+			left join lateral (
+				select candidate.cover_url
+				from book_edition candidate
+				where candidate.work_id = b.work_id
+					and nullif(trim(candidate.cover_url), '') is not null
+				order by
+					case when candidate.book_id = b.id then 0 else 1 end,
+					candidate.updated_at desc,
+					candidate.id desc
+				limit 1
+			) be on true
 			left join lateral (
 				select
 					round(avg(ubr.rating)::numeric, 2) as average_rating,
@@ -614,7 +641,12 @@ export async function loadBookSeriesContext(
 				coalesce(nullif(trim(b.title), ''), 'Untitled') as title,
 				coalesce(nullif(trim(b.primary_author), ''), '') as primary_author,
 				b.author_id,
-				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+				coalesce(
+					nullif(trim(b.cover_url), ''),
+					nullif(trim(bw.preferred_cover_url), ''),
+					nullif(trim(be.cover_url), ''),
+					''
+				) as cover_url,
 				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 				coalesce(nullif(trim(b.language), ''), '') as language,
 				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
@@ -632,6 +664,18 @@ export async function loadBookSeriesContext(
 			join direct_book db on db.work_series_id = cs.series_id
 			join series s on s.id = cs.series_id
 			join book b on b.id = db.book_id
+			left join book_work bw on bw.id = b.work_id
+			left join lateral (
+				select candidate.cover_url
+				from book_edition candidate
+				where candidate.work_id = b.work_id
+					and nullif(trim(candidate.cover_url), '') is not null
+				order by
+					case when candidate.book_id = b.id then 0 else 1 end,
+					candidate.updated_at desc,
+					candidate.id desc
+				limit 1
+			) be on true
 			left join lateral (
 				select
 					round(avg(ubr.rating)::numeric, 2) as average_rating,
