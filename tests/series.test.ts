@@ -85,6 +85,7 @@ test("known series metadata is inferred for regression fixtures", () => {
 		["The Fellowship of the Ring", "J. R. R. Tolkien", "The Lord of the Rings", 1],
 		["Fourth Wing", "Rebecca Yarros", "The Empyrean", 1],
 		["The Dragonet Prophecy", "Tui T. Sutherland", "Wings of Fire", 1],
+		["Moon Rising", "Tui T. Sutherland", "Wings of Fire", 6],
 		["The Bad Beginning", "Lemony Snicket", "A Series of Unfortunate Events", 1],
 		["The Final Empire", "Brandon Sanderson", "Mistborn", 1]
 	] as const;
@@ -94,6 +95,21 @@ test("known series metadata is inferred for regression fixtures", () => {
 		assert.equal(inferred?.seriesName, seriesName);
 		assert.equal(inferred?.bookOrder, bookOrder);
 	}
+});
+
+test("Wings of Fire known series matches Book Detail release fixture total", () => {
+	const source = readFileSync("src/lib/series.ts", "utf8");
+
+	assert.match(source, /name: "Wings of Fire"[\s\S]+totalBooks: 16/);
+});
+
+test("series context loader falls back from representative books to canonical Work membership", () => {
+	const source = readFileSync("src/lib/series.ts", "utf8");
+
+	assert.match(source, /with direct_book as/);
+	assert.match(source, /bw\.series_id as work_series_id/);
+	assert.match(source, /select db\.work_series_id/);
+	assert.match(source, /where not exists \([\s\S]+from series_book existing[\s\S]+existing\.book_id = b\.id/);
 });
 
 test("series inference is wired through search, shelf import, recommendations, and migration", () => {

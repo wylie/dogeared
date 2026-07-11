@@ -141,7 +141,7 @@ const KNOWN_SERIES: KnownSeries[] = [
 	{
 		name: "Wings of Fire",
 		slug: "wings-of-fire",
-		totalBooks: 15,
+		totalBooks: 16,
 		authors: ["tui t sutherland"],
 		books: [
 			{ title: "The Dragonet Prophecy", order: 1 },
@@ -534,43 +534,103 @@ export async function loadBookSeriesContext(
 		chronological_order: string | null;
 		viewer_status: ShelfStatus | null;
 	}>>`
-		with current_series as (
+		with direct_book as (
+			select
+				b.id as book_id,
+				bw.series_id as work_series_id,
+				bw.series_position as work_series_position
+			from book b
+			left join book_work bw on bw.id = b.work_id
+			where b.id = ${currentBookId}
+			limit 1
+		),
+		current_series as (
 			select sb.series_id
 			from series_book sb
 			where sb.book_id = ${currentBookId}
-			order by sb.series_id asc
+			union
+			select db.work_series_id
+			from direct_book db
+			where db.work_series_id is not null
+			order by series_id asc
 			limit 1
+		),
+		series_rows as (
+			select
+				s.id as series_id,
+				s.name as series_name,
+				coalesce(s.description, '') as series_description,
+				coalesce(s.cover_url, '') as series_cover_url,
+				coalesce(nullif(s.total_books, 0), count(*) over (partition by s.id))::int as series_total_books,
+				sb.book_id,
+				coalesce(nullif(trim(b.title), ''), nullif(trim(sb.title_override), ''), 'Untitled') as title,
+				coalesce(nullif(trim(b.primary_author), ''), '') as primary_author,
+				b.author_id,
+				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+				coalesce(nullif(trim(b.language), ''), '') as language,
+				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+				b.published_year,
+				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
+				sb.book_order::text as book_order,
+				sb.publication_order::text as publication_order,
+				sb.chronological_order::text as chronological_order,
+				coalesce(ub.status, '') as viewer_status
+			from current_series cs
+			join series s on s.id = cs.series_id
+			join series_book sb on sb.series_id = s.id
+			left join book b on b.id = sb.book_id
+			left join user_book ub on ub.book_id = sb.book_id
+				and ${viewerUserId} <> ''
+				and ub.user_id = ${viewerUserId || "00000000-0000-0000-0000-000000000000"}::uuid
+			union all
+			select
+				s.id as series_id,
+				s.name as series_name,
+				coalesce(s.description, '') as series_description,
+				coalesce(s.cover_url, '') as series_cover_url,
+				coalesce(nullif(s.total_books, 0), 1)::int as series_total_books,
+				b.id as book_id,
+				coalesce(nullif(trim(b.title), ''), 'Untitled') as title,
+				coalesce(nullif(trim(b.primary_author), ''), '') as primary_author,
+				b.author_id,
+				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+				coalesce(nullif(trim(b.language), ''), '') as language,
+				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+				b.published_year,
+				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
+				db.work_series_position::text as book_order,
+				db.work_series_position::text as publication_order,
+				db.work_series_position::text as chronological_order,
+				coalesce(ub.status, '') as viewer_status
+			from current_series cs
+			join direct_book db on db.work_series_id = cs.series_id
+			join series s on s.id = cs.series_id
+			join book b on b.id = db.book_id
+			left join user_book ub on ub.book_id = b.id
+				and ${viewerUserId} <> ''
+				and ub.user_id = ${viewerUserId || "00000000-0000-0000-0000-000000000000"}::uuid
+			where not exists (
+				select 1
+				from series_book existing
+				where existing.series_id = s.id
+					and existing.book_id = b.id
+			)
 		)
 		select
-			s.id as series_id,
-			s.name as series_name,
-			coalesce(s.description, '') as series_description,
-			coalesce(s.cover_url, '') as series_cover_url,
-			coalesce(nullif(s.total_books, 0), count(*) over (partition by s.id))::int as series_total_books,
-			sb.book_id,
-			coalesce(nullif(trim(b.title), ''), nullif(trim(sb.title_override), ''), 'Untitled') as title,
-			coalesce(nullif(trim(b.primary_author), ''), '') as primary_author,
-			b.author_id,
-			coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
-			coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
-			coalesce(nullif(trim(b.language), ''), '') as language,
-			coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
-			coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
-			coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
-			b.published_year,
-			coalesce(nullif(b.page_count, 0), 0)::int as page_count,
-			sb.book_order::text as book_order,
-			sb.publication_order::text as publication_order,
-			sb.chronological_order::text as chronological_order,
-			coalesce(ub.status, '') as viewer_status
-		from current_series cs
-		join series s on s.id = cs.series_id
-		join series_book sb on sb.series_id = s.id
-		left join book b on b.id = sb.book_id
-		left join user_book ub on ub.book_id = sb.book_id
-			and ${viewerUserId} <> ''
-			and ub.user_id = ${viewerUserId || "00000000-0000-0000-0000-000000000000"}::uuid
-		order by sb.book_order nulls last, sb.publication_order nulls last, sb.chronological_order nulls last, b.published_year nulls last, title asc
+			*
+		from series_rows
+		order by
+			nullif(book_order, '')::numeric nulls last,
+			nullif(publication_order, '')::numeric nulls last,
+			nullif(chronological_order, '')::numeric nulls last,
+			published_year nulls last,
+			title asc
 	`;
 	if (rows.length === 0) return null;
 	const first = rows[0];

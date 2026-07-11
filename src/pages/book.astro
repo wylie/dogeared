@@ -12,10 +12,11 @@ import { buildBookReviewList, ensureReviewSchema, type BookReview } from "../lib
 import { googleBooksCoverUrl } from "../lib/bookCovers";
 import { resolveCustomShelfOptions } from "../lib/customShelves";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
-import { loadBookSeriesContext, type BookSeriesContext, type ShelfStatus } from "../lib/series";
+import { loadBookSeriesContext, upsertKnownSeriesForBook, type BookSeriesContext, type ShelfStatus } from "../lib/series";
 import { formatReadingPosition, loadJournalEntriesForBook, type JournalSearchResult } from "../lib/readingJournal";
 import { loadReadersAlsoEnjoyed, type RecommendationSection } from "../lib/recommendations";
 import { ensureCanonicalWorkSchema, resolveRepresentativeBookId } from "../lib/catalogWorks";
+import { publicReaderAccountFilterSql } from "../lib/publicReaderPolicy";
 
 export const prerender = false;
 
@@ -256,6 +257,10 @@ function normalizeCatalogPageCount(value: unknown) {
 	return Number.isFinite(numeric) ? Math.floor(numeric) : 0;
 }
 
+function logBookDetailLoadError(stage: string, error: unknown) {
+	console.error(`[book.detail.${stage}]`, error);
+}
+
 async function fetchOpenLibraryBook() {
 	const fetchJson = async (url: string) => {
 		try {
@@ -479,123 +484,140 @@ try {
 			ratingCount: Number(row.rating_count || 0)
 			,pageCount: normalizeCatalogPageCount(row.page_count)
 		};
-		if (book.workId > 0) {
-			const editionRows = await sql<Array<{
-				id: number;
-				book_id: number | null;
-				format: string | null;
-				publisher: string | null;
-				language: string | null;
-				publication_date: string | null;
-				publication_year: number | null;
-				page_count: number | null;
-				isbn13: string | null;
-				isbn10: string | null;
-				cover_url: string | null;
-			}>>`
-				select
-					be.id,
-					be.book_id,
-					coalesce(nullif(trim(be.format), ''), 'Book') as format,
-					coalesce(nullif(trim(be.publisher), ''), '') as publisher,
-					coalesce(nullif(trim(be.language), ''), '') as language,
-					be.publication_date::text as publication_date,
-					be.publication_year,
-					be.page_count,
-					coalesce(nullif(trim(be.isbn13), ''), '') as isbn13,
-					coalesce(nullif(trim(be.isbn10), ''), '') as isbn10,
-					coalesce(nullif(trim(be.cover_url), ''), '') as cover_url
-				from book_edition be
-				where be.work_id = ${book.workId}
-				order by
-					case when be.book_id = ${book.id} then 0 else 1 end,
-					case lower(coalesce(be.format, ''))
-						when 'hardcover' then 1
-						when 'paperback' then 2
-						when 'ebook' then 3
-						when 'audiobook' then 4
-						else 5
-					end,
-					coalesce(be.publication_date::text, ''),
-					be.id
-				limit 12
-			`;
-			const seenEditions = new Set<string>();
-			availableEditions = editionRows
-				.map((edition) => ({
-					id: Number(edition.id || 0),
-					bookId: Number(edition.book_id || 0),
-					format: normalizeText(edition.format) || "Book",
-					publisher: normalizeText(edition.publisher),
-					language: normalizeText(edition.language).toUpperCase(),
-					publicationLabel: formatPublishedLabel(normalizeText(edition.publication_date)) || (edition.publication_year ? String(edition.publication_year) : ""),
-					pageCount: normalizeCatalogPageCount(edition.page_count),
-					isbn: normalizeText(edition.isbn13 || edition.isbn10),
-					coverUrl: normalizeText(edition.cover_url)
-				}))
-				.filter((edition) => {
-					const key = `${edition.format}|${edition.publisher}|${edition.publicationLabel}|${edition.isbn}|${edition.pageCount}`;
-					if (!key.replace(/\|/g, "") || seenEditions.has(key)) return false;
-					seenEditions.add(key);
-					return true;
-				});
+		try {
+			await upsertKnownSeriesForBook(sql, {
+				bookId: book.id,
+				workId: book.workId,
+				title: book.title,
+				author: book.author,
+				coverUrl: book.coverUrl,
+				publishedYear: row.published_year || 0
+			});
+		} catch (error) {
+			logBookDetailLoadError("series-upsert", error);
 		}
-		const genreRows = await sql<Array<{ genre_name: string }>>`
-			select distinct coalesce(nullif(trim(genre_name), ''), '') as genre_name
-			from book_genre
-			where book_id = ${book.id}
-			order by genre_name asc
-			limit 6
-		`;
-		const genreDedupe = new Set<string>();
-		bookGenres = genreRows
-			.map((row) => normalizeText(row.genre_name))
-			.filter((value) => value && !isDisplayNoise(value))
-			.flatMap((value) => normalizeGenreEntry(value))
-			.map((item) => item.name)
-			.filter((label) => {
-				const key = canonicalTagKey(label);
-				if (!key || genreDedupe.has(key)) return false;
-				genreDedupe.add(key);
-				return true;
-			})
-			.slice(0, 8);
-		const topicRows = await sql<Array<{ tag_name: string }>>`
-			select distinct coalesce(nullif(trim(tag_name), ''), '') as tag_name
-			from book_tag
-			where book_id = ${book.id}
-			order by tag_name asc
-			limit 8
-		`;
-		const genreKeySet = new Set(bookGenres.map((value) => canonicalTagKey(value)).filter(Boolean));
-		const topicDedupe = new Set<string>();
-		bookTopics = topicRows
-			.map((row) => normalizeText(row.tag_name))
-			.filter((value) => value && !isDisplayNoise(value))
-			.map((value) => formatTopicLabel(value))
-			.filter((label) => {
-				const key = canonicalTagKey(label);
-				if (!key || genreKeySet.has(key) || topicDedupe.has(key)) return false;
-				topicDedupe.add(key);
-				return true;
-			})
-			.filter(Boolean)
-			.slice(0, 8);
+		if (book.workId > 0) {
+			try {
+				const editionRows = await sql<Array<{
+					id: number;
+					book_id: number | null;
+					format: string | null;
+					publisher: string | null;
+					language: string | null;
+					publication_date: string | null;
+					publication_year: number | null;
+					page_count: number | null;
+					isbn13: string | null;
+					isbn10: string | null;
+					cover_url: string | null;
+				}>>`
+					select
+						be.id,
+						be.book_id,
+						coalesce(nullif(trim(be.format), ''), 'Book') as format,
+						coalesce(nullif(trim(be.publisher), ''), '') as publisher,
+						coalesce(nullif(trim(be.language), ''), '') as language,
+						be.publication_date::text as publication_date,
+						be.publication_year,
+						be.page_count,
+						coalesce(nullif(trim(be.isbn13), ''), '') as isbn13,
+						coalesce(nullif(trim(be.isbn10), ''), '') as isbn10,
+						coalesce(nullif(trim(be.cover_url), ''), '') as cover_url
+					from book_edition be
+					where be.work_id = ${book.workId}
+					order by
+						case when be.book_id = ${book.id} then 0 else 1 end,
+						case lower(coalesce(be.format, ''))
+							when 'hardcover' then 1
+							when 'paperback' then 2
+							when 'ebook' then 3
+							when 'audiobook' then 4
+							else 5
+						end,
+						coalesce(be.publication_date::text, ''),
+						be.id
+					limit 12
+				`;
+				const seenEditions = new Set<string>();
+				availableEditions = editionRows
+					.map((edition) => ({
+						id: Number(edition.id || 0),
+						bookId: Number(edition.book_id || 0),
+						format: normalizeText(edition.format) || "Book",
+						publisher: normalizeText(edition.publisher),
+						language: normalizeText(edition.language).toUpperCase(),
+						publicationLabel: formatPublishedLabel(normalizeText(edition.publication_date)) || (edition.publication_year ? String(edition.publication_year) : ""),
+						pageCount: normalizeCatalogPageCount(edition.page_count),
+						isbn: normalizeText(edition.isbn13 || edition.isbn10),
+						coverUrl: normalizeText(edition.cover_url)
+					}))
+					.filter((edition) => {
+						const key = `${edition.format}|${edition.publisher}|${edition.publicationLabel}|${edition.isbn}|${edition.pageCount}`;
+						if (!key.replace(/\|/g, "") || seenEditions.has(key)) return false;
+						seenEditions.add(key);
+						return true;
+					});
+			} catch (error) {
+				logBookDetailLoadError("editions", error);
+				availableEditions = [];
+			}
+		}
+		try {
+			const genreRows = await sql<Array<{ genre_name: string }>>`
+				select distinct coalesce(nullif(trim(genre_name), ''), '') as genre_name
+				from book_genre
+				where book_id = ${book.id}
+				order by genre_name asc
+				limit 6
+			`;
+			const genreDedupe = new Set<string>();
+			bookGenres = genreRows
+				.map((row) => normalizeText(row.genre_name))
+				.filter((value) => value && !isDisplayNoise(value))
+				.flatMap((value) => normalizeGenreEntry(value))
+				.map((item) => item.name)
+				.filter((label) => {
+					const key = canonicalTagKey(label);
+					if (!key || genreDedupe.has(key)) return false;
+					genreDedupe.add(key);
+					return true;
+				})
+				.slice(0, 8);
+		} catch (error) {
+			logBookDetailLoadError("genres", error);
+			bookGenres = [];
+		}
+		try {
+			const topicRows = await sql<Array<{ tag_name: string }>>`
+				select distinct coalesce(nullif(trim(tag_name), ''), '') as tag_name
+				from book_tag
+				where book_id = ${book.id}
+				order by tag_name asc
+				limit 8
+			`;
+			const genreKeySet = new Set(bookGenres.map((value) => canonicalTagKey(value)).filter(Boolean));
+			const topicDedupe = new Set<string>();
+			bookTopics = topicRows
+				.map((row) => normalizeText(row.tag_name))
+				.filter((value) => value && !isDisplayNoise(value))
+				.map((value) => formatTopicLabel(value))
+				.filter((label) => {
+					const key = canonicalTagKey(label);
+					if (!key || genreKeySet.has(key) || topicDedupe.has(key)) return false;
+					topicDedupe.add(key);
+					return true;
+				})
+				.filter(Boolean)
+				.slice(0, 8);
+		} catch (error) {
+			logBookDetailLoadError("topics", error);
+			bookTopics = [];
+		}
 
 		const encryptionKey = getEncryptionKey();
-		await ensureReviewSchema(sql);
-		let activityRows: Array<{
-			id: number;
-			event_type: string;
-			created_at: string;
-			username: string | null;
-			email_local: string | null;
-			rating: number | null;
-			like_count: number;
-			viewer_liked: boolean;
-		}> = [];
 		try {
-			activityRows = await sql<Array<{
+			await ensureReviewSchema(sql);
+			let activityRows: Array<{
 				id: number;
 				event_type: string;
 				created_at: string;
@@ -604,33 +626,45 @@ try {
 				rating: number | null;
 				like_count: number;
 				viewer_liked: boolean;
-			}>>`
-				select
-					ua.id,
-					ua.event_type,
-					ua.created_at::text as created_at,
-					au.username,
-					nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local,
-					coalesce(ub.rating, ua.rating) as rating,
-					coalesce(la.like_count, 0)::int as like_count,
-					coalesce(la.viewer_liked, false) as viewer_liked
-				from user_activity ua
-				join app_user au on au.id = ua.user_id
-				left join user_book ub on ub.user_id = ua.user_id and ub.book_id = ua.book_id
-				left join lateral (
+			}> = [];
+			try {
+				activityRows = await sql<Array<{
+					id: number;
+					event_type: string;
+					created_at: string;
+					username: string | null;
+					email_local: string | null;
+					rating: number | null;
+					like_count: number;
+					viewer_liked: boolean;
+				}>>`
 					select
-						count(*)::int as like_count,
-						bool_or(ual.user_id = ${session?.userId || "00000000-0000-0000-0000-000000000000"}::uuid) as viewer_liked
-					from user_activity_like ual
-					where ual.activity_id = ua.id
-				) la on true
-				where ua.book_id = ${book.id}
-					${publicReaderAccountFilterSql(sql, { requireActivitySharing: true })}
-				order by ua.created_at desc, ua.id desc
-				limit 40
-			`;
-		} catch {
-			activityRows = await sql<Array<{
+						ua.id,
+						ua.event_type,
+						ua.created_at::text as created_at,
+						au.username,
+						nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local,
+						coalesce(ub.rating, ua.rating) as rating,
+						coalesce(la.like_count, 0)::int as like_count,
+						coalesce(la.viewer_liked, false) as viewer_liked
+					from user_activity ua
+					join app_user au on au.id = ua.user_id
+					left join user_book ub on ub.user_id = ua.user_id and ub.book_id = ua.book_id
+					left join lateral (
+						select
+							count(*)::int as like_count,
+							bool_or(ual.user_id = ${session?.userId || "00000000-0000-0000-0000-000000000000"}::uuid) as viewer_liked
+						from user_activity_like ual
+						where ual.activity_id = ua.id
+					) la on true
+					where ua.book_id = ${book.id}
+						${publicReaderAccountFilterSql(sql, { requireActivitySharing: true })}
+					order by ua.created_at desc, ua.id desc
+					limit 40
+				`;
+			} catch (error) {
+				logBookDetailLoadError("activity-likes", error);
+				activityRows = await sql<Array<{
 				id: number;
 				actor_user_id: string;
 				event_type: string;
@@ -659,48 +693,58 @@ try {
 				order by ua.created_at desc, ua.id desc
 				limit 40
 			`;
+			}
+			activity = activityRows.map((item) => ({
+				id: Math.max(0, Number(item.id || 0)),
+				eventType: normalizeText(item.event_type),
+				timestamp: item.created_at,
+				actorUsername: normalizeText(item.username),
+				actorName: normalizeText(item.username) || normalizeText(item.email_local) || "A Reader",
+				rating: Math.max(0, Math.min(5, Number(item.rating || 0) || 0)),
+				likeCount: Math.max(0, Number(item.like_count || 0)),
+				viewerLiked: !!item.viewer_liked
+			}));
+		} catch (error) {
+			logBookDetailLoadError("activity", error);
+			activity = [];
 		}
-		activity = activityRows.map((item) => ({
-			id: Math.max(0, Number(item.id || 0)),
-			eventType: normalizeText(item.event_type),
-			timestamp: item.created_at,
-			actorUsername: normalizeText(item.username),
-			actorName: normalizeText(item.username) || normalizeText(item.email_local) || "A Reader",
-			rating: Math.max(0, Math.min(5, Number(item.rating || 0) || 0)),
-			likeCount: Math.max(0, Number(item.like_count || 0)),
-			viewerLiked: !!item.viewer_liked
-		}));
-		const reviewRows = await sql<Array<{
-			user_id: string;
-			username: string | null;
-			email_local: string | null;
-			rating: number | null;
-			review_title: string | null;
-			finished_reflection: string | null;
-			review_spoiler: boolean | null;
-			review_updated_at: string | null;
-			updated_at: string;
-		}>>`
-			select
-				ub.user_id::text as user_id,
-				au.username,
-				nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local,
-				ub.rating,
-				ub.review_title,
-				ub.finished_reflection,
-				ub.review_spoiler,
-				ub.review_updated_at::text as review_updated_at,
-				ub.updated_at::text as updated_at
-			from user_book ub
-			join app_user au on au.id = ub.user_id
-			where ub.book_id = ${book.id}
-				and (
-					char_length(trim(coalesce(ub.finished_reflection, ''))) > 0
-					or char_length(trim(coalesce(ub.review_title, ''))) > 0
-				)
-			order by ub.updated_at desc, ub.user_id asc
-		`;
-		reviews = buildBookReviewList(reviewRows);
+		try {
+			await ensureReviewSchema(sql);
+			const reviewRows = await sql<Array<{
+				user_id: string;
+				username: string | null;
+				email_local: string | null;
+				rating: number | null;
+				review_title: string | null;
+				finished_reflection: string | null;
+				review_spoiler: boolean | null;
+				review_updated_at: string | null;
+				updated_at: string;
+			}>>`
+				select
+					ub.user_id::text as user_id,
+					au.username,
+					nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local,
+					ub.rating,
+					ub.review_title,
+					ub.finished_reflection,
+					ub.review_spoiler,
+					ub.review_updated_at::text as review_updated_at,
+					ub.updated_at::text as updated_at
+				from user_book ub
+				join app_user au on au.id = ub.user_id
+				where ub.book_id = ${book.id}
+					and (
+						char_length(trim(coalesce(ub.finished_reflection, ''))) > 0
+						or char_length(trim(coalesce(ub.review_title, ''))) > 0
+					)
+				order by ub.updated_at desc, ub.user_id asc
+			`;
+			reviews = buildBookReviewList(reviewRows);
+		} catch (error) {
+			logBookDetailLoadError("reviews", error);
+			reviews = [];
+		}
 	} else {
 		const google = await fetchGoogleBook();
 		if (google) {
@@ -752,11 +796,13 @@ try {
 
 if (book && session?.userId) {
 	try {
-		customShelfOptionsJson = JSON.stringify(await resolveCustomShelfOptions(sql, session.userId));
-	} catch {
-		customShelfOptionsJson = "[]";
-	}
-	const directBookId = Number(book.id || 0);
+		try {
+			customShelfOptionsJson = JSON.stringify(await resolveCustomShelfOptions(sql, session.userId));
+		} catch (error) {
+			logBookDetailLoadError("custom-shelves", error);
+			customShelfOptionsJson = "[]";
+		}
+		const directBookId = Number(book.id || 0);
 		if (directBookId > 0) {
 			const rows = await sql<Array<{ status: "want_to_read" | "reading" | "finished"; rating: number | null; review_title: string | null; finished_reflection: string | null; review_spoiler: boolean | null }>>`
 				select ub.status, ub.rating, ub.review_title, ub.finished_reflection, ub.review_spoiler
@@ -774,7 +820,14 @@ if (book && session?.userId) {
 				viewerReviewBody = normalizeText(rows[0]?.finished_reflection);
 				viewerReviewSpoiler = rows[0]?.review_spoiler === true;
 			}
-			if (readerOwnsBook) journalEntries = await loadJournalEntriesForBook(sql, session.userId, directBookId, 5);
+			if (readerOwnsBook) {
+				try {
+					journalEntries = await loadJournalEntriesForBook(sql, session.userId, directBookId, 5);
+				} catch (error) {
+					logBookDetailLoadError("journal", error);
+					journalEntries = [];
+				}
+			}
 		}
 		if (!viewerShelfStatus) {
 			const isbn13 = normalizeText(book.isbn13);
@@ -812,13 +865,28 @@ if (book && session?.userId) {
 				viewerReviewSpoiler = rows[0]?.review_spoiler === true;
 			}
 		}
+	} catch (error) {
+		logBookDetailLoadError("viewer-state", error);
+		customShelfOptionsJson = "[]";
 	}
-	if (book?.id) {
+}
+if (book?.id) {
+	try {
 		seriesContext = await loadBookSeriesContext(sql, book.id, session?.userId || "");
-		readersAlsoEnjoyed = await loadReadersAlsoEnjoyed(sql, book.id, session?.userId || "", 6).catch(() => null);
+	} catch (error) {
+		logBookDetailLoadError("series", error);
+		seriesContext = null;
 	}
+	try {
+		readersAlsoEnjoyed = await loadReadersAlsoEnjoyed(sql, book.id, session?.userId || "", 6);
+	} catch (error) {
+		logBookDetailLoadError("recommendations", error);
+		readersAlsoEnjoyed = null;
+	}
+}
 } catch (error) {
-	errorMessage = error instanceof Error ? error.message : "Failed to load book.";
+	logBookDetailLoadError("page", error);
+	errorMessage = book ? "" : "We couldn't load this book right now.";
 }
 
 const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
@@ -897,7 +965,7 @@ const bookStructuredDataPayload = bookStructuredData
 				</>
 			) : <span>Book</span>}
 		</nav>
-		{errorMessage && <p class="error">{errorMessage}</p>}
+		{errorMessage && !book && <p class="error">{errorMessage}</p>}
 		{!errorMessage && !book && <p>Book not found.</p>}
 		{book && (
 			<>

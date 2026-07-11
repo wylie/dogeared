@@ -6,7 +6,7 @@ values
 	('Harry Potter', 'harry-potter', 7, '{"source":"known-series-v1"}'::jsonb),
 	('The Lord of the Rings', 'the-lord-of-the-rings', 3, '{"source":"known-series-v1"}'::jsonb),
 	('The Empyrean', 'the-empyrean', 3, '{"source":"known-series-v1"}'::jsonb),
-	('Wings of Fire', 'wings-of-fire', 15, '{"source":"known-series-v1"}'::jsonb),
+	('Wings of Fire', 'wings-of-fire', 16, '{"source":"known-series-v1"}'::jsonb),
 	('A Series of Unfortunate Events', 'a-series-of-unfortunate-events', 13, '{"source":"known-series-v1"}'::jsonb),
 	('Mistborn', 'mistborn', 7, '{"source":"known-series-v1"}'::jsonb)
 on conflict (slug) do update set

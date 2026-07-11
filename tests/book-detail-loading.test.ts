@@ -1,0 +1,50 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+test("book detail imports public reader policy before activity queries use it", () => {
+	const source = readFileSync("src/pages/book.astro", "utf8");
+
+	assert.match(source, /import \{ publicReaderAccountFilterSql \} from "\.\.\/lib\/publicReaderPolicy"/);
+	assert.match(source, /publicReaderAccountFilterSql\(sql, \{ requireActivitySharing: true \}\)/);
+});
+
+test("book detail logs server failures without rendering raw exception messages", () => {
+	const source = readFileSync("src/pages/book.astro", "utf8");
+
+	assert.match(source, /function logBookDetailLoadError/);
+	assert.doesNotMatch(source, /errorMessage = error instanceof Error \? error\.message/);
+	assert.match(source, /errorMessage = book \? "" : "We couldn't load this book right now\."/);
+	assert.match(source, /\{errorMessage && !book && <p class="error">\{errorMessage\}<\/p>\}/);
+});
+
+test("book detail isolates optional data queries so one failure does not block the page", () => {
+	const source = readFileSync("src/pages/book.astro", "utf8");
+
+	for (const stage of [
+		"series-upsert",
+		"editions",
+		"genres",
+		"topics",
+		"activity",
+		"reviews",
+		"viewer-state",
+		"journal",
+		"series",
+		"recommendations"
+	]) {
+		assert.match(source, new RegExp(`logBookDetailLoadError\\("${stage}"`));
+	}
+	assert.match(source, /upsertKnownSeriesForBook\(sql/);
+	assert.match(source, /loadBookSeriesContext\(sql, book\.id/);
+	assert.match(source, /loadReadersAlsoEnjoyed\(sql, book\.id/);
+});
+
+test("book detail keeps reviews, activity, and recommendations wired", () => {
+	const source = readFileSync("src/pages/book.astro", "utf8");
+
+	assert.match(source, /buildBookReviewList\(reviewRows\)/);
+	assert.match(source, /<section class="panel reviews-panel" id="reviews">/);
+	assert.match(source, /<section class="panel activity-panel">/);
+	assert.match(source, /readersAlsoEnjoyed\.books\.map/);
+});
