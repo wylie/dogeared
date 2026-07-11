@@ -3292,56 +3292,74 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		filter: brightness(0.95);
 	}
 	.progress-journal-prompt {
-		margin-top: 0.45rem;
-		padding-top: 0.48rem;
-		border-top: var(--border-subtle);
-		display: flex;
+		margin-top: 0.38rem;
+		padding: 0.42rem 0.48rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: rgba(255, 255, 255, 0.62);
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
-		justify-content: space-between;
-		gap: 0.55rem;
+		gap: 0.44rem;
 	}
 	.progress-journal-prompt p {
 		margin: 0;
-		color: #596777;
+		color: #4b5f75;
+		font-size: 0.78rem;
+		font-weight: 560;
+		line-height: 1.24;
+	}
+	.progress-journal-prompt strong {
+		display: block;
+		color: #253348;
 		font-size: 0.82rem;
-		font-weight: 600;
-		line-height: 1.3;
+		font-weight: 760;
+		line-height: 1.18;
 	}
 	.progress-journal-actions {
 		display: flex;
 		flex-wrap: nowrap;
-		gap: 0.35rem;
+		gap: 0.3rem;
 		align-items: center;
 		justify-content: flex-end;
 		flex: 0 0 auto;
 	}
-	.progress-journal-actions a,
-	.progress-journal-actions button {
-		min-height: 30px;
-		border-radius: 8px;
-		padding: 0.34rem 0.56rem;
-		font: inherit;
-		font-size: 0.8rem;
-		font-weight: 740;
-		line-height: 1;
-	}
-	.progress-journal-actions a {
+	.progress-journal-button {
 		display: inline-flex;
 		align-items: center;
-		background: rgba(31, 122, 69, 0.1);
-		color: var(--color-primary);
-		border: 1px solid rgba(31, 122, 69, 0.2);
+		justify-content: center;
+		min-height: 32px;
+		border-radius: 8px;
+		padding: 0.34rem 0.58rem;
+		font: inherit;
+		font-size: 0.78rem;
+		font-weight: 740;
+		line-height: 1.05;
 		text-decoration: none;
-	}
-	.progress-journal-actions button {
-		border: none;
-		background: transparent;
-		color: #667385;
+		white-space: nowrap;
 		cursor: pointer;
+		box-sizing: border-box;
 	}
-	.progress-journal-actions a:hover,
-	.progress-journal-actions button:hover {
-		background: rgba(87, 117, 144, 0.1);
+	.progress-journal-button-primary {
+		border: 1px solid var(--color-primary);
+		background: var(--color-primary);
+		color: #fff;
+	}
+	.progress-journal-button-secondary {
+		border: var(--border-subtle);
+		background: rgba(255, 255, 255, 0.82);
+		color: var(--color-nav);
+	}
+	.progress-journal-button-primary:hover,
+	.progress-journal-button-primary:focus-visible {
+		background: var(--color-primary-hover);
+		border-color: var(--color-primary-hover);
+		color: #fff;
+	}
+	.progress-journal-button-secondary:hover,
+	.progress-journal-button-secondary:focus-visible {
+		background: #fff;
+		color: var(--color-nav-hover);
 	}
 	.progress-track {
 		margin-top: 0.25rem;
@@ -3727,14 +3745,19 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			font-size: 0.9rem;
 		}
 		.progress-journal-prompt {
-			align-items: flex-start;
-			flex-direction: column;
-			gap: 0.42rem;
+			grid-template-columns: minmax(0, 1fr);
+			align-items: stretch;
+			gap: 0.38rem;
 		}
 		.progress-journal-actions {
 			width: 100%;
-			justify-content: flex-start;
-			flex-wrap: wrap;
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			justify-content: stretch;
+		}
+		.progress-journal-button {
+			width: 100%;
+			padding-inline: 0.45rem;
 		}
 	}
 	@media (max-width: 319px) {
@@ -5020,13 +5043,37 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 	}
 
+	const journalPromptDismissKey = (bookId, currentPage) => `dogeared:progress-journal-prompt-dismissed:${bookId}:${currentPage}`;
+
+	const isJournalProgressPromptDismissed = (bookId, currentPage) => {
+		try {
+			return window.sessionStorage?.getItem(journalPromptDismissKey(bookId, currentPage)) === "true";
+		} catch {
+			return false;
+		}
+	};
+
+	const dismissJournalProgressPrompt = (bookId, currentPage) => {
+		try {
+			window.sessionStorage?.setItem(journalPromptDismissKey(bookId, currentPage), "true");
+		} catch {
+			// Dismissal is helpful session guidance, not required for progress saving.
+		}
+	};
+
 	const showJournalProgressPrompt = (card, sourceButton, bookId, currentPage) => {
 		if (!(card instanceof HTMLElement) || !(sourceButton instanceof HTMLElement) || !bookId) return;
+		if (isJournalProgressPromptDismissed(bookId, currentPage)) return;
 		card.querySelector(".progress-journal-prompt")?.remove();
 		const prompt = document.createElement("div");
 		prompt.className = "progress-journal-prompt";
+		prompt.setAttribute("role", "status");
+		prompt.setAttribute("aria-live", "polite");
 		const text = document.createElement("p");
-		text.textContent = "Capture a quick thought from today's reading.";
+		const title = document.createElement("strong");
+		title.textContent = "Capture today's reading?";
+		const detail = document.createTextNode("Remember a thought before you move on.");
+		text.append(title, detail);
 		const actions = document.createElement("div");
 		actions.className = "progress-journal-actions";
 		const link = document.createElement("a");
@@ -5036,11 +5083,16 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			readingPositionValue: String(currentPage)
 		});
 		link.href = `/journal?${params.toString()}#new-entry`;
-		link.textContent = "Write journal entry";
+		link.className = "progress-journal-button progress-journal-button-primary";
+		link.textContent = "Write Journal Entry";
 		const dismiss = document.createElement("button");
 		dismiss.type = "button";
+		dismiss.className = "progress-journal-button progress-journal-button-secondary";
 		dismiss.textContent = "Not now";
-		dismiss.addEventListener("click", () => prompt.remove());
+		dismiss.addEventListener("click", () => {
+			dismissJournalProgressPrompt(bookId, currentPage);
+			prompt.remove();
+		});
 		actions.append(link, dismiss);
 		prompt.append(text, actions);
 		const progressInline = sourceButton.closest(".progress-inline");
