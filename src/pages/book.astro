@@ -12,7 +12,7 @@ import { buildBookReviewList, ensureReviewSchema, type BookReview } from "../lib
 import { googleBooksCoverUrl } from "../lib/bookCovers";
 import { resolveCustomShelfOptions } from "../lib/customShelves";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
-import { loadBookSeriesContext, upsertKnownSeriesForBook, type BookSeriesContext, type ShelfStatus } from "../lib/series";
+import { loadBookSeriesContext, upsertKnownSeriesForBook, type BookSeriesContext } from "../lib/series";
 import { formatReadingPosition, loadJournalEntriesForBook, type JournalSearchResult } from "../lib/readingJournal";
 import { loadReadersAlsoEnjoyed, type RecommendationSection } from "../lib/recommendations";
 import { ensureCanonicalWorkSchema, resolveRepresentativeBookId } from "../lib/catalogWorks";
@@ -108,13 +108,6 @@ function activityHeading(eventType: string) {
 	if (type === "want_to_read") return { prefix: "Added to", shelf: "Want to Read" };
 	if (type === "rating") return { prefix: "Rated this book", shelf: "" };
 	return { prefix: "Updated shelf", shelf: "" };
-}
-
-function shelfStatusLabel(status: ShelfStatus) {
-	if (status === "reading") return "Currently Reading";
-	if (status === "finished") return "Read";
-	if (status === "want_to_read") return "Want to Read";
-	return "";
 }
 
 function formatTopicLabel(value: string) {
@@ -1062,8 +1055,8 @@ const bookStructuredDataPayload = bookStructuredData
 								<div class="series-cover series-cover-placeholder" aria-hidden="true"><span class="material-icons">auto_stories</span></div>
 							)}
 							<div>
-								<h2 id="series-heading">Series</h2>
-								<p class="series-name">{seriesContext.series.name}</p>
+								<p class="series-eyebrow">Series</p>
+								<h2 id="series-heading" class="series-name">{seriesContext.series.name}</h2>
 								{seriesContext.currentBook && (
 									<p class="series-position">
 										{seriesContext.currentBook.orderLabel}{seriesContext.series.totalBooks > 0 ? ` of ${seriesContext.series.totalBooks}` : ""}
@@ -1092,7 +1085,6 @@ const bookStructuredDataPayload = bookStructuredData
 						<ol class="series-list">
 							{seriesContext.books.map((seriesBook) => {
 								const seriesBookHref = seriesBook.bookHref || `/search?q=${encodeURIComponent(seriesBook.title)}`;
-								const seriesStatusLabel = shelfStatusLabel(seriesBook.shelfStatus || "") || "Not on Shelf";
 								const seriesCardAttrs = {
 									id: `series-book-${seriesBook.bookId || seriesBook.bookOrder || seriesBook.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
 									"data-current-series-book": seriesBook.isCurrent ? "true" : "false",
@@ -1117,10 +1109,8 @@ const bookStructuredDataPayload = bookStructuredData
 									>
 										<div slot="preTitle" class="series-card-kickers">
 											<span>{seriesBook.orderLabel}</span>
-											{seriesBook.isCurrent && <span class="series-current-badge">Current Book</span>}
 										</div>
 										<div slot="meta">
-											<p class="meta series-book-status">Shelf: {seriesStatusLabel}</p>
 											{(seriesBook.ratingCount || 0) === 0 && <p class="meta">No ratings yet.</p>}
 										</div>
 										<div slot="actions">
@@ -2215,9 +2205,19 @@ const bookStructuredDataPayload = bookStructuredData
 		place-items: center;
 		color: var(--color-text-subtle);
 	}
+	.series-eyebrow {
+		margin: 0 0 0.14rem;
+		color: var(--color-text-subtle);
+		font-size: 0.72rem;
+		font-weight: 820;
+		letter-spacing: 0;
+		line-height: 1.2;
+		text-transform: uppercase;
+	}
 	.series-name {
 		margin: 0;
-		font-size: 1.05rem;
+		font-size: 1.42rem;
+		line-height: 1.12;
 		font-weight: 760;
 		color: var(--color-text);
 	}
@@ -2242,9 +2242,11 @@ const bookStructuredDataPayload = bookStructuredData
 		}
 	}
 	:global(.series-list .book-card[data-current-series-book="true"]) {
-		border-color: var(--color-border);
-		background: #fff;
-		box-shadow: var(--shadow-xs);
+		border-color: rgba(31, 122, 69, 0.82);
+		background: linear-gradient(180deg, rgba(31, 122, 69, 0.07), rgba(255, 255, 255, 0.92) 42%);
+		box-shadow:
+			inset 0 0 0 1px rgba(31, 122, 69, 0.62),
+			0 12px 30px rgba(31, 122, 69, 0.13);
 	}
 	.series-nav,
 	.series-card-kickers {
@@ -2284,15 +2286,6 @@ const bookStructuredDataPayload = bookStructuredData
 	}
 	.series-card-kickers span {
 		color: var(--color-text-subtle);
-	}
-	.series-current-badge {
-		background: var(--color-nav-surface);
-		color: var(--color-nav);
-		border-color: rgba(31, 93, 135, 0.2);
-	}
-	.series-book-status {
-		color: var(--color-primary);
-		font-weight: 760;
 	}
 	.related-links-row {
 		display: flex;

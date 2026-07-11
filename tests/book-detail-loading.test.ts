@@ -59,6 +59,10 @@ test("book detail series section reuses BookCard and shared shelf actions", () =
 	assert.match(seriesSection, /Jump to Current/);
 	assert.match(seriesSection, /Next Book/);
 	assert.match(seriesSection, /data-current-series-book/);
+	assert.match(seriesSection, /class="series-eyebrow">Series/);
+	assert.match(seriesSection, /<h2 id="series-heading" class="series-name">\{seriesContext\.series\.name\}<\/h2>/);
 	assert.doesNotMatch(seriesSection, /series-add-link/);
 	assert.doesNotMatch(seriesSection, /Add to DogEared/);
+	assert.doesNotMatch(seriesSection, /Current Book/);
+	assert.doesNotMatch(seriesSection, /Shelf: \{/);
 });
