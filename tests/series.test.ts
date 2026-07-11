@@ -196,10 +196,13 @@ test("series inference is wired through search, shelf import, recommendations, a
 	const bookDetail = readFileSync("src/pages/book.astro", "utf8");
 
 	assert.match(search, /inferKnownSeriesMetadata/);
+	assert.match(search, /normalizeRedundantSeriesTitle/);
 	assert.match(shelfEntries, /upsertKnownSeriesForBook/);
+	assert.match(shelfEntries, /normalizeRedundantSeriesTitle/);
 	assert.match(recommendations, /next_series/);
 	assert.match(recommendations, /Next in/);
 	assert.match(bookDetail, /loadKnownSeriesFallbackContext/);
+	assert.match(bookDetail, /normalizeRedundantSeriesTitle/);
 	assert.match(bookDetail, /logBookDetailLoadError\("series-fallback"/);
 	for (const fixture of ["harry-potter", "the-lord-of-the-rings", "the-empyrean", "wings-of-fire", "a-series-of-unfortunate-events", "mistborn"]) {
 		assert.match(migration, new RegExp(fixture));

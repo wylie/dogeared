@@ -10,6 +10,7 @@ import {
 	canonicalCatalogWorkKey,
 	canonicalizeCatalogTitle,
 	canonicalizeCatalogAuthor,
+	normalizeRedundantSeriesTitle,
 	resolveBestCatalogBookId,
 	upsertBookSources,
 	type CatalogSourceInput
@@ -20,7 +21,7 @@ import { ensureCustomShelfSchema } from "../../../lib/customShelves";
 import { monitorEvent } from "../../../lib/monitoring";
 import { ensureReviewSchema, normalizeReviewBody, normalizeReviewTitle } from "../../../lib/bookReviews";
 import { ensureCanonicalWorkSchema, resolveRepresentativeBookId, upsertWorkAndEdition } from "../../../lib/catalogWorks";
-import { upsertKnownSeriesForBook } from "../../../lib/series";
+import { inferKnownSeriesMetadata, upsertKnownSeriesForBook } from "../../../lib/series";
 import { createReadingMilestoneNotifications } from "../../../lib/notifications";
 
 export const prerender = false;
@@ -496,8 +497,8 @@ export const POST: APIRoute = async ({ request }) => {
 		debugContext.rawEntry = entry;
 		const directBookId = normalizePositiveInt(entry.bookId);
 		const bookPayload = fromShelfEntryInput(entry);
-		const title = bookPayload.title;
-		if (!title) {
+		const rawTitle = bookPayload.title;
+		if (!rawTitle) {
 			return new Response(JSON.stringify({ error: "Missing title." }), {
 				status: 400,
 				headers: { "Content-Type": "application/json" }
@@ -505,6 +506,12 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 
 		const author = bookPayload.author;
+		const inferredSeries = inferKnownSeriesMetadata({ title: rawTitle, author });
+		const title = normalizeRedundantSeriesTitle({
+			title: rawTitle,
+			seriesName: inferredSeries?.seriesName || "",
+			bookOrder: inferredSeries?.bookOrder || 0
+		}).title || rawTitle;
 		const authorId = await ensureAuthorEnriched(author);
 		const status = normalizeStatus(entry.status);
 		const rating = status === "finished" ? normalizeRating(entry.rating) : null;

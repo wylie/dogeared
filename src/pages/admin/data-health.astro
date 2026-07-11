@@ -3,6 +3,7 @@ import Layout from "../../layouts/Layout.astro";
 import { getNeonSql } from "../../lib/neon";
 import { resolveAdminSession } from "../../lib/admin";
 import { formatDate, formatNumber, percentOf, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
+import { loadCanonicalTitleCleanupCandidates, normalizeCanonicalSeriesTitles } from "../../lib/canonicalTitleCleanup";
 
 export const prerender = false;
 
@@ -14,6 +15,24 @@ const publisherSchemaResult = await safeAdminLoad("Publisher schema", async () =
 	await sql`alter table book add column if not exists publisher text not null default ''`;
 	return true;
 }, false);
+const adminNotices: string[] = [];
+
+if (Astro.request.method === "POST") {
+	const formData = await Astro.request.formData();
+	const action = String(formData.get("action") || "").trim();
+	if (action === "canonical-title-cleanup") {
+		const cleanupResult = await safeAdminLoad(
+			"Canonical title cleanup action",
+			() => normalizeCanonicalSeriesTitles(sql, 500),
+			{ checked: 0, updated: 0, candidates: [] }
+		);
+		if (cleanupResult.warning) {
+			adminNotices.push(cleanupResult.warning);
+		} else {
+			adminNotices.push(`Canonical Title Cleanup normalized ${formatNumber(cleanupResult.data.updated)} of ${formatNumber(cleanupResult.data.checked)} candidate titles.`);
+		}
+	}
+}
 
 const [
 	bookCoverageResult,
@@ -22,6 +41,7 @@ const [
 	importHealthResult,
 	duplicateGroupsResult,
 	metadataReviewResult,
+	canonicalTitleCleanupResult,
 	recentBackfillResult,
 	unresolvedPageCountResult,
 	unresolvedPublisherResult
@@ -140,6 +160,7 @@ const [
 		order by b.updated_at desc, b.id desc
 		limit 50
 	`, []),
+	safeAdminLoad("Canonical title cleanup", () => loadCanonicalTitleCleanupCandidates(sql, 50), []),
 	safeAdminLoad("Backfill movement", () => sql<Array<{
 		updated_books_24h: number;
 		updated_books_7d: number;
@@ -204,6 +225,7 @@ const authorCoverageRows = safeArray(authorCoverageResult.data);
 const importHealthRows = safeArray(importHealthResult.data);
 const duplicateGroupsRows = safeArray(duplicateGroupsResult.data);
 const metadataReviewRows = safeArray(metadataReviewResult.data);
+const canonicalTitleCleanupRows = safeArray(canonicalTitleCleanupResult.data);
 const recentBackfillRows = safeArray(recentBackfillResult.data);
 const unresolvedPageCountRows = safeArray(unresolvedPageCountResult.data);
 const unresolvedPublisherRows = safeArray(unresolvedPublisherResult.data);
@@ -215,6 +237,7 @@ const adminWarnings = [
 	importHealthResult.warning,
 	duplicateGroupsResult.warning,
 	metadataReviewResult.warning,
+	canonicalTitleCleanupResult.warning,
 	recentBackfillResult.warning,
 	unresolvedPageCountResult.warning,
 	unresolvedPublisherResult.warning
@@ -225,6 +248,7 @@ const sectionLinks = [
 	{ id: "metadata-gaps", label: "Metadata Gaps" },
 	{ id: "import-health", label: "Import Health" },
 	{ id: "metadata-review", label: "Review Queue" },
+	{ id: "canonical-title-cleanup", label: "Titles" },
 	{ id: "duplicates", label: "Duplicates" },
 	{ id: "backfills", label: "Backfills" },
 	{ id: "page-count-gaps", label: "Page Counts" },
@@ -282,6 +306,12 @@ const backfills = recentBackfillRows[0] || {
 		{adminWarnings.length > 0 && (
 			<div class="warning-list" role="status">
 				{adminWarnings.map((warning) => <p>{warning}</p>)}
+			</div>
+		)}
+
+		{adminNotices.length > 0 && (
+			<div class="notice-list" role="status">
+				{adminNotices.map((notice) => <p>{notice}</p>)}
 			</div>
 		)}
 
@@ -391,6 +421,40 @@ const backfills = recentBackfillRows[0] || {
 				</table>
 			</div>
 			<p class="note">Use this queue after imports to review missing covers, authors, descriptions, series, and page counts without blocking readers from using their shelves.</p>
+		</section>
+
+		<section class="panel" id="canonical-title-cleanup">
+			<div class="panel-head">
+				<h2>Canonical Title Cleanup</h2>
+				<p>{formatNumber(canonicalTitleCleanupRows.length)} redundant series title suffixes detected (up to 50 shown).</p>
+			</div>
+			<div class="actions">
+				<form method="post">
+					<input type="hidden" name="action" value="canonical-title-cleanup" />
+					<button type="submit">Normalize redundant series titles</button>
+				</form>
+			</div>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr><th>Current title</th><th>Canonical title</th><th>Series</th><th>Book</th><th>Updated</th></tr>
+					</thead>
+					<tbody>
+						{canonicalTitleCleanupRows.length === 0 ? (
+							<tr><td colspan="5">No redundant series title suffixes detected.</td></tr>
+						) : canonicalTitleCleanupRows.map((row) => (
+							<tr>
+								<td>{row.title || "Untitled"}</td>
+								<td>{row.normalizedTitle || "Untitled"}</td>
+								<td>{row.seriesName || "Unknown series"}</td>
+								<td>{row.bookOrder > 0 ? `Book ${row.bookOrder}` : "—"}</td>
+								<td>{formatDate(row.updatedAt)}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+			<p class="note">This check only removes trailing parenthetical series text when the book already has matching structured series metadata.</p>
 		</section>
 
 		<section class="panel" id="duplicates">
@@ -518,6 +582,16 @@ const backfills = recentBackfillRows[0] || {
 	}
 	.warning-list p { margin: 0; }
 	.warning-list p + p { margin-top: 0.3rem; }
+	.notice-list {
+		margin-top: 1rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(31, 122, 69, 0.08);
+		color: var(--color-primary);
+		padding: 0.65rem 0.75rem;
+	}
+	.notice-list p { margin: 0; }
+	.notice-list p + p { margin-top: 0.3rem; }
 	.panel { margin-top: 1rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
 	.panel-head h2 { margin: 0; }
 	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }
@@ -545,6 +619,18 @@ const backfills = recentBackfillRows[0] || {
 	.actions { margin-top: 0.7rem; display: flex; gap: 0.75rem; }
 	.actions a { color: var(--color-nav); font-weight: 700; text-decoration: none; }
 	.actions a:hover { color: var(--color-nav-hover); text-decoration: underline; }
+	.actions form { margin: 0; }
+	.actions button {
+		border: 0;
+		border-radius: var(--radius-pill);
+		background: var(--color-primary);
+		color: #fff;
+		font: inherit;
+		font-weight: 700;
+		padding: 0.5rem 0.8rem;
+		cursor: pointer;
+	}
+	.actions button:hover { background: var(--color-primary-hover); }
 
 	@media (max-width: 900px) {
 		.grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -24,6 +24,12 @@ export {
 	type CatalogSourceInput
 } from "./catalogKeys";
 
+export {
+	normalizeRedundantSeriesTitle,
+	type CanonicalSeriesTitleInput,
+	type CanonicalSeriesTitleResult
+} from "./canonicalTitles";
+
 export type CatalogBookLookupInput = {
 	canonicalWorkKey?: string;
 	title?: string;

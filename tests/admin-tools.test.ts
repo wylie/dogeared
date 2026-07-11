@@ -110,6 +110,10 @@ test("admin pages use defensive loaders and formatting", () => {
 	assert.equal(feedback.includes("[admin.feedback.post.failed]"), true);
 	assert.equal(dataHealth.includes("Publisher schema"), true);
 	assert.equal(dataHealth.includes("warning-list"), true);
+	assert.equal(dataHealth.includes("Canonical Title Cleanup"), true);
+	assert.equal(dataHealth.includes("canonical-title-cleanup"), true);
+	assert.equal(dataHealth.includes("loadCanonicalTitleCleanupCandidates"), true);
+	assert.equal(dataHealth.includes("normalizeCanonicalSeriesTitles"), true);
 	assert.equal(users.includes("[admin.users.post.failed]"), true);
 	assert.equal(detail.includes("[admin.user-detail.post.failed]"), true);
 });

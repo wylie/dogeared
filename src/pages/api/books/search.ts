@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { googleBooksCoverUrl } from "../../../lib/bookCovers";
+import { normalizeRedundantSeriesTitle } from "../../../lib/catalog";
 import { getNeonSql } from "../../../lib/neon";
 import { createPublicCacheControl, withRuntimeCache } from "../../../lib/runtimeCache";
 import { ensureSeriesSchema, inferKnownSeriesMetadata } from "../../../lib/series";
@@ -440,6 +441,11 @@ export const GET: APIRoute = async ({ request, url }) => {
 			const info = item.volumeInfo ?? {};
 			const authors = Array.isArray(info.authors) ? info.authors : [];
 			const inferredSeries = inferKnownSeriesMetadata({ title: info.title ?? "", author: authors[0] || "" });
+			const title = normalizeRedundantSeriesTitle({
+				title: info.title ?? "Untitled",
+				seriesName: inferredSeries?.seriesName || "",
+				bookOrder: inferredSeries?.bookOrder || 0
+			}).title || "Untitled";
 			const identifiers = Array.isArray(info.industryIdentifiers) ? info.industryIdentifiers : [];
 			const isbn13 = String(
 				(identifiers.find((entry) => String(entry?.type || "") === "ISBN_13")?.identifier || "")
@@ -449,7 +455,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			).replace(/[^0-9Xx]/g, "").toUpperCase();
 			return {
 				source: "google_books",
-				title: info.title ?? "Untitled",
+				title,
 				subtitle: info.subtitle ?? "",
 				authors,
 				description: info.description ?? "",
@@ -504,6 +510,11 @@ export const GET: APIRoute = async ({ request, url }) => {
 		const openLibraryMapped: SearchResult[] = openItems.map((doc) => {
 			const authorNames = Array.isArray(doc?.author_name) ? doc.author_name.map((v: unknown) => String(v || "").trim()).filter(Boolean) : [];
 			const inferredSeries = inferKnownSeriesMetadata({ title: doc?.title || "", author: authorNames[0] || "" });
+			const title = normalizeRedundantSeriesTitle({
+				title: doc?.title || "Untitled",
+				seriesName: inferredSeries?.seriesName || "",
+				bookOrder: inferredSeries?.bookOrder || 0
+			}).title || "Untitled";
 			const isbns = Array.isArray(doc?.isbn) ? doc.isbn.map((v: unknown) => String(v || "").replace(/[^0-9Xx]/g, "").toUpperCase()).filter(Boolean) : [];
 			const isbn13 = isbns.find((value: string) => value.length === 13) || "";
 			const isbn10 = isbns.find((value: string) => value.length === 10) || "";
@@ -511,7 +522,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			const pageCount = Number(doc?.number_of_pages_median || 0) || 0;
 			return {
 				source: "open_library",
-				title: String(doc?.title || "Untitled").trim(),
+				title,
 				subtitle: "",
 				authors: authorNames,
 				description: "",
@@ -600,8 +611,14 @@ export const GET: APIRoute = async ({ request, url }) => {
 			const seriesBookOrder = Number(item.seriesBookOrder || 0) > 0
 				? Number(item.seriesBookOrder || 0)
 				: (match?.seriesBookOrder || inferredSeries?.bookOrder || 0);
+			const title = normalizeRedundantSeriesTitle({
+				title: item.title,
+				seriesName,
+				bookOrder: seriesBookOrder
+			}).title || item.title;
 			return {
 				...item,
+				title,
 				bookId: Number(item.bookId || 0) > 0 ? Number(item.bookId || 0) : (match?.bookId || 0),
 				authorId: Number(item.authorId || 0) > 0 ? Number(item.authorId || 0) : (match?.authorId || 0),
 				seriesName,

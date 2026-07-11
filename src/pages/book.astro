@@ -12,12 +12,13 @@ import { buildBookReviewList, ensureReviewSchema, type BookReview } from "../lib
 import { googleBooksCoverUrl } from "../lib/bookCovers";
 import { resolveCustomShelfOptions } from "../lib/customShelves";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
-import { loadBookSeriesContext, loadKnownSeriesFallbackContext, upsertKnownSeriesForBook, type BookSeriesContext } from "../lib/series";
+import { inferKnownSeriesMetadata, loadBookSeriesContext, loadKnownSeriesFallbackContext, upsertKnownSeriesForBook, type BookSeriesContext } from "../lib/series";
 import { formatReadingPosition, loadJournalEntriesForBook, type JournalSearchResult } from "../lib/readingJournal";
 import { loadReadersAlsoEnjoyed, type RecommendationSection } from "../lib/recommendations";
 import { ensureCanonicalWorkSchema, resolveRepresentativeBookId } from "../lib/catalogWorks";
 import { publicReaderAccountFilterSql } from "../lib/publicReaderPolicy";
 import { enrichMissingSeriesBookCovers } from "../lib/bookCoverEnrichment";
+import { normalizeRedundantSeriesTitle } from "../lib/catalog";
 
 export const prerender = false;
 
@@ -743,11 +744,18 @@ try {
 		const google = await fetchGoogleBook();
 		if (google) {
 			const info = google.volumeInfo || {};
+			const googleAuthor = normalizeText(Array.isArray(info.authors) ? info.authors[0] : queryAuthor);
+			const inferredSeries = inferKnownSeriesMetadata({ title: info.title || queryTitle, author: googleAuthor });
+			const title = normalizeRedundantSeriesTitle({
+				title: info.title || queryTitle,
+				seriesName: inferredSeries?.seriesName || "",
+				bookOrder: inferredSeries?.bookOrder || 0
+			}).title || normalizeText(info.title || queryTitle);
 			book = {
 				id: 0,
 				workId: 0,
-				title: normalizeText(info.title || queryTitle),
-				author: normalizeText(Array.isArray(info.authors) ? info.authors[0] : queryAuthor),
+				title,
+				author: googleAuthor,
 				authorId: 0,
 				synopsis: sanitizeSynopsis(info.description || ""),
 				coverUrl: googleBooksCoverUrl(info.imageLinks, "detail"),
@@ -765,10 +773,16 @@ try {
 		} else {
 			const open = await fetchOpenLibraryBook();
 			if (open) {
+				const inferredSeries = inferKnownSeriesMetadata({ title: open.title || queryTitle, author: open.author || queryAuthor });
+				const title = normalizeRedundantSeriesTitle({
+					title: open.title || queryTitle,
+					seriesName: inferredSeries?.seriesName || "",
+					bookOrder: inferredSeries?.bookOrder || 0
+				}).title || normalizeText(open.title || queryTitle);
 				book = {
 					id: 0,
 					workId: 0,
-					title: open.title || queryTitle,
+					title,
 					author: open.author || queryAuthor,
 					authorId: 0,
 					synopsis: open.synopsis,
