@@ -54,6 +54,7 @@ test("book detail series section reuses BookCard and shared shelf actions", () =
 	const seriesSection = source.slice(source.indexOf('{seriesContext && ('), source.indexOf('<section class="panel synopsis-panel">'));
 
 	assert.match(seriesSection, /<BookCard/);
+	assert.match(seriesSection, /variant="compact-series"/);
 	assert.match(seriesSection, /<ShelfDropdown/);
 	assert.match(seriesSection, /data-current-series-book/);
 	assert.match(seriesSection, /class="series-eyebrow">Series/);
@@ -75,6 +76,6 @@ test("book detail series cards stay compact without header navigation controls",
 	assert.doesNotMatch(source, /const nextSeriesBook/);
 	assert.doesNotMatch(source, /scrollIntoView/);
 	assert.match(source, /\.series-list \{[\s\S]+align-items: start/);
-	assert.match(source, /:global\(\.series-list \.book-card\) \{[\s\S]+grid-template-columns: 76px minmax\(0, 1fr\)/);
-	assert.match(source, /:global\(\.series-list \.book-card \.cover\) \{[\s\S]+height: 114px/);
+	assert.doesNotMatch(source, /:global\(\.series-list \.book-card\) \{[\s\S]+grid-template-columns: 76px minmax\(0, 1fr\)/);
+	assert.doesNotMatch(source, /:global\(\.series-list \.book-card \.cover\) \{[\s\S]+height: 114px/);
 });

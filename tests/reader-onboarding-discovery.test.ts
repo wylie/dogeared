@@ -82,6 +82,21 @@ test("BookCard renders accessible genre navigation", () => {
 	assert.equal(source.includes('kind="topic"'), true);
 });
 
+test("BookCard owns the compact reusable presentation variant", () => {
+	const source = readFileSync("src/components/BookCard.astro", "utf8");
+	const bookPage = readFileSync("src/pages/book.astro", "utf8");
+
+	assert.match(source, /variant\?: "standard" \| "compact-series"/);
+	assert.equal(source.includes('variant = "standard"'), true);
+	assert.equal(source.includes("book-card--compact-series"), true);
+	assert.match(source, /\.book-card--compact-series \{[\s\S]+grid-template-columns: 76px minmax\(0, 1fr\)/);
+	assert.match(source, /\.book-card--compact-series \.cover \{[\s\S]+height: 114px/);
+	assert.match(source, /\.book-card--compact-series \.card-body \{[\s\S]+min-height: 0/);
+	assert.match(source, /\.book-card--compact-series \.cover-actions :global\(\.shelf-dropdown\) \{[\s\S]+--shelf-trigger-height: 30px/);
+	assert.equal(bookPage.includes('variant="compact-series"'), true);
+	assert.equal(bookPage.includes(":global(.series-list .book-card .cover)"), false);
+});
+
 test("author cards do not repeat genre chips as plain metadata", () => {
 	for (const path of ["src/pages/author.astro", "src/pages/author/[slug].astro"]) {
 		const source = readFileSync(path, "utf8");

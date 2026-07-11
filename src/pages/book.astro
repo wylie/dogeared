@@ -1100,6 +1100,7 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 										pageCount={seriesBook.pageCount || 0}
 										averageRating={seriesBook.averageRating || 0}
 										seriesLabel={`${seriesContext.series.name}${seriesBook.bookOrder > 0 ? ` · Book ${seriesBook.bookOrder}` : ""}`}
+										variant="compact-series"
 										attrs={seriesCardAttrs}
 									>
 										<div slot="preTitle" class="series-card-kickers">
@@ -2244,38 +2245,6 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 		box-shadow:
 			inset 0 0 0 1px rgba(31, 122, 69, 0.62),
 			0 12px 30px rgba(31, 122, 69, 0.13);
-	}
-	:global(.series-list .book-card) {
-		align-self: start;
-		grid-template-columns: 76px minmax(0, 1fr);
-		padding: 0.58rem;
-		gap: 0.58rem;
-	}
-	:global(.series-list .book-card .cover-wrap) {
-		width: 76px;
-		gap: 0.44rem;
-	}
-	:global(.series-list .book-card .cover) {
-		width: 76px;
-		height: 114px;
-	}
-	:global(.series-list .book-card .cover-actions .shelf-dropdown) {
-		--shelf-trigger-height: 30px;
-		--shelf-trigger-min-height: 30px;
-	}
-	:global(.series-list .book-card .card-body) {
-		min-height: 0;
-	}
-	:global(.series-list .book-card h3) {
-		font-size: 0.98rem;
-		line-height: 1.16;
-	}
-	:global(.series-list .book-card .card-tail) {
-		margin-top: 0.2rem;
-		gap: 0.14rem;
-	}
-	:global(.series-list .book-card .meta) {
-		margin: 0.12rem 0;
 	}
 	.series-card-kickers {
 		display: flex;
