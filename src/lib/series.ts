@@ -31,6 +31,8 @@ export type SeriesBookInput = {
 	googleBooksId?: string;
 	publishedYear?: number;
 	pageCount?: number;
+	averageRating?: number;
+	ratingCount?: number;
 	bookOrder?: number;
 	publicationOrder?: number;
 	chronologicalOrder?: number;
@@ -48,6 +50,7 @@ export type BookSeriesContext = {
 	series: SeriesInfo;
 	books: SeriesBookItem[];
 	currentBook: SeriesBookItem | null;
+	previousBook: SeriesBookItem | null;
 	nextBook: SeriesBookItem | null;
 };
 
@@ -419,6 +422,9 @@ export function buildBookSeriesContext(input: {
 	if (ordered.length === 0) return null;
 	const currentIndex = ordered.findIndex((book) => book.bookId === currentBookId);
 	const currentBook = currentIndex >= 0 ? ordered[currentIndex] : null;
+	const previousBook = currentIndex >= 0
+		? (ordered.slice(0, currentIndex).reverse().find((book) => book.bookId > 0) || null)
+		: null;
 	const nextBook = currentIndex >= 0
 		? (ordered.slice(currentIndex + 1).find((book) => book.bookId > 0) || null)
 		: null;
@@ -426,6 +432,7 @@ export function buildBookSeriesContext(input: {
 		series: input.series,
 		books: ordered,
 		currentBook,
+		previousBook,
 		nextBook
 	};
 }
@@ -529,6 +536,8 @@ export async function loadBookSeriesContext(
 		google_books_id: string;
 		published_year: number | null;
 		page_count: number;
+		average_rating: number | null;
+		rating_count: number | null;
 		book_order: string | null;
 		publication_order: string | null;
 		chronological_order: string | null;
@@ -574,6 +583,8 @@ export async function loadBookSeriesContext(
 				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
 				b.published_year,
 				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
+				coalesce(rt.average_rating, 0) as average_rating,
+				coalesce(rt.rating_count, 0)::int as rating_count,
 				sb.book_order::text as book_order,
 				sb.publication_order::text as publication_order,
 				sb.chronological_order::text as chronological_order,
@@ -582,6 +593,13 @@ export async function loadBookSeriesContext(
 			join series s on s.id = cs.series_id
 			join series_book sb on sb.series_id = s.id
 			left join book b on b.id = sb.book_id
+			left join lateral (
+				select
+					round(avg(ubr.rating)::numeric, 2) as average_rating,
+					count(*) filter (where ubr.rating is not null)::int as rating_count
+				from user_book ubr
+				where ubr.book_id = b.id
+			) rt on true
 			left join user_book ub on ub.book_id = sb.book_id
 				and ${viewerUserId} <> ''
 				and ub.user_id = ${viewerUserId || "00000000-0000-0000-0000-000000000000"}::uuid
@@ -604,6 +622,8 @@ export async function loadBookSeriesContext(
 				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
 				b.published_year,
 				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
+				coalesce(rt.average_rating, 0) as average_rating,
+				coalesce(rt.rating_count, 0)::int as rating_count,
 				db.work_series_position::text as book_order,
 				db.work_series_position::text as publication_order,
 				db.work_series_position::text as chronological_order,
@@ -612,6 +632,13 @@ export async function loadBookSeriesContext(
 			join direct_book db on db.work_series_id = cs.series_id
 			join series s on s.id = cs.series_id
 			join book b on b.id = db.book_id
+			left join lateral (
+				select
+					round(avg(ubr.rating)::numeric, 2) as average_rating,
+					count(*) filter (where ubr.rating is not null)::int as rating_count
+				from user_book ubr
+				where ubr.book_id = b.id
+			) rt on true
 			left join user_book ub on ub.book_id = b.id
 				and ${viewerUserId} <> ''
 				and ub.user_id = ${viewerUserId || "00000000-0000-0000-0000-000000000000"}::uuid
@@ -661,6 +688,8 @@ export async function loadBookSeriesContext(
 			googleBooksId: normalizeText(row.google_books_id),
 			publishedYear: Math.max(0, Number(row.published_year || 0) || 0),
 			pageCount: Math.max(0, Number(row.page_count || 0) || 0),
+			averageRating: Math.max(0, Math.min(5, Number(row.average_rating || 0) || 0)),
+			ratingCount: Math.max(0, Number(row.rating_count || 0) || 0),
 			bookOrder: numericOrder(row.book_order),
 			publicationOrder: numericOrder(row.publication_order),
 			chronologicalOrder: numericOrder(row.chronological_order),

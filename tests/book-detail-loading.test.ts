@@ -48,3 +48,17 @@ test("book detail keeps reviews, activity, and recommendations wired", () => {
 	assert.match(source, /<section class="panel activity-panel">/);
 	assert.match(source, /readersAlsoEnjoyed\.books\.map/);
 });
+
+test("book detail series section reuses BookCard and shared shelf actions", () => {
+	const source = readFileSync("src/pages/book.astro", "utf8");
+	const seriesSection = source.slice(source.indexOf('{seriesContext && ('), source.indexOf('<section class="panel synopsis-panel">'));
+
+	assert.match(seriesSection, /<BookCard/);
+	assert.match(seriesSection, /<ShelfDropdown/);
+	assert.match(seriesSection, /Previous Book/);
+	assert.match(seriesSection, /Jump to Current/);
+	assert.match(seriesSection, /Next Book/);
+	assert.match(seriesSection, /data-current-series-book/);
+	assert.doesNotMatch(seriesSection, /series-add-link/);
+	assert.doesNotMatch(seriesSection, /Add to DogEared/);
+});

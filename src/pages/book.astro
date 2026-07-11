@@ -1066,62 +1066,77 @@ const bookStructuredDataPayload = bookStructuredData
 								{seriesContext.series.description && <p class="series-description">{seriesContext.series.description}</p>}
 							</div>
 						</div>
+						<nav class="series-nav" aria-label={`${seriesContext.series.name} navigation`}>
+							{seriesContext.previousBook ? (
+								<a href={seriesContext.previousBook.bookHref}>Previous Book</a>
+							) : (
+								<span aria-disabled="true">Previous Book</span>
+							)}
+							{seriesContext.currentBook ? (
+								<a href={`#series-book-${seriesContext.currentBook.bookId}`}>Jump to Current</a>
+							) : (
+								<span aria-disabled="true">Jump to Current</span>
+							)}
+							{seriesContext.nextBook ? (
+								<a href={seriesContext.nextBook.bookHref}>Next Book</a>
+							) : (
+								<span aria-disabled="true">Next Book</span>
+							)}
+						</nav>
 						<ol class="series-list">
-							{seriesContext.books.map((seriesBook) => (
-								<li class={`series-book${seriesBook.isCurrent ? " is-current" : ""}`} aria-current={seriesBook.isCurrent ? "true" : undefined}>
-									{seriesBook.coverUrl ? (
-										<img class="series-book-cover" src={seriesBook.coverUrl} alt="" loading="lazy" decoding="async" width="38" height="56" />
-									) : (
-										<div class="series-book-cover series-book-cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></div>
-									)}
-									<div class="series-book-main">
-										<p class="series-book-order">{seriesBook.orderLabel}</p>
-										{seriesBook.bookHref ? (
-											<a class="series-book-title" href={seriesBook.bookHref}>{seriesBook.title}</a>
-										) : (
-											<a class="series-book-title" href={`/search?q=${encodeURIComponent(seriesBook.title)}`}>{seriesBook.title}</a>
-										)}
-										{seriesBook.isCurrent && <span class="series-current-badge">Current book</span>}
-									</div>
-									<div class="series-book-state">
-										{seriesBook.shelfStatus === "finished" ? (
-											<span class="series-state-read"><span aria-hidden="true">✓</span> Read</span>
-										) : !seriesBook.canOpenBook ? (
-											<a class="series-add-link" href={`/search?q=${encodeURIComponent(seriesBook.title)}`}>Add to DogEared</a>
-										) : (
-											shelfStatusLabel(seriesBook.shelfStatus || "") || "Not on shelf"
-										)}
-									</div>
-								</li>
-							))}
+							{seriesContext.books.map((seriesBook) => {
+								const seriesBookHref = seriesBook.bookHref || `/search?q=${encodeURIComponent(seriesBook.title)}`;
+								const seriesStatusLabel = shelfStatusLabel(seriesBook.shelfStatus || "") || "Not on Shelf";
+								const seriesCardAttrs = {
+									id: `series-book-${seriesBook.bookId || seriesBook.bookOrder || seriesBook.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+									"data-current-series-book": seriesBook.isCurrent ? "true" : "false",
+									...(seriesBook.isCurrent ? { "aria-current": "true" } : {})
+								};
+								return (
+									<BookCard
+										title={seriesBook.title}
+										titleHref={seriesBookHref}
+										author={seriesBook.author || "Unknown author"}
+										authorHref={seriesBook.author ? authorHref(seriesBook.author, seriesBook.authorId || 0) : ""}
+										thumbnail={seriesBook.coverUrl}
+										description=""
+										readers={-1}
+										shelfEntries={-1}
+										showCommunityStats={false}
+										publishedLabel={seriesBook.publishedYear ? String(seriesBook.publishedYear) : ""}
+										pageCount={seriesBook.pageCount || 0}
+										averageRating={seriesBook.averageRating || 0}
+										seriesLabel={`${seriesContext.series.name}${seriesBook.bookOrder > 0 ? ` · Book ${seriesBook.bookOrder}` : ""}`}
+										attrs={seriesCardAttrs}
+									>
+										<div slot="preTitle" class="series-card-kickers">
+											<span>{seriesBook.orderLabel}</span>
+											{seriesBook.isCurrent && <span class="series-current-badge">Current Book</span>}
+										</div>
+										<div slot="meta">
+											<p class="meta series-book-status">Shelf: {seriesStatusLabel}</p>
+											{(seriesBook.ratingCount || 0) === 0 && <p class="meta">No ratings yet.</p>}
+										</div>
+										<div slot="actions">
+											<ShelfDropdown attrs={{
+												"data-title": seriesBook.title,
+												"data-author": seriesBook.author || "",
+												"data-description": seriesBook.synopsis || "",
+												"data-cover": seriesBook.coverUrl || "",
+												"data-pages": String(seriesBook.pageCount || 0),
+												"data-language": seriesBook.language || "",
+												"data-isbn10": seriesBook.isbn10 || "",
+												"data-isbn13": seriesBook.isbn13 || "",
+												"data-google-books-id": seriesBook.googleBooksId || "",
+												"data-book-id": String(seriesBook.bookId || 0),
+												"data-custom-shelves": customShelfOptionsJson,
+												"data-initial-status": seriesBook.shelfStatus || ""
+											}} />
+										</div>
+									</BookCard>
+								);
+							})}
 						</ol>
-						{viewerShelfStatus === "finished" && seriesContext.nextBook && (
-							<div
-								class="series-continue"
-								data-title={seriesContext.nextBook.title}
-								data-author={seriesContext.nextBook.author || ""}
-								data-description={seriesContext.nextBook.synopsis || ""}
-								data-cover={seriesContext.nextBook.coverUrl || ""}
-								data-pages={String(seriesContext.nextBook.pageCount || 0)}
-								data-language={seriesContext.nextBook.language || ""}
-								data-isbn10={seriesContext.nextBook.isbn10 || ""}
-								data-isbn13={seriesContext.nextBook.isbn13 || ""}
-								data-google-books-id={seriesContext.nextBook.googleBooksId || ""}
-								data-book-id={String(seriesContext.nextBook.bookId || 0)}
-							>
-								<div>
-									<p class="series-continue-eyebrow">Continue the series →</p>
-									<p class="series-continue-title">{seriesContext.nextBook.title}</p>
-									<p class="series-continue-meta">{seriesContext.nextBook.orderLabel}</p>
-								</div>
-								{seriesContext.nextBook.shelfStatus ? (
-									<p class="series-continue-state">Already on {shelfStatusLabel(seriesContext.nextBook.shelfStatus)}</p>
-								) : (
-									<button type="button" class="series-continue-button" data-action="series-add-want">Add to Want to Read</button>
-								)}
-								<p class="series-continue-feedback" role="status" aria-live="polite" hidden></p>
-							</div>
-						)}
 					</section>
 				)}
 
@@ -2212,144 +2227,66 @@ const bookStructuredDataPayload = bookStructuredData
 		margin: 0;
 		padding: 0;
 		display: grid;
-		gap: 0.45rem;
+		gap: 0.75rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
-	.series-book {
-		display: grid;
-		grid-template-columns: 38px minmax(0, 1fr) auto;
-		gap: 0.65rem;
-		align-items: center;
-		border: var(--border-subtle);
-		border-radius: var(--radius-md);
-		background: rgba(255, 255, 255, 0.54);
-		padding: 0.55rem;
+	@media (min-width: 980px) {
+		.series-list {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
 	}
-	.series-book.is-current {
+	:global(.series-list .book-card[data-current-series-book="true"]) {
 		border-color: var(--color-border);
 		background: #fff;
+		box-shadow: var(--shadow-xs);
 	}
-	.series-book-cover,
-	.series-book-cover-placeholder {
-		width: 38px;
-		height: 56px;
-		border-radius: var(--radius-sm);
-		object-fit: cover;
-		background: rgba(255, 255, 255, 0.7);
-		border: var(--border-subtle);
-	}
-	.series-book-cover-placeholder {
-		display: grid;
-		place-items: center;
-		color: var(--color-text-subtle);
-	}
-	.series-book-main {
-		min-width: 0;
+	.series-nav,
+	.series-card-kickers {
 		display: flex;
 		flex-wrap: wrap;
-		align-items: baseline;
-		gap: 0.22rem 0.45rem;
+		align-items: center;
+		gap: 0.35rem;
 	}
-	.series-book-order {
-		flex: 0 0 100%;
-		margin: 0;
-		color: var(--color-text-subtle);
-		font-size: 0.78rem;
-		font-weight: 700;
+	.series-nav {
+		margin: -0.1rem 0 0;
 	}
-	.series-book-title {
-		color: var(--color-nav);
+	.series-nav a,
+	.series-nav span,
+	.series-card-kickers span {
+		border-radius: 999px;
+		border: var(--border-subtle);
+		background: rgba(255, 255, 255, 0.72);
+		padding: 0.18rem 0.55rem;
+		font-size: 0.76rem;
 		font-weight: 760;
+		line-height: 1.35;
 		text-decoration: none;
-		overflow-wrap: anywhere;
 	}
-	.series-book-title:hover,
-	.series-book-title:focus-visible {
-		text-decoration: underline;
-		text-underline-offset: 2px;
+	.series-nav a {
+		color: var(--color-nav);
+	}
+	.series-nav a:hover,
+	.series-nav a:focus-visible {
+		border-color: var(--color-border);
+		color: var(--color-nav-hover);
+	}
+	.series-nav span {
+		color: var(--color-text-subtle);
+	}
+	.series-card-kickers {
+		margin: 0 0 0.35rem;
+	}
+	.series-card-kickers span {
+		color: var(--color-text-subtle);
 	}
 	.series-current-badge {
-		border-radius: 999px;
 		background: var(--color-nav-surface);
 		color: var(--color-nav);
-		padding: 0.12rem 0.45rem;
-		font-size: 0.72rem;
-		font-weight: 760;
+		border-color: rgba(31, 93, 135, 0.2);
 	}
-	.series-book-state {
-		color: var(--color-text-muted);
-		font-size: 0.84rem;
-		font-weight: 700;
-		white-space: nowrap;
-	}
-	.series-state-read {
+	.series-book-status {
 		color: var(--color-primary);
-	}
-	.series-add-link {
-		color: var(--color-nav);
 		font-weight: 760;
-		text-decoration: none;
-	}
-	.series-add-link:hover,
-	.series-add-link:focus-visible {
-		text-decoration: underline;
-		text-underline-offset: 2px;
-	}
-	.series-continue {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.8rem;
-		border-radius: var(--radius-md);
-		background: var(--color-nav-surface);
-		border: var(--border-subtle);
-		padding: 0.75rem;
-	}
-	.series-continue-eyebrow,
-	.series-continue-title,
-	.series-continue-meta,
-	.series-continue-state,
-	.series-continue-feedback {
-		margin: 0;
-	}
-	.series-continue-eyebrow {
-		color: var(--color-nav);
-		font-size: 0.82rem;
-		font-weight: 760;
-	}
-	.series-continue-title {
-		margin-top: 0.12rem;
-		font-weight: 760;
-	}
-	.series-continue-meta,
-	.series-continue-state {
-		margin-top: 0.1rem;
-		color: var(--color-text-muted);
-		font-size: 0.84rem;
-	}
-	.series-continue-button {
-		border: none;
-		border-radius: 999px;
-		background: var(--color-primary);
-		color: #fff;
-		font: inherit;
-		font-size: 0.9rem;
-		font-weight: 760;
-		min-height: 2.4rem;
-		padding: 0.45rem 0.8rem;
-		cursor: pointer;
-		white-space: nowrap;
-	}
-	.series-continue-button:hover,
-	.series-continue-button:focus-visible {
-		background: var(--color-primary-hover);
-	}
-	.series-continue-feedback {
-		color: var(--color-primary);
-		font-size: 0.84rem;
-		font-weight: 700;
-	}
-	.series-continue-feedback[hidden] {
-		display: none;
 	}
 	.related-links-row {
 		display: flex;
@@ -2820,9 +2757,8 @@ const bookStructuredDataPayload = bookStructuredData
 		.activity-grid,
 		.readers-also-list { grid-template-columns: 1fr; }
 		.review-card { padding: 0.65rem; }
-		.series-continue {
-			align-items: flex-start;
-			flex-direction: column;
+		.series-list {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 	}
 	@media (max-width: 540px) {
@@ -2840,12 +2776,8 @@ const bookStructuredDataPayload = bookStructuredData
 		.journal-count {
 			margin-left: 0;
 		}
-		.series-book {
-			grid-template-columns: 34px minmax(0, 1fr);
-		}
-		.series-book-state {
-			grid-column: 2;
-			white-space: normal;
+		.series-list {
+			grid-template-columns: 1fr;
 		}
 	}
 	@media (max-width: 760px) {}
@@ -2919,14 +2851,6 @@ const bookStructuredDataPayload = bookStructuredData
 		setDropdownLabel(dropdown, status);
 	}
 
-	function showSeriesFeedback(container, message) {
-		const feedback = container?.querySelector?.(".series-continue-feedback");
-		if (feedback instanceof HTMLElement) {
-			feedback.hidden = false;
-			feedback.textContent = message;
-		}
-	}
-
 	resolveClientAuthState().then((state) => {
 		isAuthenticated = !!state.isAuthenticated;
 	}).catch(() => {});
@@ -2934,31 +2858,6 @@ const bookStructuredDataPayload = bookStructuredData
 	document.addEventListener("click", async (event) => {
 		const target = event.target instanceof HTMLElement ? event.target : null;
 		if (!target) return;
-
-		const seriesAdd = target.closest('[data-action="series-add-want"]');
-		if (seriesAdd instanceof HTMLButtonElement) {
-			const container = seriesAdd.closest(".series-continue");
-			if (!isAuthenticated) {
-				promptForShelfLogin();
-				return;
-			}
-			if (!(container instanceof HTMLElement)) return;
-			const entry = buildEntry(container, "want_to_read");
-			if (!entry?.title) return;
-			seriesAdd.disabled = true;
-			const result = await saveShelfEntryWithRetry(entry);
-			if (result.ok) {
-				seriesAdd.replaceWith(Object.assign(document.createElement("p"), {
-					className: "series-continue-state",
-					textContent: "Added to Want to Read"
-				}));
-				showSeriesFeedback(container, "Saved to Want to Read.");
-			} else if (result.message) {
-				seriesAdd.disabled = false;
-				showSeriesFeedback(container, result.message);
-			}
-			return;
-		}
 
 		const toggle = target.closest('[data-action="toggle-shelf"]');
 		if (toggle) {

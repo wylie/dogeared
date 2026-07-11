@@ -35,7 +35,7 @@ test("series context marks the current book and read completion state", () => {
 	assert.equal(context?.books[1]?.orderLabel, "Book 2");
 });
 
-test("continue reading chooses the next existing book and skips missing placeholders", () => {
+test("series context exposes previous and next existing books for navigation", () => {
 	const context = buildBookSeriesContext({
 		currentBookId: 2,
 		series: { id: 1, name: "Quartet", description: "", coverUrl: "", totalBooks: 4 },
@@ -49,6 +49,7 @@ test("continue reading chooses the next existing book and skips missing placehol
 
 	assert.equal(context?.books[2]?.canOpenBook, false);
 	assert.equal(context?.books[2]?.bookHref, "");
+	assert.equal(context?.previousBook?.bookId, 1);
 	assert.equal(context?.nextBook?.bookId, 4);
 	assert.equal(context?.nextBook?.shelfStatus, "want_to_read");
 });
