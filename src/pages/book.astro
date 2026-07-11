@@ -12,7 +12,7 @@ import { buildBookReviewList, ensureReviewSchema, type BookReview } from "../lib
 import { googleBooksCoverUrl } from "../lib/bookCovers";
 import { resolveCustomShelfOptions } from "../lib/customShelves";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
-import { loadBookSeriesContext, upsertKnownSeriesForBook, type BookSeriesContext } from "../lib/series";
+import { loadBookSeriesContext, loadKnownSeriesFallbackContext, upsertKnownSeriesForBook, type BookSeriesContext } from "../lib/series";
 import { formatReadingPosition, loadJournalEntriesForBook, type JournalSearchResult } from "../lib/readingJournal";
 import { loadReadersAlsoEnjoyed, type RecommendationSection } from "../lib/recommendations";
 import { ensureCanonicalWorkSchema, resolveRepresentativeBookId } from "../lib/catalogWorks";
@@ -881,6 +881,26 @@ if (book?.id) {
 	} catch (error) {
 		logBookDetailLoadError("recommendations", error);
 		readersAlsoEnjoyed = null;
+	}
+} else if (book) {
+	try {
+		seriesContext = await loadKnownSeriesFallbackContext(sql, {
+			title: book.title,
+			author: book.author,
+			coverUrl: book.coverUrl,
+			synopsis: book.synopsis,
+			language: book.language,
+			isbn10: book.isbn10,
+			isbn13: book.isbn13,
+			googleBooksId: book.googleBooksId,
+			publishedLabel: book.publishedLabel,
+			pageCount: book.pageCount,
+			averageRating: book.averageRating,
+			ratingCount: book.ratingCount
+		});
+	} catch (error) {
+		logBookDetailLoadError("series-fallback", error);
+		seriesContext = null;
 	}
 }
 } catch (error) {

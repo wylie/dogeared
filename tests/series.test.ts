@@ -5,6 +5,7 @@ import {
 	buildBookSeriesContext,
 	groupAuthorBooksBySeries,
 	inferKnownSeriesMetadata,
+	loadKnownSeriesFallbackContext,
 	orderSeriesBooks
 } from "../src/lib/series.ts";
 
@@ -98,6 +99,80 @@ test("known series metadata is inferred for regression fixtures", () => {
 	}
 });
 
+test("known series fallback context renders external book detail pages from database series rows", async () => {
+	const calls: string[] = [];
+	const sql = (async (strings: TemplateStringsArray) => {
+		const query = strings.join("");
+		calls.push(query);
+		if (!query.includes("where s.slug =")) return [];
+		return [
+			{
+				series_id: 104,
+				series_name: "Harry Potter",
+				series_description: "",
+				series_cover_url: "",
+				series_total_books: 7,
+				book_id: null,
+				title: "Harry Potter and the Sorcerer's Stone",
+				primary_author: "J.K. Rowling",
+				author_id: null,
+				cover_url: "",
+				synopsis: "",
+				language: "",
+				isbn10: "",
+				isbn13: "",
+				google_books_id: "",
+				published_year: null,
+				page_count: 0,
+				average_rating: 0,
+				rating_count: 0,
+				book_order: "1",
+				publication_order: "1",
+				chronological_order: "1"
+			},
+			{
+				series_id: 104,
+				series_name: "Harry Potter",
+				series_description: "",
+				series_cover_url: "",
+				series_total_books: 7,
+				book_id: null,
+				title: "Harry Potter and the Chamber of Secrets",
+				primary_author: "J.K. Rowling",
+				author_id: null,
+				cover_url: "",
+				synopsis: "",
+				language: "",
+				isbn10: "",
+				isbn13: "",
+				google_books_id: "",
+				published_year: null,
+				page_count: 0,
+				average_rating: 0,
+				rating_count: 0,
+				book_order: "2",
+				publication_order: "2",
+				chronological_order: "2"
+			}
+		];
+	}) as never;
+	const context = await loadKnownSeriesFallbackContext(sql, {
+		title: "Harry Potter and the Chamber of Secrets",
+		author: "J.K. Rowling",
+		pageCount: 341,
+		publishedLabel: "1999"
+	});
+
+	assert.equal(context?.series.name, "Harry Potter");
+	assert.equal(context?.currentBook?.title, "Harry Potter and the Chamber of Secrets");
+	assert.equal(context?.currentBook?.isCurrent, true);
+	assert.equal(context?.currentBook?.orderLabel, "Book 2");
+	assert.equal(context?.currentBook?.pageCount, 341);
+	assert.equal(context?.currentBook?.publishedYear, 1999);
+	assert.equal(context?.books.length, 2);
+	assert.equal(calls.some((query) => query.includes("from series s")), true);
+});
+
 test("Wings of Fire known series matches Book Detail release fixture total", () => {
 	const source = readFileSync("src/lib/series.ts", "utf8");
 
@@ -118,11 +193,14 @@ test("series inference is wired through search, shelf import, recommendations, a
 	const shelfEntries = readFileSync("src/pages/api/shelf/entries.ts", "utf8");
 	const recommendations = readFileSync("src/lib/recommendations.ts", "utf8");
 	const migration = readFileSync("db/migrations/2026-07-06-known-series-backfill.sql", "utf8");
+	const bookDetail = readFileSync("src/pages/book.astro", "utf8");
 
 	assert.match(search, /inferKnownSeriesMetadata/);
 	assert.match(shelfEntries, /upsertKnownSeriesForBook/);
 	assert.match(recommendations, /next_series/);
 	assert.match(recommendations, /Next in/);
+	assert.match(bookDetail, /loadKnownSeriesFallbackContext/);
+	assert.match(bookDetail, /logBookDetailLoadError\("series-fallback"/);
 	for (const fixture of ["harry-potter", "the-lord-of-the-rings", "the-empyrean", "wings-of-fire", "a-series-of-unfortunate-events", "mistborn"]) {
 		assert.match(migration, new RegExp(fixture));
 	}

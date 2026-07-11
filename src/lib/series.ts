@@ -104,6 +104,21 @@ type UpsertKnownSeriesInput = {
 	publishedYear?: unknown;
 };
 
+type KnownSeriesFallbackInput = {
+	title?: unknown;
+	author?: unknown;
+	coverUrl?: unknown;
+	synopsis?: unknown;
+	language?: unknown;
+	isbn10?: unknown;
+	isbn13?: unknown;
+	googleBooksId?: unknown;
+	publishedLabel?: unknown;
+	pageCount?: unknown;
+	averageRating?: unknown;
+	ratingCount?: unknown;
+};
+
 const KNOWN_SERIES: KnownSeries[] = [
 	{
 		name: "Harry Potter",
@@ -443,6 +458,146 @@ export function buildBookSeriesContext(input: {
 		currentBook,
 		previousBook,
 		nextBook
+	};
+}
+
+function publicationYearFromLabel(value: unknown) {
+	const match = normalizeText(value).match(/\b(1[5-9]\d{2}|20\d{2}|21\d{2})\b/);
+	return match ? numericOrder(match[1]) : 0;
+}
+
+export async function loadKnownSeriesFallbackContext(
+	sql: SeriesSql,
+	input: KnownSeriesFallbackInput
+): Promise<BookSeriesContext | null> {
+	const inferred = inferKnownSeriesMetadata(input);
+	if (!inferred) return null;
+	const knownSeries = findKnownSeriesBySlug(inferred.seriesSlug);
+	if (!knownSeries) return null;
+	await ensureSeriesSchema(sql);
+	const rows = await sql<Array<{
+		series_id: number;
+		series_name: string;
+		series_description: string;
+		series_cover_url: string;
+		series_total_books: number;
+		book_id: number | null;
+		title: string;
+		primary_author: string;
+		author_id: number | null;
+		cover_url: string;
+		synopsis: string;
+		language: string;
+		isbn10: string;
+		isbn13: string;
+		google_books_id: string;
+		published_year: number | null;
+		page_count: number;
+		average_rating: number | null;
+		rating_count: number | null;
+		book_order: string | null;
+		publication_order: string | null;
+		chronological_order: string | null;
+	}>>`
+		select
+			s.id as series_id,
+			s.name as series_name,
+			coalesce(s.description, '') as series_description,
+			coalesce(s.cover_url, '') as series_cover_url,
+			coalesce(nullif(s.total_books, 0), count(*) over (partition by s.id))::int as series_total_books,
+			sb.book_id,
+			coalesce(nullif(trim(b.title), ''), nullif(trim(sb.title_override), ''), 'Untitled') as title,
+			coalesce(nullif(trim(b.primary_author), ''), nullif(trim(sb.metadata ->> 'author'), ''), ${knownSeries.displayAuthor}) as primary_author,
+			b.author_id,
+			coalesce(nullif(trim(b.cover_url), ''), nullif(trim(bw.preferred_cover_url), ''), nullif(trim(sb.metadata ->> 'coverUrl'), ''), '') as cover_url,
+			coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+			coalesce(nullif(trim(b.language), ''), '') as language,
+			coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+			coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+			coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+			b.published_year,
+			coalesce(nullif(b.page_count, 0), 0)::int as page_count,
+			coalesce(rt.average_rating, 0) as average_rating,
+			coalesce(rt.rating_count, 0)::int as rating_count,
+			sb.book_order::text as book_order,
+			sb.publication_order::text as publication_order,
+			sb.chronological_order::text as chronological_order
+		from series s
+		join series_book sb on sb.series_id = s.id
+		left join book b on b.id = sb.book_id
+		left join book_work bw on bw.id = b.work_id
+		left join lateral (
+			select
+				round(avg(ubr.rating)::numeric, 2) as average_rating,
+				count(*) filter (where ubr.rating is not null)::int as rating_count
+			from user_book ubr
+			where ubr.book_id = b.id
+		) rt on true
+		where s.slug = ${inferred.seriesSlug}
+		order by
+			nullif(sb.book_order::text, '')::numeric nulls last,
+			nullif(sb.publication_order::text, '')::numeric nulls last,
+			nullif(sb.chronological_order::text, '')::numeric nulls last,
+			b.published_year nulls last,
+			title asc
+	`;
+	if (rows.length === 0) return null;
+	const first = rows[0];
+	const externalTitle = normalizeText(input.title);
+	const externalAuthor = normalizeText(input.author);
+	const externalCover = normalizeText(input.coverUrl);
+	const externalPublishedYear = publicationYearFromLabel(input.publishedLabel);
+	const externalPageCount = numericOrder(input.pageCount);
+	const externalAverageRating = Math.max(0, Math.min(5, Number(input.averageRating || 0) || 0));
+	const externalRatingCount = Math.max(0, Number(input.ratingCount || 0) || 0);
+	const books = orderSeriesBooks(rows.map((row) => {
+		const bookOrder = numericOrder(row.book_order);
+		const isCurrent = bookOrder === inferred.bookOrder;
+		return {
+			seriesId: Number(row.series_id || 0),
+			seriesName: normalizeText(row.series_name),
+			seriesDescription: normalizeText(row.series_description),
+			seriesCoverUrl: normalizeText(row.series_cover_url),
+			seriesTotalBooks: Math.max(0, Number(row.series_total_books || 0)),
+			bookId: Math.max(0, Number(row.book_id || 0) || 0),
+			title: isCurrent && externalTitle ? externalTitle : normalizeText(row.title),
+			author: isCurrent && externalAuthor ? externalAuthor : normalizeText(row.primary_author),
+			authorId: Math.max(0, Number(row.author_id || 0) || 0),
+			coverUrl: isCurrent && externalCover ? externalCover : normalizeText(row.cover_url),
+			synopsis: isCurrent ? normalizeText(input.synopsis) : normalizeText(row.synopsis),
+			language: isCurrent ? normalizeText(input.language) : normalizeText(row.language),
+			isbn10: isCurrent ? normalizeText(input.isbn10) : normalizeText(row.isbn10),
+			isbn13: isCurrent ? normalizeText(input.isbn13) : normalizeText(row.isbn13),
+			googleBooksId: isCurrent ? normalizeText(input.googleBooksId) : normalizeText(row.google_books_id),
+			publishedYear: isCurrent && externalPublishedYear > 0 ? externalPublishedYear : Math.max(0, Number(row.published_year || 0) || 0),
+			pageCount: isCurrent && externalPageCount > 0 ? externalPageCount : Math.max(0, Number(row.page_count || 0) || 0),
+			averageRating: isCurrent && externalAverageRating > 0 ? externalAverageRating : Math.max(0, Math.min(5, Number(row.average_rating || 0) || 0)),
+			ratingCount: isCurrent && externalRatingCount > 0 ? externalRatingCount : Math.max(0, Number(row.rating_count || 0) || 0),
+			bookOrder,
+			publicationOrder: numericOrder(row.publication_order),
+			chronologicalOrder: numericOrder(row.chronological_order),
+			shelfStatus: "" as ShelfStatus
+		};
+	})).map((book) => ({
+		...book,
+		orderLabel: formatSeriesBookLabel(book),
+		isCurrent: numericOrder(book.bookOrder) === inferred.bookOrder,
+		canOpenBook: book.bookId > 0,
+		bookHref: book.bookId > 0 ? `/book?bookId=${encodeURIComponent(String(book.bookId))}` : ""
+	}));
+	const currentIndex = books.findIndex((book) => book.isCurrent);
+	return {
+		series: {
+			id: Number(first.series_id || 0),
+			name: normalizeText(first.series_name),
+			description: normalizeText(first.series_description),
+			coverUrl: normalizeText(first.series_cover_url),
+			totalBooks: Math.max(0, Number(first.series_total_books || rows.length) || rows.length)
+		},
+		books,
+		currentBook: currentIndex >= 0 ? books[currentIndex] : null,
+		previousBook: currentIndex >= 0 ? (books.slice(0, currentIndex).reverse().find((book) => book.bookId > 0) || null) : null,
+		nextBook: currentIndex >= 0 ? (books.slice(currentIndex + 1).find((book) => book.bookId > 0) || null) : null
 	};
 }
 
