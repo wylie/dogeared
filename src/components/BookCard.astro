@@ -225,11 +225,16 @@ function renderAverageStars(value: number) {
 	}
 	.book-card--compact-series {
 		align-self: start;
+		height: max-content;
+		min-height: 0;
 		grid-template-columns: 76px minmax(0, 1fr);
+		grid-auto-rows: max-content;
+		align-items: start;
 		gap: 0.58rem;
 		padding: 0.58rem;
 	}
 	.book-card--compact-series .cover-wrap {
+		align-self: start;
 		width: 76px;
 		gap: 0.44rem;
 	}
@@ -238,6 +243,7 @@ function renderAverageStars(value: number) {
 		height: 114px;
 	}
 	.book-card--compact-series .card-body {
+		align-self: start;
 		min-height: 0;
 	}
 	.book-card--compact-series .card-body h3 {

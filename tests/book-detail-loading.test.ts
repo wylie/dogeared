@@ -81,6 +81,7 @@ test("book detail series cards stay compact without header navigation controls",
 	assert.doesNotMatch(source, /const nextSeriesBook/);
 	assert.doesNotMatch(source, /scrollIntoView/);
 	assert.match(source, /\.series-list \{[\s\S]+align-items: start/);
+	assert.match(source, /\.series-list \{[\s\S]+grid-auto-rows: max-content/);
 	assert.doesNotMatch(source, /:global\(\.series-list \.book-card\) \{[\s\S]+grid-template-columns: 76px minmax\(0, 1fr\)/);
 	assert.doesNotMatch(source, /:global\(\.series-list \.book-card \.cover\) \{[\s\S]+height: 114px/);
 });

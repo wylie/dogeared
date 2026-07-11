@@ -90,7 +90,11 @@ test("BookCard owns the compact reusable presentation variant", () => {
 	assert.equal(source.includes('variant = "standard"'), true);
 	assert.equal(source.includes("book-card--compact-series"), true);
 	assert.match(source, /\.book-card--compact-series \{[\s\S]+grid-template-columns: 76px minmax\(0, 1fr\)/);
+	assert.match(source, /\.book-card--compact-series \{[\s\S]+height: max-content/);
+	assert.match(source, /\.book-card--compact-series \{[\s\S]+grid-auto-rows: max-content/);
+	assert.match(source, /\.book-card--compact-series \{[\s\S]+align-items: start/);
 	assert.match(source, /\.book-card--compact-series \.cover \{[\s\S]+height: 114px/);
+	assert.match(source, /\.book-card--compact-series \.card-body \{[\s\S]+align-self: start/);
 	assert.match(source, /\.book-card--compact-series \.card-body \{[\s\S]+min-height: 0/);
 	assert.match(source, /\.book-card--compact-series \.series-meta \{[\s\S]+color: var\(--color-text-muted\)/);
 	assert.match(source, /\.book-card--compact-series \.cover-actions :global\(\.shelf-dropdown\) \{[\s\S]+--shelf-trigger-height: 30px/);
