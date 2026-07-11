@@ -55,6 +55,7 @@ test("book detail series section reuses BookCard and shared shelf actions", () =
 
 	assert.match(seriesSection, /<BookCard/);
 	assert.match(seriesSection, /variant="compact-series"/);
+	assert.match(seriesSection, /seriesLabel=\{seriesBook\.bookOrder > 0 \? `Book \$\{seriesBook\.bookOrder\}` : ""\}/);
 	assert.match(seriesSection, /<ShelfDropdown/);
 	assert.match(seriesSection, /data-current-series-book/);
 	assert.match(seriesSection, /class="series-eyebrow">Series/);
@@ -67,6 +68,10 @@ test("book detail series section reuses BookCard and shared shelf actions", () =
 	assert.doesNotMatch(seriesSection, /Add to DogEared/);
 	assert.doesNotMatch(seriesSection, /Current Book/);
 	assert.doesNotMatch(seriesSection, /Shelf: \{/);
+	assert.doesNotMatch(seriesSection, /series-card-kickers/);
+	assert.doesNotMatch(seriesSection, /slot="preTitle"/);
+	assert.doesNotMatch(seriesSection, /seriesContext\.series\.name\}\$\{seriesBook\.bookOrder/);
+	assert.doesNotMatch(seriesSection, /No ratings yet\./);
 });
 
 test("book detail series cards stay compact without header navigation controls", () => {
