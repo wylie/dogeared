@@ -99,6 +99,8 @@ Editions remain available for precision metadata such as ISBN, publisher, format
 
 Potential duplicate Works are detected with confidence scoring across canonical title, author, structured series position, ISBNs, edition keys, provider identifiers, and existing Work relationships. Admins review high-confidence suggestions in Data Health and may merge or ignore them. Approved merges preserve reader-owned data, activity, recommendations, custom shelves, journal entries, collection entries, source mappings, and editions; uncertain matches are never silently merged.
 
+Legacy catalog rows are backfilled idempotently into `book_work` and `book_edition` using the same canonical title rules as imports. The backfill attaches every compatibility `book` row to a Work and creates an Edition without overwriting legacy unique source keys on `book.canonical_work_key`.
+
 Limitations: v1 keeps the existing `book` table as a compatibility representative for routes and older relationships while new `book_work` and `book_edition` records carry the canonical model.
 
 ### Recommended For You

@@ -1,5 +1,5 @@
 import { canonicalCatalogEditionKey, canonicalCatalogWorkKey, normalizeCatalogIsbn, normalizeCatalogText, type CatalogSourceInput } from "./catalogKeys.ts";
-import { normalizeRedundantEditionTitle } from "./canonicalTitles.ts";
+import { normalizeRedundantEditionTitle, normalizeRedundantSeriesTitle } from "./canonicalTitles.ts";
 import type { getNeonSql } from "./neon.ts";
 
 type Sql = ReturnType<typeof getNeonSql>;
@@ -32,17 +32,39 @@ export type CatalogEditionInput = {
 
 let schemaReady: Promise<void> | null = null;
 
-function sqlWorkKeyExpression(alias = "b") {
-	return `
-		'title_author:' ||
-		coalesce(nullif(btrim(regexp_replace(regexp_replace(regexp_replace(
-			lower(split_part(regexp_replace(regexp_replace(coalesce(${alias}.title, ''), '\\\\([^)]*\\\\)', ' ', 'g'), '(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition)', ' ', 'gi'), ':', 1)),
-			'^(the|a|an)[[:space:]]+', '', 'g'
-		), '[^a-z0-9]+', ' ', 'g'), '[[:space:]]+', ' ', 'g')), ''), 'untitled') ||
-		'|' ||
-		coalesce(nullif(btrim(regexp_replace(regexp_replace(lower(regexp_replace(coalesce(${alias}.primary_author, ''), '^by[[:space:]]+', '', 'g')), '[^a-z0-9]+', ' ', 'g'), '[[:space:]]+', ' ', 'g')), ''), 'unknown')
-	`;
-}
+type CanonicalWorkBackfillRow = {
+	id: number;
+	title: string;
+	primary_author: string;
+	author_id: number | null;
+	synopsis: string;
+	cover_url: string;
+	published_year: number | null;
+	page_count: number | null;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+	google_books_id: string;
+	publisher: string;
+	series_id: number | null;
+	series_name: string;
+	book_order: number | null;
+	shelf_count: number;
+	rating_count: number;
+};
+
+type CanonicalWorkBackfillBook = CanonicalWorkBackfillRow & {
+	workKey: string;
+	canonicalTitle: string;
+	editionTitle: string;
+};
+
+export type CanonicalWorkBackfillPlan = {
+	workKey: string;
+	canonicalTitle: string;
+	representative: CanonicalWorkBackfillBook;
+	books: CanonicalWorkBackfillBook[];
+};
 
 export async function ensureCanonicalWorkSchema(sql: Sql) {
 	if (!schemaReady) {
@@ -106,79 +128,143 @@ export async function ensureCanonicalWorkSchema(sql: Sql) {
 	await schemaReady;
 }
 
+function numeric(value: unknown) {
+	const number = Number(value || 0);
+	return Number.isFinite(number) ? number : 0;
+}
+
+function canonicalWorkTitleForBackfill(row: CanonicalWorkBackfillRow) {
+	const rawTitle = normalizeCatalogText(row.title) || "Untitled";
+	const seriesTitle = normalizeRedundantSeriesTitle({
+		title: rawTitle,
+		seriesName: row.series_name,
+		bookOrder: row.book_order
+	});
+	const editionTitle = normalizeRedundantEditionTitle({ title: seriesTitle.title || rawTitle });
+	return editionTitle.title || seriesTitle.title || rawTitle;
+}
+
+function backfillQuality(book: CanonicalWorkBackfillBook) {
+	return numeric(book.shelf_count) * 8
+		+ numeric(book.rating_count) * 4
+		+ (normalizeCatalogText(book.cover_url) ? 3 : 0)
+		+ (normalizeCatalogText(book.synopsis) ? 2 : 0)
+		+ (numeric(book.series_id) > 0 && numeric(book.book_order) > 0 ? 2 : 0)
+		+ (normalizeCatalogIsbn(book.isbn13) || normalizeCatalogIsbn(book.isbn10) ? 1 : 0);
+}
+
+export function buildCanonicalWorkBackfillPlan(rows: CanonicalWorkBackfillRow[]): CanonicalWorkBackfillPlan[] {
+	const groups = new Map<string, CanonicalWorkBackfillBook[]>();
+	for (const row of rows) {
+		const canonicalTitle = canonicalWorkTitleForBackfill(row);
+		const author = normalizeCatalogText(row.primary_author);
+		const workKey = canonicalCatalogWorkKey({ title: canonicalTitle, author });
+		if (!workKey) continue;
+		const book: CanonicalWorkBackfillBook = {
+			...row,
+			workKey,
+			canonicalTitle,
+			editionTitle: normalizeCatalogText(row.title) || canonicalTitle
+		};
+		groups.set(workKey, [...(groups.get(workKey) || []), book]);
+	}
+	return Array.from(groups.entries()).map(([workKey, books]) => {
+		const representative = [...books].sort((a, b) => backfillQuality(b) - backfillQuality(a) || numeric(a.id) - numeric(b.id))[0];
+		return {
+			workKey,
+			canonicalTitle: representative.canonicalTitle,
+			representative,
+			books
+		};
+	});
+}
+
 async function backfillCanonicalWorks(sql: Sql) {
-	const workKeySql = sqlWorkKeyExpression("b");
-	await sql.unsafe(`
-		with source_books as (
+	const rows = await sql<CanonicalWorkBackfillRow[]>`
+		select
+			b.id,
+			coalesce(nullif(trim(b.title), ''), 'Untitled') as title,
+			coalesce(nullif(trim(b.primary_author), ''), '') as primary_author,
+			b.author_id,
+			coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+			coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+			b.published_year,
+			b.page_count,
+			coalesce(nullif(trim(b.language), ''), '') as language,
+			coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+			coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+			coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+			coalesce(nullif(trim(b.publisher), ''), '') as publisher,
+			sb.series_id,
+			coalesce(nullif(trim(s.name), ''), '') as series_name,
+			sb.book_order,
+			coalesce(sc.shelf_count, 0)::int as shelf_count,
+			coalesce(sc.rating_count, 0)::int as rating_count
+		from book b
+		left join series_book sb on sb.book_id = b.id
+		left join series s on s.id = sb.series_id
+		left join lateral (
 			select
-				b.*,
-				${workKeySql} as work_key,
-				coalesce(sc.shelf_count, 0) as shelf_count,
-				coalesce(sc.rating_count, 0) as rating_count
-			from book b
-			left join lateral (
-				select
-					count(*)::int as shelf_count,
-					count(*) filter (where rating is not null)::int as rating_count
-				from user_book ub
-				where ub.book_id = b.id
-			) sc on true
-		),
-		representatives as (
-			select distinct on (work_key)
+				count(*)::int as shelf_count,
+				count(*) filter (where rating is not null)::int as rating_count
+			from user_book ub
+			where ub.book_id = b.id
+		) sc on true
+	`;
+	const plans = buildCanonicalWorkBackfillPlan(rows);
+	for (const plan of plans) {
+		const representative = plan.representative;
+		const workRows = await sql<Array<{ id: number }>>`
+			insert into book_work (
 				work_key,
 				title,
+				canonical_title,
 				primary_author,
 				author_id,
-				synopsis,
-				cover_url,
-				published_year
-			from source_books
-			order by
-				work_key,
-				shelf_count desc,
-				rating_count desc,
-				(nullif(trim(cover_url), '') is not null) desc,
-				(nullif(trim(synopsis), '') is not null) desc,
-				id asc
-		)
-		insert into book_work (
-			work_key,
-			title,
-			canonical_title,
-			primary_author,
-			author_id,
-			description,
-			original_publication_year,
-			preferred_cover_url
-		)
-		select
-			work_key,
-			coalesce(nullif(trim(title), ''), 'Untitled'),
-			coalesce(nullif(trim(title), ''), 'Untitled'),
-			coalesce(nullif(trim(primary_author), ''), ''),
-			author_id,
-			coalesce(nullif(trim(synopsis), ''), ''),
-			published_year,
-			coalesce(nullif(trim(cover_url), ''), '')
-		from representatives
-		on conflict (work_key) do update set
-			title = case when excluded.title <> '' then excluded.title else book_work.title end,
-			canonical_title = case when excluded.canonical_title <> '' then excluded.canonical_title else book_work.canonical_title end,
-			primary_author = case when excluded.primary_author <> '' then excluded.primary_author else book_work.primary_author end,
-			author_id = coalesce(excluded.author_id, book_work.author_id),
-			description = case when excluded.description <> '' then excluded.description else book_work.description end,
-			original_publication_year = coalesce(book_work.original_publication_year, excluded.original_publication_year),
-			preferred_cover_url = case when excluded.preferred_cover_url <> '' then excluded.preferred_cover_url else book_work.preferred_cover_url end,
-			updated_at = now()
-	`);
-	await sql.unsafe(`
-		update book b
-		set work_id = bw.id
-		from book_work bw
-		where bw.work_key = ${workKeySql}
-			and (b.work_id is distinct from bw.id)
-	`);
+				description,
+				series_id,
+				series_position,
+				original_publication_year,
+				preferred_cover_url,
+				updated_at
+			)
+			values (
+				${plan.workKey},
+				${plan.canonicalTitle},
+				${plan.canonicalTitle},
+				${normalizeCatalogText(representative.primary_author)},
+				${numeric(representative.author_id) > 0 ? numeric(representative.author_id) : null},
+				${normalizeCatalogText(representative.synopsis)},
+				${numeric(representative.series_id) > 0 ? numeric(representative.series_id) : null},
+				${numeric(representative.book_order) > 0 ? numeric(representative.book_order) : null},
+				${numeric(representative.published_year) > 0 ? numeric(representative.published_year) : null},
+				${normalizeCatalogText(representative.cover_url)},
+				now()
+			)
+			on conflict (work_key) do update set
+				title = case when excluded.title <> '' then excluded.title else book_work.title end,
+				canonical_title = case when excluded.canonical_title <> '' then excluded.canonical_title else book_work.canonical_title end,
+				primary_author = case when excluded.primary_author <> '' then excluded.primary_author else book_work.primary_author end,
+				author_id = coalesce(excluded.author_id, book_work.author_id),
+				description = case when excluded.description <> '' then excluded.description else book_work.description end,
+				series_id = coalesce(book_work.series_id, excluded.series_id),
+				series_position = coalesce(book_work.series_position, excluded.series_position),
+				original_publication_year = coalesce(book_work.original_publication_year, excluded.original_publication_year),
+				preferred_cover_url = case when excluded.preferred_cover_url <> '' then excluded.preferred_cover_url else book_work.preferred_cover_url end,
+				updated_at = now()
+			returning id
+		`;
+		const workId = numeric(workRows[0]?.id);
+		if (workId <= 0) continue;
+		for (const book of plan.books) {
+			await sql`
+				update book
+				set work_id = ${workId}, updated_at = now()
+				where id = ${numeric(book.id)}
+					and (work_id is distinct from ${workId})
+			`;
+		}
+	}
 	await sql`
 		update book_edition be
 		set

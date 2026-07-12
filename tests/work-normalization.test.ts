@@ -6,6 +6,7 @@ import {
 	scorePotentialDuplicateBooks,
 	type WorkNormalizationBook
 } from "../src/lib/workNormalization.ts";
+import { buildCanonicalWorkBackfillPlan } from "../src/lib/catalogWorks.ts";
 
 function book(overrides: Partial<WorkNormalizationBook>): WorkNormalizationBook {
 	return {
@@ -123,9 +124,82 @@ test("potential duplicate Work groups collapse known edition suffixes", () => {
 	assert.equal(groups[0]?.reasons.some((reason) => reason.includes("edition metadata")), true);
 });
 
+test("canonical Work backfill plans use cleaned titles and preserve editions", () => {
+	const plans = buildCanonicalWorkBackfillPlan([
+		{
+			id: 26,
+			title: "The Poison Jungle",
+			primary_author: "Tui T. Sutherland",
+			author_id: null,
+			synopsis: "",
+			cover_url: "",
+			published_year: 2019,
+			page_count: 336,
+			language: "en",
+			isbn10: "",
+			isbn13: "9781338214536",
+			google_books_id: "",
+			publisher: "",
+			series_id: 1,
+			series_name: "Wings of Fire",
+			book_order: 13,
+			shelf_count: 0,
+			rating_count: 0
+		},
+		{
+			id: 104,
+			title: "The Poison Jungle (Wings of Fire, #13)",
+			primary_author: "Tui T. Sutherland",
+			author_id: null,
+			synopsis: "",
+			cover_url: "cover.jpg",
+			published_year: 2019,
+			page_count: 336,
+			language: "en",
+			isbn10: "",
+			isbn13: "9781338214536",
+			google_books_id: "",
+			publisher: "",
+			series_id: 1,
+			series_name: "Wings of Fire",
+			book_order: 13,
+			shelf_count: 1,
+			rating_count: 1
+		},
+		{
+			id: 202,
+			title: "Project Hail Mary (Hardcover)",
+			primary_author: "Andy Weir",
+			author_id: null,
+			synopsis: "",
+			cover_url: "",
+			published_year: 2021,
+			page_count: 496,
+			language: "en",
+			isbn10: "",
+			isbn13: "9780593135204",
+			google_books_id: "",
+			publisher: "",
+			series_id: null,
+			series_name: "",
+			book_order: null,
+			shelf_count: 0,
+			rating_count: 0
+		}
+	]);
+
+	const poison = plans.find((plan) => plan.workKey === "title_author:poison jungle|tui t sutherland");
+	const projectHailMary = plans.find((plan) => plan.workKey === "title_author:project hail mary|andy weir");
+	assert.equal(poison?.canonicalTitle, "The Poison Jungle");
+	assert.equal(poison?.books.length, 2);
+	assert.equal(poison?.representative.id, 104);
+	assert.equal(projectHailMary?.canonicalTitle, "Project Hail Mary");
+});
+
 test("Data Health exposes potential duplicate Work review and merge actions", () => {
 	const page = readFileSync("src/pages/admin/data-health.astro", "utf8");
 	const normalization = readFileSync("src/lib/workNormalization.ts", "utf8");
+	const catalogWorks = readFileSync("src/lib/catalogWorks.ts", "utf8");
 
 	assert.equal(page.includes("Potential Duplicate Works"), true);
 	assert.equal(page.includes("merge-duplicate-work"), true);
@@ -147,4 +221,6 @@ test("Data Health exposes potential duplicate Work review and merge actions", ()
 	]) {
 		assert.equal(normalization.includes(table), true);
 	}
+	assert.equal(catalogWorks.includes("buildCanonicalWorkBackfillPlan"), true);
+	assert.equal(catalogWorks.includes("sql.unsafe"), false);
 });
