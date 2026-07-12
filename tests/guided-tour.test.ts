@@ -103,6 +103,21 @@ test("guided tips are anchored coach marks that hide when targets leave view", (
 	assert.equal(source.includes("removeAttribute(\"inert\")"), true);
 });
 
+test("post-progress journal prompt reuses the anchored coach mark surface", () => {
+	const guidedTip = readFileSync("src/components/GuidedTip.astro", "utf8");
+	const profilePage = readFileSync("src/pages/profile/[username].astro", "utf8");
+	assert.equal(guidedTip.includes('window.addEventListener("dogeared:progress-journal-prompt"'), true);
+	assert.equal(guidedTip.includes('id: "progress-journal-prompt"'), true);
+	assert.equal(guidedTip.includes('status: "✓ Progress updated."'), true);
+	assert.equal(guidedTip.includes('dismissLabel: "Not now"'), true);
+	assert.equal(guidedTip.includes('document.addEventListener("click"'), true);
+	assert.equal(guidedTip.includes('dismissTransientTip("outside")'), true);
+	assert.equal(guidedTip.includes('dismissTransientTip("escape")'), true);
+	assert.equal(profilePage.includes('window.dispatchEvent(new CustomEvent("dogeared:progress-journal-prompt"'), true);
+	assert.equal(profilePage.includes('data-progress-journal-anchor'), true);
+	assert.equal(profilePage.includes('insertAdjacentElement("afterend", prompt)'), false);
+});
+
 test("journal guidance is constrained to journal context or a progress update", () => {
 	const source = readFileSync("src/components/GuidedTip.astro", "utf8");
 	assert.match(source, /id: "reading-journal-private"[\s\S]+path: "\/journal"/);

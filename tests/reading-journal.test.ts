@@ -132,6 +132,7 @@ test("journal API enforces authentication, ownership, CRUD, and search", () => {
 test("journal UI is wired into book, private journal page, navigation, and autosave", () => {
 	const bookPage = readFileSync("src/pages/book.astro", "utf8");
 	const profilePage = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const guidedTip = readFileSync("src/components/GuidedTip.astro", "utf8");
 	const journalPage = readFileSync("src/pages/journal.astro", "utf8");
 	const nav = readFileSync("src/components/LeftHand.astro", "utf8");
 
@@ -145,15 +146,18 @@ test("journal UI is wired into book, private journal page, navigation, and autos
 	assert.match(bookPage, /\/api\/journal\/entries/);
 	assert.doesNotMatch(profilePage, /Recent Journal Entries/);
 	assert.doesNotMatch(profilePage, /loadRecentJournalEntries/);
-	assert.match(profilePage, /Capture today's reading\?/);
-	assert.match(profilePage, /Remember a thought before you move on/);
-	assert.match(profilePage, /Write Journal Entry/);
-	assert.match(profilePage, /progress-journal-prompt/);
-	assert.match(profilePage, /progress-journal-button-primary/);
-	assert.match(profilePage, /progress-journal-button-secondary/);
+	assert.match(profilePage, /data-progress-journal-anchor/);
+	assert.match(profilePage, /dogeared:progress-journal-prompt/);
+	assert.doesNotMatch(profilePage, /insertAdjacentElement\("afterend", prompt\)/);
+	assert.doesNotMatch(profilePage, /card\.append\(prompt\)/);
+	assert.match(guidedTip, /✓ Progress updated\./);
+	assert.match(guidedTip, /Capture today's reading\?/);
+	assert.match(guidedTip, /Remember a thought before you move on/);
+	assert.match(guidedTip, /Write Journal Entry/);
+	assert.match(guidedTip, /Not now/);
+	assert.match(guidedTip, /data-coach-mark/);
+	assert.match(guidedTip, /dogeared:progress-journal-prompt-dismissed/);
 	assert.match(profilePage, /sessionStorage/);
-	assert.match(profilePage, /border: var\(--border-subtle\)/);
-	assert.match(profilePage, /background: rgba\(255, 255, 255, 0\.62\)/);
 	assert.match(journalPage, /Search your own notes/);
 	assert.match(journalPage, /New Entry/);
 	assert.match(journalPage, /data-journal-entry-form/);

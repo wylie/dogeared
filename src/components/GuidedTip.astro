@@ -7,6 +7,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		<div class="guided-tip-arrow" data-guided-tip-arrow aria-hidden="true"></div>
 		<div class="guided-tip-icon" data-guided-tip-icon aria-hidden="true">auto_stories</div>
 		<div class="guided-tip-body">
+			<p class="guided-tip-status" data-guided-tip-status hidden></p>
 			<h2 id="guided-tip-title" data-guided-tip-title></h2>
 			<p id="guided-tip-description" data-guided-tip-description></p>
 			<div class="guided-tip-actions">
@@ -25,6 +26,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 
 		const titleEl = root.querySelector("[data-guided-tip-title]");
 		const descriptionEl = root.querySelector("[data-guided-tip-description]");
+		const statusEl = root.querySelector("[data-guided-tip-status]");
 		const iconEl = root.querySelector("[data-guided-tip-icon]");
 		const primaryEl = root.querySelector("[data-guided-tip-primary]");
 		const dismissEl = root.querySelector("[data-guided-tip-dismiss]");
@@ -156,6 +158,8 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		let activeStats = null;
 		let refreshTimer = 0;
 		let positionFrame = 0;
+		let outsideDismissPausedUntil = 0;
+		let suppressRegularTipsUntil = 0;
 
 		function isTipAvailable(tip, settings, stats) {
 			if (!settings?.showHelpfulTips) return false;
@@ -168,6 +172,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		}
 
 		function findAnchor(tip) {
+			if (tip?.anchorElement instanceof HTMLElement) return tip.anchorElement;
 			const selectors = String(tip.anchor || "main").split(",").map((item) => item.trim()).filter(Boolean);
 			for (const selector of selectors) {
 				const node = document.querySelector(selector);
@@ -271,11 +276,18 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			const anchor = findAnchor(tip);
 			if (!(anchor instanceof HTMLElement)) return hideTip();
 			activeTip = tip;
+			root.dataset.tipMode = tip.transient ? "transient" : "guided";
+			if (statusEl instanceof HTMLElement) {
+				const status = String(tip.status || "").trim();
+				statusEl.textContent = status;
+				statusEl.hidden = !status;
+			}
 			titleEl.textContent = tip.title;
 			descriptionEl.textContent = tip.description;
 			if (iconEl instanceof HTMLElement) iconEl.textContent = tip.icon || "auto_stories";
 			primaryEl.textContent = tip.primaryLabel || "Continue";
 			primaryEl.href = tip.primaryHref || "#";
+			dismissEl.textContent = tip.dismissLabel || "Dismiss";
 			root.hidden = false;
 			root.classList.remove("is-visible");
 			root.setAttribute("aria-hidden", "true");
@@ -289,6 +301,26 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			root.setAttribute("aria-hidden", "true");
 			root.setAttribute("inert", "");
 			root.hidden = true;
+			delete root.dataset.tipMode;
+		}
+
+		function dispatchProgressPromptDismissed(tip, reason) {
+			if (!tip?.transient || tip.id !== "progress-journal-prompt") return;
+			window.dispatchEvent(new CustomEvent("dogeared:progress-journal-prompt-dismissed", {
+				detail: {
+					bookId: tip.bookId || 0,
+					currentPage: tip.currentPage || 0,
+					reason
+				}
+			}));
+		}
+
+		function dismissTransientTip(reason = "dismiss") {
+			if (!activeTip?.transient) return false;
+			dispatchProgressPromptDismissed(activeTip, reason);
+			suppressRegularTipsUntil = Date.now() + 4000;
+			hideTip();
+			return true;
 		}
 
 		async function postAction(action, tipId = activeTip?.id) {
@@ -310,6 +342,8 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		}
 
 		function renderNextTip() {
+			if (activeTip?.transient) return;
+			if (Date.now() < suppressRegularTipsUntil) return;
 			if (!activeSettings || !activeStats) return hideTip();
 			const availableTips = TIPS.filter((candidate) => isTipAvailable(candidate, activeSettings, activeStats));
 			const tip = availableTips.find((candidate) => candidate.path || candidate.pathPrefix) || availableTips[0];
@@ -318,6 +352,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		}
 
 		async function refreshStatus() {
+			if (activeTip?.transient) return;
 			try {
 				const response = await fetch("/api/guidance/status", { headers: { Accept: "application/json" } });
 				if (!response.ok) return hideTip();
@@ -331,6 +366,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		}
 
 		dismissEl.addEventListener("click", async () => {
+			if (dismissTransientTip("dismiss")) return;
 			await postAction("dismiss");
 			hideTip();
 			renderNextTip();
@@ -339,6 +375,18 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		primaryEl.addEventListener("click", async (event) => {
 			const href = primaryEl.getAttribute("href") || "";
 			event.preventDefault();
+			if (activeTip?.transient) {
+				dispatchProgressPromptDismissed(activeTip, "primary");
+				hideTip();
+				if (href.startsWith("#")) {
+					document.querySelector(href)?.scrollIntoView({ behavior: "smooth", block: "start" });
+					const target = document.querySelector(href);
+					if (target instanceof HTMLElement) target.focus?.();
+					return;
+				}
+				window.location.href = href || "/";
+				return;
+			}
 			await postAction("complete");
 			if (href.startsWith("#")) {
 				document.querySelector(href)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -353,8 +401,19 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 
 		document.addEventListener("keydown", (event) => {
 			if (event.key !== "Escape" || root.hidden) return;
+			if (dismissTransientTip("escape")) return;
 			void postAction("dismiss");
 			hideTip();
+		});
+
+		document.addEventListener("click", (event) => {
+			if (!activeTip?.transient || root.hidden || Date.now() < outsideDismissPausedUntil) return;
+			const target = event.target instanceof Node ? event.target : null;
+			if (!target) return;
+			const anchor = findAnchor(activeTip);
+			if (root.contains(target)) return;
+			if (anchor instanceof HTMLElement && anchor.contains(target)) return;
+			dismissTransientTip("outside");
 		});
 
 		window.addEventListener("resize", () => {
@@ -375,6 +434,32 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		window.addEventListener("dogeared:reading-data-changed", () => {
 			window.clearTimeout(refreshTimer);
 			refreshTimer = window.setTimeout(refreshStatus, 600);
+		});
+
+		window.addEventListener("dogeared:progress-journal-prompt", (event) => {
+			const detail = event instanceof CustomEvent ? event.detail || {} : {};
+			const anchor = detail.anchor instanceof HTMLElement ? detail.anchor : null;
+			const bookId = Math.max(0, Number(detail.bookId || 0) || 0);
+			const currentPage = Math.max(0, Number(detail.currentPage || 0) || 0);
+			const href = String(detail.href || "").trim();
+			if (!anchor || !bookId || !currentPage || !href) return;
+			outsideDismissPausedUntil = Date.now() + 300;
+			suppressRegularTipsUntil = Date.now() + 4000;
+			showTip({
+				id: "progress-journal-prompt",
+				anchorElement: anchor,
+				title: "Capture today's reading?",
+				status: "✓ Progress updated.",
+				description: "Remember a thought before you move on.",
+				icon: "check_circle",
+				primaryLabel: "Write Journal Entry",
+				primaryHref: href,
+				dismissLabel: "Not now",
+				placement: "below",
+				transient: true,
+				bookId,
+				currentPage
+			});
 		});
 
 		void refreshStatus();
@@ -437,6 +522,13 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		margin: 0.4rem 0 0;
 		color: var(--color-text-muted);
 		line-height: 1.45;
+	}
+	.guided-tip .guided-tip-status {
+		margin: 0 0 0.22rem;
+		color: var(--color-primary);
+		font-size: 0.78rem;
+		font-weight: 760;
+		line-height: 1.2;
 	}
 	.guided-tip-actions {
 		display: flex;
