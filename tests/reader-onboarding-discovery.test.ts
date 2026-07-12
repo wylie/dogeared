@@ -71,6 +71,10 @@ test("author pages organize local and external books by reader-facing bibliograp
 	assert.equal(source.includes("Books In DogEared"), false);
 	assert.equal(source.includes("Not Yet In DogEared"), false);
 	assert.equal(source.includes("<ExternalAuthorBooks"), false);
+	assert.equal(source.includes("<SeriesSection"), true);
+	assert.equal(source.includes('spacing="inline"'), true);
+	assert.equal(source.includes('variant="compact-series"'), true);
+	assert.equal(source.includes("supportingText={formatBookCount(group.books.length)}"), true);
 	assert.equal(source.includes("buildAuthorBibliographySections"), true);
 	assert.equal(source.includes("formatSeriesSectionTitle"), true);
 	assert.equal(source.includes("inferKnownSeriesMetadata"), true);
@@ -103,6 +107,7 @@ test("BookCard renders accessible genre navigation", () => {
 test("BookCard owns the compact reusable presentation variant", () => {
 	const source = readFileSync("src/components/BookCard.astro", "utf8");
 	const bookPage = readFileSync("src/pages/book.astro", "utf8");
+	const authorPage = readFileSync("src/pages/author/[slug].astro", "utf8");
 
 	assert.match(source, /variant\?: "standard" \| "compact-series"/);
 	assert.equal(source.includes('variant = "standard"'), true);
@@ -117,6 +122,7 @@ test("BookCard owns the compact reusable presentation variant", () => {
 	assert.match(source, /\.book-card--compact-series \.series-meta \{[\s\S]+color: var\(--color-text-muted\)/);
 	assert.match(source, /\.book-card--compact-series \.cover-actions :global\(\.shelf-dropdown\) \{[\s\S]+--shelf-trigger-height: 30px/);
 	assert.equal(bookPage.includes('variant="compact-series"'), true);
+	assert.equal(authorPage.includes('variant="compact-series"'), true);
 	assert.equal(bookPage.includes(":global(.series-list .book-card .cover)"), false);
 	assert.equal(bookPage.includes("series-card-kickers"), false);
 });

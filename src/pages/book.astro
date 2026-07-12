@@ -4,6 +4,7 @@ import BookCard from "../components/BookCard.astro";
 import ShelfDropdown from "../components/ShelfDropdown.astro";
 import RatingControl from "../components/RatingControl.astro";
 import Chip from "../components/Chip.astro";
+import SeriesSection from "../components/SeriesSection.astro";
 import { getNeonSql } from "../lib/neon";
 import { getEncryptionKey, resolveUserBySession } from "../lib/auth";
 import { authorHref } from "../lib/author";
@@ -1085,80 +1086,60 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 				)}
 
 				{seriesContext && (
-					<section class="panel series-panel" aria-labelledby="series-heading" data-feature="series">
-						<div class="series-heading-row">
-							{(seriesContext.series.coverUrl || seriesContext.currentBook?.coverUrl || book.coverUrl) ? (
-								<img
-									class="series-cover"
-									src={seriesContext.series.coverUrl || seriesContext.currentBook?.coverUrl || book.coverUrl}
-									alt=""
-									loading="lazy"
-									decoding="async"
-									width="54"
-									height="78"
-								/>
-							) : (
-								<div class="series-cover series-cover-placeholder" aria-hidden="true"><span class="material-icons">auto_stories</span></div>
-							)}
-							<div>
-								<p class="series-eyebrow">Series</p>
-								<h2 id="series-heading" class="series-name">{seriesContext.series.name}</h2>
-								{seriesContext.currentBook && (
-									<p class="series-position">
-										{seriesContext.currentBook.orderLabel}{seriesContext.series.totalBooks > 0 ? ` of ${seriesContext.series.totalBooks}` : ""}
-									</p>
-								)}
-								{seriesContext.series.description && <p class="series-description">{seriesContext.series.description}</p>}
-							</div>
-						</div>
-						<ol class="series-list">
-							{seriesContext.books.map((seriesBook) => {
-								const seriesBookHref = seriesBook.bookHref || seriesSearchHref(seriesBook.title, seriesBook.author);
-								const seriesCardAttrs = {
-									id: seriesBookDomId(seriesBook),
-									"data-current-series-book": seriesBook.isCurrent ? "true" : "false",
-									...(seriesBook.isCurrent ? { "aria-current": "true" } : {})
-								};
-								return (
-									<BookCard
-										title={seriesBook.title}
-										titleHref={seriesBookHref}
-										author={seriesBook.author || "Unknown author"}
-										authorHref={seriesBook.author ? authorHref(seriesBook.author, seriesBook.authorId || 0) : ""}
-										thumbnail={seriesBook.coverUrl}
-										description=""
-										readers={-1}
-										shelfEntries={-1}
-										showCommunityStats={false}
-										publishedLabel={seriesBook.publishedYear ? String(seriesBook.publishedYear) : ""}
-										pageCount={seriesBook.pageCount || 0}
-										averageRating={seriesBook.averageRating || 0}
-										seriesLabel={seriesBook.bookOrder > 0 ? `Book ${seriesBook.bookOrder}` : ""}
-										variant="compact-series"
-										attrs={seriesCardAttrs}
-									>
-										{(seriesBook.ratingCount || 0) === 0 && <p slot="meta" class="meta">No ratings yet.</p>}
-										<div slot="actions">
-											<ShelfDropdown attrs={{
-												"data-title": seriesBook.title,
-												"data-author": seriesBook.author || "",
-												"data-description": seriesBook.synopsis || "",
-												"data-cover": seriesBook.coverUrl || "",
-												"data-pages": String(seriesBook.pageCount || 0),
-												"data-language": seriesBook.language || "",
-												"data-isbn10": seriesBook.isbn10 || "",
-												"data-isbn13": seriesBook.isbn13 || "",
-												"data-google-books-id": seriesBook.googleBooksId || "",
-												"data-book-id": String(seriesBook.bookId || 0),
-												"data-custom-shelves": customShelfOptionsJson,
-												"data-initial-status": seriesBook.shelfStatus || ""
-											}} />
-										</div>
-									</BookCard>
-								);
-							})}
-						</ol>
-					</section>
+					<SeriesSection
+						title={seriesContext.series.name}
+						supportingText={seriesContext.currentBook ? `${seriesContext.currentBook.orderLabel}${seriesContext.series.totalBooks > 0 ? ` of ${seriesContext.series.totalBooks}` : ""}` : ""}
+						description={seriesContext.series.description}
+						coverUrl={seriesContext.series.coverUrl || seriesContext.currentBook?.coverUrl || book.coverUrl}
+						headingId="series-heading"
+						attrs={{ "data-feature": "series" }}
+					>
+						{seriesContext.books.map((seriesBook) => {
+							const seriesBookHref = seriesBook.bookHref || seriesSearchHref(seriesBook.title, seriesBook.author);
+							const seriesCardAttrs = {
+								id: seriesBookDomId(seriesBook),
+								"data-current-series-book": seriesBook.isCurrent ? "true" : "false",
+								...(seriesBook.isCurrent ? { "aria-current": "true" } : {})
+							};
+							return (
+								<BookCard
+									title={seriesBook.title}
+									titleHref={seriesBookHref}
+									author={seriesBook.author || "Unknown author"}
+									authorHref={seriesBook.author ? authorHref(seriesBook.author, seriesBook.authorId || 0) : ""}
+									thumbnail={seriesBook.coverUrl}
+									description=""
+									readers={-1}
+									shelfEntries={-1}
+									showCommunityStats={false}
+									publishedLabel={seriesBook.publishedYear ? String(seriesBook.publishedYear) : ""}
+									pageCount={seriesBook.pageCount || 0}
+									averageRating={seriesBook.averageRating || 0}
+									seriesLabel={seriesBook.bookOrder > 0 ? `Book ${seriesBook.bookOrder}` : ""}
+									variant="compact-series"
+									attrs={seriesCardAttrs}
+								>
+									{(seriesBook.ratingCount || 0) === 0 && <p slot="meta" class="meta">No ratings yet.</p>}
+									<div slot="actions">
+										<ShelfDropdown attrs={{
+											"data-title": seriesBook.title,
+											"data-author": seriesBook.author || "",
+											"data-description": seriesBook.synopsis || "",
+											"data-cover": seriesBook.coverUrl || "",
+											"data-pages": String(seriesBook.pageCount || 0),
+											"data-language": seriesBook.language || "",
+											"data-isbn10": seriesBook.isbn10 || "",
+											"data-isbn13": seriesBook.isbn13 || "",
+											"data-google-books-id": seriesBook.googleBooksId || "",
+											"data-book-id": String(seriesBook.bookId || 0),
+											"data-custom-shelves": customShelfOptionsJson,
+											"data-initial-status": seriesBook.shelfStatus || ""
+										}} />
+									</div>
+								</BookCard>
+							);
+						})}
+					</SeriesSection>
 				)}
 
 				<section class="panel synopsis-panel">
@@ -2207,75 +2188,6 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 		color: var(--color-text-muted);
 		line-height: 1.4;
 	}
-	.series-panel {
-		display: grid;
-		gap: 0.8rem;
-	}
-	.series-heading-row {
-		display: grid;
-		grid-template-columns: 54px minmax(0, 1fr);
-		gap: 0.75rem;
-		align-items: start;
-	}
-	.series-cover,
-	.series-cover-placeholder {
-		width: 54px;
-		height: 78px;
-		border-radius: var(--radius-sm);
-		object-fit: cover;
-		background: rgba(255, 255, 255, 0.62);
-		border: var(--border-subtle);
-	}
-	.series-cover-placeholder {
-		display: grid;
-		place-items: center;
-		color: var(--color-text-subtle);
-	}
-	.series-eyebrow {
-		margin: 0 0 0.14rem;
-		color: var(--color-text-subtle);
-		font-size: 0.72rem;
-		font-weight: 820;
-		letter-spacing: 0;
-		line-height: 1.2;
-		text-transform: uppercase;
-	}
-	.series-name {
-		margin: 0;
-		font-size: 1.42rem;
-		line-height: 1.12;
-		font-weight: 760;
-		color: var(--color-text);
-	}
-	.series-position,
-	.series-description {
-		margin: 0.2rem 0 0;
-		color: var(--color-text-muted);
-		font-size: 0.9rem;
-		line-height: 1.4;
-	}
-	.series-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: grid;
-		gap: 0.75rem;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		grid-auto-rows: max-content;
-		align-items: start;
-	}
-	@media (min-width: 980px) {
-		.series-list {
-			grid-template-columns: repeat(3, minmax(0, 1fr));
-		}
-	}
-	:global(.series-list .book-card[data-current-series-book="true"]) {
-		border-color: rgba(31, 122, 69, 0.82);
-		/* background: linear-gradient(180deg, rgba(31, 122, 69, 0.07), rgba(255, 255, 255, 0.92) 42%); */
-		box-shadow:
-			inset 0 0 0 1px rgba(31, 122, 69, 0.62),
-			0 12px 30px rgba(31, 122, 69, 0.13);
-	}
 	.related-links-row {
 		display: flex;
 		flex-wrap: wrap;
@@ -2744,9 +2656,6 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 		.activity-grid,
 		.readers-also-list { grid-template-columns: 1fr; }
 		.review-card { padding: 0.65rem; }
-		.series-list {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
 	}
 	@media (max-width: 540px) {
 		.journal-head,
@@ -2762,9 +2671,6 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 		}
 		.journal-count {
 			margin-left: 0;
-		}
-		.series-list {
-			grid-template-columns: 1fr;
 		}
 	}
 	@media (max-width: 760px) {}

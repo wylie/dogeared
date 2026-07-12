@@ -51,8 +51,10 @@ test("book detail keeps reviews, activity, and recommendations wired", () => {
 
 test("book detail series section reuses BookCard and shared shelf actions", () => {
 	const source = readFileSync("src/pages/book.astro", "utf8");
+	const sharedSeries = readFileSync("src/components/SeriesSection.astro", "utf8");
 	const seriesSection = source.slice(source.indexOf('{seriesContext && ('), source.indexOf('<section class="panel synopsis-panel">'));
 
+	assert.match(seriesSection, /<SeriesSection/);
 	assert.match(seriesSection, /<BookCard/);
 	assert.match(seriesSection, /variant="compact-series"/);
 	assert.match(seriesSection, /seriesLabel=\{seriesBook\.bookOrder > 0 \? `Book \$\{seriesBook\.bookOrder\}` : ""\}/);
@@ -63,8 +65,11 @@ test("book detail series section reuses BookCard and shared shelf actions", () =
 	assert.match(seriesSection, /description=""/);
 	assert.match(seriesSection, /<ShelfDropdown/);
 	assert.match(seriesSection, /data-current-series-book/);
-	assert.match(seriesSection, /class="series-eyebrow">Series/);
-	assert.match(seriesSection, /<h2 id="series-heading" class="series-name">\{seriesContext\.series\.name\}<\/h2>/);
+	assert.match(seriesSection, /title=\{seriesContext\.series\.name\}/);
+	assert.match(seriesSection, /supportingText=\{seriesContext\.currentBook/);
+	assert.match(sharedSeries, /class="series-section-eyebrow">Series/);
+	assert.match(sharedSeries, /class="series-section-title"/);
+	assert.match(sharedSeries, /class="series-section-cover"/);
 	assert.doesNotMatch(seriesSection, /Previous Book/);
 	assert.doesNotMatch(seriesSection, /Jump to Current/);
 	assert.doesNotMatch(seriesSection, /Next Book/);
@@ -81,12 +86,14 @@ test("book detail series section reuses BookCard and shared shelf actions", () =
 
 test("book detail series cards stay compact without header navigation controls", () => {
 	const source = readFileSync("src/pages/book.astro", "utf8");
+	const sharedSeries = readFileSync("src/components/SeriesSection.astro", "utf8");
 
 	assert.doesNotMatch(source, /const previousSeriesBook/);
 	assert.doesNotMatch(source, /const nextSeriesBook/);
 	assert.doesNotMatch(source, /scrollIntoView/);
-	assert.match(source, /\.series-list \{[\s\S]+align-items: start/);
-	assert.match(source, /\.series-list \{[\s\S]+grid-auto-rows: max-content/);
+	assert.match(sharedSeries, /\.series-section-list \{[\s\S]+align-items: start/);
+	assert.match(sharedSeries, /\.series-section-list \{[\s\S]+grid-auto-rows: max-content/);
+	assert.match(sharedSeries, /:global\(\.series-section-list \.book-card\[data-current-series-book="true"\]\)/);
 	assert.doesNotMatch(source, /:global\(\.series-list \.book-card\) \{[\s\S]+grid-template-columns: 76px minmax\(0, 1fr\)/);
 	assert.doesNotMatch(source, /:global\(\.series-list \.book-card \.cover\) \{[\s\S]+height: 114px/);
 });

@@ -1,0 +1,141 @@
+---
+type Props = {
+	title: string;
+	supportingText?: string;
+	description?: string;
+	coverUrl?: string;
+	headingId?: string;
+	attrs?: Record<string, string>;
+	spacing?: "section" | "inline";
+};
+
+const {
+	title,
+	supportingText = "",
+	description = "",
+	coverUrl = "",
+	headingId = "series-heading",
+	attrs = {},
+	spacing = "section"
+} = Astro.props as Props;
+const cleanTitle = String(title || "").trim();
+const cleanSupportingText = String(supportingText || "").trim();
+const cleanDescription = String(description || "").trim();
+const cleanCoverUrl = String(coverUrl || "").trim();
+---
+
+<section class={`series-section ${spacing === "inline" ? "series-section--inline" : ""}`.trim()} aria-labelledby={headingId} {...attrs}>
+	<div class="series-section-heading">
+		{cleanCoverUrl ? (
+			<img
+				class="series-section-cover"
+				src={cleanCoverUrl}
+				alt=""
+				loading="lazy"
+				decoding="async"
+				width="54"
+				height="78"
+			/>
+		) : (
+			<div class="series-section-cover series-section-cover-placeholder" aria-hidden="true"><span class="material-icons">auto_stories</span></div>
+		)}
+		<div>
+			<p class="series-section-eyebrow">Series</p>
+			<h2 id={headingId} class="series-section-title">{cleanTitle}</h2>
+			{cleanSupportingText && <p class="series-section-supporting">{cleanSupportingText}</p>}
+			{cleanDescription && <p class="series-section-description">{cleanDescription}</p>}
+		</div>
+	</div>
+	<ol class="series-section-list">
+		<slot />
+	</ol>
+</section>
+
+<style>
+	.series-section {
+		margin-top: 0.95rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		padding: 1rem;
+		display: grid;
+		gap: 0.8rem;
+	}
+	.series-section--inline {
+		margin-top: 0;
+	}
+	.series-section-heading {
+		display: grid;
+		grid-template-columns: 54px minmax(0, 1fr);
+		gap: 0.75rem;
+		align-items: start;
+	}
+	.series-section-cover,
+	.series-section-cover-placeholder {
+		width: 54px;
+		height: 78px;
+		border-radius: var(--radius-sm);
+		object-fit: cover;
+		background: rgba(255, 255, 255, 0.62);
+		border: var(--border-subtle);
+	}
+	.series-section-cover-placeholder {
+		display: grid;
+		place-items: center;
+		color: var(--color-text-subtle);
+	}
+	.series-section-eyebrow {
+		margin: 0 0 0.14rem;
+		color: var(--color-text-subtle);
+		font-size: 0.72rem;
+		font-weight: 820;
+		letter-spacing: 0;
+		line-height: 1.2;
+		text-transform: uppercase;
+	}
+	.series-section-title {
+		margin: 0;
+		font-size: 1.42rem;
+		line-height: 1.12;
+		font-weight: 760;
+		color: var(--color-text);
+	}
+	.series-section-supporting,
+	.series-section-description {
+		margin: 0.2rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.9rem;
+		line-height: 1.4;
+	}
+	.series-section-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.75rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-auto-rows: max-content;
+		align-items: start;
+	}
+	@media (min-width: 980px) {
+		.series-section-list {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+	:global(.series-section-list .book-card[data-current-series-book="true"]) {
+		border-color: rgba(31, 122, 69, 0.82);
+		box-shadow:
+			inset 0 0 0 1px rgba(31, 122, 69, 0.62),
+			0 12px 30px rgba(31, 122, 69, 0.13);
+	}
+	@media (max-width: 860px) {
+		.series-section-list {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+	@media (max-width: 540px) {
+		.series-section-list {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

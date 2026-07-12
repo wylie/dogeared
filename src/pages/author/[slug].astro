@@ -3,6 +3,7 @@ import Layout from "../../layouts/Layout.astro";
 import BookCard from "../../components/BookCard.astro";
 import ShelfDropdown from "../../components/ShelfDropdown.astro";
 import RatingControl from "../../components/RatingControl.astro";
+import SeriesSection from "../../components/SeriesSection.astro";
 import { getNeonSql } from "../../lib/neon";
 import { resolveUserBySession } from "../../lib/auth";
 import { authorHref, canonicalizeAuthor, normalizeAuthorName, slugifyAuthor } from "../../lib/author";
@@ -53,6 +54,7 @@ type BibliographyItem = {
 	publicationOrder: number;
 	chronologicalOrder: number;
 	publishedYear: number;
+	coverUrl: string;
 	localBook?: BookRow;
 	externalBook?: ExternalAuthorBook;
 };
@@ -61,6 +63,7 @@ type BibliographySection = {
 	id: string;
 	title: string;
 	kind: "series" | "standalone";
+	coverUrl: string;
 	books: BibliographyItem[];
 };
 
@@ -111,6 +114,11 @@ function formatSeriesSectionTitle(name: string) {
 	return /\bseries$/i.test(clean) ? clean : `${clean} Series`;
 }
 
+function formatBookCount(count: number) {
+	const normalized = Math.max(0, Number(count || 0) || 0);
+	return `${normalized.toLocaleString()} book${normalized === 1 ? "" : "s"}`;
+}
+
 function compareBibliographyItems(a: BibliographyItem, b: BibliographyItem) {
 	const aOrder = numericOrder(a.bookOrder) || numericOrder(a.publicationOrder) || numericOrder(a.chronologicalOrder);
 	const bOrder = numericOrder(b.bookOrder) || numericOrder(b.publicationOrder) || numericOrder(b.chronologicalOrder);
@@ -128,8 +136,10 @@ function buildAuthorBibliographySections(localBooks: BookRow[], missingBooks: Ex
 				id: item.seriesKey.replace(/[^a-z0-9-]+/gi, "-"),
 				title: formatSeriesSectionTitle(item.seriesName),
 				kind: "series" as const,
+				coverUrl: "",
 				books: []
 			};
+			if (!section.coverUrl && item.coverUrl) section.coverUrl = item.coverUrl;
 			section.books.push(item);
 			seriesSections.set(item.seriesKey, section);
 		} else {
@@ -151,6 +161,7 @@ function buildAuthorBibliographySections(localBooks: BookRow[], missingBooks: Ex
 			publicationOrder: numericOrder(book.publicationOrder) || bookOrder,
 			chronologicalOrder: numericOrder(book.chronologicalOrder) || bookOrder,
 			publishedYear: Math.max(0, Number(book.publishedYear || 0) || 0),
+			coverUrl: book.coverUrl,
 			localBook: book
 		});
 	}
@@ -170,6 +181,7 @@ function buildAuthorBibliographySections(localBooks: BookRow[], missingBooks: Ex
 			publicationOrder: bookOrder,
 			chronologicalOrder: bookOrder,
 			publishedYear: Math.max(0, Number(book.publishedYear || 0) || 0),
+			coverUrl: book.coverUrl,
 			externalBook: book
 		});
 	}
@@ -182,6 +194,7 @@ function buildAuthorBibliographySections(localBooks: BookRow[], missingBooks: Ex
 			id: "standalone",
 			title: "Standalone Books",
 			kind: "standalone",
+			coverUrl: "",
 			books: [...standalone].sort((a, b) => {
 				if (a.publishedYear !== b.publishedYear) return (a.publishedYear || Number.MAX_SAFE_INTEGER) - (b.publishedYear || Number.MAX_SAFE_INTEGER);
 				return a.title.localeCompare(b.title);
@@ -492,9 +505,14 @@ const authorStructuredData = displayName
 			) : (
 				<div class="author-book-groups">
 					{bibliographySections.map((group) => (
-						<section class="author-book-group" aria-labelledby={`author-book-group-${group.id}`}>
-							<h2 id={`author-book-group-${group.id}`}>{group.title}</h2>
-							<ul class="book-grid">
+						group.kind === "series" ? (
+							<SeriesSection
+								title={group.title}
+								supportingText={formatBookCount(group.books.length)}
+								coverUrl={group.coverUrl}
+								headingId={`author-book-group-${group.id}`}
+								spacing="inline"
+							>
 								{group.books.map((entry) => entry.localBook ? (
 									<BookCard
 										title={entry.localBook.title}
@@ -502,27 +520,14 @@ const authorStructuredData = displayName
 										author={entry.localBook.author}
 										authorHref={entry.localBook.author ? authorHref(entry.localBook.author, entry.localBook.authorId) : ""}
 										thumbnail={entry.localBook.coverUrl}
-										description={entry.localBook.synopsis || "Synopsis unavailable for this title."}
-										readers={entry.localBook.readers}
-										shelfEntries={entry.localBook.shelves}
+										showCommunityStats={false}
 										publishedLabel={entry.localBook.publishedYear > 0 ? String(entry.localBook.publishedYear) : ""}
 										pageCount={entry.localBook.pageCount}
 										averageRating={entry.localBook.averageRating}
 										seriesLabel={entry.bookOrder > 0 ? `Book ${entry.bookOrder}` : ""}
-										genres={entry.localBook.genres}
+										variant="compact-series"
 									>
-										<div slot="preMeta">
-											{viewerStatusByBookId.get(Number(entry.localBook.id || 0)) === "finished" && (
-												<RatingControl
-													bookId={String(entry.localBook.id || 0)}
-													rating={viewerRatingByBookId.get(Number(entry.localBook.id || 0)) || 0}
-													editable={true}
-												/>
-											)}
-											{viewerStatusByBookId.get(Number(entry.localBook.id || 0)) !== "finished" && !(Number(entry.localBook.ratingCount || 0) > 0) && (
-												<p class="meta">No ratings yet.</p>
-											)}
-										</div>
+										{!(Number(entry.localBook.ratingCount || 0) > 0) && <p slot="meta" class="meta">No ratings yet.</p>}
 										<div slot="actions">
 											<ShelfDropdown attrs={{
 												"data-book-id": String(entry.localBook.id || 0),
@@ -548,7 +553,9 @@ const authorStructuredData = displayName
 										publishedLabel={entry.externalBook.publishedYear > 0 ? String(entry.externalBook.publishedYear) : ""}
 										seriesLabel={entry.bookOrder > 0 ? `Book ${entry.bookOrder}` : ""}
 										showCommunityStats={false}
+										variant="compact-series"
 									>
+										<p slot="meta" class="meta">No ratings yet.</p>
 										<div slot="actions">
 											<ShelfDropdown attrs={{
 												"data-book-id": "",
@@ -565,8 +572,82 @@ const authorStructuredData = displayName
 										</div>
 									</BookCard>
 								) : null)}
-							</ul>
-						</section>
+							</SeriesSection>
+						) : (
+							<section class="author-book-group" aria-labelledby={`author-book-group-${group.id}`}>
+								<h2 id={`author-book-group-${group.id}`}>{group.title}</h2>
+								<ul class="book-grid">
+									{group.books.map((entry) => entry.localBook ? (
+										<BookCard
+											title={entry.localBook.title}
+											titleHref={`/book?bookId=${encodeURIComponent(String(entry.localBook.id))}`}
+											author={entry.localBook.author}
+											authorHref={entry.localBook.author ? authorHref(entry.localBook.author, entry.localBook.authorId) : ""}
+											thumbnail={entry.localBook.coverUrl}
+											description={entry.localBook.synopsis || "Synopsis unavailable for this title."}
+											readers={entry.localBook.readers}
+											shelfEntries={entry.localBook.shelves}
+											publishedLabel={entry.localBook.publishedYear > 0 ? String(entry.localBook.publishedYear) : ""}
+											pageCount={entry.localBook.pageCount}
+											averageRating={entry.localBook.averageRating}
+											genres={entry.localBook.genres}
+										>
+											<div slot="preMeta">
+												{viewerStatusByBookId.get(Number(entry.localBook.id || 0)) === "finished" && (
+													<RatingControl
+														bookId={String(entry.localBook.id || 0)}
+														rating={viewerRatingByBookId.get(Number(entry.localBook.id || 0)) || 0}
+														editable={true}
+													/>
+												)}
+												{viewerStatusByBookId.get(Number(entry.localBook.id || 0)) !== "finished" && !(Number(entry.localBook.ratingCount || 0) > 0) && (
+													<p class="meta">No ratings yet.</p>
+												)}
+											</div>
+											<div slot="actions">
+												<ShelfDropdown attrs={{
+													"data-book-id": String(entry.localBook.id || 0),
+													"data-initial-status": viewerStatusByBookId.get(Number(entry.localBook.id || 0)) || "",
+													"data-title": entry.localBook.title,
+													"data-author": entry.localBook.author,
+													"data-cover": entry.localBook.coverUrl,
+													"data-description": entry.localBook.synopsis,
+													"data-pages": String(entry.localBook.pageCount || 0),
+													"data-language": entry.localBook.language,
+													"data-isbn10": entry.localBook.isbn10,
+													"data-isbn13": entry.localBook.isbn13,
+													"data-google-books-id": entry.localBook.googleBooksId,
+													"data-categories": JSON.stringify(entry.localBook.genres ?? [])
+												}} />
+											</div>
+										</BookCard>
+									) : entry.externalBook ? (
+										<BookCard
+											title={entry.externalBook.title}
+											author={entry.externalBook.author}
+											thumbnail={entry.externalBook.coverUrl}
+											publishedLabel={entry.externalBook.publishedYear > 0 ? String(entry.externalBook.publishedYear) : ""}
+											showCommunityStats={false}
+										>
+											<div slot="actions">
+												<ShelfDropdown attrs={{
+													"data-book-id": "",
+													"data-title": entry.externalBook.title,
+													"data-author": entry.externalBook.author,
+													"data-cover": entry.externalBook.coverUrl,
+													"data-isbn10": entry.externalBook.isbn10,
+													"data-isbn13": entry.externalBook.isbn13,
+													"data-published-date": entry.externalBook.publishedYear > 0 ? String(entry.externalBook.publishedYear) : "",
+													"data-source": "open_library",
+													"data-source-work-id": entry.externalBook.sourceWorkId,
+													"data-source-url": entry.externalBook.sourceUrl
+												}} />
+											</div>
+										</BookCard>
+									) : null)}
+								</ul>
+							</section>
+						)
 					))}
 				</div>
 			)}
