@@ -88,6 +88,7 @@ test("known series metadata is inferred for regression fixtures", () => {
 		["Fourth Wing", "Rebecca Yarros", "The Empyrean", 1],
 		["The Dragonet Prophecy", "Tui T. Sutherland", "Wings of Fire", 1],
 		["Moon Rising", "Tui T. Sutherland", "Wings of Fire", 6],
+		["The Hybrid Prince", "Tui T. Sutherland", "Wings of Fire", 16],
 		["The Bad Beginning", "Lemony Snicket", "A Series of Unfortunate Events", 1],
 		["The Final Empire", "Brandon Sanderson", "Mistborn", 1]
 	] as const;

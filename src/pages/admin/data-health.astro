@@ -4,7 +4,7 @@ import { getNeonSql } from "../../lib/neon";
 import { resolveAdminSession } from "../../lib/admin";
 import { formatDate, formatNumber, percentOf, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
 import { loadCanonicalTitleCleanupCandidates, normalizeCanonicalSeriesTitles } from "../../lib/canonicalTitleCleanup";
-import { ignorePotentialDuplicateWork, loadPotentialDuplicateWorks, mergeCatalogWorks } from "../../lib/workNormalization";
+import { ignorePotentialDuplicateWork, loadPotentialDuplicateWorks, mergeCatalogWorks, normalizeCanonicalWorkRelationships } from "../../lib/workNormalization";
 
 export const prerender = false;
 
@@ -31,6 +31,31 @@ if (Astro.request.method === "POST") {
 			adminNotices.push(cleanupResult.warning);
 		} else {
 			adminNotices.push(`Canonical Title Cleanup normalized ${formatNumber(cleanupResult.data.updated)} of ${formatNumber(cleanupResult.data.checked)} candidate titles.`);
+		}
+	}
+	if (action === "canonical-work-normalization") {
+		const normalizationResult = await safeAdminLoad(
+			"Canonical Work normalization action",
+			() => normalizeCanonicalWorkRelationships(sql, {
+				apply: true,
+				candidateLimit: 1500,
+				duplicateLimit: 100,
+				maxPasses: 6
+			}),
+			{
+				knownSeriesChecked: 0,
+				knownSeriesAttached: 0,
+				titlesChecked: 0,
+				titlesUpdated: 0,
+				duplicateGroupsChecked: 0,
+				worksMerged: 0,
+				messages: []
+			}
+		);
+		if (normalizationResult.warning) {
+			adminNotices.push(normalizationResult.warning);
+		} else {
+			adminNotices.push(`Canonical Work normalization attached ${formatNumber(normalizationResult.data.knownSeriesAttached)} known-series relationships, normalized ${formatNumber(normalizationResult.data.titlesUpdated)} titles, and merged ${formatNumber(normalizationResult.data.worksMerged)} high-confidence duplicate Works.`);
 		}
 	}
 	if (action === "merge-duplicate-work") {
@@ -69,6 +94,7 @@ const [
 	duplicateGroupsResult,
 	potentialDuplicateWorksResult,
 	metadataReviewResult,
+	relationshipHealthResult,
 	canonicalTitleCleanupResult,
 	recentBackfillResult,
 	unresolvedPageCountResult,
@@ -194,6 +220,103 @@ const [
 		order by b.updated_at desc, b.id desc
 		limit 50
 	`, []),
+	safeAdminLoad("Relationship health", () => sql<Array<{
+		duplicate_works: number;
+		duplicate_editions: number;
+		missing_series: number;
+		incorrect_standalone: number;
+		canonical_title_conflicts: number;
+		series_position_conflicts: number;
+	}>>`
+		with known_series_like as (
+			select b.id, b.work_id, b.title, b.primary_author
+			from book b
+			where lower(b.title) ~ '(wings of fire|harry potter|lord of the rings|empyrean|mistborn|series of unfortunate events|#|book [0-9])'
+		),
+		duplicate_work_groups as (
+			select
+				lower(regexp_replace(coalesce(nullif(trim(bw.canonical_title), ''), nullif(trim(bw.title), ''), b.title), '[^[:alnum:]]+', '', 'g')) as normalized_title,
+				lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) as normalized_author,
+				coalesce(series_info.series_id, 0) as series_id,
+				coalesce(series_info.book_order, 0) as book_order,
+				count(distinct coalesce(b.work_id, b.id))::int as work_count
+			from book b
+			left join book_work bw on bw.id = b.work_id
+			left join lateral (
+				select
+					candidate.series_id,
+					candidate.book_order
+				from (
+					select sb.series_id, sb.book_order, 1 as priority
+					from series_book sb
+					where sb.book_id = b.id
+					union all
+					select sb.series_id, sb.book_order, 2 as priority
+					from book sibling
+					join series_book sb on sb.book_id = sibling.id
+					where b.work_id is not null
+						and sibling.work_id = b.work_id
+					union all
+					select bw.series_id, bw.series_position as book_order, 3 as priority
+					where bw.series_id is not null
+				) candidate
+				order by candidate.priority asc
+				limit 1
+			) series_info on true
+			where trim(coalesce(b.title, '')) <> ''
+				and trim(coalesce(b.primary_author, '')) <> ''
+			group by normalized_title, normalized_author, coalesce(series_info.series_id, 0), coalesce(series_info.book_order, 0)
+			having count(distinct coalesce(b.work_id, b.id)) > 1
+		),
+		duplicate_edition_groups as (
+			select lower(trim(coalesce(edition_key, ''))) as edition_key, count(distinct work_id)::int as work_count
+			from book_edition
+			where trim(coalesce(edition_key, '')) <> ''
+			group by lower(trim(coalesce(edition_key, '')))
+			having count(distinct work_id) > 1
+		),
+		missing_series_rows as (
+			select k.id
+			from known_series_like k
+			left join book_work bw on bw.id = k.work_id
+			where not exists (select 1 from series_book sb where sb.book_id = k.id)
+				and bw.series_id is null
+		),
+		incorrect_standalone_rows as (
+			select b.id
+			from book b
+			join book_work bw on bw.id = b.work_id
+			where bw.series_id is not null
+				and not exists (
+					select 1
+					from series_book sb
+					where sb.book_id = b.id
+				)
+		),
+		canonical_title_conflict_rows as (
+			select b.id
+			from book b
+			join series_book sb on sb.book_id = b.id
+			join series s on s.id = sb.series_id
+			where lower(b.title) like '%' || lower(s.name) || '%'
+				or lower(b.title) ~ '\\(.*#?[0-9]+.*\\)$'
+		),
+		series_position_conflict_rows as (
+			select sb.series_id, sb.book_order, count(distinct coalesce(b.work_id, b.id))::int as work_count
+			from series_book sb
+			left join book b on b.id = sb.book_id
+			where sb.book_order is not null
+			group by sb.series_id, sb.book_order
+			having count(distinct coalesce(b.work_id, b.id)) filter (where coalesce(b.work_id, b.id) is not null) > 1
+		)
+		select
+			(select count(*)::int from duplicate_work_groups) as duplicate_works,
+			(select count(*)::int from duplicate_edition_groups) as duplicate_editions,
+			(select count(*)::int from missing_series_rows) as missing_series,
+			(select count(*)::int from incorrect_standalone_rows) as incorrect_standalone,
+			(select count(*)::int from canonical_title_conflict_rows) as canonical_title_conflicts,
+			(select count(*)::int from series_position_conflict_rows) as series_position_conflicts
+	`, []),
 	safeAdminLoad("Canonical title cleanup", () => loadCanonicalTitleCleanupCandidates(sql, 50), []),
 	safeAdminLoad("Backfill movement", () => sql<Array<{
 		updated_books_24h: number;
@@ -260,6 +383,7 @@ const importHealthRows = safeArray(importHealthResult.data);
 const duplicateGroupsRows = safeArray(duplicateGroupsResult.data);
 const potentialDuplicateWorksRows = safeArray(potentialDuplicateWorksResult.data);
 const metadataReviewRows = safeArray(metadataReviewResult.data);
+const relationshipHealthRows = safeArray(relationshipHealthResult.data);
 const canonicalTitleCleanupRows = safeArray(canonicalTitleCleanupResult.data);
 const recentBackfillRows = safeArray(recentBackfillResult.data);
 const unresolvedPageCountRows = safeArray(unresolvedPageCountResult.data);
@@ -273,6 +397,7 @@ const adminWarnings = [
 	duplicateGroupsResult.warning,
 	potentialDuplicateWorksResult.warning,
 	metadataReviewResult.warning,
+	relationshipHealthResult.warning,
 	canonicalTitleCleanupResult.warning,
 	recentBackfillResult.warning,
 	unresolvedPageCountResult.warning,
@@ -284,6 +409,7 @@ const sectionLinks = [
 	{ id: "metadata-gaps", label: "Metadata Gaps" },
 	{ id: "import-health", label: "Import Health" },
 	{ id: "potential-duplicates", label: "Work Duplicates" },
+	{ id: "relationship-health", label: "Relationships" },
 	{ id: "metadata-review", label: "Review Queue" },
 	{ id: "canonical-title-cleanup", label: "Titles" },
 	{ id: "duplicates", label: "Duplicates" },
@@ -325,6 +451,14 @@ const imports = importHealthRows[0] || {
 	entries_without_total_pages: 0,
 	finished_without_date: 0,
 	reading_with_zero_progress: 0
+};
+const relationships = relationshipHealthRows[0] || {
+	duplicate_works: 0,
+	duplicate_editions: 0,
+	missing_series: 0,
+	incorrect_standalone: 0,
+	canonical_title_conflicts: 0,
+	series_position_conflicts: 0
 };
 const backfills = recentBackfillRows[0] || {
 	updated_books_24h: 0,
@@ -394,6 +528,10 @@ const backfills = recentBackfillRows[0] || {
 					<p>Canonical title cleanup</p>
 					<strong>{formatNumber(canonicalTitleCleanupRows.length)}</strong>
 				</article>
+				<article class="stat">
+					<p>Series position conflicts</p>
+					<strong>{formatNumber(relationships.series_position_conflicts)}</strong>
+				</article>
 			</div>
 			<div class="table-wrap">
 				<table>
@@ -410,6 +548,11 @@ const backfills = recentBackfillRows[0] || {
 						<tr><td>Books missing publisher</td><td>{formatNumber(books.missing_publisher)}</td></tr>
 						<tr><td>Books with possible missing series</td><td>{formatNumber(books.missing_series)}</td></tr>
 						<tr><td>Potential duplicate Works</td><td>{formatNumber(potentialDuplicateWorksRows.length)}</td></tr>
+						<tr><td>Duplicate Works</td><td>{formatNumber(relationships.duplicate_works)}</td></tr>
+						<tr><td>Duplicate Editions</td><td>{formatNumber(relationships.duplicate_editions)}</td></tr>
+						<tr><td>Incorrect standalone classification</td><td>{formatNumber(relationships.incorrect_standalone)}</td></tr>
+						<tr><td>Canonical title conflicts</td><td>{formatNumber(relationships.canonical_title_conflicts)}</td></tr>
+						<tr><td>Series position conflicts</td><td>{formatNumber(relationships.series_position_conflicts)}</td></tr>
 						<tr><td>Canonical title cleanup candidates</td><td>{formatNumber(canonicalTitleCleanupRows.length)}</td></tr>
 						<tr><td>Books without genres</td><td>{formatNumber(genres.books_without_genres)}</td></tr>
 						<tr><td>Authors without bio</td><td>{countWithPct(authors.authors_without_bio, authors.total_authors)}</td></tr>
@@ -495,6 +638,35 @@ const backfills = recentBackfillRows[0] || {
 				</table>
 			</div>
 			<p class="note">Suggestions use canonical title, author, series position, edition identifiers, ISBNs, and provider IDs. Admins approve or ignore each merge; uncertain matches are not merged automatically.</p>
+		</section>
+
+		<section class="panel" id="relationship-health">
+			<div class="panel-head">
+				<h2>Canonical Relationship Health</h2>
+				<p>Work, Edition, Series, and standalone-classification checks for catalog normalization.</p>
+			</div>
+			<div class="actions">
+				<form method="post">
+					<input type="hidden" name="action" value="canonical-work-normalization" />
+					<button type="submit">Normalize canonical Works</button>
+				</form>
+			</div>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr><th>Check</th><th>Count</th></tr>
+					</thead>
+					<tbody>
+						<tr><td>Duplicate Works</td><td>{formatNumber(relationships.duplicate_works)}</td></tr>
+						<tr><td>Duplicate Editions</td><td>{formatNumber(relationships.duplicate_editions)}</td></tr>
+						<tr><td>Missing Series</td><td>{formatNumber(relationships.missing_series)}</td></tr>
+						<tr><td>Incorrect Standalone Classification</td><td>{formatNumber(relationships.incorrect_standalone)}</td></tr>
+						<tr><td>Canonical Title Conflicts</td><td>{formatNumber(relationships.canonical_title_conflicts)}</td></tr>
+						<tr><td>Series Position Conflicts</td><td>{formatNumber(relationships.series_position_conflicts)}</td></tr>
+					</tbody>
+				</table>
+			</div>
+			<p class="note">Normalization first attaches known-series metadata, then cleans redundant title suffixes, then merges only high-confidence duplicate Works using the merge path that preserves shelves, ratings, reviews, activity, journal entries, recommendations, editions, and imports.</p>
 		</section>
 
 		<section class="panel" id="metadata-review">

@@ -95,6 +95,8 @@ Legacy catalog rows are repaired through an idempotent Work/Edition backfill. Th
 
 DogEared detects potential duplicate Works with multiple signals: canonical title, author, structured series name and position, ISBNs, edition keys, external provider identifiers, and existing Work relationships. High-confidence duplicate candidates are shown in Admin Data Health for review with merge reasoning. Admins can merge or ignore suggestions; DogEared does not silently merge uncertain matches. A merge keeps the richer representative Work while preserving shelf assignments, ratings, reviews, reading progress, activity, journal entries, recommendation feedback, custom shelves, collection entries, source mappings, and editions.
 
+Canonical Work normalization is repeatable and relationship-first. The normalization workflow attaches known-series metadata to legacy rows and their Works, safely removes redundant series suffixes from titles, and automatically merges only high-confidence duplicate Works where structured series position or strong edition/provider evidence proves the records represent the same book. Duplicate editions remain attached beneath the surviving Work instead of appearing as separate reader-facing books.
+
 The legacy `book` record remains a compatibility catalog row and representative display record while v1 migrates data into `book_work` and `book_edition`.
 
 ### Series
@@ -105,7 +107,7 @@ When a book belongs to a series, the book page shows a dedicated Series section 
 
 Series cards use DogEared's stored catalog metadata as the source of truth for covers. When a series entry is missing a cover, Book Detail schedules non-blocking metadata enrichment that first checks existing Work, Edition, book, and series-entry metadata, then tries Open Library, then Google Books. Successful covers are saved back to DogEared's catalog tables so later page loads use local metadata. No-cover and failed lookup attempts are cached before retrying, which avoids repeated external requests for titles that providers cannot resolve.
 
-Author pages group books by series when metadata exists and keep standalone books in a separate section. Search results, discovery cards, recommendation cards, author cards, and book detail cards show concise series labels such as series name and book number when that metadata is available.
+Author pages group books by structured series metadata from `series_book` and canonical Work fields, not by title parsing. A book is standalone only when no series relationship exists on its representative row, another edition row for the same Work, or the Work itself. Search results, discovery cards, recommendation cards, author cards, and book detail cards show concise series labels when metadata exists; inside a visible series group, cards use only the book-position label such as `Book 7` because the section heading already supplies the series name.
 
 ### Community Discovery
 

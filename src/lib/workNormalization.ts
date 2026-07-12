@@ -5,6 +5,8 @@ import { ensureBookCoverEnrichmentSchema } from "./bookCoverEnrichment.ts";
 import { ensureCollectionSchema } from "./collections.ts";
 import { ensureCustomShelfSchema } from "./customShelves.ts";
 import { ensureReadingJournalSchema } from "./readingJournal.ts";
+import { ensureSeriesSchema, inferKnownSeriesMetadata, upsertKnownSeriesForBook } from "./series.ts";
+import { normalizeCanonicalSeriesTitles } from "./canonicalTitleCleanup.ts";
 import type { getNeonSql } from "./neon.ts";
 
 type Sql = ReturnType<typeof getNeonSql>;
@@ -41,6 +43,16 @@ export type PotentialDuplicateWorkGroup = {
 	target: WorkNormalizationBook;
 	duplicates: WorkNormalizationBook[];
 	books: WorkNormalizationBook[];
+};
+
+export type CanonicalWorkNormalizationResult = {
+	knownSeriesChecked: number;
+	knownSeriesAttached: number;
+	titlesChecked: number;
+	titlesUpdated: number;
+	duplicateGroupsChecked: number;
+	worksMerged: number;
+	messages: string[];
 };
 
 type WorkCandidateRow = {
@@ -748,4 +760,112 @@ export async function mergeCatalogWorks(sql: Sql, input: { groupKey?: unknown; t
 		`
 	]);
 	return { ok: true, message: `Merged "${source.title}" into "${mergedTitle}".` };
+}
+
+function isSafeAutomaticMerge(group: PotentialDuplicateWorkGroup) {
+	if (group.confidenceScore < 100) return false;
+	const allSameSeries = group.books.every((book) => book.seriesName && book.seriesBookOrder > 0)
+		&& sameSeriesPosition(group.books);
+	const hasIdentifierEvidence = group.reasons.some((reason) => /ISBN|external provider|edition key/i.test(reason));
+	const hasCleanupEvidence = group.reasons.some((reason) => /redundant series|edition metadata/i.test(reason));
+	return allSameSeries || hasIdentifierEvidence || hasCleanupEvidence;
+}
+
+export async function attachKnownSeriesRelationships(sql: Sql, limit = 1000) {
+	await ensureCanonicalWorkSchema(sql);
+	await ensureSeriesSchema(sql);
+	const normalizedLimit = Math.max(1, Math.min(5000, Math.floor(Number(limit || 1000))));
+	const rows = await sql<Array<{
+		id: number;
+		work_id: number | null;
+		title: string;
+		primary_author: string;
+		cover_url: string;
+		published_year: number | null;
+	}>>`
+		select
+			b.id,
+			b.work_id,
+			coalesce(nullif(trim(b.title), ''), '') as title,
+			coalesce(nullif(trim(b.primary_author), ''), '') as primary_author,
+			coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+			b.published_year
+		from book b
+		where trim(coalesce(b.title, '')) <> ''
+			and trim(coalesce(b.primary_author, '')) <> ''
+		order by b.updated_at desc, b.id desc
+		limit ${normalizedLimit}
+	`;
+	let attached = 0;
+	for (const row of rows) {
+		const inferred = inferKnownSeriesMetadata({ title: row.title, author: row.primary_author });
+		if (!inferred) continue;
+		const result = await upsertKnownSeriesForBook(sql, {
+			bookId: Number(row.id || 0),
+			workId: Number(row.work_id || 0),
+			title: row.title,
+			author: row.primary_author,
+			coverUrl: row.cover_url,
+			publishedYear: row.published_year
+		});
+		if (result) attached += 1;
+	}
+	return { checked: rows.length, attached };
+}
+
+export async function normalizeCanonicalWorkRelationships(sql: Sql, options: {
+	candidateLimit?: number;
+	duplicateLimit?: number;
+	maxPasses?: number;
+	apply?: boolean;
+} = {}): Promise<CanonicalWorkNormalizationResult> {
+	const candidateLimit = Math.max(1, Math.min(5000, Math.floor(Number(options.candidateLimit || 1000))));
+	const duplicateLimit = Math.max(1, Math.min(100, Math.floor(Number(options.duplicateLimit || 100))));
+	const maxPasses = Math.max(1, Math.min(10, Math.floor(Number(options.maxPasses || 5))));
+	const shouldApply = options.apply !== false;
+	const messages: string[] = [];
+
+	const seriesResult = shouldApply
+		? await attachKnownSeriesRelationships(sql, candidateLimit)
+		: { checked: 0, attached: 0 };
+	const titleResult = shouldApply
+		? await normalizeCanonicalSeriesTitles(sql, candidateLimit)
+		: { checked: 0, updated: 0, candidates: [] };
+
+	let duplicateGroupsChecked = 0;
+	let worksMerged = 0;
+	for (let pass = 0; pass < maxPasses; pass += 1) {
+		const groups = await loadPotentialDuplicateWorks(sql, duplicateLimit);
+		duplicateGroupsChecked += groups.length;
+		const mergeable = groups.flatMap((group) => (
+			isSafeAutomaticMerge(group)
+				? group.duplicates.map((duplicate) => ({ group, duplicate }))
+				: []
+		));
+		if (mergeable.length === 0) break;
+		if (!shouldApply) {
+			messages.push(`${mergeable.length} high-confidence duplicate Works would be merged.`);
+			break;
+		}
+		for (const { group, duplicate } of mergeable) {
+			const result = await mergeCatalogWorks(sql, {
+				groupKey: group.groupKey,
+				targetBookId: group.target.bookId,
+				sourceBookId: duplicate.bookId,
+				reason: `Automatic canonical Work normalization. ${group.reasons.join(" ")}`
+			});
+			messages.push(result.message);
+			if (result.ok) worksMerged += 1;
+		}
+	}
+
+	return {
+		knownSeriesChecked: seriesResult.checked,
+		knownSeriesAttached: seriesResult.attached,
+		titlesChecked: titleResult.checked,
+		titlesUpdated: titleResult.updated,
+		duplicateGroupsChecked,
+		worksMerged,
+		messages
+	};
 }

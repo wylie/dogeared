@@ -13,6 +13,7 @@ import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
 import { ensureSeriesSchema, groupAuthorBooksBySeries } from "../../lib/series";
 import { loadCollectionsForAuthor, type CollectionRecord } from "../../lib/collections";
 import { ensureCanonicalWorkSchema } from "../../lib/catalogWorks";
+import { canonicalizeCatalogAuthor, canonicalizeCatalogTitle } from "../../lib/catalogKeys";
 
 export const prerender = false;
 
@@ -132,7 +133,7 @@ try {
 		select
 			b.id,
 			coalesce(b.work_id, b.id)::bigint as "workId",
-			b.title,
+			coalesce(nullif(trim(bw.canonical_title), ''), nullif(trim(bw.title), ''), b.title) as title,
 			coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
 			coalesce(b.author_id, 0)::bigint as "authorId",
 			count(ub.book_id)::int as shelves,
@@ -148,16 +149,60 @@ try {
 			coalesce(nullif(b.page_count, 0), 0)::int as "pageCount",
 			coalesce(rt.average_rating, 0) as "averageRating",
 			coalesce(rt.rating_count, 0)::int as "ratingCount",
-			coalesce(s.id, 0)::bigint as "seriesId",
-			coalesce(s.name, '') as "seriesName",
-			coalesce(sb.book_order, 0)::numeric as "bookOrder",
-			coalesce(sb.publication_order, 0)::numeric as "publicationOrder",
-			coalesce(sb.chronological_order, 0)::numeric as "chronologicalOrder"
+			coalesce(series_info.series_id, 0)::bigint as "seriesId",
+			coalesce(series_info.series_name, '') as "seriesName",
+			coalesce(series_info.book_order, 0)::numeric as "bookOrder",
+			coalesce(series_info.publication_order, 0)::numeric as "publicationOrder",
+			coalesce(series_info.chronological_order, 0)::numeric as "chronologicalOrder"
 		from book b
+		left join book_work bw on bw.id = b.work_id
 		left join user_book ub on ub.book_id = b.id
 		left join book_genre bg on bg.book_id = b.id
-		left join series_book sb on sb.book_id = b.id
-		left join series s on s.id = sb.series_id
+		left join lateral (
+			select
+				candidate.series_id,
+				candidate.series_name,
+				candidate.book_order,
+				candidate.publication_order,
+				candidate.chronological_order
+			from (
+				select
+					s.id as series_id,
+					s.name as series_name,
+					sb.book_order,
+					sb.publication_order,
+					sb.chronological_order,
+					1 as priority
+				from series_book sb
+				join series s on s.id = sb.series_id
+				where sb.book_id = b.id
+				union all
+				select
+					s.id as series_id,
+					s.name as series_name,
+					sb.book_order,
+					sb.publication_order,
+					sb.chronological_order,
+					2 as priority
+				from book sibling
+				join series_book sb on sb.book_id = sibling.id
+				join series s on s.id = sb.series_id
+				where b.work_id is not null
+					and sibling.work_id = b.work_id
+				union all
+				select
+					s.id as series_id,
+					s.name as series_name,
+					bw.series_position as book_order,
+					bw.series_position as publication_order,
+					bw.series_position as chronological_order,
+					3 as priority
+				from series s
+				where s.id = bw.series_id
+			) candidate
+			order by candidate.priority asc, candidate.book_order nulls last, candidate.series_id asc
+			limit 1
+		) series_info on true
 		left join lateral (
 			select
 				round(avg(ub2.rating)::numeric, 2) as average_rating,
@@ -169,18 +214,25 @@ try {
 			(${authorId} > 0 and b.author_id = ${authorId})
 			or lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
 		)
-		group by b.id, b.work_id, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis, b.published_year, b.page_count, rt.average_rating, rt.rating_count, s.id, s.name, sb.book_order, sb.publication_order, sb.chronological_order
-		order by coalesce(s.name, '') asc, coalesce(sb.book_order, 999999) asc, shelves desc, readers desc, b.title asc
+		group by b.id, b.work_id, bw.canonical_title, bw.title, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis, b.published_year, b.page_count, rt.average_rating, rt.rating_count, series_info.series_id, series_info.series_name, series_info.book_order, series_info.publication_order, series_info.chronological_order
+		order by coalesce(series_info.series_name, '') asc, coalesce(series_info.book_order, 999999) asc, shelves desc, readers desc, b.title asc
 	`;
 
 	if (rows.length > 0) {
 		authorName = normalizeAuthorName(rows[0].author);
-		const byWorkId = new Map<number, BookRow>();
+		const byCanonicalSlot = new Map<string, BookRow>();
 		for (const row of rows) {
-			const key = Number(row.workId || row.id || 0);
-			if (key > 0 && !byWorkId.has(key)) byWorkId.set(key, row);
+			const seriesId = Number(row.seriesId || 0);
+			const bookOrder = Number(row.bookOrder || 0);
+			const key = seriesId > 0 && bookOrder > 0
+				? `series:${seriesId}:${bookOrder}`
+				: `work:${canonicalizeCatalogTitle(row.title)}:${canonicalizeCatalogAuthor(row.author)}`;
+			const existing = byCanonicalSlot.get(key);
+			if (!existing || row.shelves > existing.shelves || row.readers > existing.readers || row.ratingCount > existing.ratingCount) {
+				byCanonicalSlot.set(key, row);
+			}
 		}
-		books = Array.from(byWorkId.values());
+		books = Array.from(byCanonicalSlot.values());
 		const authorCounts = await sql<Array<{ shelves: number; readers: number }>>`
 			select
 				count(distinct concat(ub.user_id::text, ':', coalesce(ub.status, '')))::int as shelves,
@@ -339,14 +391,9 @@ const authorStructuredData = displayName
 										publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
 										pageCount={book.pageCount}
 										averageRating={book.averageRating}
-										seriesLabel={book.seriesName ? `${book.seriesName}${book.bookOrder > 0 ? ` · Book ${book.bookOrder}` : ""}` : ""}
+										seriesLabel={book.seriesName && book.bookOrder > 0 ? `Book ${book.bookOrder}` : ""}
 										genres={book.genres}
 									>
-										<div slot="preTitle">
-											{group.kind === "series" && (
-												<p class="series-chip">{book.bookOrder > 0 ? `Book ${book.bookOrder}` : "Series"}</p>
-											)}
-										</div>
 										<div slot="preMeta">
 											{viewerStatusByBookId.get(Number(book.id || 0)) === "finished" && (
 												<RatingControl
@@ -591,18 +638,6 @@ const authorStructuredData = displayName
 	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.95rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.book-card-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
 	.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-	.series-chip {
-		display: inline-flex;
-		width: fit-content;
-		max-width: 100%;
-		margin: 0 0 0.25rem;
-		border-radius: 999px;
-		background: var(--color-nav-surface);
-		color: var(--color-nav);
-		padding: 0.12rem 0.48rem;
-		font-size: 0.76rem;
-		font-weight: 760;
-	}
 	.rating-meta { color: var(--color-text-muted); font-weight: 400; }
 	.error { color: #991b1b; }
 	@media (max-width: 860px) {

@@ -74,6 +74,18 @@ test("author pages separate local and external books", () => {
 	assert.equal(source.includes("/api/shelf/custom-shelf-books"), true);
 });
 
+test("author pages group by canonical Work series metadata without duplicate book labels", () => {
+	const source = readFileSync("src/pages/author/[slug].astro", "utf8");
+
+	assert.equal(source.includes("left join book_work bw on bw.id = b.work_id"), true);
+	assert.equal(source.includes("sibling.work_id = b.work_id"), true);
+	assert.equal(source.includes("bw.series_position as book_order"), true);
+	assert.equal(source.includes("series:${seriesId}:${bookOrder}"), true);
+	assert.equal(source.includes('seriesLabel={book.seriesName && book.bookOrder > 0 ? `Book ${book.bookOrder}` : ""}'), true);
+	assert.equal(source.includes("series-chip"), false);
+	assert.equal(source.includes("`${book.seriesName}${book.bookOrder > 0"), false);
+});
+
 test("BookCard renders accessible genre navigation", () => {
 	const source = readFileSync("src/components/BookCard.astro", "utf8");
 	assert.equal(source.includes('aria-label="Genres"'), true);

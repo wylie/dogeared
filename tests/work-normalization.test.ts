@@ -202,10 +202,19 @@ test("Data Health exposes potential duplicate Work review and merge actions", ()
 	const catalogWorks = readFileSync("src/lib/catalogWorks.ts", "utf8");
 
 	assert.equal(page.includes("Potential Duplicate Works"), true);
+	assert.equal(page.includes("Canonical Relationship Health"), true);
+	assert.equal(page.includes("Duplicate Editions"), true);
+	assert.equal(page.includes("Incorrect Standalone Classification"), true);
+	assert.equal(page.includes("Series Position Conflicts"), true);
+	assert.equal(page.includes("canonical-work-normalization"), true);
 	assert.equal(page.includes("merge-duplicate-work"), true);
 	assert.equal(page.includes("ignore-duplicate-work"), true);
 	assert.equal(page.includes("loadPotentialDuplicateWorks"), true);
 	assert.equal(page.includes("mergeCatalogWorks"), true);
+	assert.equal(normalization.includes("normalizeCanonicalWorkRelationships"), true);
+	assert.equal(normalization.includes("attachKnownSeriesRelationships"), true);
+	assert.equal(normalization.includes("upsertKnownSeriesForBook"), true);
+	assert.equal(normalization.includes("Automatic canonical Work normalization"), true);
 	for (const table of [
 		"user_book",
 		"user_activity",
@@ -223,6 +232,21 @@ test("Data Health exposes potential duplicate Work review and merge actions", ()
 	}
 	assert.equal(catalogWorks.includes("buildCanonicalWorkBackfillPlan"), true);
 	assert.equal(catalogWorks.includes("sql.unsafe"), false);
+});
+
+test("canonical Work normalization has a repeatable task and documents relationship rules", () => {
+	const packageJson = readFileSync("package.json", "utf8");
+	const script = readFileSync("scripts/normalize-canonical-works.mjs", "utf8");
+	const overview = readFileSync("docs/product/overview.md", "utf8");
+	const features = readFileSync("docs/product/features.md", "utf8");
+
+	assert.equal(packageJson.includes("cleanup:canonical-works"), true);
+	assert.equal(script.includes("normalizeCanonicalWorkRelationships"), true);
+	assert.equal(script.includes("--apply"), true);
+	assert.equal(overview.includes("relationship-first"), true);
+	assert.equal(overview.includes("A book is standalone only when no series relationship exists"), true);
+	assert.equal(features.includes("duplicate Editions"), true);
+	assert.equal(features.includes("series position conflicts"), true);
 });
 
 test("book edition metadata parameters are typed and debuggable", () => {

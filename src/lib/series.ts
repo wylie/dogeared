@@ -181,7 +181,8 @@ const KNOWN_SERIES: KnownSeries[] = [
 			{ title: "The Hive Queen", order: 12 },
 			{ title: "The Poison Jungle", order: 13 },
 			{ title: "The Dangerous Gift", order: 14 },
-			{ title: "The Flames of Hope", order: 15 }
+			{ title: "The Flames of Hope", order: 15 },
+			{ title: "The Hybrid Prince", order: 16 }
 		]
 	},
 	{

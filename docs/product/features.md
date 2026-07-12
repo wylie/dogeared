@@ -101,6 +101,8 @@ Potential duplicate Works are detected with confidence scoring across canonical 
 
 Legacy catalog rows are backfilled idempotently into `book_work` and `book_edition` using the same canonical title rules as imports. The backfill attaches every compatibility `book` row to a Work and creates an Edition without overwriting legacy unique source keys on `book.canonical_work_key`.
 
+Canonical Work normalization can be run as a repeatable admin/task workflow. It first attaches known-series metadata to legacy rows and canonical Works, then runs safe title cleanup, then merges only high-confidence duplicate Works where structured series position, ISBN, edition key, provider ID, or redundant-title evidence proves equivalence. This repairs relationships instead of hiding duplicate records in individual UI surfaces.
+
 Limitations: v1 keeps the existing `book` table as a compatibility representative for routes and older relationships while new `book_work` and `book_edition` records carry the canonical model.
 
 ### Recommended For You
@@ -175,7 +177,7 @@ Limitations: Author quality depends on catalog and backfill data.
 
 Status: Complete
 
-Author pages show author metadata, reader/shelf counts, editorial collections featuring the author, unique Works in DogEared grouped by series where available, standalone Works, and shelf controls.
+Author pages show author metadata, reader/shelf counts, editorial collections featuring the author, unique Works in DogEared grouped by series where available, standalone Works, and shelf controls. Grouping uses structured series metadata from the exact representative row, another edition row for the same Work, or canonical Work fields. A title is treated as standalone only when no structured series relationship exists.
 
 Limitations: Author bio and photo may be missing.
 
@@ -673,7 +675,7 @@ Limitations: This is a simple admin form. It does not yet include rich media upl
 
 Status: Complete
 
-Admins can inspect metadata gaps, genre coverage, author coverage, import quality, duplicate risk, potential duplicate Works, recent backfills, page-count gaps, publisher gaps, missing-series signals, and canonical title cleanup candidates. Potential Duplicate Works provides a review queue with confidence and reasoning, plus merge and ignore actions. The same duplicate detection can run as the repeatable `cleanup:duplicate-works` task, which defaults to dry-run and only applies merges when explicitly requested. Canonical Title Cleanup reports books whose stored title still includes redundant series parentheticals and provides an admin action to normalize those titles through the same safe metadata-layer matcher used by imports.
+Admins can inspect metadata gaps, genre coverage, author coverage, import quality, duplicate risk, potential duplicate Works, duplicate Editions, missing-series signals, incorrect standalone classification, canonical title conflicts, series position conflicts, recent backfills, page-count gaps, publisher gaps, and canonical title cleanup candidates. Potential Duplicate Works provides a review queue with confidence and reasoning, plus merge and ignore actions. The same duplicate detection can run as the repeatable `cleanup:duplicate-works` task, which defaults to dry-run and only applies merges when explicitly requested. Canonical Work normalization is available through Data Health and `cleanup:canonical-works`; it attaches known-series metadata, normalizes redundant title suffixes, and merges only high-confidence duplicate Works. Canonical Title Cleanup reports books whose stored title still includes redundant series parentheticals and provides an admin action to normalize those titles through the same safe metadata-layer matcher used by imports.
 
 Limitations: Most backfill execution lives in scripts. Canonical title cleanup is available as a targeted admin action because it is deterministic and idempotent. Duplicate Work merging is admin-approved rather than automatic because false merges are more damaging than temporary duplicate suggestions.
 
