@@ -31,7 +31,8 @@
     "cleanup:duplicate-works": "node --experimental-strip-types scripts/normalize-duplicate-works.mjs",
     "cleanup:canonical-works": "node --experimental-strip-types scripts/normalize-canonical-works.mjs",
     "migrate:canonical-catalog": "node --experimental-strip-types scripts/migrate-canonical-catalog.mjs",
-    "catalog:audit": "node --env-file=.env --experimental-strip-types scripts/catalog-audit.mjs"
+    "catalog:audit": "node --env-file=.env --experimental-strip-types scripts/catalog-audit.mjs",
+    "catalog:cleanup": "node --env-file=.env --experimental-strip-types scripts/catalog-cleanup.mjs"
   },
   "dependencies": {
     "@astrojs/vercel": "^10.0.8",

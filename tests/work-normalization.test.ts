@@ -437,6 +437,53 @@ test("catalog audit is read-only and reports duplicate Work evidence", () => {
 	assert.equal(features.includes("read-only inspection report"), true);
 });
 
+test("canonical catalog cleanup removes only safe placeholder Works", () => {
+	const packageJson = readFileSync("package.json", "utf8");
+	const script = readFileSync("scripts/catalog-cleanup.mjs", "utf8");
+	const overview = readFileSync("docs/product/overview.md", "utf8");
+	const features = readFileSync("docs/product/features.md", "utf8");
+
+	assert.equal(packageJson.includes("catalog:cleanup"), true);
+	assert.equal(script.includes("--dry-run"), true);
+	assert.equal(script.includes("npm_config_dry_run"), true);
+	for (const required of [
+		"Placeholder Works removed",
+		"Relationships moved",
+		"Search index rebuilt",
+		"Duplicate groups remaining",
+		"Work ID:",
+		"Canonical Work ID:",
+		"Relationships found:",
+		"Deletion eligibility:"
+	]) {
+		assert.equal(script.includes(required), true);
+	}
+	for (const safety of [
+		"shelfCount === 0",
+		"readerCount === 0",
+		"reviewCount === 0",
+		"activityCount === 0",
+		"progressCount === 0",
+		"journalEntryCount === 0",
+		"journalNoteCount === 0",
+		"recommendationCount === 0",
+		"bookIds.length === 0",
+		"editionIds.length === 0"
+	]) {
+		assert.equal(script.includes(safety), true);
+	}
+	assert.equal(script.includes("hasReaderOwnedRelationships"), true);
+	assert.equal(script.includes("moveWorkReferences"), true);
+	assert.equal(script.includes("deleteIfEligible"), true);
+	assert.equal(script.includes("rebuildCanonicalSearchIdentity"), true);
+	assert.equal(script.includes("rebuildCanonicalSeriesEntries"), true);
+	assert.equal(script.includes("rebuildCanonicalAuthorRelationships"), true);
+	assert.equal(overview.includes("Canonical Catalog Cleanup"), true);
+	assert.equal(overview.includes("It is not a merge engine"), true);
+	assert.equal(features.includes("catalog:cleanup --dry-run"), true);
+	assert.equal(features.includes("Rollback requires"), true);
+});
+
 test("book edition metadata parameters are typed and debuggable", () => {
 	const catalogWorks = readFileSync("src/lib/catalogWorks.ts", "utf8");
 	const shelfEntries = readFileSync("src/pages/api/shelf/entries.ts", "utf8");
