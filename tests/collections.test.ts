@@ -53,6 +53,7 @@ test("collection routes, search, featured home, and admin management are wired",
 	const admin = readFileSync("src/pages/admin/collections.astro", "utf8");
 
 	assert.match(collectionPage, /loadCollectionBySlug/);
+	assert.match(collectionPage, /CollectionBookCard/);
 	assert.match(collectionIndex, /loadPublishedCollections/);
 	assert.match(home, /Featured Collections/);
 	assert.match(home, /loadFeaturedCollections/);

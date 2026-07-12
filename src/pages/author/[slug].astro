@@ -1,9 +1,11 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import BookCard from "../../components/BookCard.astro";
+import CollectionBookCard from "../../components/CollectionBookCard.astro";
 import ShelfDropdown from "../../components/ShelfDropdown.astro";
 import RatingControl from "../../components/RatingControl.astro";
 import SeriesSection from "../../components/SeriesSection.astro";
+import AuthorSection from "../../components/AuthorSection.astro";
 import { getNeonSql } from "../../lib/neon";
 import { resolveUserBySession } from "../../lib/auth";
 import { authorHref, canonicalizeAuthor, normalizeAuthorName, slugifyAuthor } from "../../lib/author";
@@ -456,26 +458,17 @@ const authorStructuredData = displayName
 	<div slot="right" class="author-page" data-author-id={authorId > 0 ? String(authorId) : ""}>
 		{errorMessage && <p class="error">{errorMessage}</p>}
 
-		<section class="panel author-head">
-			<div class="author-photo">
-				{authorPhotoUrl
-					? <img src={authorPhotoUrl} alt={`${displayName} photo`} loading="lazy" decoding="async" width="120" height="120" />
-					: <div class="photo-placeholder"><span class="material-icons" aria-hidden="true">person</span></div>}
-			</div>
-			<div class="author-meta">
-				<h1>{displayName || "Author"}</h1>
-				<p class="meta">Known books: {knownBookCount.toLocaleString()}</p>
-				<p class="meta">Readers: {readersCount.toLocaleString()} · Shelf entries: {shelvesCount.toLocaleString()}</p>
-				{bio ? (
-					<p class="bio">
-						{bio}
-						{bioSourceUrl && <> <a class="author-link" href={bioSourceUrl} target="_blank" rel="noreferrer noopener">Source: {bioSource}</a></>}
-					</p>
-				) : (
-					<p class="bio">Bio unavailable right now.</p>
-				)}
-			</div>
-		</section>
+		<AuthorSection
+			name={displayName || "Author"}
+			photoUrl={authorPhotoUrl}
+			bio={bio}
+			bioSource={bioSource}
+			bioSourceUrl={bioSourceUrl}
+			stats={[
+				{ label: "Known books", value: knownBookCount },
+				{ label: "Readers", value: `${readersCount.toLocaleString()} · Shelf entries: ${shelvesCount.toLocaleString()}` }
+			]}
+		/>
 
 			{featuredInCollections.length > 0 && (
 				<section class="featured-in-section" aria-labelledby="featured-in-title">
@@ -514,18 +507,16 @@ const authorStructuredData = displayName
 								spacing="inline"
 							>
 								{group.books.map((entry) => entry.localBook ? (
-									<BookCard
+									<CollectionBookCard
 										title={entry.localBook.title}
 										titleHref={`/book?bookId=${encodeURIComponent(String(entry.localBook.id))}`}
 										author={entry.localBook.author}
 										authorHref={entry.localBook.author ? authorHref(entry.localBook.author, entry.localBook.authorId) : ""}
 										thumbnail={entry.localBook.coverUrl}
-										showCommunityStats={false}
 										publishedLabel={entry.localBook.publishedYear > 0 ? String(entry.localBook.publishedYear) : ""}
 										pageCount={entry.localBook.pageCount}
 										averageRating={entry.localBook.averageRating}
 										seriesLabel={entry.bookOrder > 0 ? `Book ${entry.bookOrder}` : ""}
-										variant="compact-series"
 									>
 										{!(Number(entry.localBook.ratingCount || 0) > 0) && <p slot="meta" class="meta">No ratings yet.</p>}
 										<div slot="actions">
@@ -544,16 +535,14 @@ const authorStructuredData = displayName
 												"data-categories": JSON.stringify(entry.localBook.genres ?? [])
 											}} />
 										</div>
-									</BookCard>
+									</CollectionBookCard>
 								) : entry.externalBook ? (
-									<BookCard
+									<CollectionBookCard
 										title={entry.externalBook.title}
 										author={entry.externalBook.author}
 										thumbnail={entry.externalBook.coverUrl}
 										publishedLabel={entry.externalBook.publishedYear > 0 ? String(entry.externalBook.publishedYear) : ""}
 										seriesLabel={entry.bookOrder > 0 ? `Book ${entry.bookOrder}` : ""}
-										showCommunityStats={false}
-										variant="compact-series"
 									>
 										<p slot="meta" class="meta">No ratings yet.</p>
 										<div slot="actions">
@@ -570,7 +559,7 @@ const authorStructuredData = displayName
 												"data-source-url": entry.externalBook.sourceUrl
 											}} />
 										</div>
-									</BookCard>
+									</CollectionBookCard>
 								) : null)}
 							</SeriesSection>
 						) : (
@@ -795,12 +784,7 @@ const authorStructuredData = displayName
 <style>
 	.author-page { max-width: 1040px; }
 	.panel { border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1.05rem; }
-	.author-head { display: grid; grid-template-columns: 120px 1fr; gap: 1rem; }
-	.author-photo img, .photo-placeholder { width: 120px; height: 120px; border-radius: var(--radius-md); object-fit: cover; background: rgba(255, 255, 255, 0.62); border: 0; box-shadow: var(--shadow-xs); }
-	.photo-placeholder { display: grid; place-items: center; color: var(--color-text-subtle); box-shadow: none; }
-	.author-meta h1 { margin: 0; }
 	.meta { margin: 0.2rem 0; color: var(--color-text-muted); }
-	.bio { margin-top: 0.6rem; line-height: 1.5; }
 	.featured-in-section { margin-top: 1rem; }
 	.section-head h2 { margin: 0 0 0.6rem; }
 	.featured-in-grid {
@@ -864,9 +848,5 @@ const authorStructuredData = displayName
 	@media (max-width: 860px) {
 		.book-grid,
 		.featured-in-grid { grid-template-columns: 1fr; }
-	}
-	@media (max-width: 640px) {
-		.author-head { grid-template-columns: 1fr; }
-		.author-photo img, .photo-placeholder { width: 96px; height: 96px; }
 	}
 </style>

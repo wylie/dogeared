@@ -1,6 +1,7 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import BookCard from "../components/BookCard.astro";
+import CollectionBookCard from "../components/CollectionBookCard.astro";
 import ShelfDropdown from "../components/ShelfDropdown.astro";
 import RatingControl from "../components/RatingControl.astro";
 import Chip from "../components/Chip.astro";
@@ -1102,21 +1103,16 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 								...(seriesBook.isCurrent ? { "aria-current": "true" } : {})
 							};
 							return (
-								<BookCard
+								<CollectionBookCard
 									title={seriesBook.title}
 									titleHref={seriesBookHref}
 									author={seriesBook.author || "Unknown author"}
 									authorHref={seriesBook.author ? authorHref(seriesBook.author, seriesBook.authorId || 0) : ""}
 									thumbnail={seriesBook.coverUrl}
-									description=""
-									readers={-1}
-									shelfEntries={-1}
-									showCommunityStats={false}
 									publishedLabel={seriesBook.publishedYear ? String(seriesBook.publishedYear) : ""}
 									pageCount={seriesBook.pageCount || 0}
 									averageRating={seriesBook.averageRating || 0}
 									seriesLabel={seriesBook.bookOrder > 0 ? `Book ${seriesBook.bookOrder}` : ""}
-									variant="compact-series"
 									attrs={seriesCardAttrs}
 								>
 									{(seriesBook.ratingCount || 0) === 0 && <p slot="meta" class="meta">No ratings yet.</p>}
@@ -1136,7 +1132,7 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 											"data-initial-status": seriesBook.shelfStatus || ""
 										}} />
 									</div>
-								</BookCard>
+								</CollectionBookCard>
 							);
 						})}
 					</SeriesSection>

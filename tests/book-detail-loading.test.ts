@@ -52,17 +52,18 @@ test("book detail keeps reviews, activity, and recommendations wired", () => {
 test("book detail series section reuses BookCard and shared shelf actions", () => {
 	const source = readFileSync("src/pages/book.astro", "utf8");
 	const sharedSeries = readFileSync("src/components/SeriesSection.astro", "utf8");
+	const collectionCard = readFileSync("src/components/CollectionBookCard.astro", "utf8");
 	const seriesSection = source.slice(source.indexOf('{seriesContext && ('), source.indexOf('<section class="panel synopsis-panel">'));
 
 	assert.match(seriesSection, /<SeriesSection/);
-	assert.match(seriesSection, /<BookCard/);
-	assert.match(seriesSection, /variant="compact-series"/);
+	assert.match(seriesSection, /<CollectionBookCard/);
+	assert.match(collectionCard, /<BookCard/);
+	assert.match(collectionCard, /variant="compact-series"/);
 	assert.match(seriesSection, /seriesLabel=\{seriesBook\.bookOrder > 0 \? `Book \$\{seriesBook\.bookOrder\}` : ""\}/);
 	assert.match(seriesSection, /publishedLabel=\{seriesBook\.publishedYear \? String\(seriesBook\.publishedYear\) : ""\}/);
 	assert.match(seriesSection, /pageCount=\{seriesBook\.pageCount \|\| 0\}/);
 	assert.match(seriesSection, /averageRating=\{seriesBook\.averageRating \|\| 0\}/);
 	assert.match(seriesSection, /<p slot="meta" class="meta">No ratings yet\.<\/p>/);
-	assert.match(seriesSection, /description=""/);
 	assert.match(seriesSection, /<ShelfDropdown/);
 	assert.match(seriesSection, /data-current-series-book/);
 	assert.match(seriesSection, /title=\{seriesContext\.series\.name\}/);

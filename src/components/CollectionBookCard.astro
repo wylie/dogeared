@@ -1,0 +1,56 @@
+---
+import BookCard from "./BookCard.astro";
+
+type Props = {
+	title: string;
+	titleHref?: string;
+	author?: string;
+	authorHref?: string;
+	thumbnail?: string;
+	publishedLabel?: string;
+	pageCount?: number;
+	averageRating?: number;
+	seriesLabel?: string;
+	showCommunityStats?: boolean;
+	attrs?: Record<string, string>;
+};
+
+const {
+	title,
+	titleHref = "",
+	author = "",
+	authorHref = "",
+	thumbnail = "",
+	publishedLabel = "",
+	pageCount = 0,
+	averageRating = 0,
+	seriesLabel = "",
+	showCommunityStats = false,
+	attrs = {}
+} = Astro.props as Props;
+---
+
+<BookCard
+	title={title}
+	titleHref={titleHref}
+	author={author}
+	authorHref={authorHref}
+	thumbnail={thumbnail}
+	description=""
+	readers={-1}
+	shelfEntries={-1}
+	showCommunityStats={showCommunityStats}
+	publishedLabel={publishedLabel}
+	pageCount={pageCount}
+	averageRating={averageRating}
+	seriesLabel={seriesLabel}
+	variant="compact-series"
+	attrs={attrs}
+>
+	<Fragment slot="preTitle"><slot name="preTitle" /></Fragment>
+	<Fragment slot="preMeta"><slot name="preMeta" /></Fragment>
+	<Fragment slot="meta"><slot name="meta" /></Fragment>
+	<Fragment slot="actions"><slot name="actions" /></Fragment>
+	<Fragment slot="footer"><slot name="footer" /></Fragment>
+	<slot />
+</BookCard>

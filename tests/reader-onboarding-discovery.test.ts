@@ -57,7 +57,7 @@ test("external author books exclude local titles and duplicates", () => {
 
 test("author bibliography cards use DogEared shelf conversion without outbound title links", () => {
 	const source = readFileSync("src/pages/author/[slug].astro", "utf8");
-	assert.equal(source.includes("<BookCard"), true);
+	assert.equal(source.includes("<CollectionBookCard"), true);
 	assert.equal(source.includes("<ShelfDropdown"), true);
 	assert.equal(source.includes('"data-source": "open_library"'), true);
 	assert.equal(source.includes("Search DogEared"), false);
@@ -72,13 +72,13 @@ test("author pages organize local and external books by reader-facing bibliograp
 	assert.equal(source.includes("Not Yet In DogEared"), false);
 	assert.equal(source.includes("<ExternalAuthorBooks"), false);
 	assert.equal(source.includes("<SeriesSection"), true);
+	assert.equal(source.includes("<AuthorSection"), true);
 	assert.equal(source.includes('spacing="inline"'), true);
-	assert.equal(source.includes('variant="compact-series"'), true);
 	assert.equal(source.includes("supportingText={formatBookCount(group.books.length)}"), true);
 	assert.equal(source.includes("buildAuthorBibliographySections"), true);
 	assert.equal(source.includes("formatSeriesSectionTitle"), true);
 	assert.equal(source.includes("inferKnownSeriesMetadata"), true);
-	assert.equal(source.includes("Known books:"), true);
+	assert.equal(source.includes('{ label: "Known books", value: knownBookCount }'), true);
 	assert.equal(source.includes("books.map((book) => book.title)"), false);
 	assert.equal(source.includes("dropdown.dataset.bookId = String(bookId)"), true);
 	assert.equal(source.includes("/api/shelf/custom-shelf-books"), true);
@@ -104,10 +104,12 @@ test("BookCard renders accessible genre navigation", () => {
 	assert.equal(source.includes('kind="topic"'), true);
 });
 
-test("BookCard owns the compact reusable presentation variant", () => {
+test("CollectionBookCard owns the compact reusable presentation variant", () => {
 	const source = readFileSync("src/components/BookCard.astro", "utf8");
+	const collectionCard = readFileSync("src/components/CollectionBookCard.astro", "utf8");
 	const bookPage = readFileSync("src/pages/book.astro", "utf8");
 	const authorPage = readFileSync("src/pages/author/[slug].astro", "utf8");
+	const collectionPage = readFileSync("src/pages/collections/[slug].astro", "utf8");
 
 	assert.match(source, /variant\?: "standard" \| "compact-series"/);
 	assert.equal(source.includes('variant = "standard"'), true);
@@ -121,8 +123,10 @@ test("BookCard owns the compact reusable presentation variant", () => {
 	assert.match(source, /\.book-card--compact-series \.card-body \{[\s\S]+min-height: 0/);
 	assert.match(source, /\.book-card--compact-series \.series-meta \{[\s\S]+color: var\(--color-text-muted\)/);
 	assert.match(source, /\.book-card--compact-series \.cover-actions :global\(\.shelf-dropdown\) \{[\s\S]+--shelf-trigger-height: 30px/);
-	assert.equal(bookPage.includes('variant="compact-series"'), true);
-	assert.equal(authorPage.includes('variant="compact-series"'), true);
+	assert.match(collectionCard, /variant="compact-series"/);
+	assert.equal(bookPage.includes("<CollectionBookCard"), true);
+	assert.equal(authorPage.includes("<CollectionBookCard"), true);
+	assert.equal(collectionPage.includes("<CollectionBookCard"), true);
 	assert.equal(bookPage.includes(":global(.series-list .book-card .cover)"), false);
 	assert.equal(bookPage.includes("series-card-kickers"), false);
 });

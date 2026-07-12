@@ -1,6 +1,6 @@
 ---
 import Layout from "../../layouts/Layout.astro";
-import BookCard from "../../components/BookCard.astro";
+import CollectionBookCard from "../../components/CollectionBookCard.astro";
 import RatingControl from "../../components/RatingControl.astro";
 import ShelfDropdown from "../../components/ShelfDropdown.astro";
 import { authorHref } from "../../lib/author";
@@ -87,16 +87,12 @@ const sectionLinks = collection?.books.length ? [
 								const viewerStatus = viewerStatusByBookId.get(book.bookId) || "";
 								const viewerRating = viewerRatingByBookId.get(book.bookId) || 0;
 								return (
-									<BookCard
+									<CollectionBookCard
 										title={book.title}
 										titleHref={`/book?bookId=${encodeURIComponent(String(book.bookId))}`}
 										author={book.author}
 										authorHref={book.author ? authorHref(book.author, book.authorId) : ""}
 										thumbnail={book.coverUrl}
-										description={book.editorNote || book.synopsis || "Selected for this collection."}
-										readers={-1}
-										shelfEntries={-1}
-										showCommunityStats={false}
 										publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
 										pageCount={book.pageCount}
 										averageRating={book.averageRating}
@@ -124,7 +120,7 @@ const sectionLinks = collection?.books.length ? [
 												"data-google-books-id": book.googleBooksId
 											}} />
 										</div>
-									</BookCard>
+									</CollectionBookCard>
 								);
 							})}
 						</ol>

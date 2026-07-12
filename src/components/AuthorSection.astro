@@ -1,0 +1,112 @@
+---
+type AuthorStat = {
+	label: string;
+	value: string | number;
+};
+
+type Props = {
+	name: string;
+	photoUrl?: string;
+	bio?: string;
+	bioSource?: string;
+	bioSourceUrl?: string;
+	stats?: AuthorStat[];
+	attrs?: Record<string, string>;
+};
+
+const {
+	name,
+	photoUrl = "",
+	bio = "",
+	bioSource = "",
+	bioSourceUrl = "",
+	stats = [],
+	attrs = {}
+} = Astro.props as Props;
+const displayName = String(name || "Author").trim() || "Author";
+const cleanPhotoUrl = String(photoUrl || "").trim();
+const cleanBio = String(bio || "").trim();
+const cleanBioSource = String(bioSource || "").trim();
+const cleanBioSourceUrl = String(bioSourceUrl || "").trim();
+const normalizedStats = (Array.isArray(stats) ? stats : [])
+	.map((stat) => ({
+		label: String(stat?.label || "").trim(),
+		value: typeof stat?.value === "number" ? stat.value.toLocaleString() : String(stat?.value || "").trim()
+	}))
+	.filter((stat) => stat.label && stat.value);
+---
+
+<section class="author-section" {...attrs}>
+	<div class="author-section-photo">
+		{cleanPhotoUrl
+			? <img src={cleanPhotoUrl} alt={`${displayName} photo`} loading="lazy" decoding="async" width="120" height="120" />
+			: <div class="author-section-placeholder"><span class="material-icons" aria-hidden="true">person</span></div>}
+	</div>
+	<div class="author-section-body">
+		<h1>{displayName}</h1>
+		{normalizedStats.length > 0 && (
+			<div class="author-section-stats" aria-label={`${displayName} statistics`}>
+				{normalizedStats.map((stat) => (
+					<p class="meta">{stat.label}: {stat.value}</p>
+				))}
+			</div>
+		)}
+		{cleanBio ? (
+			<p class="author-section-bio">
+				{cleanBio}
+				{cleanBioSourceUrl && <> <a class="author-link" href={cleanBioSourceUrl} target="_blank" rel="noreferrer noopener">Source: {cleanBioSource || "Source"}</a></>}
+			</p>
+		) : (
+			<p class="author-section-bio">Bio unavailable right now.</p>
+		)}
+		<slot />
+	</div>
+</section>
+
+<style>
+	.author-section {
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		padding: 1.05rem;
+		display: grid;
+		grid-template-columns: 120px 1fr;
+		gap: 1rem;
+	}
+	.author-section-photo img,
+	.author-section-placeholder {
+		width: 120px;
+		height: 120px;
+		border-radius: var(--radius-md);
+		object-fit: cover;
+		background: rgba(255, 255, 255, 0.62);
+		border: 0;
+		box-shadow: var(--shadow-xs);
+	}
+	.author-section-placeholder {
+		display: grid;
+		place-items: center;
+		color: var(--color-text-subtle);
+		box-shadow: none;
+	}
+	.author-section-body h1 {
+		margin: 0;
+	}
+	.author-section-stats {
+		margin-top: 0.2rem;
+	}
+	.author-section-bio {
+		margin-top: 0.6rem;
+		line-height: 1.5;
+	}
+	@media (max-width: 640px) {
+		.author-section {
+			grid-template-columns: 1fr;
+		}
+		.author-section-photo img,
+		.author-section-placeholder {
+			width: 96px;
+			height: 96px;
+		}
+	}
+</style>
