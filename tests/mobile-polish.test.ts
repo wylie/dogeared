@@ -16,12 +16,16 @@ test("BookCard recommendation feedback buttons stay centered and single-line on 
 
 test("mobile left navigation footer compresses into a horizontal no-wrap row", () => {
 	const source = read("../src/components/LeftHand.astro");
+	const layout = read("../src/layouts/Layout.astro");
 
+	assert.equal(source.includes("founding-reader-badge"), false);
 	assert.match(source, /@media \(max-width: 900px\)\s*{[\s\S]*?#left-hand-nav \.sidebar-footer\s*{[^}]*display: flex;/s);
 	assert.match(source, /#left-hand-nav \.sidebar-footer\s*{[^}]*overflow-x: auto;/s);
 	assert.match(source, /#left-hand-nav \.sidebar-footer\s*{[^}]*white-space: nowrap;/s);
 	assert.match(source, /#left-hand-nav \.footer-program-meta\s*{[^}]*flex-wrap: nowrap;/s);
 	assert.match(source, /#left-hand-nav \.sidebar-footer nav\s*{[^}]*flex-wrap: nowrap;/s);
+	assert.match(layout, /@media \(max-width: 900px\)\s*{[\s\S]*?\.content-column\s*{[^}]*padding-top: 1\.15rem;/s);
+	assert.match(layout, /\.content-column\s*{[^}]*padding-inline: 0\.65rem;/s);
 });
 
 test("Home and Discover use tighter mobile section rhythm", () => {

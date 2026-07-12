@@ -564,7 +564,11 @@ const authorStructuredData = displayName
 							</SeriesSection>
 						) : (
 							<section class="author-book-group" aria-labelledby={`author-book-group-${group.id}`}>
-								<h2 id={`author-book-group-${group.id}`}>{group.title}</h2>
+								<div class="author-book-group-heading">
+									<p class="author-book-group-eyebrow">Books</p>
+									<h2 id={`author-book-group-${group.id}`}>{group.title}</h2>
+									<p>{formatBookCount(group.books.length)}</p>
+								</div>
 								<ul class="book-grid">
 									{group.books.map((entry) => entry.localBook ? (
 										<BookCard
@@ -833,12 +837,36 @@ const authorStructuredData = displayName
 	.books-section { margin-top: 0.95rem; }
 	.author-book-groups {
 		display: grid;
-		gap: 1rem;
+		gap: 1.25rem;
+	}
+	.author-book-group {
+		display: grid;
+		gap: 0.65rem;
+	}
+	.author-book-group-heading {
+		display: grid;
+		gap: 0.16rem;
+	}
+	.author-book-group-eyebrow {
+		margin: 0;
+		color: var(--color-text-subtle);
+		font-size: 0.72rem;
+		font-weight: 820;
+		letter-spacing: 0;
+		line-height: 1.2;
+		text-transform: uppercase;
 	}
 	.author-book-group h2 {
-		margin: 0 0 0.45rem;
-		font-size: 1.1rem;
-		line-height: 1.2;
+		margin: 0;
+		font-size: 1.42rem;
+		line-height: 1.12;
+		font-weight: 760;
+	}
+	.author-book-group-heading p:not(.author-book-group-eyebrow) {
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: 0.9rem;
+		line-height: 1.4;
 	}
 	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.95rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.book-card-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }

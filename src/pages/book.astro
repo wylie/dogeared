@@ -104,6 +104,17 @@ function formatActivityDate(value: string) {
 	return parsed.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
+function formatSeriesSectionTitle(name: string) {
+	const clean = normalizeText(name);
+	if (!clean) return "";
+	return /\bseries$/i.test(clean) ? clean : `${clean} Series`;
+}
+
+function formatBookCount(count: number) {
+	const normalized = Math.max(0, Number(count || 0) || 0);
+	return `${normalized.toLocaleString()} book${normalized === 1 ? "" : "s"}`;
+}
+
 function activityHeading(eventType: string) {
 	const type = normalizeText(eventType).toLowerCase();
 	if (type === "reading") return { prefix: "Started Reading", shelf: "" };
@@ -1088,8 +1099,8 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 
 				{seriesContext && (
 					<SeriesSection
-						title={seriesContext.series.name}
-						supportingText={seriesContext.currentBook ? `${seriesContext.currentBook.orderLabel}${seriesContext.series.totalBooks > 0 ? ` of ${seriesContext.series.totalBooks}` : ""}` : ""}
+						title={formatSeriesSectionTitle(seriesContext.series.name)}
+						supportingText={formatBookCount(seriesContext.series.totalBooks || seriesContext.books.length)}
 						description={seriesContext.series.description}
 						coverUrl={seriesContext.series.coverUrl || seriesContext.currentBook?.coverUrl || book.coverUrl}
 						headingId="series-heading"

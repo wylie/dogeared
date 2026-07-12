@@ -66,11 +66,12 @@ test("book detail series section reuses BookCard and shared shelf actions", () =
 	assert.match(seriesSection, /<p slot="meta" class="meta">No ratings yet\.<\/p>/);
 	assert.match(seriesSection, /<ShelfDropdown/);
 	assert.match(seriesSection, /data-current-series-book/);
-	assert.match(seriesSection, /title=\{seriesContext\.series\.name\}/);
-	assert.match(seriesSection, /supportingText=\{seriesContext\.currentBook/);
+	assert.match(seriesSection, /title=\{formatSeriesSectionTitle\(seriesContext\.series\.name\)\}/);
+	assert.match(seriesSection, /supportingText=\{formatBookCount\(seriesContext\.series\.totalBooks \|\| seriesContext\.books\.length\)\}/);
 	assert.match(sharedSeries, /class="series-section-eyebrow">Series/);
 	assert.match(sharedSeries, /class="series-section-title"/);
-	assert.match(sharedSeries, /class="series-section-cover"/);
+	assert.doesNotMatch(sharedSeries, /class="series-section-cover"/);
+	assert.doesNotMatch(sharedSeries, /color-surface-raised/);
 	assert.doesNotMatch(seriesSection, /Previous Book/);
 	assert.doesNotMatch(seriesSection, /Jump to Current/);
 	assert.doesNotMatch(seriesSection, /Next Book/);
