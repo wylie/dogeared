@@ -115,6 +115,16 @@ test("buildGoodreadsImportPlan is idempotent against existing shelf entries", ()
 	assert.equal(canonicalWorkKey(plan.nextEntries.find((item) => item.title === "Project Hail Mary") || {}), "title_author:project hail mary|andy weir");
 });
 
+test("Goodreads canonical Work keys preserve meaningful subtitle text", () => {
+	assert.equal(
+		canonicalWorkKey(entry({
+			title: "Star Wars: The High Republic, Vol. 1: There Is No Fear",
+			author: "Cavan Scott"
+		})),
+		"title_author:star wars the high republic vol 1 there is no fear|cavan scott"
+	);
+});
+
 test("buildGoodreadsImportPlan replace mode ignores existing shelf entries", () => {
 	const parseResult = {
 		totalRows: 1,

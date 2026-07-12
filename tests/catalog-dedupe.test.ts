@@ -54,7 +54,14 @@ test("display work keys and UI dedupe collapse duplicate editions", () => {
 test("canonical title and author collapse common formatting differences", () => {
 	assert.equal(
 		canonicalizeCatalogTitle("The Fellowship of the Ring: Lord of the Rings #1 (Kindle Edition)"),
-		"fellowship of the ring"
+		"fellowship of the ring lord of the rings 1"
+	);
+	assert.equal(
+		canonicalCatalogWorkKey({
+			title: "Star Wars: The High Republic, Vol. 1: There Is No Fear",
+			author: "Cavan Scott"
+		}),
+		"title_author:star wars the high republic vol 1 there is no fear|cavan scott"
 	);
 	assert.equal(canonicalizeCatalogTitle("A Promised Land (Audiobook)"), "promised land");
 	assert.equal(canonicalizeCatalogAuthor("By J.R.R. Tolkien"), "j r r tolkien");

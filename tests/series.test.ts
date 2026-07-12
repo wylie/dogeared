@@ -205,7 +205,7 @@ test("series inference is wired through search, shelf import, recommendations, a
 	assert.match(bookDetail, /loadKnownSeriesFallbackContext/);
 	assert.match(bookDetail, /normalizeRedundantSeriesTitle/);
 	assert.match(bookDetail, /logBookDetailLoadError\("series-fallback"/);
-	for (const fixture of ["harry-potter", "the-lord-of-the-rings", "the-empyrean", "wings-of-fire", "a-series-of-unfortunate-events", "mistborn"]) {
+	for (const fixture of ["harry-potter", "the-lord-of-the-rings", "the-empyrean", "shadow-and-bone", "six-of-crows", "wings-of-fire", "a-series-of-unfortunate-events", "mistborn"]) {
 		assert.match(migration, new RegExp(fixture));
 	}
 });

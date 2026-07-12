@@ -48,10 +48,15 @@ export type PotentialDuplicateWorkGroup = {
 export type CanonicalWorkNormalizationResult = {
 	knownSeriesChecked: number;
 	knownSeriesAttached: number;
+	workKeysChecked: number;
+	workKeysRepaired: number;
+	editionsAttached: number;
 	titlesChecked: number;
 	titlesUpdated: number;
+	seriesPlaceholdersRemoved: number;
 	duplicateGroupsChecked: number;
 	worksMerged: number;
+	metadataConflictsRemaining: number;
 	messages: string[];
 };
 
@@ -76,6 +81,30 @@ type WorkCandidateRow = {
 	has_cover: boolean;
 	has_description: boolean;
 	updated_at: string;
+};
+
+type WorkRekeyRow = {
+	id: number;
+	work_id: number | null;
+	title: string;
+	primary_author: string;
+	author_id: number | null;
+	synopsis: string;
+	cover_url: string;
+	published_year: number | null;
+	page_count: number | null;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+	google_books_id: string;
+	publisher: string;
+	current_work_key: string;
+	canonical_work_key: string;
+	series_id: number | null;
+	series_name: string;
+	series_book_order: number | null;
+	shelf_count: number;
+	rating_count: number;
 };
 
 function numeric(value: unknown) {
@@ -186,12 +215,21 @@ function sameSeriesPosition(books: WorkNormalizationBook[]) {
 	return keys.size === 1;
 }
 
+function sameExistingWork(books: WorkNormalizationBook[]) {
+	const workIds = new Set(books.map((book) => book.workId).filter((workId) => workId > 0));
+	return workIds.size === 1;
+}
+
 export function scorePotentialDuplicateBooks(books: WorkNormalizationBook[]) {
 	let score = 65;
 	const reasons = ["Same canonical title and author."];
 	if (sameSeriesPosition(books)) {
 		score += 35;
 		reasons.push("Same structured series and book number.");
+	}
+	if (sameExistingWork(books)) {
+		score += 35;
+		reasons.push("Already attached to the same canonical Work.");
 	}
 	if (sharedSignalCount(books, "isbn13") > 1 || sharedSignalCount(books, "isbn10") > 1) {
 		score += 25;
@@ -231,8 +269,6 @@ export function buildPotentialDuplicateWorkGroups(books: WorkNormalizationBook[]
 	for (const [groupKey, groupBooks] of byKey.entries()) {
 		const distinctBookIds = new Set(groupBooks.map((book) => book.bookId));
 		if (distinctBookIds.size < 2) continue;
-		const distinctWorkIds = new Set(groupBooks.map((book) => book.workId || book.bookId));
-		if (distinctWorkIds.size < 2 && !groupBooks.some((book) => book.hasRedundantSeriesSuffix || book.hasRedundantEditionSuffix)) continue;
 		const scored = scorePotentialDuplicateBooks(groupBooks);
 		if (scored.score < 85) continue;
 		const target = chooseTarget(groupBooks);
@@ -766,9 +802,10 @@ function isSafeAutomaticMerge(group: PotentialDuplicateWorkGroup) {
 	if (group.confidenceScore < 100) return false;
 	const allSameSeries = group.books.every((book) => book.seriesName && book.seriesBookOrder > 0)
 		&& sameSeriesPosition(group.books);
+	const allSameWork = sameExistingWork(group.books);
 	const hasIdentifierEvidence = group.reasons.some((reason) => /ISBN|external provider|edition key/i.test(reason));
 	const hasCleanupEvidence = group.reasons.some((reason) => /redundant series|edition metadata/i.test(reason));
-	return allSameSeries || hasIdentifierEvidence || hasCleanupEvidence;
+	return allSameSeries || allSameWork || hasIdentifierEvidence || hasCleanupEvidence;
 }
 
 export async function attachKnownSeriesRelationships(sql: Sql, limit = 1000) {
@@ -813,6 +850,220 @@ export async function attachKnownSeriesRelationships(sql: Sql, limit = 1000) {
 	return { checked: rows.length, attached };
 }
 
+function canonicalTitleForRekey(row: WorkRekeyRow) {
+	const rawTitle = normalizeCatalogText(row.title) || "Untitled";
+	const seriesTitle = normalizeRedundantSeriesTitle({
+		title: rawTitle,
+		seriesName: row.series_name,
+		bookOrder: row.series_book_order
+	});
+	const editionTitle = normalizeRedundantEditionTitle({ title: seriesTitle.title || rawTitle });
+	return editionTitle.title || seriesTitle.title || rawTitle;
+}
+
+export async function repairCanonicalWorkKeys(sql: Sql, limit = 5000) {
+	await ensureCanonicalWorkSchema(sql);
+	const normalizedLimit = Math.max(1, Math.min(10000, Math.floor(Number(limit || 5000))));
+	const rows = await sql<WorkRekeyRow[]>`
+		select
+			b.id,
+			b.work_id,
+			coalesce(nullif(trim(b.title), ''), 'Untitled') as title,
+			coalesce(nullif(trim(b.primary_author), ''), '') as primary_author,
+			b.author_id,
+			coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+			coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+			b.published_year,
+			b.page_count,
+			coalesce(nullif(trim(b.language), ''), '') as language,
+			coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+			coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+			coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+			coalesce(nullif(trim(b.publisher), ''), '') as publisher,
+			coalesce(nullif(trim(bw.work_key), ''), '') as current_work_key,
+			coalesce(nullif(trim(b.canonical_work_key), ''), '') as canonical_work_key,
+			coalesce(sb.series_id, bw.series_id) as series_id,
+			coalesce(nullif(trim(s.name), ''), nullif(trim(ws.name), ''), '') as series_name,
+			coalesce(sb.book_order, bw.series_position, 0)::numeric as series_book_order,
+			coalesce(sc.shelf_count, 0)::int as shelf_count,
+			coalesce(sc.rating_count, 0)::int as rating_count
+		from book b
+		left join book_work bw on bw.id = b.work_id
+		left join series_book sb on sb.book_id = b.id
+		left join series s on s.id = sb.series_id
+		left join series ws on ws.id = bw.series_id
+		left join lateral (
+			select
+				count(*)::int as shelf_count,
+				count(*) filter (where rating is not null)::int as rating_count
+			from user_book ub
+			where ub.book_id = b.id
+		) sc on true
+		where trim(coalesce(b.title, '')) <> ''
+			and trim(coalesce(b.primary_author, '')) <> ''
+		order by b.updated_at desc, b.id desc
+		limit ${normalizedLimit}
+	`;
+
+	let repaired = 0;
+	let editionsAttached = 0;
+	for (const row of rows) {
+		const canonicalTitle = canonicalTitleForRekey(row);
+		const workKey = canonicalCatalogWorkKey({ title: canonicalTitle, author: row.primary_author });
+		if (!workKey) continue;
+		const currentWorkId = Number(row.work_id || 0);
+		if (currentWorkId > 0 && row.current_work_key === workKey && row.canonical_work_key === workKey) continue;
+		const workRows = await sql<Array<{ id: number }>>`
+			insert into book_work (
+				work_key,
+				title,
+				canonical_title,
+				primary_author,
+				author_id,
+				description,
+				series_id,
+				series_position,
+				original_publication_year,
+				preferred_cover_url,
+				updated_at
+			)
+			values (
+				${workKey},
+				${canonicalTitle},
+				${canonicalTitle},
+				${normalizeCatalogText(row.primary_author)},
+				${Number(row.author_id || 0) > 0 ? Number(row.author_id || 0) : null},
+				${normalizeCatalogText(row.synopsis)},
+				${Number(row.series_id || 0) > 0 ? Number(row.series_id || 0) : null},
+				${Number(row.series_book_order || 0) > 0 ? Number(row.series_book_order || 0) : null},
+				${Number(row.published_year || 0) > 0 ? Number(row.published_year || 0) : null},
+				${normalizeCatalogText(row.cover_url)},
+				now()
+			)
+			on conflict (work_key) do update set
+				title = case when excluded.title <> '' then excluded.title else book_work.title end,
+				canonical_title = case when excluded.canonical_title <> '' then excluded.canonical_title else book_work.canonical_title end,
+				primary_author = case when excluded.primary_author <> '' then excluded.primary_author else book_work.primary_author end,
+				author_id = coalesce(excluded.author_id, book_work.author_id),
+				description = case when book_work.description = '' then excluded.description else book_work.description end,
+				series_id = coalesce(book_work.series_id, excluded.series_id),
+				series_position = coalesce(book_work.series_position, excluded.series_position),
+				original_publication_year = coalesce(book_work.original_publication_year, excluded.original_publication_year),
+				preferred_cover_url = case when book_work.preferred_cover_url = '' then excluded.preferred_cover_url else book_work.preferred_cover_url end,
+				updated_at = now()
+			returning id
+		`;
+		const workId = Number(workRows[0]?.id || 0);
+		if (workId <= 0) continue;
+		const existingBookKeyRows = await sql<Array<{ id: number }>>`
+			select id
+			from book
+			where canonical_work_key = ${workKey}
+				and id <> ${Number(row.id || 0)}
+			limit 1
+		`;
+		const compatibilityBookKey = existingBookKeyRows.length > 0 ? `${workKey}:duplicate:${Number(row.id || 0)}` : workKey;
+		await sql`
+			update book
+			set
+				work_id = ${workId},
+				canonical_work_key = ${compatibilityBookKey},
+				updated_at = now()
+			where id = ${Number(row.id || 0)}
+				and (work_id is distinct from ${workId} or canonical_work_key is distinct from ${compatibilityBookKey})
+		`;
+		const editions = await sql<Array<{ id: number; edition_key: string }>>`
+			select id, edition_key
+			from book_edition
+			where book_id = ${Number(row.id || 0)}
+		`;
+		for (const edition of editions) {
+			const existing = await sql<Array<{ id: number }>>`
+				select id
+				from book_edition
+				where work_id = ${workId}
+					and edition_key = ${edition.edition_key}
+					and id <> ${Number(edition.id || 0)}
+				limit 1
+			`;
+			const existingId = Number(existing[0]?.id || 0);
+			if (existingId > 0) {
+				await sql`update user_book set edition_id = ${existingId} where edition_id = ${Number(edition.id || 0)}`;
+				await sql`delete from book_edition where id = ${Number(edition.id || 0)}`;
+				editionsAttached += 1;
+			} else {
+				await sql`
+					update book_edition
+					set work_id = ${workId}, updated_at = now()
+					where id = ${Number(edition.id || 0)}
+						and work_id is distinct from ${workId}
+				`;
+				editionsAttached += 1;
+			}
+		}
+		repaired += 1;
+	}
+	await sql`
+		delete from book_work bw
+		where not exists (select 1 from book b where b.work_id = bw.id)
+			and not exists (select 1 from book_edition be where be.work_id = bw.id)
+	`;
+	return { checked: rows.length, repaired, editionsAttached };
+}
+
+export async function removeResolvedSeriesPlaceholders(sql: Sql) {
+	await ensureSeriesSchema(sql);
+	const rows = await sql<Array<{ series_id: number; book_order: string }>>`
+		with real_entries as (
+			select distinct series_id, book_order
+			from series_book
+			where book_id is not null
+				and book_order is not null
+		)
+		delete from series_book placeholder
+		using real_entries real_entry
+		where placeholder.series_id = real_entry.series_id
+			and placeholder.book_id is null
+			and placeholder.book_order = real_entry.book_order
+		returning placeholder.series_id, placeholder.book_order::text
+	`;
+	return rows.length;
+}
+
+async function countCatalogRelationshipConflicts(sql: Sql) {
+	const rows = await sql<Array<{ conflict_count: number }>>`
+		with duplicate_series_positions as (
+			select s.id, sb.book_order
+			from series s
+			join series_book sb on sb.series_id = s.id
+			where sb.book_order is not null
+			group by s.id, sb.book_order
+			having count(*) > 1
+		),
+		missing_work_keys as (
+			select b.id
+			from book b
+			left join book_work bw on bw.id = b.work_id
+			where b.work_id is null
+				or trim(coalesce(bw.work_key, '')) = ''
+				or trim(coalesce(b.canonical_work_key, '')) = ''
+		),
+		multi_title_works as (
+			select b.work_id
+			from book b
+			where b.work_id is not null
+			group by b.work_id
+			having count(distinct b.canonical_work_key) > 1
+		)
+		select (
+			(select count(*) from duplicate_series_positions)
+			+ (select count(*) from missing_work_keys)
+			+ (select count(*) from multi_title_works)
+		)::int as conflict_count
+	`;
+	return Number(rows[0]?.conflict_count || 0);
+}
+
 export async function normalizeCanonicalWorkRelationships(sql: Sql, options: {
 	candidateLimit?: number;
 	duplicateLimit?: number;
@@ -828,9 +1079,14 @@ export async function normalizeCanonicalWorkRelationships(sql: Sql, options: {
 	const seriesResult = shouldApply
 		? await attachKnownSeriesRelationships(sql, candidateLimit)
 		: { checked: 0, attached: 0 };
+	const removedPlaceholdersBefore = shouldApply ? await removeResolvedSeriesPlaceholders(sql) : 0;
 	const titleResult = shouldApply
 		? await normalizeCanonicalSeriesTitles(sql, candidateLimit)
 		: { checked: 0, updated: 0, candidates: [] };
+	const rekeyResult = shouldApply
+		? await repairCanonicalWorkKeys(sql, candidateLimit)
+		: { checked: 0, repaired: 0, editionsAttached: 0 };
+	const removedPlaceholdersAfter = shouldApply ? await removeResolvedSeriesPlaceholders(sql) : 0;
 
 	let duplicateGroupsChecked = 0;
 	let worksMerged = 0;
@@ -862,10 +1118,15 @@ export async function normalizeCanonicalWorkRelationships(sql: Sql, options: {
 	return {
 		knownSeriesChecked: seriesResult.checked,
 		knownSeriesAttached: seriesResult.attached,
+		workKeysChecked: rekeyResult.checked,
+		workKeysRepaired: rekeyResult.repaired,
+		editionsAttached: rekeyResult.editionsAttached,
 		titlesChecked: titleResult.checked,
 		titlesUpdated: titleResult.updated,
+		seriesPlaceholdersRemoved: removedPlaceholdersBefore + removedPlaceholdersAfter,
 		duplicateGroupsChecked,
 		worksMerged,
+		metadataConflictsRemaining: shouldApply ? await countCatalogRelationshipConflicts(sql) : 0,
 		messages
 	};
 }

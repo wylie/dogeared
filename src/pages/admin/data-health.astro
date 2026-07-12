@@ -45,17 +45,22 @@ if (Astro.request.method === "POST") {
 			{
 				knownSeriesChecked: 0,
 				knownSeriesAttached: 0,
+				workKeysChecked: 0,
+				workKeysRepaired: 0,
+				editionsAttached: 0,
 				titlesChecked: 0,
 				titlesUpdated: 0,
+				seriesPlaceholdersRemoved: 0,
 				duplicateGroupsChecked: 0,
 				worksMerged: 0,
+				metadataConflictsRemaining: 0,
 				messages: []
 			}
 		);
 		if (normalizationResult.warning) {
 			adminNotices.push(normalizationResult.warning);
 		} else {
-			adminNotices.push(`Canonical Work normalization attached ${formatNumber(normalizationResult.data.knownSeriesAttached)} known-series relationships, normalized ${formatNumber(normalizationResult.data.titlesUpdated)} titles, and merged ${formatNumber(normalizationResult.data.worksMerged)} high-confidence duplicate Works.`);
+			adminNotices.push(`Canonical Work normalization attached ${formatNumber(normalizationResult.data.knownSeriesAttached)} known-series relationships, repaired ${formatNumber(normalizationResult.data.workKeysRepaired)} Work keys, moved ${formatNumber(normalizationResult.data.editionsAttached)} editions, removed ${formatNumber(normalizationResult.data.seriesPlaceholdersRemoved)} stale series placeholders, normalized ${formatNumber(normalizationResult.data.titlesUpdated)} titles, and merged ${formatNumber(normalizationResult.data.worksMerged)} high-confidence duplicate Works. Remaining relationship conflicts: ${formatNumber(normalizationResult.data.metadataConflictsRemaining)}.`);
 		}
 	}
 	if (action === "merge-duplicate-work") {
@@ -223,7 +228,11 @@ const [
 	safeAdminLoad("Relationship health", () => sql<Array<{
 		duplicate_works: number;
 		duplicate_editions: number;
+		broken_series: number;
+		multiple_canonical_works: number;
 		missing_series: number;
+		missing_canonical_title: number;
+		missing_series_position: number;
 		incorrect_standalone: number;
 		canonical_title_conflicts: number;
 		series_position_conflicts: number;
@@ -275,12 +284,54 @@ const [
 			group by lower(trim(coalesce(edition_key, '')))
 			having count(distinct work_id) > 1
 		),
+		broken_series_rows as (
+			select sb.series_id, sb.book_order
+			from series_book sb
+			where sb.book_order is null
+				or (sb.book_id is null and trim(coalesce(sb.title_override, '')) = '')
+				or (
+					sb.book_id is not null
+					and not exists (select 1 from book b where b.id = sb.book_id)
+				)
+			union
+			select sb.series_id, sb.book_order
+			from series_book sb
+			where sb.book_id is null
+				and exists (
+					select 1
+					from series_book real_entry
+					where real_entry.series_id = sb.series_id
+						and real_entry.book_id is not null
+						and real_entry.book_order = sb.book_order
+				)
+		),
+		multiple_canonical_work_rows as (
+			select b.work_id
+			from book b
+			where b.work_id is not null
+			group by b.work_id
+			having count(distinct b.canonical_work_key) > 1
+		),
 		missing_series_rows as (
 			select k.id
 			from known_series_like k
 			left join book_work bw on bw.id = k.work_id
 			where not exists (select 1 from series_book sb where sb.book_id = k.id)
 				and bw.series_id is null
+		),
+		missing_canonical_title_rows as (
+			select bw.id
+			from book_work bw
+			where trim(coalesce(bw.canonical_title, '')) = ''
+				or trim(coalesce(bw.work_key, '')) = ''
+		),
+		missing_series_position_rows as (
+			select b.id
+			from book b
+			join book_work bw on bw.id = b.work_id
+			left join series_book sb on sb.book_id = b.id
+			where coalesce(sb.series_id, bw.series_id) is not null
+				and coalesce(sb.book_order, bw.series_position) is null
 		),
 		incorrect_standalone_rows as (
 			select b.id
@@ -312,7 +363,11 @@ const [
 		select
 			(select count(*)::int from duplicate_work_groups) as duplicate_works,
 			(select count(*)::int from duplicate_edition_groups) as duplicate_editions,
+			(select count(*)::int from broken_series_rows) as broken_series,
+			(select count(*)::int from multiple_canonical_work_rows) as multiple_canonical_works,
 			(select count(*)::int from missing_series_rows) as missing_series,
+			(select count(*)::int from missing_canonical_title_rows) as missing_canonical_title,
+			(select count(*)::int from missing_series_position_rows) as missing_series_position,
 			(select count(*)::int from incorrect_standalone_rows) as incorrect_standalone,
 			(select count(*)::int from canonical_title_conflict_rows) as canonical_title_conflicts,
 			(select count(*)::int from series_position_conflict_rows) as series_position_conflicts
@@ -455,7 +510,11 @@ const imports = importHealthRows[0] || {
 const relationships = relationshipHealthRows[0] || {
 	duplicate_works: 0,
 	duplicate_editions: 0,
+	broken_series: 0,
+	multiple_canonical_works: 0,
 	missing_series: 0,
+	missing_canonical_title: 0,
+	missing_series_position: 0,
 	incorrect_standalone: 0,
 	canonical_title_conflicts: 0,
 	series_position_conflicts: 0
@@ -550,6 +609,10 @@ const backfills = recentBackfillRows[0] || {
 						<tr><td>Potential duplicate Works</td><td>{formatNumber(potentialDuplicateWorksRows.length)}</td></tr>
 						<tr><td>Duplicate Works</td><td>{formatNumber(relationships.duplicate_works)}</td></tr>
 						<tr><td>Duplicate Editions</td><td>{formatNumber(relationships.duplicate_editions)}</td></tr>
+						<tr><td>Broken Series</td><td>{formatNumber(relationships.broken_series)}</td></tr>
+						<tr><td>Multiple Canonical Works</td><td>{formatNumber(relationships.multiple_canonical_works)}</td></tr>
+						<tr><td>Missing Canonical Title</td><td>{formatNumber(relationships.missing_canonical_title)}</td></tr>
+						<tr><td>Missing Series Position</td><td>{formatNumber(relationships.missing_series_position)}</td></tr>
 						<tr><td>Incorrect standalone classification</td><td>{formatNumber(relationships.incorrect_standalone)}</td></tr>
 						<tr><td>Canonical title conflicts</td><td>{formatNumber(relationships.canonical_title_conflicts)}</td></tr>
 						<tr><td>Series position conflicts</td><td>{formatNumber(relationships.series_position_conflicts)}</td></tr>
@@ -659,7 +722,11 @@ const backfills = recentBackfillRows[0] || {
 					<tbody>
 						<tr><td>Duplicate Works</td><td>{formatNumber(relationships.duplicate_works)}</td></tr>
 						<tr><td>Duplicate Editions</td><td>{formatNumber(relationships.duplicate_editions)}</td></tr>
+						<tr><td>Broken Series</td><td>{formatNumber(relationships.broken_series)}</td></tr>
+						<tr><td>Multiple Canonical Works</td><td>{formatNumber(relationships.multiple_canonical_works)}</td></tr>
 						<tr><td>Missing Series</td><td>{formatNumber(relationships.missing_series)}</td></tr>
+						<tr><td>Missing Canonical Title</td><td>{formatNumber(relationships.missing_canonical_title)}</td></tr>
+						<tr><td>Missing Series Position</td><td>{formatNumber(relationships.missing_series_position)}</td></tr>
 						<tr><td>Incorrect Standalone Classification</td><td>{formatNumber(relationships.incorrect_standalone)}</td></tr>
 						<tr><td>Canonical Title Conflicts</td><td>{formatNumber(relationships.canonical_title_conflicts)}</td></tr>
 						<tr><td>Series Position Conflicts</td><td>{formatNumber(relationships.series_position_conflicts)}</td></tr>

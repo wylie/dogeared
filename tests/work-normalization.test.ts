@@ -124,6 +124,84 @@ test("potential duplicate Work groups collapse known edition suffixes", () => {
 	assert.equal(groups[0]?.reasons.some((reason) => reason.includes("edition metadata")), true);
 });
 
+test("potential duplicate Work groups merge duplicate legacy rows already attached to one Work", () => {
+	const groups = buildPotentialDuplicateWorkGroups([
+		book({
+			bookId: 501,
+			workId: 77,
+			title: "Fourth Wing",
+			normalizedTitle: "Fourth Wing",
+			author: "Rebecca Yarros",
+			seriesName: "The Empyrean",
+			seriesBookOrder: 1,
+			shelfCount: 1
+		}),
+		book({
+			bookId: 502,
+			workId: 77,
+			title: "Fourth Wing",
+			normalizedTitle: "Fourth Wing",
+			author: "Rebecca Yarros",
+			seriesName: "The Empyrean",
+			seriesBookOrder: 1,
+			ratingCount: 1
+		})
+	]);
+
+	assert.equal(groups.length, 1);
+	assert.equal(groups[0]?.confidenceScore, 100);
+	assert.equal(groups[0]?.reasons.some((reason) => reason.includes("same canonical Work")), true);
+});
+
+test("canonical Work keys preserve subtitle text so unrelated colon titles do not collapse", () => {
+	const plans = buildCanonicalWorkBackfillPlan([
+		{
+			id: 289,
+			title: "Star Wars: The High Republic Omnibus, Phase I: Light of the Jedi",
+			primary_author: "Cavan Scott",
+			author_id: null,
+			synopsis: "",
+			cover_url: "",
+			published_year: 2024,
+			page_count: 0,
+			language: "en",
+			isbn10: "",
+			isbn13: "",
+			google_books_id: "",
+			publisher: "",
+			series_id: null,
+			series_name: "",
+			book_order: null,
+			shelf_count: 0,
+			rating_count: 0
+		},
+		{
+			id: 314,
+			title: "Star Wars: The High Republic, Vol. 1: There Is No Fear",
+			primary_author: "Cavan Scott",
+			author_id: null,
+			synopsis: "",
+			cover_url: "",
+			published_year: 2021,
+			page_count: 0,
+			language: "en",
+			isbn10: "",
+			isbn13: "",
+			google_books_id: "",
+			publisher: "",
+			series_id: null,
+			series_name: "",
+			book_order: null,
+			shelf_count: 0,
+			rating_count: 0
+		}
+	]);
+
+	assert.equal(plans.length, 2);
+	assert.equal(plans.some((plan) => plan.workKey === "title_author:star wars the high republic omnibus phase i light of the jedi|cavan scott"), true);
+	assert.equal(plans.some((plan) => plan.workKey === "title_author:star wars the high republic vol 1 there is no fear|cavan scott"), true);
+});
+
 test("canonical Work backfill plans use cleaned titles and preserve editions", () => {
 	const plans = buildCanonicalWorkBackfillPlan([
 		{
@@ -204,6 +282,10 @@ test("Data Health exposes potential duplicate Work review and merge actions", ()
 	assert.equal(page.includes("Potential Duplicate Works"), true);
 	assert.equal(page.includes("Canonical Relationship Health"), true);
 	assert.equal(page.includes("Duplicate Editions"), true);
+	assert.equal(page.includes("Broken Series"), true);
+	assert.equal(page.includes("Multiple Canonical Works"), true);
+	assert.equal(page.includes("Missing Canonical Title"), true);
+	assert.equal(page.includes("Missing Series Position"), true);
 	assert.equal(page.includes("Incorrect Standalone Classification"), true);
 	assert.equal(page.includes("Series Position Conflicts"), true);
 	assert.equal(page.includes("canonical-work-normalization"), true);
@@ -213,6 +295,8 @@ test("Data Health exposes potential duplicate Work review and merge actions", ()
 	assert.equal(page.includes("mergeCatalogWorks"), true);
 	assert.equal(normalization.includes("normalizeCanonicalWorkRelationships"), true);
 	assert.equal(normalization.includes("attachKnownSeriesRelationships"), true);
+	assert.equal(normalization.includes("repairCanonicalWorkKeys"), true);
+	assert.equal(normalization.includes("removeResolvedSeriesPlaceholders"), true);
 	assert.equal(normalization.includes("upsertKnownSeriesForBook"), true);
 	assert.equal(normalization.includes("Automatic canonical Work normalization"), true);
 	for (const table of [

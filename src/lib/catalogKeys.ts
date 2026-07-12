@@ -22,7 +22,6 @@ export function canonicalizeCatalogTitle(value: unknown) {
 		.replace(/[\u0300-\u036f]/g, "")
 		.replace(/\([^)]*\)/g, " ")
 		.replace(/\b(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition)\b/g, " ")
-		.split(":")[0]
 		.replace(/^(the|a|an)\s+/g, "")
 		.replace(/[^a-z0-9\s]/g, " ")
 		.replace(/\s+/g, " ")
@@ -40,6 +39,13 @@ export function canonicalizeCatalogAuthor(value: unknown) {
 		.trim();
 }
 
+function stripDisplayEditionSuffix(value: unknown) {
+	return String(value || "").replace(
+		/\s*:\s*(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition|deluxe edition|illustrated edition|special edition|collector'?s edition)\s*$/i,
+		""
+	);
+}
+
 export function canonicalCatalogWorkKey(input: { title?: unknown; author?: unknown; isbn10?: unknown; isbn13?: unknown }) {
 	const title = canonicalizeCatalogTitle(input.title) || "untitled";
 	const author = canonicalizeCatalogAuthor(input.author) || "unknown";
@@ -47,7 +53,7 @@ export function canonicalCatalogWorkKey(input: { title?: unknown; author?: unkno
 }
 
 export function canonicalCatalogDisplayWorkKey(input: { title?: unknown; author?: unknown }) {
-	const title = canonicalizeCatalogTitle(input.title);
+	const title = canonicalizeCatalogTitle(stripDisplayEditionSuffix(input.title));
 	const author = canonicalizeCatalogAuthor(input.author);
 	if (!title && !author) return "";
 	return `title_author:${title || "untitled"}|${author || "unknown"}`;

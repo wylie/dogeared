@@ -161,6 +161,29 @@ const KNOWN_SERIES: KnownSeries[] = [
 		]
 	},
 	{
+		name: "Shadow and Bone",
+		slug: "shadow-and-bone",
+		totalBooks: 3,
+		displayAuthor: "Leigh Bardugo",
+		authors: ["leigh bardugo"],
+		books: [
+			{ title: "Shadow and Bone", order: 1 },
+			{ title: "Siege and Storm", order: 2 },
+			{ title: "Ruin and Rising", order: 3 }
+		]
+	},
+	{
+		name: "Six of Crows",
+		slug: "six-of-crows",
+		totalBooks: 2,
+		displayAuthor: "Leigh Bardugo",
+		authors: ["leigh bardugo"],
+		books: [
+			{ title: "Six of Crows", order: 1 },
+			{ title: "Crooked Kingdom", order: 2 }
+		]
+	},
+	{
 		name: "Wings of Fire",
 		slug: "wings-of-fire",
 		totalBooks: 16,

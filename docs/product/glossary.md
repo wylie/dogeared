@@ -20,6 +20,8 @@ The reader-facing literary Work DogEared uses as the primary catalog identity. A
 
 The published title stored on a canonical Work without redundant series or edition suffixes. DogEared only strips parenthetical series metadata when structured series name and book-position metadata already prove the suffix is duplicated.
 
+Meaningful subtitles are part of the canonical title. DogEared does not discard text after a colon unless it is clearly edition metadata handled outside the Work.
+
 ## Author
 
 A catalog entity representing a writer. Books may reference an author record through `author_id`.

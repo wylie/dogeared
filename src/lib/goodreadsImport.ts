@@ -99,7 +99,6 @@ export function canonicalizeTitle(value: unknown) {
 		.replace(/[\u0300-\u036f]/g, "")
 		.replace(/\([^)]*\)/g, " ")
 		.replace(/\b(abridged|unabridged|audio ?book|audiobook|kindle edition|paperback|hardcover|ebook|e-book|digital edition|color edition)\b/g, " ")
-		.split(":")[0]
 		.replace(/^(the|a|an)\s+/g, "")
 		.replace(/[^a-z0-9\s]/g, " ")
 		.replace(/\s+/g, " ")
