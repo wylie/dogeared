@@ -23,6 +23,7 @@ import { ensureReviewSchema, normalizeReviewBody, normalizeReviewTitle } from ".
 import { ensureCanonicalWorkSchema, resolveRepresentativeBookId, upsertWorkAndEdition } from "../../../lib/catalogWorks";
 import { inferKnownSeriesMetadata, upsertKnownSeriesForBook } from "../../../lib/series";
 import { createReadingMilestoneNotifications } from "../../../lib/notifications";
+import { withSqlDebug, type SqlDebugParam } from "../../../lib/sqlDebug";
 
 export const prerender = false;
 
@@ -85,6 +86,36 @@ function normalizeRating(value: unknown) {
 	if (!Number.isFinite(parsed)) return null;
 	const rounded = Math.floor(parsed);
 	return rounded >= 1 && rounded <= 5 ? rounded : null;
+}
+
+function userBookUpsertDebugParams(input: {
+	userId: string;
+	bookId: number;
+	status: ShelfStatus;
+	rating: number | null;
+	effectiveTotalPages: number;
+	currentPage: number;
+	finishedDate: string | null;
+	finishedReflection: string;
+	reviewTitle: string;
+	reviewSpoiler: boolean;
+	editionId: number | null;
+}): SqlDebugParam[] {
+	return [
+		{ name: "userId", pgType: "uuid", value: input.userId },
+		{ name: "bookId", pgType: "bigint", value: input.bookId },
+		{ name: "status", pgType: "text", value: input.status },
+		{ name: "rating", pgType: "int", value: input.rating },
+		{ name: "totalPages", pgType: "int", value: input.effectiveTotalPages },
+		{ name: "currentPage", pgType: "int", value: input.currentPage },
+		{ name: "finishedDate", pgType: "date", value: input.finishedDate },
+		{ name: "finishedReflection", pgType: "text", value: input.finishedReflection },
+		{ name: "reviewTitle", pgType: "text", value: input.reviewTitle },
+		{ name: "reviewSpoiler", pgType: "boolean", value: input.reviewSpoiler },
+		{ name: "editionId", pgType: "bigint", value: input.editionId },
+		{ name: "reviewTitle_presence_check", pgType: "text", value: input.reviewTitle },
+		{ name: "finishedReflection_presence_check", pgType: "text", value: input.finishedReflection }
+	];
 }
 
 function normalizeIsbn(value: unknown) {
@@ -828,7 +859,24 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 
 		debugStage = "upsert_user_book";
-		await sql`
+		const finishedDateParam = finishedDate ? finishedDate : null;
+		const editionIdParam = workEdition.editionId > 0 ? workEdition.editionId : null;
+		await withSqlDebug(
+			"shelfEntries.userBook.upsert",
+			userBookUpsertDebugParams({
+				userId,
+				bookId,
+				status,
+				rating,
+				effectiveTotalPages,
+				currentPage,
+				finishedDate: finishedDateParam,
+				finishedReflection,
+				reviewTitle,
+				reviewSpoiler,
+				editionId: editionIdParam
+			}),
+			() => sql`
 			insert into user_book (
 				user_id,
 				book_id,
@@ -847,17 +895,17 @@ export const POST: APIRoute = async ({ request }) => {
 			)
 			values (
 				${userId}::uuid,
-				${bookId},
-				${status},
-				${rating},
-				${effectiveTotalPages},
-				${currentPage},
-				${finishedDate ? finishedDate : null}::date,
-				${finishedReflection},
-				${reviewTitle},
-				${reviewSpoiler},
-				${workEdition.editionId > 0 ? workEdition.editionId : null},
-				case when ${reviewTitle} <> '' or ${finishedReflection} <> '' then now() else null end,
+				${bookId}::bigint,
+				${status}::text,
+				${rating}::int,
+				${effectiveTotalPages}::int,
+				${currentPage}::int,
+				${finishedDateParam}::date,
+				${finishedReflection}::text,
+				${reviewTitle}::text,
+				${reviewSpoiler}::boolean,
+				${editionIdParam}::bigint,
+				case when ${reviewTitle}::text <> '' or ${finishedReflection}::text <> '' then now() else null end,
 				now(),
 				now()
 			)
@@ -882,7 +930,7 @@ export const POST: APIRoute = async ({ request }) => {
 					else user_book.review_updated_at
 				end,
 				updated_at = now()
-		`;
+		`);
 		// Single-shelf mode: putting a book on a default shelf removes it from
 		// all custom shelves for this user.
 		debugStage = "clear_custom_shelves";
@@ -1089,7 +1137,7 @@ export const POST: APIRoute = async ({ request }) => {
 			error: "Failed to save shelf entry.",
 			detail: import.meta.env.DEV && debugStage
 				? `[${debugStage}] ${message}`
-				: message
+				: "Please try again."
 		}), {
 			status: 500,
 			headers: { "Content-Type": "application/json" }

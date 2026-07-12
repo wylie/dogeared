@@ -1,6 +1,7 @@
 import { canonicalCatalogEditionKey, canonicalCatalogWorkKey, normalizeCatalogIsbn, normalizeCatalogText, type CatalogSourceInput } from "./catalogKeys.ts";
 import { normalizeRedundantEditionTitle, normalizeRedundantSeriesTitle } from "./canonicalTitles.ts";
 import type { getNeonSql } from "./neon.ts";
+import { withSqlDebug, type SqlDebugParam } from "./sqlDebug.ts";
 
 type Sql = ReturnType<typeof getNeonSql>;
 
@@ -131,6 +132,98 @@ export async function ensureCanonicalWorkSchema(sql: Sql) {
 function numeric(value: unknown) {
 	const number = Number(value || 0);
 	return Number.isFinite(number) ? number : 0;
+}
+
+function bookEditionUpdateDebugParams(input: {
+	workId: number;
+	bookId: number;
+	editionKey: string;
+	normalizedIsbn10: string;
+	normalizedIsbn13: string;
+	normalizedPublisher: string;
+	normalizedFormat: string;
+	normalizedLanguage: string;
+	normalizedPublicationDate: string;
+	publicationYear: number | null;
+	normalizedPageCount: number;
+	normalizedCoverUrl: string;
+	normalizedGoogleBooksId: string;
+	normalizedOpenLibraryWorkId: string;
+	normalizedOpenLibraryEditionId: string;
+	normalizedExternalIds: string;
+	editionTitle: string;
+	targetEditionId: number;
+}): SqlDebugParam[] {
+	return [
+		{ name: "workId", pgType: "bigint", value: input.workId },
+		{ name: "bookId", pgType: "bigint", value: input.bookId },
+		{ name: "editionKey", pgType: "text", value: input.editionKey },
+		{ name: "isbn10_presence_check", pgType: "text", value: input.normalizedIsbn10 },
+		{ name: "isbn10_value", pgType: "text", value: input.normalizedIsbn10 },
+		{ name: "isbn13_presence_check", pgType: "text", value: input.normalizedIsbn13 },
+		{ name: "isbn13_value", pgType: "text", value: input.normalizedIsbn13 },
+		{ name: "publisher_presence_check", pgType: "text", value: input.normalizedPublisher },
+		{ name: "publisher_value", pgType: "text", value: input.normalizedPublisher },
+		{ name: "format_presence_check", pgType: "text", value: input.normalizedFormat },
+		{ name: "format_value", pgType: "text", value: input.normalizedFormat },
+		{ name: "language_presence_check", pgType: "text", value: input.normalizedLanguage },
+		{ name: "language_value", pgType: "text", value: input.normalizedLanguage },
+		{ name: "publicationDate_presence_check", pgType: "text", value: input.normalizedPublicationDate },
+		{ name: "publicationDate_value", pgType: "text", value: input.normalizedPublicationDate },
+		{ name: "publicationYear", pgType: "int", value: input.publicationYear },
+		{ name: "pageCount", pgType: "int", value: input.normalizedPageCount },
+		{ name: "coverUrl_presence_check", pgType: "text", value: input.normalizedCoverUrl },
+		{ name: "coverUrl_value", pgType: "text", value: input.normalizedCoverUrl },
+		{ name: "googleBooksId_presence_check", pgType: "text", value: input.normalizedGoogleBooksId },
+		{ name: "googleBooksId_value", pgType: "text", value: input.normalizedGoogleBooksId },
+		{ name: "openLibraryWorkId_presence_check", pgType: "text", value: input.normalizedOpenLibraryWorkId },
+		{ name: "openLibraryWorkId_value", pgType: "text", value: input.normalizedOpenLibraryWorkId },
+		{ name: "openLibraryEditionId_presence_check", pgType: "text", value: input.normalizedOpenLibraryEditionId },
+		{ name: "openLibraryEditionId_value", pgType: "text", value: input.normalizedOpenLibraryEditionId },
+		{ name: "externalIds", pgType: "jsonb", value: input.normalizedExternalIds },
+		{ name: "editionTitle", pgType: "text", value: input.editionTitle },
+		{ name: "targetEditionId", pgType: "bigint", value: input.targetEditionId }
+	];
+}
+
+function bookEditionInsertDebugParams(input: {
+	workId: number;
+	bookId: number;
+	editionKey: string;
+	normalizedIsbn10: string;
+	normalizedIsbn13: string;
+	normalizedPublisher: string;
+	normalizedFormat: string;
+	normalizedLanguage: string;
+	normalizedPublicationDate: string;
+	publicationYear: number | null;
+	normalizedPageCount: number;
+	normalizedCoverUrl: string;
+	normalizedGoogleBooksId: string;
+	normalizedOpenLibraryWorkId: string;
+	normalizedOpenLibraryEditionId: string;
+	normalizedExternalIds: string;
+	editionTitle: string;
+}): SqlDebugParam[] {
+	return [
+		{ name: "workId", pgType: "bigint", value: input.workId },
+		{ name: "bookId", pgType: "bigint", value: input.bookId },
+		{ name: "editionKey", pgType: "text", value: input.editionKey },
+		{ name: "isbn10", pgType: "text", value: input.normalizedIsbn10 },
+		{ name: "isbn13", pgType: "text", value: input.normalizedIsbn13 },
+		{ name: "publisher", pgType: "text", value: input.normalizedPublisher },
+		{ name: "format", pgType: "text", value: input.normalizedFormat },
+		{ name: "language", pgType: "text", value: input.normalizedLanguage },
+		{ name: "publicationDate", pgType: "text", value: input.normalizedPublicationDate },
+		{ name: "publicationYear", pgType: "int", value: input.publicationYear },
+		{ name: "pageCount", pgType: "int", value: input.normalizedPageCount },
+		{ name: "coverUrl", pgType: "text", value: input.normalizedCoverUrl },
+		{ name: "googleBooksId", pgType: "text", value: input.normalizedGoogleBooksId },
+		{ name: "openLibraryWorkId", pgType: "text", value: input.normalizedOpenLibraryWorkId },
+		{ name: "openLibraryEditionId", pgType: "text", value: input.normalizedOpenLibraryEditionId },
+		{ name: "externalIds", pgType: "jsonb", value: input.normalizedExternalIds },
+		{ name: "editionTitle", pgType: "text", value: input.editionTitle }
+	];
 }
 
 function canonicalWorkTitleForBackfill(row: CanonicalWorkBackfillRow) {
@@ -459,6 +552,25 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 		})),
 		editionTitle
 	});
+	const editionDebugInput = {
+		workId,
+		bookId,
+		editionKey,
+		normalizedIsbn10,
+		normalizedIsbn13,
+		normalizedPublisher,
+		normalizedFormat,
+		normalizedLanguage,
+		normalizedPublicationDate,
+		publicationYear,
+		normalizedPageCount,
+		normalizedCoverUrl,
+		normalizedGoogleBooksId,
+		normalizedOpenLibraryWorkId,
+		normalizedOpenLibraryEditionId,
+		normalizedExternalIds,
+		editionTitle
+	};
 
 	const existingByBookRows = await sql<Array<{ id: number }>>`
 		select id
@@ -494,7 +606,10 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 
 	let editionRows: Array<{ id: number }> = [];
 	if (targetEditionId > 0) {
-		editionRows = await sql<Array<{ id: number }>>`
+		editionRows = await withSqlDebug(
+			"catalogWorks.bookEdition.update",
+			bookEditionUpdateDebugParams({ ...editionDebugInput, targetEditionId }),
+			() => sql<Array<{ id: number }>>`
 			update book_edition
 			set
 				work_id = ${workId},
@@ -513,13 +628,16 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 				open_library_work_id = case when ${normalizedOpenLibraryWorkId} <> '' then ${normalizedOpenLibraryWorkId} else open_library_work_id end,
 				open_library_edition_id = case when ${normalizedOpenLibraryEditionId} <> '' then ${normalizedOpenLibraryEditionId} else open_library_edition_id end,
 				external_ids = external_ids || ${normalizedExternalIds}::jsonb,
-				metadata = metadata || jsonb_build_object('editionTitle', ${editionTitle}),
+				metadata = metadata || jsonb_build_object('editionTitle', ${editionTitle}::text),
 				updated_at = now()
 			where id = ${targetEditionId}
 			returning id
-		`;
+		`);
 	} else {
-		editionRows = await sql<Array<{ id: number }>>`
+		editionRows = await withSqlDebug(
+			"catalogWorks.bookEdition.insert",
+			bookEditionInsertDebugParams(editionDebugInput),
+			() => sql<Array<{ id: number }>>`
 			insert into book_edition (
 				work_id,
 				book_id,
@@ -557,7 +675,7 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 				${normalizedOpenLibraryWorkId},
 				${normalizedOpenLibraryEditionId},
 				${normalizedExternalIds}::jsonb,
-				jsonb_build_object('editionTitle', ${editionTitle}),
+				jsonb_build_object('editionTitle', ${editionTitle}::text),
 				now()
 			)
 			on conflict (work_id, edition_key) do update set
@@ -578,7 +696,7 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 				metadata = book_edition.metadata || excluded.metadata,
 				updated_at = now()
 			returning id
-		`;
+		`);
 	}
 	return {
 		workId,

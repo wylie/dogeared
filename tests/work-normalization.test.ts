@@ -224,3 +224,18 @@ test("Data Health exposes potential duplicate Work review and merge actions", ()
 	assert.equal(catalogWorks.includes("buildCanonicalWorkBackfillPlan"), true);
 	assert.equal(catalogWorks.includes("sql.unsafe"), false);
 });
+
+test("book edition metadata parameters are typed and debuggable", () => {
+	const catalogWorks = readFileSync("src/lib/catalogWorks.ts", "utf8");
+	const shelfEntries = readFileSync("src/pages/api/shelf/entries.ts", "utf8");
+	const sqlDebug = readFileSync("src/lib/sqlDebug.ts", "utf8");
+
+	assert.match(catalogWorks, /jsonb_build_object\('editionTitle', \$\{editionTitle\}::text\)/);
+	assert.match(catalogWorks, /name: "editionTitle", pgType: "text", value: input\.editionTitle/);
+	assert.equal(catalogWorks.includes("catalogWorks.bookEdition.update"), true);
+	assert.equal(catalogWorks.includes("catalogWorks.bookEdition.insert"), true);
+	assert.equal(shelfEntries.includes("shelfEntries.userBook.upsert"), true);
+	assert.equal(shelfEntries.includes("${editionIdParam}::bigint"), true);
+	assert.equal(sqlDebug.includes("failingParameterIndex"), true);
+	assert.equal(sqlDebug.includes("parameterList"), true);
+});
