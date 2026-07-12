@@ -399,6 +399,44 @@ test("canonical catalog migration reports full data repair and preserves reader 
 	assert.equal(features.includes("duplicate prevention"), true);
 });
 
+test("catalog audit is read-only and reports duplicate Work evidence", () => {
+	const packageJson = readFileSync("package.json", "utf8");
+	const script = readFileSync("scripts/catalog-audit.mjs", "utf8");
+	const overview = readFileSync("docs/product/overview.md", "utf8");
+	const features = readFileSync("docs/product/features.md", "utf8");
+
+	assert.equal(packageJson.includes("catalog:audit"), true);
+	assert.equal(script.includes("Mode: read-only"), true);
+	assert.equal(script.includes("Potential Duplicate Works"), true);
+	assert.equal(script.includes("Canonical Title"), true);
+	assert.equal(script.includes("Series Position"), true);
+	assert.equal(script.includes("Work IDs"), true);
+	assert.equal(script.includes("Edition IDs"), true);
+	assert.equal(script.includes("ISBNs"), true);
+	assert.equal(script.includes("External IDs"), true);
+	assert.equal(script.includes("Shelves:"), true);
+	assert.equal(script.includes("Reviews:"), true);
+	assert.equal(script.includes("Activity:"), true);
+	assert.equal(script.includes("Readers:"), true);
+	assert.equal(script.includes("Recommendations:"), true);
+	assert.equal(script.includes("Why considered duplicates"), true);
+	for (const summary of [
+		"Total Works",
+		"Total Editions",
+		"Duplicate Work groups",
+		"Duplicate Editions",
+		"Works missing Series",
+		"Works missing Covers",
+		"Works missing Authors"
+	]) {
+		assert.equal(script.includes(summary), true);
+	}
+	assert.doesNotMatch(script, /\b(insert|update|delete|create|alter|drop|truncate)\s+/i);
+	assert.equal(overview.includes("Catalog Audit tool"), true);
+	assert.equal(features.includes("catalog:audit"), true);
+	assert.equal(features.includes("read-only inspection report"), true);
+});
+
 test("book edition metadata parameters are typed and debuggable", () => {
 	const catalogWorks = readFileSync("src/lib/catalogWorks.ts", "utf8");
 	const shelfEntries = readFileSync("src/pages/api/shelf/entries.ts", "utf8");
