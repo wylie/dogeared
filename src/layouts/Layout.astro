@@ -9,20 +9,20 @@ import { resolveAdminSession } from '../lib/admin';
 import { loadActiveAnnouncement } from '../lib/adminAnnouncements';
 import { resolveUserBySession } from '../lib/auth';
 import { DEFAULT_FOUNDING_READER_CONFIG, loadFoundingReaderConfig } from '../lib/foundingReaders';
-import { DEFAULT_SOCIAL_IMAGE, METADATA_ICON_LINKS, SITE_THEME_COLOR } from '../lib/metadataAssets';
 import { getNeonSql } from '../lib/neon';
+import { DEFAULT_SOCIAL_IMAGE } from '../lib/metadataAssets';
+import { DEFAULT_ROBOTS_DIRECTIVE, DEFAULT_SOCIAL_IMAGE_ALT, buildPageMetadata, type PageMetadataOgType } from '../lib/pageMetadata';
 import { loadLatestPublishedRelease } from '../lib/releases';
-import { buildSeoMetadata } from '../lib/seo';
 import { resolveAppVersion, resolveGitCommit } from '../lib/versionInfo';
 type SectionLink = { id: string; label: string };
 const {
 	title = "DogEared",
 	sectionLinks = [],
 	metaDescription = "",
-	robots = "index,follow",
+	robots = DEFAULT_ROBOTS_DIRECTIVE,
 	canonicalUrl = "",
 	socialImage = DEFAULT_SOCIAL_IMAGE,
-	socialImageAlt = "DogEared, a calm reading community and personal reading journal",
+	socialImageAlt = DEFAULT_SOCIAL_IMAGE_ALT,
 	ogType = "website",
 	structuredData = ""
 } = Astro.props as {
@@ -33,7 +33,7 @@ const {
 	canonicalUrl?: string;
 	socialImage?: string;
 	socialImageAlt?: string;
-	ogType?: "website" | "article" | "book" | "profile";
+	ogType?: PageMetadataOgType;
 	structuredData?: string;
 };
 const currentPath = Astro.url.pathname;
@@ -57,60 +57,48 @@ const appVersion = resolveAppVersion();
 const latestRelease = await loadLatestPublishedRelease(getNeonSql()).catch(() => null);
 const releaseVersion = latestRelease && latestRelease.version ? latestRelease.version : appVersion;
 const gitCommit = resolveGitCommit();
-const seo = buildSeoMetadata({
+const metadata = buildPageMetadata({
 	title,
 	description: metaDescription,
+	robots,
 	canonicalUrl: String(canonicalUrl || "").trim() || currentPath,
 	socialImage,
+	socialImageAlt,
+	ogType,
+	structuredData,
 	site: Astro.site ?? Astro.url
 });
-const pageTitle = seo.title;
-const canonicalHref = seo.canonicalUrl;
-const ogImageUrl = seo.imageUrl;
-const siteOrigin = new URL(canonicalHref).origin;
-const websiteStructuredData = JSON.stringify({
-	"@context": "https://schema.org",
-	"@type": "WebSite",
-	name: "DogEared",
-	url: siteOrigin,
-	potentialAction: {
-		"@type": "SearchAction",
-		target: `${siteOrigin}/search?q={search_term_string}`,
-		"query-input": "required name=search_term_string"
-	}
-});
-const pageStructuredData = String(structuredData || "").trim();
 import '../assets/global.css';
 ---
 
 <!doctype html>
 <html lang="en">
 	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		{METADATA_ICON_LINKS.map((link) => (
+		<meta charset={metadata.charset} />
+		<meta name="viewport" content={metadata.viewport} />
+		{metadata.iconLinks.map((link) => (
 			<link rel={link.rel} type={link.type} sizes={link.sizes} href={link.href} />
 		))}
-		<meta name="theme-color" content={SITE_THEME_COLOR} />
+		<meta name="theme-color" content={metadata.themeColor} />
 		<meta name="generator" content={Astro.generator} />
-		<title>{pageTitle}</title>
-		<link rel="canonical" href={canonicalHref} />
-		<meta name="description" content={seo.description} />
-		<meta name="robots" content={robots} />
-		<meta property="og:type" content={ogType} />
+		<title>{metadata.title}</title>
+		<link rel="canonical" href={metadata.canonicalUrl} />
+		<meta name="description" content={metadata.description} />
+		<meta name="robots" content={metadata.robots} />
+		<meta property="og:type" content={metadata.ogType} />
 		<meta property="og:site_name" content="DogEared" />
-		<meta property="og:title" content={pageTitle} />
-		<meta property="og:description" content={seo.description} />
-		<meta property="og:url" content={canonicalHref} />
-		<meta property="og:image" content={ogImageUrl} />
-		<meta property="og:image:alt" content={socialImageAlt} />
-		<meta name="twitter:card" content="summary_large_image" />
-		<meta name="twitter:title" content={pageTitle} />
-		<meta name="twitter:description" content={seo.description} />
-		<meta name="twitter:image" content={ogImageUrl} />
-		<meta name="twitter:image:alt" content={socialImageAlt} />
-		<script type="application/ld+json" set:html={websiteStructuredData}></script>
-		{pageStructuredData ? <script type="application/ld+json" set:html={pageStructuredData}></script> : null}
+		<meta property="og:title" content={metadata.title} />
+		<meta property="og:description" content={metadata.description} />
+		<meta property="og:url" content={metadata.canonicalUrl} />
+		<meta property="og:image" content={metadata.socialImageUrl} />
+		<meta property="og:image:alt" content={metadata.socialImageAlt} />
+		<meta name="twitter:card" content={metadata.twitterCard} />
+		<meta name="twitter:title" content={metadata.title} />
+		<meta name="twitter:description" content={metadata.description} />
+		<meta name="twitter:image" content={metadata.socialImageUrl} />
+		<meta name="twitter:image:alt" content={metadata.socialImageAlt} />
+		<script type="application/ld+json" set:html={metadata.websiteStructuredData}></script>
+		{metadata.pageStructuredData ? <script type="application/ld+json" set:html={metadata.pageStructuredData}></script> : null}
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link rel="preload" as="style" href={fontStylesheetHref} onload="this.onload=null;this.rel='stylesheet'">

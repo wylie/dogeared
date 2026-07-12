@@ -137,6 +137,14 @@ Book pages represent the Work. They show metadata, cover, synopsis, author link,
 
 Limitations: If a book is not in DogEared, the page may resolve from Google Books/Open Library query parameters and may have sparse metadata.
 
+### Shared Page Metadata
+
+Status: Complete
+
+All reader-facing and admin HTML pages inherit baseline metadata through the shared layout metadata builder. The baseline includes favicon links, Apple touch icon, web manifest, theme color, viewport, canonical URL, robots directive, title branding, description, Open Graph metadata, Twitter Card metadata, and site-level JSON-LD. Individual pages provide only page-specific values such as title, description, canonical path, social image, robots policy, and optional structured data.
+
+Limitations: Redirect-only compatibility routes do not render full HTML metadata because they immediately forward readers to canonical pages.
+
 ### Series Support
 
 Status: Complete
