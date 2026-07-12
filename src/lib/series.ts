@@ -752,6 +752,16 @@ export async function loadBookSeriesContext(
 			order by series_id asc
 			limit 1
 		),
+		series_canonical_books as (
+			select
+				b.id as book_id,
+				bw.series_id,
+				bw.series_position as work_series_position
+			from current_series cs
+			join book_work bw on bw.series_id = cs.series_id
+				and coalesce(bw.series_position, 0) > 0
+			join book b on b.work_id = bw.id
+		),
 		series_rows as (
 			select
 				s.id as series_id,
@@ -809,6 +819,16 @@ export async function loadBookSeriesContext(
 			left join user_book ub on ub.book_id = sb.book_id
 				and ${viewerUserId} <> ''
 				and ub.user_id = ${viewerUserId || "00000000-0000-0000-0000-000000000000"}::uuid
+			where not (
+				sb.book_id is null
+				and coalesce(sb.book_order, sb.publication_order, sb.chronological_order) is not null
+				and exists (
+					select 1
+					from series_canonical_books canonical_book
+					where canonical_book.series_id = sb.series_id
+						and canonical_book.work_series_position = coalesce(sb.book_order, sb.publication_order, sb.chronological_order)
+				)
+			)
 			union all
 			select
 				s.id as series_id,
@@ -835,14 +855,14 @@ export async function loadBookSeriesContext(
 				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
 				coalesce(rt.average_rating, 0) as average_rating,
 				coalesce(rt.rating_count, 0)::int as rating_count,
-				db.work_series_position::text as book_order,
-				db.work_series_position::text as publication_order,
-				db.work_series_position::text as chronological_order,
+				canonical_book.work_series_position::text as book_order,
+				canonical_book.work_series_position::text as publication_order,
+				canonical_book.work_series_position::text as chronological_order,
 				coalesce(ub.status, '') as viewer_status
 			from current_series cs
-			join direct_book db on db.work_series_id = cs.series_id
+			join series_canonical_books canonical_book on canonical_book.series_id = cs.series_id
 			join series s on s.id = cs.series_id
-			join book b on b.id = db.book_id
+			join book b on b.id = canonical_book.book_id
 			left join book_work bw on bw.id = b.work_id
 			left join lateral (
 				select candidate.cover_url

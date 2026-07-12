@@ -186,6 +186,10 @@ test("series context loader falls back from representative books to canonical Wo
 	assert.match(source, /with direct_book as/);
 	assert.match(source, /bw\.series_id as work_series_id/);
 	assert.match(source, /select db\.work_series_id/);
+	assert.match(source, /series_canonical_books as \(/);
+	assert.match(source, /join book_work bw on bw\.series_id = cs\.series_id/);
+	assert.match(source, /sb\.book_id is null[\s\S]+from series_canonical_books canonical_book[\s\S]+canonical_book\.work_series_position = coalesce\(sb\.book_order, sb\.publication_order, sb\.chronological_order\)/);
+	assert.match(source, /join series_canonical_books canonical_book on canonical_book\.series_id = cs\.series_id/);
 	assert.match(source, /where not exists \([\s\S]+from series_book existing[\s\S]+existing\.book_id = b\.id/);
 });
 
