@@ -29,7 +29,8 @@
     "backfill:cleanup-genres-topics": "node scripts/cleanup-book-genres-topics-once.mjs",
     "cleanup:canonical-titles": "node --experimental-strip-types scripts/normalize-series-canonical-titles.mjs",
     "cleanup:duplicate-works": "node --experimental-strip-types scripts/normalize-duplicate-works.mjs",
-    "cleanup:canonical-works": "node --experimental-strip-types scripts/normalize-canonical-works.mjs"
+    "cleanup:canonical-works": "node --experimental-strip-types scripts/normalize-canonical-works.mjs",
+    "migrate:canonical-catalog": "node --experimental-strip-types scripts/migrate-canonical-catalog.mjs"
   },
   "dependencies": {
     "@astrojs/vercel": "^10.0.8",

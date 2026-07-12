@@ -60,6 +60,49 @@ export type CanonicalWorkNormalizationResult = {
 	messages: string[];
 };
 
+export type CanonicalCatalogMigrationState = {
+	readerFacingWorks: number;
+	canonicalWorks: number;
+	editions: number;
+	shelfEntries: number;
+	reviews: number;
+	activityEvents: number;
+	progressEvents: number;
+	journalEntries: number;
+	journalNotes: number;
+	recommendationFeedback: number;
+	customShelfEntries: number;
+	seriesEntries: number;
+	collectionEntries: number;
+	searchIndexedWorks: number;
+	searchMissingCanonicalWorks: number;
+	duplicateWorkGroups: number;
+	relationshipConflicts: number;
+};
+
+export type CanonicalCatalogMigrationReport = {
+	dryRun: boolean;
+	worksBefore: number;
+	worksAfter: number;
+	canonicalWorksBefore: number;
+	canonicalWorksAfter: number;
+	duplicateWorksMerged: number;
+	editionsAttached: number;
+	seriesRepaired: number;
+	authorRelationshipsRebuilt: number;
+	searchIndexRebuilt: {
+		strategy: "canonical-book-indexes";
+		indexedWorks: number;
+		missingCanonicalWorks: number;
+		indexesEnsured: string[];
+	};
+	conflictsRemaining: number;
+	before: CanonicalCatalogMigrationState;
+	after: CanonicalCatalogMigrationState;
+	normalization: CanonicalWorkNormalizationResult;
+	messages: string[];
+};
+
 type WorkCandidateRow = {
 	book_id: number;
 	work_id: number | null;
@@ -1030,7 +1073,7 @@ export async function removeResolvedSeriesPlaceholders(sql: Sql) {
 	return rows.length;
 }
 
-async function countCatalogRelationshipConflicts(sql: Sql) {
+export async function countCatalogRelationshipConflicts(sql: Sql) {
 	const rows = await sql<Array<{ conflict_count: number }>>`
 		with duplicate_series_positions as (
 			select s.id, sb.book_order
@@ -1062,6 +1105,379 @@ async function countCatalogRelationshipConflicts(sql: Sql) {
 		)::int as conflict_count
 	`;
 	return Number(rows[0]?.conflict_count || 0);
+}
+
+function firstCount(rows: Array<Record<string, unknown>>, key: string) {
+	return Number(rows[0]?.[key] || 0);
+}
+
+export async function loadCanonicalCatalogMigrationState(sql: Sql): Promise<CanonicalCatalogMigrationState> {
+	await ensureCanonicalWorkSchema(sql);
+	await ensureSeriesSchema(sql);
+	await ensureCollectionSchema(sql);
+	await ensureCustomShelfSchema(sql);
+	await ensureReadingJournalSchema(sql);
+	await ensureRecommendationFeedbackSchema(sql);
+	await ensureWorkMergeReviewSchema(sql);
+
+	const [
+		bookRows,
+		workRows,
+		editionRows,
+		shelfRows,
+		reviewRows,
+		activityRows,
+		progressRows,
+		journalEntryRows,
+		journalNoteRows,
+		recommendationRows,
+		customShelfRows,
+		seriesRows,
+		collectionRows,
+		searchRows,
+		duplicateGroups
+	] = await Promise.all([
+		sql<Array<{ count: number }>>`select count(*)::int as count from book`,
+		sql<Array<{ count: number }>>`select count(*)::int as count from book_work`,
+		sql<Array<{ count: number }>>`select count(*)::int as count from book_edition`,
+		sql<Array<{ count: number }>>`select count(*)::int as count from user_book`,
+		sql<Array<{ count: number }>>`
+			select count(*)::int as count
+			from user_book
+			where rating is not null
+				or trim(coalesce(review_title, '')) <> ''
+				or trim(coalesce(finished_reflection, '')) <> ''
+		`,
+		sql<Array<{ count: number }>>`select count(*)::int as count from user_activity`,
+		sql<Array<{ count: number }>>`select count(*)::int as count from user_reading_progress_event`,
+		sql<Array<{ count: number }>>`select count(*)::int as count from reading_journal_entry`,
+		sql<Array<{ count: number }>>`select count(*)::int as count from reading_journal_note`,
+		sql<Array<{ count: number }>>`select count(*)::int as count from user_recommendation_feedback`,
+		sql<Array<{ count: number }>>`select count(*)::int as count from user_custom_shelf_book`,
+		sql<Array<{ count: number }>>`select count(*)::int as count from series_book`,
+		sql<Array<{ count: number }>>`select count(*)::int as count from collection_book`,
+		sql<Array<{ indexed: number; missing: number }>>`
+			select
+				count(*) filter (where work_id is not null and trim(coalesce(canonical_work_key, '')) <> '')::int as indexed,
+				count(*) filter (where work_id is null or trim(coalesce(canonical_work_key, '')) = '')::int as missing
+			from book
+		`,
+		loadPotentialDuplicateWorks(sql, 100)
+	]);
+
+	return {
+		readerFacingWorks: firstCount(bookRows, "count"),
+		canonicalWorks: firstCount(workRows, "count"),
+		editions: firstCount(editionRows, "count"),
+		shelfEntries: firstCount(shelfRows, "count"),
+		reviews: firstCount(reviewRows, "count"),
+		activityEvents: firstCount(activityRows, "count"),
+		progressEvents: firstCount(progressRows, "count"),
+		journalEntries: firstCount(journalEntryRows, "count"),
+		journalNotes: firstCount(journalNoteRows, "count"),
+		recommendationFeedback: firstCount(recommendationRows, "count"),
+		customShelfEntries: firstCount(customShelfRows, "count"),
+		seriesEntries: firstCount(seriesRows, "count"),
+		collectionEntries: firstCount(collectionRows, "count"),
+		searchIndexedWorks: Number(searchRows[0]?.indexed || 0),
+		searchMissingCanonicalWorks: Number(searchRows[0]?.missing || 0),
+		duplicateWorkGroups: duplicateGroups.length,
+		relationshipConflicts: await countCatalogRelationshipConflicts(sql)
+	};
+}
+
+export async function rebuildCanonicalSeriesEntries(sql: Sql) {
+	await ensureCanonicalWorkSchema(sql);
+	await ensureSeriesSchema(sql);
+	const insertedRepresentativeRows = await sql<Array<{ book_id: number }>>`
+		with representative as (
+			select distinct on (b.work_id)
+				b.work_id,
+				b.id as representative_book_id
+			from book b
+			left join lateral (
+				select
+					count(*)::int as shelf_count,
+					count(*) filter (where rating is not null)::int as rating_count
+				from user_book ub
+				where ub.book_id = b.id
+			) sc on true
+			where b.work_id is not null
+			order by
+				b.work_id,
+				coalesce(sc.shelf_count, 0) desc,
+				coalesce(sc.rating_count, 0) desc,
+				(nullif(trim(coalesce(b.cover_url, '')), '') is not null) desc,
+				b.id asc
+		)
+		insert into series_book (
+			series_id,
+			book_id,
+			title_override,
+			book_order,
+			publication_order,
+			chronological_order,
+			metadata,
+			created_at,
+			updated_at
+		)
+		select distinct on (sb.series_id, r.representative_book_id)
+			sb.series_id,
+			r.representative_book_id,
+			'',
+			sb.book_order,
+			sb.publication_order,
+			sb.chronological_order,
+			coalesce(sb.metadata, '{}'::jsonb),
+			min(sb.created_at) over (partition by sb.series_id, r.representative_book_id),
+			now()
+		from series_book sb
+		join book b on b.id = sb.book_id
+		join representative r on r.work_id = b.work_id
+		where sb.book_id is not null
+			and sb.book_id <> r.representative_book_id
+		order by sb.series_id, r.representative_book_id, sb.updated_at desc nulls last
+		on conflict do nothing
+		returning book_id
+	`;
+	const removedNonRepresentativeRows = await sql<Array<{ book_id: number }>>`
+		with representative as (
+			select distinct on (b.work_id)
+				b.work_id,
+				b.id as representative_book_id
+			from book b
+			where b.work_id is not null
+			order by b.work_id, b.id asc
+		)
+		delete from series_book sb
+		using book b, representative r
+		where b.id = sb.book_id
+			and r.work_id = b.work_id
+			and sb.book_id <> r.representative_book_id
+		returning sb.book_id
+	`;
+	const removedDuplicateRows = await sql<Array<{ book_id: number | null }>>`
+		with ranked as (
+			select
+				ctid,
+				book_id,
+				row_number() over (
+					partition by
+						series_id,
+						coalesce(book_id, 0),
+						coalesce(book_order, -1),
+						lower(trim(coalesce(title_override, '')))
+					order by
+						(book_id is not null) desc,
+						updated_at desc,
+						created_at asc
+				) as row_number
+			from series_book
+		)
+		delete from series_book sb
+		using ranked
+		where sb.ctid = ranked.ctid
+			and ranked.row_number > 1
+		returning sb.book_id
+	`;
+	const placeholdersRemoved = await removeResolvedSeriesPlaceholders(sql);
+	const updatedWorkSeriesRows = await sql<Array<{ id: number }>>`
+		update book_work bw
+		set
+			series_id = coalesce(bw.series_id, sb.series_id),
+			series_position = coalesce(bw.series_position, sb.book_order),
+			updated_at = now()
+		from book b
+		join series_book sb on sb.book_id = b.id
+		where b.work_id = bw.id
+			and (
+				(bw.series_id is null and sb.series_id is not null)
+				or (bw.series_position is null and sb.book_order is not null)
+			)
+		returning bw.id
+	`;
+	const updatedSeriesTotals = await sql<Array<{ id: number }>>`
+		with counts as (
+			select
+				series_id,
+				count(*)::int as entry_count
+			from series_book
+			where book_id is not null
+				or trim(coalesce(title_override, '')) <> ''
+			group by series_id
+		)
+		update series s
+		set
+			total_books = greatest(coalesce(nullif(s.total_books, 0), 0), counts.entry_count),
+			updated_at = now()
+		from counts
+		where s.id = counts.series_id
+			and s.total_books is distinct from greatest(coalesce(nullif(s.total_books, 0), 0), counts.entry_count)
+		returning s.id
+	`;
+	return {
+		insertedRepresentativeEntries: insertedRepresentativeRows.length,
+		removedNonRepresentativeEntries: removedNonRepresentativeRows.length,
+		removedDuplicateEntries: removedDuplicateRows.length,
+		removedPlaceholders: placeholdersRemoved,
+		updatedWorkSeriesRows: updatedWorkSeriesRows.length,
+		updatedSeriesTotals: updatedSeriesTotals.length,
+		totalRepaired: insertedRepresentativeRows.length
+			+ removedNonRepresentativeRows.length
+			+ removedDuplicateRows.length
+			+ placeholdersRemoved
+			+ updatedWorkSeriesRows.length
+			+ updatedSeriesTotals.length
+	};
+}
+
+export async function rebuildCanonicalAuthorRelationships(sql: Sql) {
+	await ensureCanonicalWorkSchema(sql);
+	const updatedWorkAuthors = await sql<Array<{ id: number }>>`
+		update book_work bw
+		set author_id = a.id, updated_at = now()
+		from author a
+		where bw.author_id is null
+			and trim(coalesce(bw.primary_author, '')) <> ''
+			and lower(regexp_replace(coalesce(a.name, ''), '[^[:alnum:]]+', '', 'g')) =
+				lower(regexp_replace(coalesce(bw.primary_author, ''), '[^[:alnum:]]+', '', 'g'))
+		returning bw.id
+	`;
+	const updatedBookAuthors = await sql<Array<{ id: number }>>`
+		update book b
+		set author_id = bw.author_id, updated_at = now()
+		from book_work bw
+		where b.work_id = bw.id
+			and b.author_id is null
+			and bw.author_id is not null
+		returning b.id
+	`;
+	const updatedWorkNames = await sql<Array<{ id: number }>>`
+		update book_work bw
+		set primary_author = b.primary_author, updated_at = now()
+		from book b
+		where b.work_id = bw.id
+			and trim(coalesce(bw.primary_author, '')) = ''
+			and trim(coalesce(b.primary_author, '')) <> ''
+		returning bw.id
+	`;
+	return {
+		updatedWorkAuthors: updatedWorkAuthors.length,
+		updatedBookAuthors: updatedBookAuthors.length,
+		updatedWorkNames: updatedWorkNames.length,
+		totalRebuilt: updatedWorkAuthors.length + updatedBookAuthors.length + updatedWorkNames.length
+	};
+}
+
+export async function rebuildCanonicalSearchIdentity(sql: Sql) {
+	await ensureCanonicalWorkSchema(sql);
+	const indexesEnsured = [
+		"idx_book_canonical_work_key",
+		"idx_book_title_author",
+		"idx_book_author_id",
+		"idx_book_source_book",
+		"idx_book_source_source"
+	];
+	await sql`create index if not exists idx_book_canonical_work_key on book(canonical_work_key)`;
+	await sql`create index if not exists idx_book_title_author on book(title, primary_author)`;
+	await sql`create index if not exists idx_book_author_id on book(author_id) where author_id is not null`;
+	await sql`create index if not exists idx_book_source_book on book_source(book_id)`;
+	await sql`create index if not exists idx_book_source_source on book_source(source, source_work_id, source_edition_id)`;
+	const refreshedRows = await sql<Array<{ id: number }>>`
+		update book b
+		set
+			title = coalesce(nullif(trim(bw.canonical_title), ''), nullif(trim(bw.title), ''), b.title),
+			updated_at = now()
+		from book_work bw
+		where b.work_id = bw.id
+			and trim(coalesce(bw.canonical_title, bw.title, '')) <> ''
+			and b.title is distinct from coalesce(nullif(trim(bw.canonical_title), ''), nullif(trim(bw.title), ''), b.title)
+		returning b.id
+	`;
+	const searchRows = await sql<Array<{ indexed: number; missing: number }>>`
+		select
+			count(*) filter (where work_id is not null and trim(coalesce(canonical_work_key, '')) <> '')::int as indexed,
+			count(*) filter (where work_id is null or trim(coalesce(canonical_work_key, '')) = '')::int as missing
+		from book
+	`;
+	return {
+		strategy: "canonical-book-indexes" as const,
+		indexedWorks: Number(searchRows[0]?.indexed || 0),
+		missingCanonicalWorks: Number(searchRows[0]?.missing || 0),
+		indexesEnsured,
+		refreshedTitles: refreshedRows.length
+	};
+}
+
+export async function migrateCanonicalCatalog(sql: Sql, options: {
+	candidateLimit?: number;
+	duplicateLimit?: number;
+	maxPasses?: number;
+	apply?: boolean;
+} = {}): Promise<CanonicalCatalogMigrationReport> {
+	const shouldApply = options.apply === true;
+	const before = await loadCanonicalCatalogMigrationState(sql);
+	const normalization = await normalizeCanonicalWorkRelationships(sql, {
+		candidateLimit: options.candidateLimit,
+		duplicateLimit: options.duplicateLimit,
+		maxPasses: options.maxPasses,
+		apply: shouldApply
+	});
+	const seriesResult = shouldApply
+		? await rebuildCanonicalSeriesEntries(sql)
+		: {
+			totalRepaired: 0
+		};
+	const authorResult = shouldApply
+		? await rebuildCanonicalAuthorRelationships(sql)
+		: {
+			totalRebuilt: 0
+		};
+	const searchResult = shouldApply
+		? await rebuildCanonicalSearchIdentity(sql)
+		: {
+			strategy: "canonical-book-indexes" as const,
+			indexedWorks: before.searchIndexedWorks,
+			missingCanonicalWorks: before.searchMissingCanonicalWorks,
+			indexesEnsured: [
+				"idx_book_canonical_work_key",
+				"idx_book_title_author",
+				"idx_book_author_id",
+				"idx_book_source_book",
+				"idx_book_source_source"
+			],
+			refreshedTitles: 0
+		};
+	const after = shouldApply ? await loadCanonicalCatalogMigrationState(sql) : before;
+	const messages = [
+		...normalization.messages,
+		shouldApply
+			? `Canonical search identity refreshed for ${searchResult.indexedWorks} Works.`
+			: "Dry run only. Re-run with --apply to mutate catalog relationships."
+	];
+
+	return {
+		dryRun: !shouldApply,
+		worksBefore: before.readerFacingWorks,
+		worksAfter: after.readerFacingWorks,
+		canonicalWorksBefore: before.canonicalWorks,
+		canonicalWorksAfter: after.canonicalWorks,
+		duplicateWorksMerged: normalization.worksMerged,
+		editionsAttached: normalization.editionsAttached,
+		seriesRepaired: seriesResult.totalRepaired,
+		authorRelationshipsRebuilt: authorResult.totalRebuilt,
+		searchIndexRebuilt: {
+			strategy: searchResult.strategy,
+			indexedWorks: searchResult.indexedWorks,
+			missingCanonicalWorks: searchResult.missingCanonicalWorks,
+			indexesEnsured: searchResult.indexesEnsured
+		},
+		conflictsRemaining: after.relationshipConflicts,
+		before,
+		after,
+		normalization,
+		messages
+	};
 }
 
 export async function normalizeCanonicalWorkRelationships(sql: Sql, options: {

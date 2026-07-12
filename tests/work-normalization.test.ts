@@ -345,6 +345,60 @@ test("canonical Work normalization has a repeatable task and documents relations
 	assert.equal(features.includes("series position conflicts"), true);
 });
 
+test("canonical catalog migration reports full data repair and preserves reader relationships", () => {
+	const packageJson = readFileSync("package.json", "utf8");
+	const script = readFileSync("scripts/migrate-canonical-catalog.mjs", "utf8");
+	const normalization = readFileSync("src/lib/workNormalization.ts", "utf8");
+	const overview = readFileSync("docs/product/overview.md", "utf8");
+	const features = readFileSync("docs/product/features.md", "utf8");
+
+	assert.equal(packageJson.includes("migrate:canonical-catalog"), true);
+	assert.equal(script.includes("migrateCanonicalCatalog"), true);
+	assert.equal(script.includes("--apply"), true);
+	assert.equal(script.includes("Dry run only"), true);
+	for (const field of [
+		"worksBefore",
+		"worksAfter",
+		"duplicateWorksMerged",
+		"editionsAttached",
+		"seriesRepaired",
+		"searchIndexRebuilt",
+		"conflictsRemaining"
+	]) {
+		assert.equal(normalization.includes(field), true);
+	}
+	for (const fn of [
+		"loadCanonicalCatalogMigrationState",
+		"rebuildCanonicalSeriesEntries",
+		"rebuildCanonicalAuthorRelationships",
+		"rebuildCanonicalSearchIdentity",
+		"migrateCanonicalCatalog"
+	]) {
+		assert.equal(normalization.includes(fn), true);
+	}
+	for (const table of [
+		"user_book",
+		"user_activity",
+		"user_reading_progress_event",
+		"reading_journal_entry",
+		"reading_journal_note",
+		"user_custom_shelf_book",
+		"series_book",
+		"collection_book",
+		"user_recommendation_feedback",
+		"book_edition",
+		"book_source"
+	]) {
+		assert.equal(normalization.includes(table), true);
+	}
+	assert.equal(normalization.includes("idx_book_canonical_work_key"), true);
+	assert.equal(normalization.includes("idx_book_title_author"), true);
+	assert.equal(overview.includes("Canonical Catalog Migration"), true);
+	assert.equal(overview.includes("rollback strategy"), true);
+	assert.equal(features.includes("Canonical Catalog Migration"), true);
+	assert.equal(features.includes("duplicate prevention"), true);
+});
+
 test("book edition metadata parameters are typed and debuggable", () => {
 	const catalogWorks = readFileSync("src/lib/catalogWorks.ts", "utf8");
 	const shelfEntries = readFileSync("src/pages/api/shelf/entries.ts", "utf8");
