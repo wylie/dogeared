@@ -11,6 +11,7 @@ import {
 	canonicalizeCatalogTitle,
 	canonicalizeCatalogAuthor,
 	normalizeRedundantSeriesTitle,
+	resolveCanonicalCatalogWork,
 	resolveBestCatalogBookId,
 	upsertBookSources,
 	type CatalogSourceInput
@@ -30,6 +31,7 @@ export const prerender = false;
 type ShelfStatus = "want_to_read" | "reading" | "finished";
 
 type ShelfEntryInput = {
+	bookId?: unknown;
 	title?: unknown;
 	author?: unknown;
 	description?: unknown;
@@ -624,26 +626,42 @@ export const POST: APIRoute = async ({ request }) => {
 		debugStage = "ensure_canonical_schema";
 		await ensureCanonicalWorkSchema(sql);
 		let resolvedBookId = 0;
+		let resolvedWorkId = 0;
 		if (directBookId > 0) {
-			const directRows = await sql<Array<{ id: number }>>`
-				select id
+			const directRows = await sql<Array<{ id: number; work_id: number | null }>>`
+				select id, work_id
 				from book
 				where id = ${directBookId}
 				limit 1
 			`;
 			resolvedBookId = Number(directRows[0]?.id || 0);
 			if (resolvedBookId > 0) resolvedBookId = await resolveRepresentativeBookId(sql, resolvedBookId);
+			if (resolvedBookId > 0) {
+				const representativeRows = await sql<Array<{ work_id: number | null }>>`
+					select work_id
+					from book
+					where id = ${resolvedBookId}
+					limit 1
+				`;
+				resolvedWorkId = Number(representativeRows[0]?.work_id || directRows[0]?.work_id || 0) || 0;
+			}
 		}
 		if (resolvedBookId <= 0) {
-			resolvedBookId = await resolveBestCatalogBookId(sql, {
+			const resolution = await resolveCanonicalCatalogWork(sql, {
 				canonicalWorkKey: workKey,
 				title,
 				author,
 				isbn10,
 				isbn13,
 				googleBooksId,
-				sources
+				sources,
+				seriesName: inferredSeries?.seriesName || "",
+				seriesBookOrder: inferredSeries?.bookOrder || 0,
+				pageCount,
+				publishedYear
 			});
+			resolvedBookId = Number(resolution?.bookId || 0) || 0;
+			resolvedWorkId = Number(resolution?.workId || 0) || 0;
 		}
 
 		const previousRows = await sql<Array<{
@@ -760,6 +778,7 @@ export const POST: APIRoute = async ({ request }) => {
 		debugStage = "upsert_work_edition";
 		const workEdition = await upsertWorkAndEdition(sql, {
 			bookId,
+			resolvedWorkId,
 			title,
 			canonicalTitle: title,
 			editionTitle: rawTitle,
@@ -771,6 +790,8 @@ export const POST: APIRoute = async ({ request }) => {
 			coverUrl,
 			isbn10,
 			isbn13,
+			seriesId: 0,
+			seriesPosition: inferredSeries?.bookOrder || 0,
 			publisher,
 			format: normalizeText(entry.format) || "Book",
 			language,

@@ -101,6 +101,8 @@ Potential duplicate Works are detected with confidence scoring across canonical 
 
 Legacy catalog rows are backfilled idempotently into `book_work` and `book_edition` using the same canonical title rules as imports. The backfill attaches every compatibility `book` row to a Work and creates an Edition without overwriting legacy unique source keys on `book.canonical_work_key`.
 
+Canonical Work resolution now runs before Search or shelf imports create catalog entries. The resolver scores ISBNs, Google Books IDs, Open Library Work and Edition IDs, stored `book_source` mappings, Edition keys, canonical title and author, structured series position, page count, publication year, and existing relationships. A sufficiently confident match returns the existing DogEared Work and attaches any incoming edition metadata beneath it. New Works are created only when no confident canonical match exists.
+
 Canonical Work normalization can be run as a repeatable admin/task workflow. It first attaches known-series metadata to legacy rows and canonical Works, removes resolved placeholder Series rows, repairs legacy Work keys, moves Edition rows beneath the corrected Work, then runs safe title cleanup and merges only high-confidence duplicate Works where structured series position, shared Work identity, ISBN, edition key, provider ID, or redundant-title evidence proves equivalence. This repairs relationships instead of hiding duplicate records in individual UI surfaces.
 
 Canonical Work identity preserves meaningful subtitle text. Titles like `Star Wars: The High Republic, Vol. 1: There Is No Fear` and `Minecraft: The Island` are distinct Works, not generic `Star Wars` or `Minecraft` records. Edition labels may still collapse for display dedupe when the suffix is clearly edition metadata rather than part of the published title.
@@ -129,7 +131,7 @@ Limitations: Award winners and staff picks are future extension points through e
 
 Status: Complete
 
-Search combines DogEared catalog, Google Books, and Open Library results, then returns Works rather than separate duplicate editions. Users can add search results to shelves, catalog matches show series name/book number when available, and matching editorial collections appear above book results.
+Search combines DogEared catalog, Google Books, and Open Library results, then resolves every result through the shared canonical Work resolver before rendering. If an external provider returns a book already in DogEared, Search returns the existing Work with DogEared community context, reader counts, rating context, series metadata, and the standard ShelfButton instead of exposing a duplicate imported record. Users can add search results to shelves, catalog matches show series name/book number when available, and matching editorial collections appear above book results.
 
 Limitations: External APIs can fail or return incomplete metadata.
 

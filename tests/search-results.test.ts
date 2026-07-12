@@ -73,11 +73,36 @@ test("search result logs include render diagnostics without requiring private da
 	});
 });
 
+test("search results preserve external source identifiers for canonical resolution", () => {
+	const result = normalizeSearchResult({
+		source: "open_library",
+		title: "The Fellowship of the Ring",
+		authors: ["J.R.R. Tolkien"],
+		sourceWorkId: "OL27448W",
+		sourceEditionId: "OL7353617M"
+	});
+
+	assert.ok(result);
+	assert.equal(result.sourceWorkId, "OL27448W");
+	assert.equal(result.sourceEditionId, "OL7353617M");
+});
+
+test("search API resolves external results through canonical catalog engine", () => {
+	const source = readFileSync(new URL("../src/pages/api/books/search.ts", import.meta.url), "utf8");
+
+	assert.match(source, /resolveCanonicalCatalogWork/);
+	assert.match(source, /catalogSourcesForResult/);
+	assert.match(source, /const sourceWorkId = openLibraryId/);
+	assert.match(source, /`catalog:\$\{catalogBookId\}`/);
+});
+
 test("search page validates API results before rendering BookCard props", () => {
 	const source = readFileSync(new URL("../src/pages/search.astro", import.meta.url), "utf8");
 
 	assert.match(source, /normalizeSearchResult\(result, \{ source: "search\.page"/);
 	assert.match(source, /\[search\.result\.skipped\]/);
 	assert.match(source, /const primaryAuthor = authors\[0\] \|\| "Unknown author"/);
+	assert.match(source, /data-book-id/);
+	assert.match(source, /Already in DogEared/);
 	assert.doesNotMatch(source, /results = Array\.isArray\(payload\?\.results\) \? payload\.results : \[\];/);
 });

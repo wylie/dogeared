@@ -11,6 +11,8 @@ export type SearchResultVariant = {
 	isbn10: string;
 	isbn13: string;
 	googleBooksId: string;
+	sourceWorkId?: string;
+	sourceEditionId?: string;
 	bookId?: number;
 	authorId?: number;
 	format: string;
@@ -34,6 +36,8 @@ export type SearchResult = {
 	isbn10: string;
 	isbn13: string;
 	googleBooksId: string;
+	sourceWorkId?: string;
+	sourceEditionId?: string;
 	bookId?: number;
 	authorId?: number;
 	seriesName?: string;
@@ -111,6 +115,8 @@ function normalizeVariant(value: unknown): SearchResultVariant | null {
 		isbn10: text(record.isbn10),
 		isbn13: text(record.isbn13),
 		googleBooksId: text(record.googleBooksId),
+		sourceWorkId: text(record.sourceWorkId),
+		sourceEditionId: text(record.sourceEditionId),
 		bookId: positiveNumber(record.bookId),
 		authorId: positiveNumber(record.authorId),
 		format,
@@ -169,6 +175,8 @@ export function normalizeSearchResult(value: unknown, context: NormalizeContext 
 		isbn10: text(record.isbn10),
 		isbn13: text(record.isbn13),
 		googleBooksId: text(record.googleBooksId),
+		sourceWorkId: text(record.sourceWorkId),
+		sourceEditionId: text(record.sourceEditionId),
 		bookId: positiveNumber(record.bookId),
 		authorId: positiveNumber(record.authorId),
 		seriesName: text(record.seriesName),

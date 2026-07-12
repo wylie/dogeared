@@ -16,6 +16,10 @@ A reader's target number of finished books for the current year. DogEared calcul
 
 The reader-facing literary Work DogEared uses as the primary catalog identity. A Work represents the intellectual book and owns shelves, ratings, reviews, reading progress, series membership, recommendations, search identity, author-page display, and Readers Also Enjoyed identity.
 
+## Canonical Work Resolution
+
+The shared metadata lookup process DogEared uses before creating catalog entries. It scores ISBNs, provider identifiers, source mappings, Edition keys, title, author, structured series position, page count, publication year, and existing relationships to decide whether an incoming search/import/enrichment result should reuse an existing Work or create a new one.
+
 ## Canonical Title
 
 The published title stored on a canonical Work without redundant series or edition suffixes. DogEared only strips parenthetical series metadata when structured series name and book-position metadata already prove the suffix is duplicated.

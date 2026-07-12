@@ -7,6 +7,7 @@ type Sql = ReturnType<typeof getNeonSql>;
 
 export type CatalogEditionInput = {
 	bookId: number;
+	resolvedWorkId?: number;
 	title: string;
 	canonicalTitle?: string;
 	editionTitle?: string;
@@ -462,6 +463,7 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 	await ensureCanonicalWorkSchema(sql);
 	const bookId = Math.max(0, Number(input.bookId || 0) || 0);
 	if (!bookId) return { workId: 0, editionId: 0, representativeBookId: 0 };
+	const resolvedWorkId = Math.max(0, Number(input.resolvedWorkId || 0) || 0);
 	const rawWorkTitle = normalizeCatalogText(input.canonicalTitle || input.title) || "Untitled";
 	const workTitle = normalizeRedundantEditionTitle({ title: rawWorkTitle }).title || rawWorkTitle;
 	const editionTitle = normalizeCatalogText(input.editionTitle || input.title);
@@ -478,53 +480,74 @@ export async function upsertWorkAndEdition(sql: Sql, input: CatalogEditionInput)
 		fallback: `book:${bookId}`
 	});
 	const publicationYear = Number(input.publicationYear || input.originalPublicationYear || 0) || null;
-	const workRows = await sql<Array<{ id: number }>>`
-		insert into book_work (
-			work_key,
-			title,
-			canonical_title,
-			primary_author,
-			author_id,
-			description,
-			subjects,
-			genres,
-			series_id,
-			series_position,
-			original_publication_year,
-			preferred_cover_url,
-			updated_at
-		)
-		values (
-			${workKey},
-			${workTitle},
-			${workTitle},
-			${normalizeCatalogText(input.author)},
-			${Number(input.authorId || 0) > 0 ? Number(input.authorId || 0) : null},
-			${normalizeCatalogText(input.description)},
-			${subjects}::text[],
-			${genres}::text[],
-			${Number(input.seriesId || 0) > 0 ? Number(input.seriesId || 0) : null},
-			${Number(input.seriesPosition || 0) > 0 ? Number(input.seriesPosition || 0) : null},
-			${Number(input.originalPublicationYear || 0) > 0 ? Number(input.originalPublicationYear || 0) : publicationYear},
-			${normalizeCatalogText(input.coverUrl)},
-			now()
-		)
-		on conflict (work_key) do update set
-			title = case when excluded.title <> '' then excluded.title else book_work.title end,
-			canonical_title = case when excluded.canonical_title <> '' then excluded.canonical_title else book_work.canonical_title end,
-			primary_author = case when excluded.primary_author <> '' then excluded.primary_author else book_work.primary_author end,
-			author_id = coalesce(excluded.author_id, book_work.author_id),
-			description = case when excluded.description <> '' then excluded.description else book_work.description end,
-			subjects = case when cardinality(excluded.subjects) > 0 then excluded.subjects else book_work.subjects end,
-			genres = case when cardinality(excluded.genres) > 0 then excluded.genres else book_work.genres end,
-			series_id = coalesce(excluded.series_id, book_work.series_id),
-			series_position = coalesce(excluded.series_position, book_work.series_position),
-			original_publication_year = coalesce(book_work.original_publication_year, excluded.original_publication_year),
-			preferred_cover_url = case when excluded.preferred_cover_url <> '' then excluded.preferred_cover_url else book_work.preferred_cover_url end,
-			updated_at = now()
-		returning id
-	`;
-	const workId = Number(workRows[0]?.id || 0);
+	let workId = resolvedWorkId;
+	if (workId > 0) {
+		const existingWorkRows = await sql<Array<{ id: number }>>`
+			update book_work
+			set
+				author_id = coalesce(book_work.author_id, ${Number(input.authorId || 0) > 0 ? Number(input.authorId || 0) : null}),
+				description = case when book_work.description = '' and ${normalizeCatalogText(input.description)} <> '' then ${normalizeCatalogText(input.description)} else book_work.description end,
+				subjects = case when cardinality(book_work.subjects) = 0 and cardinality(${subjects}::text[]) > 0 then ${subjects}::text[] else book_work.subjects end,
+				genres = case when cardinality(book_work.genres) = 0 and cardinality(${genres}::text[]) > 0 then ${genres}::text[] else book_work.genres end,
+				series_id = coalesce(book_work.series_id, ${Number(input.seriesId || 0) > 0 ? Number(input.seriesId || 0) : null}),
+				series_position = coalesce(book_work.series_position, ${Number(input.seriesPosition || 0) > 0 ? Number(input.seriesPosition || 0) : null}),
+				original_publication_year = coalesce(book_work.original_publication_year, ${Number(input.originalPublicationYear || 0) > 0 ? Number(input.originalPublicationYear || 0) : publicationYear}),
+				preferred_cover_url = case when book_work.preferred_cover_url = '' and ${normalizeCatalogText(input.coverUrl)} <> '' then ${normalizeCatalogText(input.coverUrl)} else book_work.preferred_cover_url end,
+				updated_at = now()
+			where id = ${workId}
+			returning id
+		`;
+		workId = Number(existingWorkRows[0]?.id || 0);
+	}
+	if (workId <= 0) {
+		const workRows = await sql<Array<{ id: number }>>`
+			insert into book_work (
+				work_key,
+				title,
+				canonical_title,
+				primary_author,
+				author_id,
+				description,
+				subjects,
+				genres,
+				series_id,
+				series_position,
+				original_publication_year,
+				preferred_cover_url,
+				updated_at
+			)
+			values (
+				${workKey},
+				${workTitle},
+				${workTitle},
+				${normalizeCatalogText(input.author)},
+				${Number(input.authorId || 0) > 0 ? Number(input.authorId || 0) : null},
+				${normalizeCatalogText(input.description)},
+				${subjects}::text[],
+				${genres}::text[],
+				${Number(input.seriesId || 0) > 0 ? Number(input.seriesId || 0) : null},
+				${Number(input.seriesPosition || 0) > 0 ? Number(input.seriesPosition || 0) : null},
+				${Number(input.originalPublicationYear || 0) > 0 ? Number(input.originalPublicationYear || 0) : publicationYear},
+				${normalizeCatalogText(input.coverUrl)},
+				now()
+			)
+			on conflict (work_key) do update set
+				title = case when excluded.title <> '' then excluded.title else book_work.title end,
+				canonical_title = case when excluded.canonical_title <> '' then excluded.canonical_title else book_work.canonical_title end,
+				primary_author = case when excluded.primary_author <> '' then excluded.primary_author else book_work.primary_author end,
+				author_id = coalesce(excluded.author_id, book_work.author_id),
+				description = case when excluded.description <> '' then excluded.description else book_work.description end,
+				subjects = case when cardinality(excluded.subjects) > 0 then excluded.subjects else book_work.subjects end,
+				genres = case when cardinality(excluded.genres) > 0 then excluded.genres else book_work.genres end,
+				series_id = coalesce(excluded.series_id, book_work.series_id),
+				series_position = coalesce(excluded.series_position, book_work.series_position),
+				original_publication_year = coalesce(book_work.original_publication_year, excluded.original_publication_year),
+				preferred_cover_url = case when excluded.preferred_cover_url <> '' then excluded.preferred_cover_url else book_work.preferred_cover_url end,
+				updated_at = now()
+			returning id
+		`;
+		workId = Number(workRows[0]?.id || 0);
+	}
 	if (!workId) return { workId: 0, editionId: 0, representativeBookId: bookId };
 	await sql`
 		update book

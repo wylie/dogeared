@@ -32,6 +32,8 @@ let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finishe
 let viewerRatingByBookId = new Map<number, number>();
 let averageRatingByBookId = new Map<number, number>();
 let ratingCountByBookId = new Map<number, number>();
+let readerCountByBookId = new Map<number, number>();
+let shelfEntryCountByBookId = new Map<number, number>();
 let customShelfOptionsJson = "[]";
 
 function truncateDescription(value: string, maxLength = 280) {
@@ -104,36 +106,42 @@ if (query) {
 				})
 				.filter((result): result is SearchResult => !!result);
 			collectionResults = Array.isArray(payload?.collectionResults) ? payload.collectionResults : [];
-			if (session?.userId && results.length > 0) {
+			if (results.length > 0) {
 				const bookIds = Array.from(new Set(results.map((result) => Number(result.bookId || 0)).filter((value) => value > 0)));
 				if (bookIds.length > 0) {
 					const sql = getNeonSql();
-					const statusRows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
-						select book_id, status, rating
-						from user_book
-						where user_id = ${session.userId}::uuid
-							and book_id = any(${bookIds}::bigint[])
-					`;
-					viewerStatusByBookId = new Map(statusRows.map((row) => [Number(row.book_id || 0), row.status]));
-					viewerRatingByBookId = new Map(statusRows.map((row) => [
-						Number(row.book_id || 0),
-						Math.max(0, Math.min(5, Number(row.rating || 0) || 0))
-					]));
-					const ratingRows = await sql<Array<{ book_id: number; average_rating: number | null; rating_count: number }>>`
+					const summaryRows = await sql<Array<{ book_id: number; reader_count: number; shelf_entry_count: number; average_rating: number | null; rating_count: number }>>`
 						select
 							ub.book_id,
+							count(distinct ub.user_id)::int as reader_count,
+							count(*)::int as shelf_entry_count,
 							round(avg(ub.rating)::numeric, 1) as average_rating,
 							count(*) filter (where ub.rating is not null)::int as rating_count
 						from user_book ub
 						where ub.book_id = any(${bookIds}::bigint[])
 						group by ub.book_id
 					`;
+					readerCountByBookId = new Map(summaryRows.map((row) => [Number(row.book_id || 0), Number(row.reader_count || 0)]));
+					shelfEntryCountByBookId = new Map(summaryRows.map((row) => [Number(row.book_id || 0), Number(row.shelf_entry_count || 0)]));
 					averageRatingByBookId = new Map(
-						ratingRows.map((row) => [Number(row.book_id || 0), Number(row.average_rating || 0)])
+						summaryRows.map((row) => [Number(row.book_id || 0), Number(row.average_rating || 0)])
 					);
 					ratingCountByBookId = new Map(
-						ratingRows.map((row) => [Number(row.book_id || 0), Number(row.rating_count || 0)])
+						summaryRows.map((row) => [Number(row.book_id || 0), Number(row.rating_count || 0)])
 					);
+					if (session?.userId) {
+						const statusRows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
+							select book_id, status, rating
+							from user_book
+							where user_id = ${session.userId}::uuid
+								and book_id = any(${bookIds}::bigint[])
+						`;
+						viewerStatusByBookId = new Map(statusRows.map((row) => [Number(row.book_id || 0), row.status]));
+						viewerRatingByBookId = new Map(statusRows.map((row) => [
+							Number(row.book_id || 0),
+							Math.max(0, Math.min(5, Number(row.rating || 0) || 0))
+						]));
+					}
 				}
 			}
 		}
@@ -203,6 +211,8 @@ if (session?.userId) {
 					const numericBookId = Number(result.bookId || 0);
 					const averageRating = Number(averageRatingByBookId.get(numericBookId) || 0);
 					const ratingCount = Number(ratingCountByBookId.get(numericBookId) || 0);
+					const readerCount = Number(readerCountByBookId.get(numericBookId) || 0);
+					const shelfEntryCount = Number(shelfEntryCountByBookId.get(numericBookId) || 0);
 					const authors = Array.isArray(result.authors) ? result.authors : [];
 					const primaryAuthor = authors[0] || "Unknown author";
 					const authorForHref = authors[0] || "";
@@ -217,8 +227,8 @@ if (session?.userId) {
 					authorHref={authorForHref ? authorHref(authorForHref, result.authorId || 0) : ""}
 					thumbnail={result.thumbnail}
 					description={truncateDescription(result.description)}
-					readers={0}
-					shelfEntries={0}
+					readers={numericBookId > 0 ? readerCount : 0}
+					shelfEntries={numericBookId > 0 ? shelfEntryCount : 0}
 					publishedLabel={publishedYearOnly(result.publishedDate)}
 					pageCount={result.pageCount || 0}
 					averageRating={averageRating}
@@ -226,6 +236,7 @@ if (session?.userId) {
 					genres={categories}
 				>
 						<div slot="meta">
+							{numericBookId > 0 && <p class="meta">Already in DogEared</p>}
 							{result.publisher && <p class="meta">Publisher: {result.publisher}</p>}
 							{Number(result.bookId || 0) > 0 && viewerStatusByBookId.get(Number(result.bookId || 0)) === "finished" && (
 								<RatingControl
@@ -237,6 +248,7 @@ if (session?.userId) {
 						</div>
 						<div slot="actions">
 							<ShelfDropdown attrs={{
+								'data-book-id': String(result.bookId || ""),
 								'data-title': result.title,
 								'data-author': authorForHref,
 								'data-description': result.description,
@@ -250,8 +262,11 @@ if (session?.userId) {
 								'data-isbn13': result.isbn13 || "",
 								'data-google-books-id': result.googleBooksId || "",
 								'data-source': result.source || (result.googleBooksId ? "google_books" : "open_library"),
-								'data-source-work-id': result.googleBooksId || "",
-								'data-source-url': result.googleBooksId ? `https://books.google.com/books?id=${encodeURIComponent(result.googleBooksId)}` : "",
+								'data-source-work-id': result.sourceWorkId || result.googleBooksId || "",
+								'data-source-edition-id': result.sourceEditionId || "",
+								'data-source-url': result.googleBooksId
+									? `https://books.google.com/books?id=${encodeURIComponent(result.googleBooksId)}`
+									: (result.sourceWorkId ? `https://openlibrary.org/works/${encodeURIComponent(result.sourceWorkId)}` : ""),
 								'data-categories': JSON.stringify(categories),
 								'data-custom-shelves': customShelfOptionsJson
 							}} />
@@ -663,6 +678,11 @@ if (session?.userId) {
 		const isbn10 = String(dropdown.dataset.isbn10 || "").trim();
 		const isbn13 = String(dropdown.dataset.isbn13 || "").trim();
 		const googleBooksId = String(dropdown.dataset.googleBooksId || "").trim();
+		const bookId = Number(dropdown.dataset.bookId || 0) || 0;
+		const source = String(dropdown.dataset.source || "").trim();
+		const sourceWorkId = String(dropdown.dataset.sourceWorkId || "").trim();
+		const sourceEditionId = String(dropdown.dataset.sourceEditionId || "").trim();
+		const sourceUrl = String(dropdown.dataset.sourceUrl || "").trim();
 		const categories = parseCategories(dropdown.dataset.categories);
 
 		const entries = loadShelfEntries();
@@ -678,6 +698,11 @@ if (session?.userId) {
 			if (isbn10) existing.isbn10 = isbn10;
 			if (isbn13) existing.isbn13 = isbn13;
 			if (googleBooksId) existing.googleBooksId = googleBooksId;
+			if (bookId > 0) existing.bookId = bookId;
+			if (source) existing.source = source;
+			if (sourceWorkId) existing.sourceWorkId = sourceWorkId;
+			if (sourceEditionId) existing.sourceEditionId = sourceEditionId;
+			if (sourceUrl) existing.sourceUrl = sourceUrl;
 			if (categories.length > 0) existing.categories = categories;
 			if (description && !existing.description) existing.description = description;
 			applyStatus(existing, selectedStatus, totalPages || Number(existing.totalPages) || 0);
@@ -707,6 +732,7 @@ if (session?.userId) {
 		}
 
 		const next = buildShelfEntryFromRecord({
+			bookId,
 			title,
 			author,
 			description,
@@ -721,13 +747,15 @@ if (session?.userId) {
 			googleBooksId,
 			categories
 		}, {
+			bookId,
 			status: selectedStatus,
 			totalPages,
 			currentPage: 0,
 			finishedDate: "",
-			source: "google_books",
-			sourceWorkId: googleBooksId,
-			sourceUrl: googleBooksId ? `https://books.google.com/books?id=${encodeURIComponent(googleBooksId)}` : "",
+			source: source || (googleBooksId ? "google_books" : ""),
+			sourceWorkId: sourceWorkId || googleBooksId,
+			sourceEditionId,
+			sourceUrl: sourceUrl || (googleBooksId ? `https://books.google.com/books?id=${encodeURIComponent(googleBooksId)}` : ""),
 			updatedAt: Date.now()
 		});
 		applyStatus(next, selectedStatus, totalPages);

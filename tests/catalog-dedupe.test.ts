@@ -11,6 +11,7 @@ import {
 	getCatalogSourceKeys,
 	normalizeCatalogIsbn
 } from "../src/lib/catalogKeys.ts";
+import { scoreCanonicalCatalogCandidate, type CanonicalCatalogResolutionCandidate } from "../src/lib/catalog.ts";
 
 test("canonical catalog keys separate works from editions", () => {
 	assert.equal(
@@ -89,4 +90,63 @@ test("catalog source keys include both work and edition IDs for lookup", () => {
 
 test("normalizeCatalogIsbn removes punctuation and preserves X check digits", () => {
 	assert.equal(normalizeCatalogIsbn("0-8044-2957-X"), "080442957X");
+});
+
+function resolutionCandidate(overrides: Partial<CanonicalCatalogResolutionCandidate>): CanonicalCatalogResolutionCandidate {
+	return {
+		bookId: 42,
+		workId: 7,
+		authorId: 3,
+		title: "The Poison Jungle",
+		author: "Tui T. Sutherland",
+		description: "",
+		coverUrl: "",
+		isbn10: "",
+		isbn13: "",
+		googleBooksId: "",
+		publishedYear: 2019,
+		pageCount: 336,
+		seriesName: "Wings of Fire",
+		seriesBookOrder: 13,
+		workKey: "title_author:poison jungle|tui t sutherland",
+		canonicalWorkKey: "title_author:poison jungle|tui t sutherland",
+		editionKeys: [],
+		sourceKeys: [],
+		openLibraryWorkIds: [],
+		openLibraryEditionIds: [],
+		editionGoogleBooksIds: [],
+		editionIsbn10s: [],
+		editionIsbn13s: [],
+		shelfCount: 0,
+		ratingCount: 0,
+		averageRating: 0,
+		...overrides
+	};
+}
+
+test("canonical catalog resolution scores title, author, series, and provider identifiers", () => {
+	const exactTitleAuthor = scoreCanonicalCatalogCandidate({
+		title: "The Poison Jungle (Wings of Fire, #13)",
+		author: "Tui T. Sutherland",
+		seriesName: "Wings of Fire",
+		seriesBookOrder: 13,
+		pageCount: 336,
+		publishedYear: 2019
+	}, resolutionCandidate({}));
+
+	assert.equal(exactTitleAuthor.score >= 90, true);
+	assert.equal(exactTitleAuthor.reasons.some((reason) => reason.includes("canonical title and author")), true);
+	assert.equal(exactTitleAuthor.reasons.some((reason) => reason.includes("series position")), true);
+
+	const openLibrary = scoreCanonicalCatalogCandidate({
+		title: "A Different Edition Title",
+		author: "Tui T. Sutherland",
+		sources: [{ source: "open_library", sourceWorkId: "OL123W", sourceEditionId: "OL456M" }]
+	}, resolutionCandidate({
+		openLibraryWorkIds: ["OL123W"],
+		openLibraryEditionIds: ["OL456M"]
+	}));
+
+	assert.equal(openLibrary.score >= 98, true);
+	assert.equal(openLibrary.reasons.some((reason) => reason.includes("Open Library")), true);
 });

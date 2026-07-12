@@ -274,6 +274,18 @@ test("canonical Work backfill plans use cleaned titles and preserve editions", (
 	assert.equal(projectHailMary?.canonicalTitle, "Project Hail Mary");
 });
 
+test("shelf imports attach resolved editions to the matched canonical Work", () => {
+	const shelfApi = readFileSync("src/pages/api/shelf/entries.ts", "utf8");
+	const catalogWorks = readFileSync("src/lib/catalogWorks.ts", "utf8");
+
+	assert.match(shelfApi, /resolveCanonicalCatalogWork/);
+	assert.match(shelfApi, /resolvedWorkId/);
+	assert.match(shelfApi, /resolvedWorkId,\s*\n\s*title/);
+	assert.match(catalogWorks, /resolvedWorkId\?: number/);
+	assert.match(catalogWorks, /const resolvedWorkId = Math\.max/);
+	assert.match(catalogWorks, /where id = \$\{workId\}/);
+});
+
 test("Data Health exposes potential duplicate Work review and merge actions", () => {
 	const page = readFileSync("src/pages/admin/data-health.astro", "utf8");
 	const normalization = readFileSync("src/lib/workNormalization.ts", "utf8");

@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { googleBooksCoverUrl } from "../../../lib/bookCovers";
-import { normalizeRedundantSeriesTitle } from "../../../lib/catalog";
+import { normalizeRedundantSeriesTitle, resolveCanonicalCatalogWork, type CatalogSourceInput } from "../../../lib/catalog";
 import { getNeonSql } from "../../../lib/neon";
 import { createPublicCacheControl, withRuntimeCache } from "../../../lib/runtimeCache";
 import { ensureSeriesSchema, inferKnownSeriesMetadata } from "../../../lib/series";
@@ -106,6 +106,8 @@ function toVariant(result: SearchResult) {
 		isbn10: String(result.isbn10 || "").trim(),
 		isbn13: String(result.isbn13 || "").trim(),
 		googleBooksId: String(result.googleBooksId || "").trim(),
+		sourceWorkId: String(result.sourceWorkId || "").trim(),
+		sourceEditionId: String(result.sourceEditionId || "").trim(),
 		bookId: Number(result.bookId || 0) || 0,
 		authorId: Number(result.authorId || 0) || 0,
 		format,
@@ -202,6 +204,7 @@ function formatSeriesSearchLabel(seriesName: string, bookOrder: number) {
 function dedupeVariants(input: SearchResult[], queryText: string) {
 	const grouped = new Map<string, SearchResult[]>();
 	for (const [index, result] of input.entries()) {
+		const catalogBookId = Number(result.bookId || 0) || 0;
 		const authors = Array.isArray(result.authors) ? result.authors : [];
 		const primaryAuthor = authors[0] || "";
 		const canonicalTitle = canonicalizeTitle(result.title);
@@ -212,9 +215,11 @@ function dedupeVariants(input: SearchResult[], queryText: string) {
 		const workGroup = stem
 			? `work:${stem}|${canonicalAuthor}`
 			: (canonicalTitle ? `work:${canonicalTitle}|${canonicalAuthor}` : "");
-		const key = workGroup || (isbnGroup
+		const key = catalogBookId > 0
+			? `catalog:${catalogBookId}`
+			: (workGroup || (isbnGroup
 			? `isbn:${isbnGroup}`
-			: (googleGroup ? `gid:${googleGroup}` : `ungrouped_${index}`));
+			: (googleGroup ? `gid:${googleGroup}` : `ungrouped_${index}`)));
 		const existing = grouped.get(key) || [];
 		existing.push(result);
 		grouped.set(key, existing);
@@ -261,6 +266,7 @@ function dedupeVariants(input: SearchResult[], queryText: string) {
 		let matched = false;
 		for (let i = 0; i < merged.length; i += 1) {
 			const existing = merged[i];
+			if (Number(candidate.bookId || 0) > 0 && Number(existing.bookId || 0) > 0 && Number(candidate.bookId || 0) !== Number(existing.bookId || 0)) continue;
 			const existingAuthors = Array.isArray(existing.authors) ? existing.authors : [];
 			const existingAuthor = canonicalizeAuthor(existingAuthors[0] || "");
 			if (!candidateAuthor || !existingAuthor || candidateAuthor !== existingAuthor) continue;
@@ -288,6 +294,37 @@ function dedupeVariants(input: SearchResult[], queryText: string) {
 	}
 
 	return merged;
+}
+
+function openLibraryId(value: unknown, suffix: "W" | "M") {
+	const match = String(value || "").match(new RegExp(`OL[0-9A-Z]+${suffix}`, "i"));
+	return match ? match[0] : "";
+}
+
+function publishedYear(value: unknown) {
+	const match = String(value || "").match(/\d{4}/);
+	const year = match ? Number(match[0]) : 0;
+	return Number.isFinite(year) && year > 0 ? year : null;
+}
+
+function catalogSourcesForResult(result: SearchResult): CatalogSourceInput[] {
+	const sources: CatalogSourceInput[] = [];
+	if (result.googleBooksId) {
+		sources.push({
+			source: "google_books",
+			sourceWorkId: result.googleBooksId,
+			sourceUrl: `https://books.google.com/books?id=${encodeURIComponent(result.googleBooksId)}`
+		});
+	}
+	if (result.source === "open_library" && (result.sourceWorkId || result.sourceEditionId)) {
+		sources.push({
+			source: "open_library",
+			sourceWorkId: result.sourceWorkId || "",
+			sourceEditionId: result.sourceEditionId || "",
+			sourceUrl: result.sourceWorkId ? `https://openlibrary.org/works/${encodeURIComponent(result.sourceWorkId)}` : ""
+		});
+	}
+	return sources;
 }
 
 export const GET: APIRoute = async ({ request, url }) => {
@@ -469,6 +506,8 @@ export const GET: APIRoute = async ({ request, url }) => {
 				isbn10,
 				isbn13,
 				googleBooksId: String(item?.id || "").trim(),
+				sourceWorkId: String(item?.id || "").trim(),
+				sourceEditionId: "",
 				seriesName: inferredSeries?.seriesName || "",
 				seriesBookOrder: inferredSeries?.bookOrder || 0,
 				seriesLabel: formatSeriesSearchLabel(inferredSeries?.seriesName || "", inferredSeries?.bookOrder || 0)
@@ -520,6 +559,9 @@ export const GET: APIRoute = async ({ request, url }) => {
 			const isbn10 = isbns.find((value: string) => value.length === 10) || "";
 			const coverId = Number(doc?.cover_i || 0) || 0;
 			const pageCount = Number(doc?.number_of_pages_median || 0) || 0;
+			const sourceWorkId = openLibraryId(doc?.key, "W");
+			const editionKeys = Array.isArray(doc?.edition_key) ? doc.edition_key : [];
+			const sourceEditionId = openLibraryId(editionKeys[0] || "", "M");
 			return {
 				source: "open_library",
 				title,
@@ -536,6 +578,8 @@ export const GET: APIRoute = async ({ request, url }) => {
 				isbn10,
 				isbn13,
 				googleBooksId: "",
+				sourceWorkId,
+				sourceEditionId,
 				seriesName: inferredSeries?.seriesName || "",
 				seriesBookOrder: inferredSeries?.bookOrder || 0,
 				seriesLabel: formatSeriesSearchLabel(inferredSeries?.seriesName || "", inferredSeries?.bookOrder || 0)
@@ -550,82 +594,71 @@ export const GET: APIRoute = async ({ request, url }) => {
 			.filter((result) => isLikelyMatch(result, query))
 			.filter((result) => passesQualityGate(result));
 
-		const googleIds = Array.from(new Set(mapped.map((item) => String(item.googleBooksId || "").trim()).filter(Boolean)));
-		const isbn13s = Array.from(new Set(mapped.map((item) => String(item.isbn13 || "").trim()).filter(Boolean)));
-		const isbn10s = Array.from(new Set(mapped.map((item) => String(item.isbn10 || "").trim()).filter(Boolean)));
-		const catalogRows = await withRuntimeCache(
-			`search:catalog:${googleIds.join(",")}:${isbn13s.join(",")}:${isbn10s.join(",")}`,
-			20_000,
-			() => sql<Array<{
-				id: number;
-				author_id: number | null;
-				google_books_id: string;
-				isbn13: string;
-				isbn10: string;
-				series_name: string;
-				series_book_order: number;
-			}>>`
-				select
-					b.id,
-					b.author_id,
-					coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
-					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
-					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
-					coalesce(s.name, '') as series_name,
-					coalesce(sb.book_order, 0)::numeric as series_book_order
-				from book b
-				left join series_book sb on sb.book_id = b.id
-				left join series s on s.id = sb.series_id
-				where
-					(array_length(${googleIds}::text[], 1) is not null and b.google_books_id = any(${googleIds}::text[]))
-					or (array_length(${isbn13s}::text[], 1) is not null and b.isbn13 = any(${isbn13s}::text[]))
-					or (array_length(${isbn10s}::text[], 1) is not null and b.isbn10 = any(${isbn10s}::text[]))
-			`
-		);
-		const byGoogleId = new Map<string, { bookId: number; authorId: number; seriesName: string; seriesBookOrder: number; seriesLabel: string }>();
-		const byIsbn13 = new Map<string, { bookId: number; authorId: number; seriesName: string; seriesBookOrder: number; seriesLabel: string }>();
-		const byIsbn10 = new Map<string, { bookId: number; authorId: number; seriesName: string; seriesBookOrder: number; seriesLabel: string }>();
-		for (const row of catalogRows) {
-			const seriesName = String(row.series_name || "").trim();
-			const seriesBookOrder = Number(row.series_book_order || 0) || 0;
-			const pair = {
-				bookId: Number(row.id || 0),
-				authorId: Number(row.author_id || 0) || 0,
-				seriesName,
-				seriesBookOrder,
-				seriesLabel: formatSeriesSearchLabel(seriesName, seriesBookOrder)
-			};
-			if (pair.bookId <= 0) continue;
-			const gid = String(row.google_books_id || "").trim();
-			const i13 = String(row.isbn13 || "").trim();
-			const i10 = String(row.isbn10 || "").trim();
-			if (gid && !byGoogleId.has(gid)) byGoogleId.set(gid, pair);
-			if (i13 && !byIsbn13.has(i13)) byIsbn13.set(i13, pair);
-			if (i10 && !byIsbn10.has(i10)) byIsbn10.set(i10, pair);
-		}
-		const mappedWithIds = mapped.map((item) => {
-			const match = byGoogleId.get(item.googleBooksId) || byIsbn13.get(item.isbn13) || byIsbn10.get(item.isbn10);
+		const resolutionCache = new Map<string, Promise<Awaited<ReturnType<typeof resolveCanonicalCatalogWork>>>>();
+		const resolveSearchResult = async (item: SearchResult) => {
 			const authors = Array.isArray(item.authors) ? item.authors : [];
 			const inferredSeries = item.seriesName ? null : inferKnownSeriesMetadata({ title: item.title, author: authors[0] || "" });
-			const seriesName = item.seriesName || match?.seriesName || inferredSeries?.seriesName || "";
+			const seriesName = item.seriesName || inferredSeries?.seriesName || "";
 			const seriesBookOrder = Number(item.seriesBookOrder || 0) > 0
 				? Number(item.seriesBookOrder || 0)
-				: (match?.seriesBookOrder || inferredSeries?.bookOrder || 0);
+				: (inferredSeries?.bookOrder || 0);
 			const title = normalizeRedundantSeriesTitle({
 				title: item.title,
 				seriesName,
 				bookOrder: seriesBookOrder
 			}).title || item.title;
+			const cacheKey = [
+				item.bookId || 0,
+				item.googleBooksId || "",
+				item.source || "",
+				item.sourceWorkId || "",
+				item.sourceEditionId || "",
+				item.isbn13 || "",
+				item.isbn10 || "",
+				title,
+				authors[0] || "",
+				seriesName,
+				seriesBookOrder
+			].join("|");
+			let resolutionPromise = resolutionCache.get(cacheKey);
+			if (!resolutionPromise) {
+				resolutionPromise = resolveCanonicalCatalogWork(sql, {
+					title,
+					author: authors[0] || "",
+					isbn10: item.isbn10,
+					isbn13: item.isbn13,
+					googleBooksId: item.googleBooksId,
+					sources: catalogSourcesForResult(item),
+					seriesName,
+					seriesBookOrder,
+					pageCount: item.pageCount,
+					publishedYear: publishedYear(item.publishedDate)
+				});
+				resolutionCache.set(cacheKey, resolutionPromise);
+			}
+			const resolution = await resolutionPromise;
+			const resolvedSeriesName = resolution?.seriesName || seriesName;
+			const resolvedSeriesBookOrder = Number(resolution?.seriesBookOrder || 0) || seriesBookOrder;
+			const resolvedAuthor = resolution?.author || authors[0] || "";
 			return {
 				...item,
-				title,
-				bookId: Number(item.bookId || 0) > 0 ? Number(item.bookId || 0) : (match?.bookId || 0),
-				authorId: Number(item.authorId || 0) > 0 ? Number(item.authorId || 0) : (match?.authorId || 0),
-				seriesName,
-				seriesBookOrder,
-				seriesLabel: item.seriesLabel || match?.seriesLabel || formatSeriesSearchLabel(seriesName, seriesBookOrder)
+				title: resolution?.title || title,
+				authors: resolvedAuthor ? [resolvedAuthor] : authors,
+				description: resolution?.description || item.description,
+				thumbnail: resolution?.coverUrl || item.thumbnail,
+				bookId: resolution?.bookId || Number(item.bookId || 0) || 0,
+				authorId: resolution?.authorId || Number(item.authorId || 0) || 0,
+				isbn10: item.isbn10 || resolution?.isbn10 || "",
+				isbn13: item.isbn13 || resolution?.isbn13 || "",
+				googleBooksId: item.googleBooksId || resolution?.googleBooksId || "",
+				pageCount: item.pageCount || resolution?.pageCount || null,
+				publishedDate: item.publishedDate || (resolution?.publishedYear ? String(resolution.publishedYear) : ""),
+				seriesName: resolvedSeriesName,
+				seriesBookOrder: resolvedSeriesBookOrder,
+				seriesLabel: item.seriesLabel || formatSeriesSearchLabel(resolvedSeriesName, resolvedSeriesBookOrder)
 			};
-		})
+		};
+		const mappedWithIds = (await Promise.all(mapped.map(resolveSearchResult)))
 			.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.catalog", index, query }))
 			.filter((result): result is SearchResult => !!result);
 		const results = dedupeVariants(mappedWithIds, query)
