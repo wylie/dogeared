@@ -3,14 +3,13 @@ import Layout from "../../layouts/Layout.astro";
 import BookCard from "../../components/BookCard.astro";
 import ShelfDropdown from "../../components/ShelfDropdown.astro";
 import RatingControl from "../../components/RatingControl.astro";
-import ExternalAuthorBooks from "../../components/ExternalAuthorBooks.astro";
 import { getNeonSql } from "../../lib/neon";
 import { resolveUserBySession } from "../../lib/auth";
 import { authorHref, canonicalizeAuthor, normalizeAuthorName, slugifyAuthor } from "../../lib/author";
 import { fetchExternalAuthorBooks, type ExternalAuthorBook } from "../../lib/externalAuthorBooks";
 import { authorCanonicalPath } from "../../lib/indexing";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
-import { ensureSeriesSchema, groupAuthorBooksBySeries } from "../../lib/series";
+import { ensureSeriesSchema, inferKnownSeriesMetadata } from "../../lib/series";
 import { loadCollectionsForAuthor, type CollectionRecord } from "../../lib/collections";
 import { ensureCanonicalWorkSchema } from "../../lib/catalogWorks";
 import { canonicalizeCatalogAuthor, canonicalizeCatalogTitle } from "../../lib/catalogKeys";
@@ -43,6 +42,28 @@ type BookRow = {
 	chronologicalOrder: number;
 };
 
+type BibliographyItem = {
+	kind: "local" | "external";
+	id: string;
+	title: string;
+	author: string;
+	seriesKey: string;
+	seriesName: string;
+	bookOrder: number;
+	publicationOrder: number;
+	chronologicalOrder: number;
+	publishedYear: number;
+	localBook?: BookRow;
+	externalBook?: ExternalAuthorBook;
+};
+
+type BibliographySection = {
+	id: string;
+	title: string;
+	kind: "series" | "standalone";
+	books: BibliographyItem[];
+};
+
 const slug = String(Astro.params.slug || "").trim().toLowerCase();
 const requestedName = normalizeAuthorName(Astro.url.searchParams.get("name"));
 const canonicalFromSlug = slug.replace(/[^a-z0-9]+/g, "");
@@ -72,6 +93,102 @@ function renderAverageStars(value: number) {
 	const hasHalf = rounded - full >= 0.5;
 	const empty = 5 - full - (hasHalf ? 1 : 0);
 	return `${"★".repeat(full)}${hasHalf ? "☆" : ""}${"☆".repeat(Math.max(0, empty))}`;
+}
+
+function numericOrder(value: unknown) {
+	const parsed = Number(value || 0);
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function seriesGroupingKey(name: string) {
+	const canonicalName = canonicalizeCatalogTitle(name);
+	return canonicalName ? `series:${canonicalName}` : "";
+}
+
+function formatSeriesSectionTitle(name: string) {
+	const clean = String(name || "").trim();
+	if (!clean) return "";
+	return /\bseries$/i.test(clean) ? clean : `${clean} Series`;
+}
+
+function compareBibliographyItems(a: BibliographyItem, b: BibliographyItem) {
+	const aOrder = numericOrder(a.bookOrder) || numericOrder(a.publicationOrder) || numericOrder(a.chronologicalOrder);
+	const bOrder = numericOrder(b.bookOrder) || numericOrder(b.publicationOrder) || numericOrder(b.chronologicalOrder);
+	if (aOrder !== bOrder) return (aOrder || Number.MAX_SAFE_INTEGER) - (bOrder || Number.MAX_SAFE_INTEGER);
+	if (a.publishedYear !== b.publishedYear) return (a.publishedYear || Number.MAX_SAFE_INTEGER) - (b.publishedYear || Number.MAX_SAFE_INTEGER);
+	return a.title.localeCompare(b.title);
+}
+
+function buildAuthorBibliographySections(localBooks: BookRow[], missingBooks: ExternalAuthorBook[]) {
+	const seriesSections = new Map<string, BibliographySection>();
+	const standalone: BibliographyItem[] = [];
+	const appendItem = (item: BibliographyItem) => {
+		if (item.seriesKey && item.seriesName) {
+			const section = seriesSections.get(item.seriesKey) || {
+				id: item.seriesKey.replace(/[^a-z0-9-]+/gi, "-"),
+				title: formatSeriesSectionTitle(item.seriesName),
+				kind: "series" as const,
+				books: []
+			};
+			section.books.push(item);
+			seriesSections.set(item.seriesKey, section);
+		} else {
+			standalone.push(item);
+		}
+	};
+
+	for (const book of localBooks) {
+		const seriesName = String(book.seriesName || "").trim();
+		const bookOrder = numericOrder(book.bookOrder);
+		appendItem({
+			kind: "local",
+			id: `local-${book.id}`,
+			title: book.title,
+			author: book.author,
+			seriesKey: seriesName ? seriesGroupingKey(seriesName) : "",
+			seriesName,
+			bookOrder,
+			publicationOrder: numericOrder(book.publicationOrder) || bookOrder,
+			chronologicalOrder: numericOrder(book.chronologicalOrder) || bookOrder,
+			publishedYear: Math.max(0, Number(book.publishedYear || 0) || 0),
+			localBook: book
+		});
+	}
+
+	for (const book of missingBooks) {
+		const inferred = inferKnownSeriesMetadata({ title: book.title, author: book.author });
+		const seriesName = String(inferred?.seriesName || "").trim();
+		const bookOrder = numericOrder(inferred?.bookOrder);
+		appendItem({
+			kind: "external",
+			id: `external-${book.sourceWorkId || canonicalizeCatalogTitle(book.title)}`,
+			title: book.title,
+			author: book.author,
+			seriesKey: seriesName ? seriesGroupingKey(seriesName) : "",
+			seriesName,
+			bookOrder,
+			publicationOrder: bookOrder,
+			chronologicalOrder: bookOrder,
+			publishedYear: Math.max(0, Number(book.publishedYear || 0) || 0),
+			externalBook: book
+		});
+	}
+
+	const sections = Array.from(seriesSections.values())
+		.map((section) => ({ ...section, books: [...section.books].sort(compareBibliographyItems) }))
+		.sort((a, b) => a.title.localeCompare(b.title));
+	if (standalone.length > 0) {
+		sections.push({
+			id: "standalone",
+			title: "Standalone Books",
+			kind: "standalone",
+			books: [...standalone].sort((a, b) => {
+				if (a.publishedYear !== b.publishedYear) return (a.publishedYear || Number.MAX_SAFE_INTEGER) - (b.publishedYear || Number.MAX_SAFE_INTEGER);
+				return a.title.localeCompare(b.title);
+			})
+		});
+	}
+	return sections;
 }
 
 async function fetchOpenLibraryBio(name: string) {
@@ -279,7 +396,8 @@ try {
 	errorMessage = error instanceof Error ? error.message : "Failed to load author page.";
 }
 if (authorName) externalBooks = await fetchExternalAuthorBooks(authorName, books);
-const bookGroups = groupAuthorBooksBySeries(books);
+const bibliographySections = buildAuthorBibliographySections(books, externalBooks);
+const knownBookCount = bibliographySections.reduce((total, section) => total + section.books.length, 0);
 
 const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 const cleanAuthorPath = displayName ? authorCanonicalPath(displayName) : "/authors";
@@ -291,7 +409,7 @@ if (displayName) {
 }
 const authorRobots = !errorMessage && books.length > 0 ? "index,follow" : "noindex,follow";
 const authorDescription = displayName
-	? `${displayName} on DogEared: ${books.length.toLocaleString()} books, ${readersCount.toLocaleString()} readers, and shelf activity.`
+	? `${displayName} on DogEared: ${knownBookCount.toLocaleString()} known books, ${readersCount.toLocaleString()} readers, and shelf activity.`
 	: "Browse authors and their books on DogEared.";
 const authorStructuredData = displayName
 	? JSON.stringify([
@@ -333,7 +451,7 @@ const authorStructuredData = displayName
 			</div>
 			<div class="author-meta">
 				<h1>{displayName || "Author"}</h1>
-				<p class="meta">Books on DogEared: {books.length.toLocaleString()}</p>
+				<p class="meta">Known books: {knownBookCount.toLocaleString()}</p>
 				<p class="meta">Readers: {readersCount.toLocaleString()} · Shelf entries: {shelvesCount.toLocaleString()}</p>
 				{bio ? (
 					<p class="bio">
@@ -368,69 +486,91 @@ const authorStructuredData = displayName
 				</section>
 			)}
 
-			<section class="books-section">
-				<h2>Books In DogEared</h2>
-			{books.length === 0 ? (
-				<p>No books by this author have been added yet. Choose a book below to start this author's DogEared shelf.</p>
+			<section class="books-section" aria-label={`${displayName || "Author"} bibliography`}>
+			{bibliographySections.length === 0 ? (
+				<p>No known books for this author are available yet.</p>
 			) : (
 				<div class="author-book-groups">
-					{bookGroups.map((group) => (
+					{bibliographySections.map((group) => (
 						<section class="author-book-group" aria-labelledby={`author-book-group-${group.id}`}>
-							<h3 id={`author-book-group-${group.id}`}>{group.title}</h3>
+							<h2 id={`author-book-group-${group.id}`}>{group.title}</h2>
 							<ul class="book-grid">
-								{group.books.map((book) => (
+								{group.books.map((entry) => entry.localBook ? (
 									<BookCard
-										title={book.title}
-										titleHref={`/book?bookId=${encodeURIComponent(String(book.id))}`}
-										author={book.author}
-										authorHref={book.author ? authorHref(book.author, book.authorId) : ""}
-										thumbnail={book.coverUrl}
-										description={book.synopsis || "Synopsis unavailable for this title."}
-										readers={book.readers}
-										shelfEntries={book.shelves}
-										publishedLabel={book.publishedYear > 0 ? String(book.publishedYear) : ""}
-										pageCount={book.pageCount}
-										averageRating={book.averageRating}
-										seriesLabel={book.seriesName && book.bookOrder > 0 ? `Book ${book.bookOrder}` : ""}
-										genres={book.genres}
+										title={entry.localBook.title}
+										titleHref={`/book?bookId=${encodeURIComponent(String(entry.localBook.id))}`}
+										author={entry.localBook.author}
+										authorHref={entry.localBook.author ? authorHref(entry.localBook.author, entry.localBook.authorId) : ""}
+										thumbnail={entry.localBook.coverUrl}
+										description={entry.localBook.synopsis || "Synopsis unavailable for this title."}
+										readers={entry.localBook.readers}
+										shelfEntries={entry.localBook.shelves}
+										publishedLabel={entry.localBook.publishedYear > 0 ? String(entry.localBook.publishedYear) : ""}
+										pageCount={entry.localBook.pageCount}
+										averageRating={entry.localBook.averageRating}
+										seriesLabel={entry.bookOrder > 0 ? `Book ${entry.bookOrder}` : ""}
+										genres={entry.localBook.genres}
 									>
 										<div slot="preMeta">
-											{viewerStatusByBookId.get(Number(book.id || 0)) === "finished" && (
+											{viewerStatusByBookId.get(Number(entry.localBook.id || 0)) === "finished" && (
 												<RatingControl
-													bookId={String(book.id || 0)}
-													rating={viewerRatingByBookId.get(Number(book.id || 0)) || 0}
+													bookId={String(entry.localBook.id || 0)}
+													rating={viewerRatingByBookId.get(Number(entry.localBook.id || 0)) || 0}
 													editable={true}
 												/>
 											)}
-											{viewerStatusByBookId.get(Number(book.id || 0)) !== "finished" && !(Number(book.ratingCount || 0) > 0) && (
+											{viewerStatusByBookId.get(Number(entry.localBook.id || 0)) !== "finished" && !(Number(entry.localBook.ratingCount || 0) > 0) && (
 												<p class="meta">No ratings yet.</p>
 											)}
 										</div>
 										<div slot="actions">
 											<ShelfDropdown attrs={{
-												"data-book-id": String(book.id || 0),
-												"data-initial-status": viewerStatusByBookId.get(Number(book.id || 0)) || "",
-												"data-title": book.title,
-												"data-author": book.author,
-												"data-cover": book.coverUrl,
-												"data-description": book.synopsis,
-												"data-pages": String(book.pageCount || 0),
-												"data-language": book.language,
-												"data-isbn10": book.isbn10,
-												"data-isbn13": book.isbn13,
-												"data-google-books-id": book.googleBooksId,
-												"data-categories": JSON.stringify(book.genres ?? [])
+												"data-book-id": String(entry.localBook.id || 0),
+												"data-initial-status": viewerStatusByBookId.get(Number(entry.localBook.id || 0)) || "",
+												"data-title": entry.localBook.title,
+												"data-author": entry.localBook.author,
+												"data-cover": entry.localBook.coverUrl,
+												"data-description": entry.localBook.synopsis,
+												"data-pages": String(entry.localBook.pageCount || 0),
+												"data-language": entry.localBook.language,
+												"data-isbn10": entry.localBook.isbn10,
+												"data-isbn13": entry.localBook.isbn13,
+												"data-google-books-id": entry.localBook.googleBooksId,
+												"data-categories": JSON.stringify(entry.localBook.genres ?? [])
 											}} />
 										</div>
 									</BookCard>
-								))}
+								) : entry.externalBook ? (
+									<BookCard
+										title={entry.externalBook.title}
+										author={entry.externalBook.author}
+										thumbnail={entry.externalBook.coverUrl}
+										publishedLabel={entry.externalBook.publishedYear > 0 ? String(entry.externalBook.publishedYear) : ""}
+										seriesLabel={entry.bookOrder > 0 ? `Book ${entry.bookOrder}` : ""}
+										showCommunityStats={false}
+									>
+										<div slot="actions">
+											<ShelfDropdown attrs={{
+												"data-book-id": "",
+												"data-title": entry.externalBook.title,
+												"data-author": entry.externalBook.author,
+												"data-cover": entry.externalBook.coverUrl,
+												"data-isbn10": entry.externalBook.isbn10,
+												"data-isbn13": entry.externalBook.isbn13,
+												"data-published-date": entry.externalBook.publishedYear > 0 ? String(entry.externalBook.publishedYear) : "",
+												"data-source": "open_library",
+												"data-source-work-id": entry.externalBook.sourceWorkId,
+												"data-source-url": entry.externalBook.sourceUrl
+											}} />
+										</div>
+									</BookCard>
+								) : null)}
 							</ul>
 						</section>
 					))}
 				</div>
 			)}
 			</section>
-			<ExternalAuthorBooks books={externalBooks} />
 	</div>
 </Layout>
 
@@ -626,14 +766,14 @@ const authorStructuredData = displayName
 		color: var(--color-text-muted);
 	}
 	.books-section { margin-top: 0.95rem; }
-	.books-section h2 { margin: 0 0 0.6rem; }
 	.author-book-groups {
 		display: grid;
 		gap: 1rem;
 	}
-	.author-book-group h3 {
+	.author-book-group h2 {
 		margin: 0 0 0.45rem;
-		font-size: 1.05rem;
+		font-size: 1.1rem;
+		line-height: 1.2;
 	}
 	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.95rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.book-card-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }

@@ -55,20 +55,26 @@ test("external author books exclude local titles and duplicates", () => {
 	assert.equal(result[0]?.sourceUrl, "https://openlibrary.org/works/OL2W");
 });
 
-test("external author cards use DogEared shelf conversion without outbound title links", () => {
-	const source = readFileSync("src/components/ExternalAuthorBooks.astro", "utf8");
+test("author bibliography cards use DogEared shelf conversion without outbound title links", () => {
+	const source = readFileSync("src/pages/author/[slug].astro", "utf8");
 	assert.equal(source.includes("<BookCard"), true);
 	assert.equal(source.includes("<ShelfDropdown"), true);
 	assert.equal(source.includes('"data-source": "open_library"'), true);
 	assert.equal(source.includes("Search DogEared"), false);
-	assert.equal(source.includes('target="_blank"'), false);
+	assert.equal(source.includes("titleHref={entry.externalBook"), false);
+	assert.equal(source.includes("href={entry.externalBook.sourceUrl"), false);
 	assert.equal(source.includes("Additional titles from Open Library"), false);
 });
 
-test("author pages separate local and external books", () => {
+test("author pages organize local and external books by reader-facing bibliography", () => {
 	const source = readFileSync("src/pages/author/[slug].astro", "utf8");
-	assert.equal(source.includes("Books In DogEared"), true);
-	assert.equal(source.includes("<ExternalAuthorBooks books={externalBooks}"), true);
+	assert.equal(source.includes("Books In DogEared"), false);
+	assert.equal(source.includes("Not Yet In DogEared"), false);
+	assert.equal(source.includes("<ExternalAuthorBooks"), false);
+	assert.equal(source.includes("buildAuthorBibliographySections"), true);
+	assert.equal(source.includes("formatSeriesSectionTitle"), true);
+	assert.equal(source.includes("inferKnownSeriesMetadata"), true);
+	assert.equal(source.includes("Known books:"), true);
 	assert.equal(source.includes("books.map((book) => book.title)"), false);
 	assert.equal(source.includes("dropdown.dataset.bookId = String(bookId)"), true);
 	assert.equal(source.includes("/api/shelf/custom-shelf-books"), true);
@@ -81,7 +87,7 @@ test("author pages group by canonical Work series metadata without duplicate boo
 	assert.equal(source.includes("sibling.work_id = b.work_id"), true);
 	assert.equal(source.includes("bw.series_position as book_order"), true);
 	assert.equal(source.includes("series:${seriesId}:${bookOrder}"), true);
-	assert.equal(source.includes('seriesLabel={book.seriesName && book.bookOrder > 0 ? `Book ${book.bookOrder}` : ""}'), true);
+	assert.equal(source.includes('seriesLabel={entry.bookOrder > 0 ? `Book ${entry.bookOrder}` : ""}'), true);
 	assert.equal(source.includes("series-chip"), false);
 	assert.equal(source.includes("`${book.seriesName}${book.bookOrder > 0"), false);
 });

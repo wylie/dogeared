@@ -181,7 +181,7 @@ Limitations: Author quality depends on catalog and backfill data.
 
 Status: Complete
 
-Author pages show author metadata, reader/shelf counts, editorial collections featuring the author, unique Works in DogEared grouped by series where available, standalone Works, and shelf controls. Grouping uses structured series metadata from the exact representative row, another edition row for the same Work, or canonical Work fields. A title is treated as standalone only when no structured series relationship exists.
+Author pages show author metadata, reader/shelf counts, editorial collections featuring the author, and a bibliography organized around what the author has written. Series sections are the primary grouping, their headings append `Series`, and they mix DogEared Works with known missing titles in reading order. Local Works render as full BookCards with standard shelf controls; known missing titles use the compact add-to-shelf presentation so readers can expand the catalog without seeing a separate catalog-status section. Standalone Books is the only non-series grouping and is sorted by publication date. Grouping uses structured series metadata from the exact representative row, another edition row for the same Work, canonical Work fields, or trusted known-series inference for external missing titles. A title is treated as standalone only when no structured or trusted series relationship exists.
 
 Limitations: Author bio and photo may be missing.
 

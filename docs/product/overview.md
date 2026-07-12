@@ -38,7 +38,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Books: curated catalog views such as trending, most shelved, top rated, and recently active.
 - Book detail: metadata, series context, synopsis, genres, topics, shelf controls, ratings, Readers Also Enjoyed recommendations, private journal entry controls for shelved books, reviews, and related activity.
 - Authors: searchable and sortable author index.
-- Author detail: author profile, editorial collections featuring the author, author books grouped by series where available, standalone books, and external author-book context.
+- Author detail: author profile, editorial collections featuring the author, and a bibliography grouped by series first, with standalone books only when no series relationship is known.
 - Editorial Collections: curated book lists with editorial introductions, book ordering, notes, quotes, and shelf controls. Collection routes remain available, but Collections is hidden from primary navigation until there is useful published content to browse.
 - Profiles: public reader identity and current reading state, including profile card, bio, favorite book/author, concise reading goal summary, shelf summary, current reads, recent activity, and settings access.
 - My Reading Life: private historical reflection across finished books, pages, streaks, goals, ratings, timeline, reading calendar, genre and author history, milestones, fun statistics, and yearly summaries.
@@ -111,7 +111,7 @@ When a book belongs to a series, the book page shows a dedicated Series section 
 
 Series cards use DogEared's stored catalog metadata as the source of truth for covers. When a series entry is missing a cover, Book Detail schedules non-blocking metadata enrichment that first checks existing Work, Edition, book, and series-entry metadata, then tries Open Library, then Google Books. Successful covers are saved back to DogEared's catalog tables so later page loads use local metadata. No-cover and failed lookup attempts are cached before retrying, which avoids repeated external requests for titles that providers cannot resolve.
 
-Author pages group books by structured series metadata from `series_book` and canonical Work fields, not by title parsing. A book is standalone only when no series relationship exists on its representative row, another edition row for the same Work, or the Work itself. Search results, discovery cards, recommendation cards, author cards, and book detail cards show concise series labels when metadata exists; inside a visible series group, cards use only the book-position label such as `Book 7` because the section heading already supplies the series name.
+Author pages group books by structured series metadata from `series_book` and canonical Work fields, not by title parsing. Series headings include the word `Series` and can mix canonical DogEared Works with trusted external missing-title context in reading order. Catalog status is expressed through the card action, not through separate "in DogEared" and "not yet in DogEared" sections. A book is standalone only when no series relationship exists on its representative row, another edition row for the same Work, or the Work itself. Search results, discovery cards, recommendation cards, author cards, and book detail cards show concise series labels when metadata exists; inside a visible series group, cards use only the book-position label such as `Book 7` because the section heading already supplies the series name.
 
 ### Community Discovery
 
