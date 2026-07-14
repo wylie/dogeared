@@ -2,32 +2,16 @@
 import Layout from "../layouts/Layout.astro";
 import { resolveUserBySession } from "../lib/auth";
 import { getNeonSql } from "../lib/neon";
+import { loadFinishedBooksForReader } from "../lib/finishedBooks";
 import {
 	buildReadingLifeSummary,
 	filterReadingTimeline,
 	type ReadingLifeCurrentBook,
 	type ReadingLifeFinishedBook,
-	type ReadingLifeGenre,
 	type ReadingLifeProgressEvent
 } from "../lib/readingLife.ts";
 
 export const prerender = false;
-
-type RawFinishedBookRow = {
-	id: number;
-	title: string;
-	primary_author: string;
-	author_id: number | null;
-	cover_url: string;
-	page_count: number;
-	published_year: number | null;
-	finished_date: string | null;
-	updated_at: string | null;
-	rating: number | null;
-	genres: ReadingLifeGenre[] | string | null;
-	series_id: number | null;
-	series_name: string | null;
-};
 
 type RawCurrentBookRow = {
 	id: number;
@@ -44,17 +28,6 @@ type RawProgressRow = {
 	date: string;
 	page_delta: number;
 };
-
-function parseGenres(value: RawFinishedBookRow["genres"]): ReadingLifeGenre[] {
-	const raw = typeof value === "string" ? JSON.parse(value || "[]") : value;
-	if (!Array.isArray(raw)) return [];
-	return raw
-		.map((item) => ({
-			slug: String((item as ReadingLifeGenre)?.slug || "").trim(),
-			name: String((item as ReadingLifeGenre)?.name || "").trim()
-		}))
-		.filter((genre) => genre.name);
-}
 
 function formatDate(value: string) {
 	if (!value) return "Date unavailable";
@@ -147,35 +120,7 @@ if (viewerUserId) {
 				where id = ${viewerUserId}::uuid
 				limit 1
 			`,
-			sql<RawFinishedBookRow[]>`
-				select
-					b.id,
-					b.title,
-					b.primary_author,
-					b.author_id,
-					b.cover_url,
-					b.page_count,
-					b.published_year,
-					ub.finished_date::text as finished_date,
-					ub.updated_at::text as updated_at,
-					ub.rating,
-					coalesce(
-						json_agg(distinct jsonb_build_object('slug', bg.genre_slug, 'name', bg.genre_name))
-							filter (where bg.genre_slug is not null),
-						'[]'::json
-					) as genres,
-					s.id as series_id,
-					s.name as series_name
-				from user_book ub
-				join book b on b.id = ub.book_id
-				left join book_genre bg on bg.book_id = b.id
-				left join series_book sb on sb.book_id = b.id
-				left join series s on s.id = sb.series_id
-				where ub.user_id = ${viewerUserId}::uuid
-					and ub.status = 'finished'
-				group by b.id, b.title, b.primary_author, b.author_id, b.cover_url, b.page_count, b.published_year, ub.finished_date, ub.updated_at, ub.rating, s.id, s.name
-				order by coalesce(ub.finished_date, ub.updated_at::date) desc, b.title asc
-			`,
+			loadFinishedBooksForReader(sql, viewerUserId),
 			sql<RawCurrentBookRow[]>`
 				select
 					b.id,
@@ -207,21 +152,7 @@ if (viewerUserId) {
 			? profileRows[0].profile_data as Record<string, unknown>
 			: {};
 		annualGoal = String(profileData.readingGoal || "");
-		finishedBooks = finishedRows.map((row) => ({
-			id: Number(row.id || 0),
-			title: String(row.title || "Untitled"),
-			author: String(row.primary_author || "Unknown Author"),
-			authorId: row.author_id ? Number(row.author_id) : null,
-			coverUrl: String(row.cover_url || ""),
-			pageCount: Number(row.page_count || 0),
-			publishedYear: row.published_year ? Number(row.published_year) : null,
-			finishedDate: String(row.finished_date || ""),
-			updatedAt: String(row.updated_at || ""),
-			rating: row.rating ? Number(row.rating) : null,
-			genres: parseGenres(row.genres),
-			seriesId: row.series_id ? Number(row.series_id) : null,
-			seriesName: String(row.series_name || "")
-		}));
+		finishedBooks = finishedRows;
 		currentBooks = currentRows.map((row) => ({
 			id: Number(row.id || 0),
 			title: String(row.title || "Untitled"),

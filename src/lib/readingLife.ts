@@ -1,4 +1,5 @@
-import { filterBooksCompletedForReadingGoal, resolveReadingGoalProgress, type ReadingGoalProgress } from "./readingGoal.ts";
+import { canonicalizeFinishedBooks, filterCanonicalFinishedBooksForYear } from "./finishedBooks.ts";
+import { resolveReadingGoalProgress, type ReadingGoalProgress } from "./readingGoal.ts";
 
 export type ReadingLifeGenre = {
 	slug: string;
@@ -7,6 +8,9 @@ export type ReadingLifeGenre = {
 
 export type ReadingLifeFinishedBook = {
 	id: number;
+	bookId?: number;
+	workId?: number | null;
+	canonicalWorkKey?: string;
 	title: string;
 	author: string;
 	authorId?: number | null;
@@ -151,7 +155,7 @@ function dateFromKey(key: string) {
 }
 
 function getFinishedDate(book: ReadingLifeFinishedBook) {
-	return dateKey(book.finishedDate || book.updatedAt);
+	return dateKey(book.finishedDate);
 }
 
 function dayOfYear(date: Date) {
@@ -443,13 +447,14 @@ export function buildReadingLifeSummary(input: {
 }): ReadingLifeSummary {
 	const now = input.now && Number.isFinite(input.now.getTime()) ? input.now : new Date();
 	const year = now.getUTCFullYear();
-	const timeline = buildReadingTimeline(input.finishedBooks);
-	const thisYearBooks = filterBooksCompletedForReadingGoal(timeline, now);
+	const finishedBooks = canonicalizeFinishedBooks(input.finishedBooks);
+	const timeline = buildReadingTimeline(finishedBooks);
+	const thisYearBooks = filterCanonicalFinishedBooksForYear(timeline, year);
 	const pagesReadThisYear = thisYearBooks.reduce((sum, book) => sum + Math.max(0, Math.round(toNumber(book.pageCount))), 0);
-	const ratings = input.finishedBooks.map((book) => clampRating(book.rating)).filter((rating) => rating > 0);
-	const genreInsights = buildGenreInsights(input.finishedBooks);
+	const ratings = finishedBooks.map((book) => clampRating(book.rating)).filter((rating) => rating > 0);
+	const genreInsights = buildGenreInsights(finishedBooks);
 	const thisYearGenreInsights = buildGenreInsights(thisYearBooks);
-	const authorInsights = buildAuthorInsights(input.finishedBooks);
+	const authorInsights = buildAuthorInsights(finishedBooks);
 	const thisYearAuthorInsights = buildAuthorInsights(thisYearBooks);
 	const activityDates = [
 		...input.progressEvents.map((event) => event.date),
@@ -472,12 +477,12 @@ export function buildReadingLifeSummary(input: {
 	return {
 		overview,
 		timeline,
-		calendarDays: buildReadingCalendar({ finishedBooks: input.finishedBooks, progressEvents: input.progressEvents, year }),
+		calendarDays: buildReadingCalendar({ finishedBooks, progressEvents: input.progressEvents, year }),
 		genreInsights,
 		genreTrend: buildGenreTrend(timeline),
 		authorInsights,
-		funStats: buildFunStats(input.finishedBooks),
-		yearSummaries: buildYearSummaries(input.finishedBooks),
+		funStats: buildFunStats(finishedBooks),
+		yearSummaries: buildYearSummaries(finishedBooks),
 		availableYears: Array.from(new Set(timeline.map((book) => book.year))).sort((a, b) => b - a)
 	};
 }

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { canonicalizeFinishedBooks, filterCanonicalFinishedBooksForYear } from "../src/lib/finishedBooks.ts";
 import {
 	filterBooksCompletedForReadingGoal,
 	parseAnnualReadingGoal,
@@ -60,6 +61,69 @@ test("reading goal completion helper uses finished dates as the shared annual so
 	assert.equal((completed[0] as any).title, "Finished");
 });
 
+test("canonical finished book filter counts one Work per year from finished dates", () => {
+	const books = canonicalizeFinishedBooks([
+		{
+			id: 1,
+			bookId: 1,
+			workId: 10,
+			title: "Multiple Edition Book",
+			author: "Taylor Reed",
+			finishedDate: "2026-02-01",
+			updatedAt: "2026-02-01T12:00:00Z"
+		},
+		{
+			id: 2,
+			bookId: 2,
+			workId: 10,
+			title: "Multiple Edition Book: Paperback",
+			author: "Taylor Reed",
+			finishedDate: "2026-02-01",
+			updatedAt: "2026-02-01T10:00:00Z"
+		},
+		{
+			id: 3,
+			bookId: 3,
+			workId: 11,
+			title: "Activity Only",
+			author: "Taylor Reed",
+			finishedDate: "",
+			updatedAt: "2026-03-01T10:00:00Z"
+		},
+		{
+			id: 4,
+			bookId: 4,
+			workId: 12,
+			title: "Moved Out and Back",
+			author: "Morgan Lee",
+			finishedDate: "2026-04-15",
+			updatedAt: "2026-04-16T10:00:00Z"
+		},
+		{
+			id: 5,
+			bookId: 5,
+			workId: 12,
+			title: "Moved Out and Back",
+			author: "Morgan Lee",
+			finishedDate: "2026-04-15",
+			updatedAt: "2026-04-15T10:00:00Z"
+		},
+		{
+			id: 6,
+			bookId: 6,
+			workId: 13,
+			title: "Prior Year",
+			author: "Morgan Lee",
+			finishedDate: "2025-12-31",
+			updatedAt: "2025-12-31T10:00:00Z"
+		}
+	]);
+
+	const completed2026 = filterCanonicalFinishedBooksForYear(books, 2026);
+	assert.deepEqual(completed2026.map((book) => book.title), ["Moved Out and Back", "Multiple Edition Book"]);
+	assert.equal(filterCanonicalFinishedBooksForYear(books, 2025).length, 1);
+});
+
 test("profile page renders reading goal between profile card and shelf summary", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	const aboutIndex = source.indexOf('<section id="about" class="profile-card">');
@@ -70,7 +134,8 @@ test("profile page renders reading goal between profile card and shelf summary",
 	assert.ok(summaryIndex > goalIndex);
 	assert.equal(source.includes("<strong>Reading goal:</strong>"), false);
 	assert.equal(source.includes("booksCompletedThisYear"), true);
-	assert.equal(source.includes("filterBooksCompletedForReadingGoal"), true);
+	assert.equal(source.includes("loadFinishedBooksForReader"), true);
+	assert.equal(source.includes("filterCanonicalFinishedBooksForYear"), true);
 	assert.equal(source.includes("resolveReadingGoalProgress"), true);
 	assert.equal(source.includes('aria-label="Reading goal progress"'), true);
 });

@@ -76,7 +76,86 @@ test("timeline supports year, month, and search filters", () => {
 	assert.deepEqual(timeline.map((book) => book.title), ["Spring Notes", "Winter Pages", "Ancient Libraries"]);
 	assert.deepEqual(filterReadingTimeline(timeline, { year: 2026 }).map((book) => book.title), ["Spring Notes", "Winter Pages"]);
 	assert.deepEqual(filterReadingTimeline(timeline, { year: 2026, month: 1 }).map((book) => book.title), ["Winter Pages"]);
+	assert.deepEqual(filterReadingTimeline(timeline, { year: 2026, month: 0 }).map((book) => book.title), ["Spring Notes", "Winter Pages"]);
+	assert.deepEqual(filterReadingTimeline(timeline, { year: 2026, query: "spring" }).map((book) => book.title), ["Spring Notes"]);
+	assert.deepEqual(filterReadingTimeline(timeline, { year: 2026, query: "avery" }).map((book) => book.title), ["Spring Notes", "Winter Pages"]);
 	assert.deepEqual(filterReadingTimeline(timeline, { query: "libraries" }).map((book) => book.title), ["Ancient Libraries"]);
+});
+
+test("reading life canonicalizes finished Works before overview and timeline counts", () => {
+	const summary = buildReadingLifeSummary({
+		finishedBooks: [
+			{
+				id: 10,
+				bookId: 10,
+				workId: 100,
+				title: "The Same Work",
+				author: "Jordan Bell",
+				pageCount: 250,
+				finishedDate: "2026-05-10",
+				updatedAt: "2026-05-10T12:00:00Z",
+				genres: [{ slug: "memoir", name: "Memoir" }]
+			},
+			{
+				id: 11,
+				bookId: 11,
+				workId: 100,
+				title: "The Same Work: Paperback",
+				author: "Jordan Bell",
+				pageCount: 250,
+				finishedDate: "2026-05-10",
+				updatedAt: "2026-05-10T11:00:00Z",
+				genres: [{ slug: "memoir", name: "Memoir" }]
+			},
+			{
+				id: 12,
+				bookId: 12,
+				workId: 101,
+				title: "Moved Out and Back",
+				author: "Riley Moon",
+				pageCount: 300,
+				finishedDate: "2026-06-02",
+				updatedAt: "2026-06-03T10:00:00Z",
+				genres: [{ slug: "fiction", name: "Fiction" }]
+			},
+			{
+				id: 13,
+				bookId: 13,
+				workId: 101,
+				title: "Moved Out and Back",
+				author: "Riley Moon",
+				pageCount: 300,
+				finishedDate: "2026-06-02",
+				updatedAt: "2026-06-02T10:00:00Z",
+				genres: [{ slug: "fiction", name: "Fiction" }]
+			},
+			{
+				id: 14,
+				bookId: 14,
+				workId: 102,
+				title: "Activity Timestamp Only",
+				author: "Riley Moon",
+				pageCount: 120,
+				updatedAt: "2026-07-01T10:00:00Z",
+				genres: [{ slug: "fiction", name: "Fiction" }]
+			}
+		],
+		currentBooks: [],
+		progressEvents: [
+			{ bookId: 10, date: "2026-05-09", pageDelta: 40 },
+			{ bookId: 10, date: "2026-05-10", pageDelta: 20 }
+		],
+		annualGoal: 10,
+		now: new Date("2026-07-01T12:00:00Z")
+	});
+
+	assert.equal(summary.overview.booksCompletedThisYear, 2);
+	assert.equal(summary.overview.goalProgress.completed, 2);
+	assert.equal(summary.timeline.length, 2);
+	assert.deepEqual(summary.timeline.map((book) => book.title), ["Moved Out and Back", "The Same Work"]);
+	assert.equal(filterReadingTimeline(summary.timeline, { year: 2026 }).length, summary.timeline.length);
+	assert.deepEqual(filterReadingTimeline(summary.timeline, { year: 2026, month: 5 }).map((book) => book.title), ["The Same Work"]);
+	assert.deepEqual(filterReadingTimeline(summary.timeline, { year: 2026, query: "riley" }).map((book) => book.title), ["Moved Out and Back"]);
 });
 
 test("calendar groups progress and completion activity by date", () => {

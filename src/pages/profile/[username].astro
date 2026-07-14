@@ -10,7 +10,8 @@ import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicS
 import { authorHref } from "../../lib/author";
 import { ensureCustomShelfSchema } from "../../lib/customShelves";
 import { daysSinceDate, resolveMomentumPrediction } from "../../lib/momentumPrediction";
-import { filterBooksCompletedForReadingGoal, readingGoalYear, resolveReadingGoalProgress } from "../../lib/readingGoal";
+import { filterCanonicalFinishedBooksForYear, loadFinishedBooksForReader } from "../../lib/finishedBooks";
+import { readingGoalYear, resolveReadingGoalProgress } from "../../lib/readingGoal";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
 import { ensureReviewSchema } from "../../lib/bookReviews";
 import { createNotification } from "../../lib/notifications";
@@ -514,51 +515,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			`
 			: Promise.resolve([]),
 		bundle.canViewActivity
-				? sql<Array<{
-					book_id: number;
-					title: string;
-					primary_author: string;
-					author_id: number | null;
-					cover_url: string;
-				language: string;
-				isbn10: string;
-				isbn13: string;
-				rating: number | null;
-				review_title: string | null;
-				finished_reflection: string | null;
-				review_spoiler: boolean | null;
-				review_updated_at: string | null;
-				finished_date: string | null;
-				updated_at: string;
-				genres: string[];
-			}>>`
-				select
-						b.id as book_id,
-						b.title,
-						b.primary_author,
-						b.author_id,
-						b.cover_url,
-					b.language,
-					b.isbn10,
-					b.isbn13,
-					ub.rating,
-					coalesce(ub.review_title, '') as review_title,
-					coalesce(ub.finished_reflection, '') as finished_reflection,
-					coalesce(ub.review_spoiler, false) as review_spoiler,
-					ub.review_updated_at::text as review_updated_at,
-					ub.finished_date::text as finished_date,
-					ub.updated_at::text as updated_at,
-					(
-						select coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}')
-						from book_genre bg where bg.book_id = b.id
-					) as genres
-				from user_book ub
-				join book b on b.id = ub.book_id
-				where ub.user_id = ${bundle.targetUserId}::uuid
-					and ub.status = 'finished'
-				order by coalesce(ub.finished_date, ub.updated_at) desc
-				limit 500
-			`
+			? loadFinishedBooksForReader(sql, bundle.targetUserId)
 			: Promise.resolve([]),
 		isOwnerViewer
 			? (async () => {
@@ -679,25 +636,24 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		!currentlyReadingKeys.has(bookIdentityKey({ title: item.title, author: item.author }))
 	));
 	finishedBooks = finishedRows.map((row) => ({
-		bookId: Number(row.book_id || 0),
+		bookId: Number(row.bookId || 0),
 		title: String(row.title || "").trim(),
-		author: String(row.primary_author || "").trim(),
-		authorId: Math.max(0, Number(row.author_id || 0) || 0),
-		thumbnail: String(row.cover_url || "").trim(),
+		author: String(row.author || "").trim(),
+		authorId: Math.max(0, Number(row.authorId || 0) || 0),
+		thumbnail: String(row.thumbnail || row.coverUrl || "").trim(),
 		language: String(row.language || "").trim(),
 		isbn10: String(row.isbn10 || "").trim(),
 		isbn13: String(row.isbn13 || "").trim(),
 		description: "",
 		rating: Math.max(0, Math.min(5, Number(row.rating || 0) || 0)),
-		reviewTitle: String(row.review_title || "").trim(),
-		reviewBody: String(row.finished_reflection || "").trim(),
-		reviewSpoiler: row.review_spoiler === true,
-		reviewUpdatedAt: String(row.review_updated_at || "").trim(),
-		finishedDate: String(row.finished_date || "").trim(),
-		updatedAt: String(row.updated_at || "").trim(),
-		genres: Array.isArray(row.genres) ? row.genres.map((genre) => String(genre || "").trim()).filter(Boolean) : []
+		reviewTitle: String(row.reviewTitle || "").trim(),
+		reviewBody: String(row.reviewBody || "").trim(),
+		reviewSpoiler: row.reviewSpoiler === true,
+		reviewUpdatedAt: String(row.reviewUpdatedAt || "").trim(),
+		finishedDate: String(row.finishedDate || "").trim(),
+		updatedAt: String(row.updatedAt || "").trim(),
+		genres: Array.isArray(row.genreNames) ? row.genreNames.map((genre) => String(genre || "").trim()).filter(Boolean) : []
 	}));
-	finishedBooks = dedupeByWorkIdentity(finishedBooks);
 	profileReviews = finishedBooks
 		.filter((book) => book.reviewTitle || book.reviewBody)
 		.filter((book) => {
@@ -1013,7 +969,7 @@ const pagedReading = paginate(currentlyReading, readingPage, PAGE_SIZE);
 const pagedWantToRead = paginate(wantToReadBooks, wantToReadPage, PAGE_SIZE);
 const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 const currentGoalYear = readingGoalYear();
-const booksCompletedThisYear = filterBooksCompletedForReadingGoal(finishedBooks)
+const booksCompletedThisYear = filterCanonicalFinishedBooksForYear(finishedBooks, currentGoalYear)
 	.sort((a, b) => finishedDateTimestamp(b.finishedDate) - finishedDateTimestamp(a.finishedDate));
 const readingGoal = resolveReadingGoalProgress({
 	goal: profile.readingGoal,
