@@ -139,3 +139,19 @@ test("profile page renders reading goal between profile card and shelf summary",
 	assert.equal(source.includes("resolveReadingGoalProgress"), true);
 	assert.equal(source.includes('aria-label="Reading goal progress"'), true);
 });
+
+test("profile refreshes annual reading goal and shelf summary after shelf mutations", () => {
+	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const refreshHelper = source.slice(
+		source.indexOf("async function refreshProfileSummarySectionsFromServer"),
+		source.indexOf("async function hydrateShelfEntriesFromServer")
+	);
+
+	assert.match(refreshHelper, /fetch\(window\.location\.href/);
+	assert.match(refreshHelper, /"X-Dogeared-Partial": "profile-reading-summary"/);
+	assert.match(refreshHelper, /new DOMParser\(\)\.parseFromString\(html, "text\/html"\)/);
+	assert.match(refreshHelper, /\["reading-goal", "shelf-summary"\]/);
+	assert.match(refreshHelper, /current\.replaceWith\(next\)/);
+	assert.match(refreshHelper, /await refreshProfileSummarySectionsFromServer\(\)/);
+	assert.doesNotMatch(refreshHelper, /window\.location\.reload/);
+});

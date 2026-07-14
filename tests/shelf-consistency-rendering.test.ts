@@ -82,3 +82,18 @@ test("roadmap reads like a public product direction page", () => {
 	assert.ok(dataSource.includes('category: "next"'));
 	assert.ok(dataSource.includes('category: "later"'));
 });
+
+test("shelf entry API does not create duplicate finished activity for already-finished books", () => {
+	const source = readFileSync("src/pages/api/shelf/entries.ts", "utf8");
+	const activityStatusBlock = source.slice(
+		source.indexOf('debugStage = "activity_status"'),
+		source.indexOf('if (rating !== null && previousRating !== rating)')
+	);
+
+	assert.match(source, /if \(!previousStatus \|\| previousStatus !== status\)/);
+	assert.match(activityStatusBlock, /insert into user_activity/);
+	assert.match(activityStatusBlock, /\$\{status\}/);
+	assert.doesNotMatch(source, /finishedMetadataChanged/);
+	assert.doesNotMatch(source, /activity_finished_metadata/);
+	assert.doesNotMatch(source, /previousStatus === "finished"[\s\S]+insert into user_activity/);
+});

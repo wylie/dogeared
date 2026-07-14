@@ -75,6 +75,108 @@ test("syncShelfEntryToServer reports unauthorized and sets redirect", async () =
 	}
 });
 
+test("syncShelfEntryToServer notifies reading views only after a successful save", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWindow = (globalThis as Record<string, unknown>).window;
+	const originalCustomEvent = (globalThis as Record<string, unknown>).CustomEvent;
+	const originalBroadcastChannel = (globalThis as Record<string, unknown>).BroadcastChannel;
+	const dispatchedEvents: Array<{ type: string; detail?: unknown }> = [];
+	const storageWrites: Array<[string, string]> = [];
+	const channelMessages: unknown[] = [];
+
+	(globalThis as unknown as { fetch: typeof fetch }).fetch = (async () =>
+		new Response(JSON.stringify({ ok: true, entry: { id: "entry_1" } }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" }
+		})) as typeof fetch;
+	(globalThis as Record<string, unknown>).CustomEvent = class {
+		type: string;
+		detail: unknown;
+		constructor(type: string, init?: { detail?: unknown }) {
+			this.type = type;
+			this.detail = init?.detail;
+		}
+	};
+	(globalThis as Record<string, unknown>).BroadcastChannel = class {
+		name: string;
+		constructor(name: string) {
+			this.name = name;
+		}
+		postMessage(message: unknown) {
+			channelMessages.push(message);
+		}
+		close() {}
+	};
+	(globalThis as Record<string, unknown>).window = {
+		location: { href: "" },
+		dispatchEvent: (event: { type: string; detail?: unknown }) => {
+			dispatchedEvents.push(event);
+			return true;
+		},
+		localStorage: {
+			setItem: (key: string, value: string) => storageWrites.push([key, value])
+		}
+	};
+
+	try {
+		const result = await syncShelfEntryToServer({ title: "Finished Book", status: "finished" });
+
+		assert.equal(result.ok, true);
+		assert.equal(dispatchedEvents.length, 1);
+		assert.equal(dispatchedEvents[0]?.type, "dogeared:reading-data-changed");
+		assert.equal(storageWrites[0]?.[0], "dogeared:reading-data-changed-at");
+		assert.match(storageWrites[0]?.[1] || "", /^\d+$/);
+		assert.deepEqual((channelMessages[0] as { type?: string })?.type, "changed");
+	} finally {
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
+		(globalThis as Record<string, unknown>).window = originalWindow;
+		(globalThis as Record<string, unknown>).CustomEvent = originalCustomEvent;
+		(globalThis as Record<string, unknown>).BroadcastChannel = originalBroadcastChannel;
+	}
+});
+
+test("syncShelfEntryToServer keeps reading views unchanged after a failed save", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWindow = (globalThis as Record<string, unknown>).window;
+	const originalCustomEvent = (globalThis as Record<string, unknown>).CustomEvent;
+	const dispatchedEvents: unknown[] = [];
+	const storageWrites: unknown[] = [];
+
+	(globalThis as unknown as { fetch: typeof fetch }).fetch = (async () =>
+		new Response(JSON.stringify({ error: "broken" }), {
+			status: 500,
+			headers: { "Content-Type": "application/json" }
+		})) as typeof fetch;
+	(globalThis as Record<string, unknown>).CustomEvent = class {
+		type: string;
+		constructor(type: string) {
+			this.type = type;
+		}
+	};
+	(globalThis as Record<string, unknown>).window = {
+		location: { href: "" },
+		dispatchEvent: (event: unknown) => {
+			dispatchedEvents.push(event);
+			return true;
+		},
+		localStorage: {
+			setItem: (key: string, value: string) => storageWrites.push([key, value])
+		}
+	};
+
+	try {
+		const result = await syncShelfEntryToServer({ title: "Failed Finish", status: "finished" });
+
+		assert.equal(result.ok, false);
+		assert.equal(dispatchedEvents.length, 0);
+		assert.equal(storageWrites.length, 0);
+	} finally {
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
+		(globalThis as Record<string, unknown>).window = originalWindow;
+		(globalThis as Record<string, unknown>).CustomEvent = originalCustomEvent;
+	}
+});
+
 test("syncShelfRatingToServer reports unauthorized and sets redirect", async () => {
 	const originalFetch = globalThis.fetch;
 	const originalWindow = (globalThis as Record<string, unknown>).window;

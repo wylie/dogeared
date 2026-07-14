@@ -3987,6 +3987,31 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		setNodeText(momentumStreakUnitNode, nextStreak === 1 ? "day" : "days");
 	}
 
+	async function refreshProfileSummarySectionsFromServer() {
+		try {
+			const response = await fetch(window.location.href, {
+				credentials: "same-origin",
+				headers: { "X-Dogeared-Partial": "profile-reading-summary" }
+			});
+			if (!response.ok) return false;
+			const html = await response.text();
+			const doc = new DOMParser().parseFromString(html, "text/html");
+			const sectionIds = ["reading-goal", "shelf-summary"];
+			let replaced = false;
+			for (const id of sectionIds) {
+				const current = document.getElementById(id);
+				const next = doc.getElementById(id);
+				if (current instanceof HTMLElement && next instanceof HTMLElement) {
+					current.replaceWith(next);
+					replaced = true;
+				}
+			}
+			return replaced;
+		} catch {
+			return false;
+		}
+	}
+
 	async function refreshProfileReadingUiAfterMutation(options = {}) {
 		const shouldHydrate = options?.hydrate !== false;
 		recalcMomentumFromDom();
@@ -3994,6 +4019,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			await hydrateShelfEntriesFromServer();
 			syncExistingState();
 		}
+		await refreshProfileSummarySectionsFromServer();
 		if (typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
 			window.dispatchEvent(new CustomEvent("dogeared:reading-data-changed"));
 		}

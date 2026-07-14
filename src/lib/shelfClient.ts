@@ -127,7 +127,20 @@ export function normalizeRatingValue(value: unknown) {
 
 function notifyReadingDataChanged() {
 	if (typeof window === "undefined" || typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
-	window.dispatchEvent(new CustomEvent("dogeared:reading-data-changed"));
+	const detail = { timestamp: Date.now() };
+	window.dispatchEvent(new CustomEvent("dogeared:reading-data-changed", { detail }));
+	try {
+		const channel = new BroadcastChannel("dogeared:reading-data");
+		channel.postMessage({ type: "changed", ...detail });
+		channel.close();
+	} catch {
+		// Same-tab events are enough when cross-tab messaging is unavailable.
+	}
+	try {
+		window.localStorage?.setItem("dogeared:reading-data-changed-at", String(detail.timestamp));
+	} catch {
+		// Storage notifications are best-effort cross-tab hydration.
+	}
 }
 
 export async function syncShelfRatingToServer(input: { bookId: unknown; rating: unknown }) {

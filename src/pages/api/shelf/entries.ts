@@ -669,12 +669,8 @@ export const POST: APIRoute = async ({ request }) => {
 			rating: number | null;
 			total_pages: number;
 			current_page: number;
-			finished_date: string | null;
-			finished_reflection: string | null;
-			review_title: string | null;
-			review_spoiler: boolean | null;
 		}>>`
-			select status, rating, total_pages, current_page, finished_date::text as finished_date, coalesce(finished_reflection, '') as finished_reflection, coalesce(review_title, '') as review_title, coalesce(review_spoiler, false) as review_spoiler
+			select status, rating, total_pages, current_page
 			from user_book
 			where user_id = ${userId}::uuid
 				and book_id = ${resolvedBookId || 0}
@@ -684,10 +680,6 @@ export const POST: APIRoute = async ({ request }) => {
 		const previousRating = normalizeRating(previousRows[0]?.rating);
 		const previousTotalPages = normalizePositiveInt(previousRows[0]?.total_pages);
 		const previousCurrentPage = normalizePositiveInt(previousRows[0]?.current_page);
-		const previousFinishedDate = String(previousRows[0]?.finished_date || "").trim();
-		const previousFinishedReflection = normalizeReviewBody(previousRows[0]?.finished_reflection);
-		const previousReviewTitle = normalizeReviewTitle(previousRows[0]?.review_title);
-		const previousReviewSpoiler = previousRows[0]?.review_spoiler === true;
 
 		let bookId = resolvedBookId;
 		let canonicalPageCount = Math.max(0, Number(pageCount || 0) || 0);
@@ -974,29 +966,6 @@ export const POST: APIRoute = async ({ request }) => {
 					${userId}::uuid,
 					${bookId},
 					${status}
-				)
-			`;
-		}
-		const finishedMetadataChanged = status === "finished" && (
-			previousStatus !== "finished"
-			|| previousRating !== rating
-			|| previousFinishedDate !== finishedDate
-			|| previousFinishedReflection !== finishedReflection
-			|| previousReviewTitle !== reviewTitle
-			|| previousReviewSpoiler !== reviewSpoiler
-		);
-		if (finishedMetadataChanged && previousStatus === "finished") {
-			debugStage = "activity_finished_metadata";
-			await sql`
-				insert into user_activity (
-					user_id,
-					book_id,
-					event_type
-				)
-				values (
-					${userId}::uuid,
-					${bookId},
-					'finished'
 				)
 			`;
 		}

@@ -935,3 +935,48 @@ const months = Array.from({ length: 12 }, (_, index) => index + 1);
 		}
 	}
 </style>
+
+<script>
+	const READING_LIFE_REFRESH_EVENT = "dogeared:reading-data-changed";
+	let readingLifeRefreshTimer = 0;
+
+	async function refreshReadingLifeSections() {
+		try {
+			const response = await fetch(window.location.href, {
+				credentials: "same-origin",
+				headers: { "X-Dogeared-Partial": "reading-life-summary" }
+			});
+			if (!response.ok) return;
+			const html = await response.text();
+			const doc = new DOMParser().parseFromString(html, "text/html");
+			for (const id of ["overview", "timeline"]) {
+				const current = document.getElementById(id);
+				const next = doc.getElementById(id);
+				if (current instanceof HTMLElement && next instanceof HTMLElement) current.replaceWith(next);
+			}
+		} catch {
+			// Keep the current view if the targeted refresh is unavailable.
+		}
+	}
+
+	function scheduleReadingLifeRefresh() {
+		window.clearTimeout(readingLifeRefreshTimer);
+		readingLifeRefreshTimer = window.setTimeout(() => {
+			void refreshReadingLifeSections();
+		}, 120);
+	}
+
+	window.addEventListener(READING_LIFE_REFRESH_EVENT, scheduleReadingLifeRefresh);
+	window.addEventListener("storage", (event) => {
+		if (event.key === "dogeared:reading-data-changed-at") scheduleReadingLifeRefresh();
+	});
+	try {
+		const channel = new BroadcastChannel("dogeared:reading-data");
+		channel.addEventListener("message", (event) => {
+			if (event.data?.type === "changed") scheduleReadingLifeRefresh();
+		});
+		window.addEventListener("pagehide", () => channel.close(), { once: true });
+	} catch {
+		// Storage and same-page events cover browsers without BroadcastChannel.
+	}
+</script>

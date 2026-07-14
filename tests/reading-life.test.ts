@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
 	buildGenreInsights,
 	buildReadingCalendar,
@@ -182,4 +183,18 @@ test("genre insights calculate books, pages, and average ratings", () => {
 	assert.equal(genres[0]?.pages, 500);
 	assert.equal(genres[0]?.averageRating, 4.5);
 	assert.equal(genres[1]?.label, "History");
+});
+
+test("My Reading Life refreshes visible annual summary and timeline after reading data changes", () => {
+	const source = readFileSync("src/pages/reading-life.astro", "utf8");
+	const refreshScript = source.slice(source.indexOf("const READING_LIFE_REFRESH_EVENT"));
+
+	assert.match(refreshScript, /dogeared:reading-data-changed/);
+	assert.match(refreshScript, /fetch\(window\.location\.href/);
+	assert.match(refreshScript, /"X-Dogeared-Partial": "reading-life-summary"/);
+	assert.match(refreshScript, /\["overview", "timeline"\]/);
+	assert.match(refreshScript, /current\.replaceWith\(next\)/);
+	assert.match(refreshScript, /dogeared:reading-data-changed-at/);
+	assert.match(refreshScript, /BroadcastChannel\("dogeared:reading-data"\)/);
+	assert.doesNotMatch(refreshScript, /window\.location\.reload/);
 });
