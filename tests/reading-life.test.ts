@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { authorHref } from "../src/lib/author.ts";
 import {
 	buildGenreInsights,
 	buildReadingCalendar,
@@ -197,4 +198,21 @@ test("My Reading Life refreshes visible annual summary and timeline after readin
 	assert.match(refreshScript, /dogeared:reading-data-changed-at/);
 	assert.match(refreshScript, /BroadcastChannel\("dogeared:reading-data"\)/);
 	assert.doesNotMatch(refreshScript, /window\.location\.reload/);
+});
+
+test("Reading Timeline author links use canonical author slugs, not numeric author ids", () => {
+	const source = readFileSync("src/pages/reading-life.astro", "utf8");
+
+	assert.equal(authorHref("Mary Pope Osborne", 529), "/author/mary-pope-osborne");
+	assert.equal(authorHref("Kim Spencer", 42), "/author/kim-spencer");
+	assert.equal(authorHref("Evelyn Clarke", 43), "/author/evelyn-clarke");
+	assert.equal(authorHref("Dave Barry", 44), "/author/dave-barry");
+	assert.equal(authorHref("Mona Awad", 45), "/author/mona-awad");
+	assert.equal(authorHref("Andrew Peterson", 46), "/author/andrew-peterson");
+	assert.match(source, /import \{ authorHref \} from "\.\.\/lib\/author"/);
+	assert.match(source, /function timelineAuthorHref/);
+	assert.match(source, /return authorHref\(book\.author, book\.authorId\)/);
+	assert.match(source, /<a href=\{timelineAuthorHref\(book\)\}>\{book\.author\}<\/a>/);
+	assert.doesNotMatch(source, /\/author\/\$\{encodeURIComponent\(String\(id\)\)\}/);
+	assert.doesNotMatch(source, /\/author\?name=\$\{encodeURIComponent\(name\)\}/);
 });

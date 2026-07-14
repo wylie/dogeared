@@ -2,6 +2,7 @@
 import Layout from "../layouts/Layout.astro";
 import { resolveUserBySession } from "../lib/auth";
 import { getNeonSql } from "../lib/neon";
+import { authorHref } from "../lib/author";
 import { loadFinishedBooksForReader } from "../lib/finishedBooks";
 import {
 	buildReadingLifeSummary,
@@ -54,8 +55,8 @@ function bookHref(id: number) {
 	return `/book?bookId=${encodeURIComponent(String(id))}`;
 }
 
-function authorHref(id: number | null | undefined, name: string) {
-	return id ? `/author/${encodeURIComponent(String(id))}` : `/author?name=${encodeURIComponent(name)}`;
+function timelineAuthorHref(book: Pick<ReadingLifeFinishedBook, "author" | "authorId">) {
+	return authorHref(book.author, book.authorId);
 }
 
 function bookTitle(book: ReadingLifeFinishedBook | null) {
@@ -367,7 +368,9 @@ const months = Array.from({ length: 12 }, (_, index) => index + 1);
 										<p class="timeline-date">{formatDate(book.dateKey)}</p>
 										<h3><a href={bookHref(book.id)}>{book.title}</a></h3>
 										<p class="meta">
-											<a href={authorHref(book.authorId, book.author)}>{book.author}</a>
+											{timelineAuthorHref(book)
+												? <a href={timelineAuthorHref(book)}>{book.author}</a>
+												: book.author}
 											{book.seriesName ? ` · ${book.seriesName}` : ""}
 										</p>
 										<p class="rating-line">{ratingStars(book.rating)} {formatRating(book.rating)}</p>
