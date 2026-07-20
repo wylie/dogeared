@@ -19,6 +19,7 @@ import {
 	loadReaderReadingSummary,
 	type ReadingSummaryMomentumBook
 } from "../../lib/readingSummary";
+import type { ProgressInputMode } from "../../lib/readingProgress";
 
 export const prerender = false;
 
@@ -266,6 +267,7 @@ let currentlyReading: Array<{
 	description: string;
 	currentPage: number;
 	totalPages: number;
+	preferredProgressType: ProgressInputMode;
 	updatedAt: string;
 	firstAddedAt: string;
 	progressUpdates: number;
@@ -1581,6 +1583,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 											"data-momentum-title": item.title,
 											"data-momentum-current-page": String(Math.max(0, Number(item.currentPage || 0))),
 											"data-momentum-total-pages": String(Math.max(0, Number(item.totalPages || 0))),
+											"data-preferred-progress-type": item.preferredProgressType || "page",
 											"data-momentum-updated-at": item.updatedAt,
 											"data-momentum-first-added-at": item.firstAddedAt || item.updatedAt,
 											"data-momentum-progress-updates": String(Math.max(0, Number(item.progressUpdates || 0)))
@@ -1630,11 +1633,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 													<label class="progress-inline-label" for={`progress-inline-${item.bookId}`}>Update progress</label>
 													<div class="progress-inline-controls">
 														<select class="progress-inline-type" aria-label="Progress type">
-															<option value="page">Page Number</option>
-															<option value="percent">Percentage</option>
-															<option value="chapter">Chapter</option>
-															<option value="location">Kindle Location</option>
-															<option value="audio">Audiobook Time</option>
+															<option value="page" selected={(item.preferredProgressType || "page") === "page"}>Page Number</option>
+															<option value="percent" selected={item.preferredProgressType === "percent"}>Percentage</option>
+															<option value="chapter" selected={item.preferredProgressType === "chapter"}>Chapter</option>
+															<option value="location" selected={item.preferredProgressType === "location"}>Kindle Location</option>
+															<option value="audio" selected={item.preferredProgressType === "audio"}>Audiobook Time</option>
 														</select>
 														<input
 															id={`progress-inline-${item.bookId}`}
@@ -4941,6 +4944,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					status: "finished",
 					totalPages,
 					currentPage: totalPages,
+					preferredProgressType: progressType,
 					finishedDate: new Date().toISOString().slice(0, 10)
 				});
 				const directBookId = Math.max(0, Number(progressSave.dataset.bookId || 0) || 0);
@@ -5004,6 +5008,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				status: "reading",
 				totalPages,
 				currentPage,
+				preferredProgressType: progressType,
 				finishedDate: ""
 			});
 			const directBookId = Math.max(0, Number(progressSave.dataset.bookId || 0) || 0);
@@ -5026,6 +5031,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 						: null;
 					const nextTotalPages = Math.max(0, Number((persistedEntry && persistedEntry.totalPages) || totalPages || 0) || 0);
 					const nextCurrentPage = Math.max(0, Number((persistedEntry && persistedEntry.currentPage) || currentPage || 0) || 0);
+					const nextPreferredProgressType = String((persistedEntry && persistedEntry.preferredProgressType) || progressType || "page").trim() || "page";
 					const previousCurrentPage = card instanceof HTMLElement
 						? Math.max(0, Number(card.dataset.momentumCurrentPage || 0) || 0)
 						: 0;
@@ -5041,11 +5047,16 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 					if (card instanceof HTMLElement) {
 						card.dataset.momentumCurrentPage = String(nextCurrentPage);
 						card.dataset.momentumTotalPages = String(nextTotalPages);
+						card.dataset.preferredProgressType = nextPreferredProgressType;
 						card.dataset.momentumUpdatedAt = updatedAtValue;
 						const priorUpdates = Math.max(0, Number(card.dataset.momentumProgressUpdates || 0) || 0);
 						card.dataset.momentumProgressUpdates = String(persistedProgressUpdates > 0
 							? persistedProgressUpdates
 							: (hasForwardProgress ? priorUpdates + 1 : priorUpdates));
+					}
+					if (progressTypeInput instanceof HTMLSelectElement) {
+						progressTypeInput.value = nextPreferredProgressType;
+						updateProgressInputPlaceholder(progressTypeInput);
 					}
 					if (hasForwardProgress) rememberReadingActivityToday();
 					await refreshProfileReadingUiAfterMutation();

@@ -8,7 +8,7 @@ export type NormalizedProgressUpdate = {
 	percent: number;
 };
 
-function normalizeMode(value: unknown): ProgressInputMode {
+export function normalizeProgressInputMode(value: unknown): ProgressInputMode {
 	const raw = String(value || "").trim();
 	if (raw === "percent" || raw === "chapter" || raw === "location" || raw === "audio") return raw;
 	return "page";
@@ -34,7 +34,7 @@ export function normalizeProgressUpdateInput(input: {
 	if (!raw) return { valid: false, currentPage: 0, mode: "page", normalizedText: "", percent: 0 };
 
 	const totalPages = Math.max(0, Number(input.totalPages || 0) || 0);
-	const mode = normalizeMode(input.progressType);
+	const mode = normalizeProgressInputMode(input.progressType);
 
 	if (mode === "percent" || raw.endsWith("%")) {
 		const percentValue = Number(raw.replace("%", "").trim());

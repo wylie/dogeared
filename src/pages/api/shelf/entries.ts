@@ -25,6 +25,7 @@ import { ensureCanonicalWorkSchema, resolveRepresentativeBookId, upsertWorkAndEd
 import { inferKnownSeriesMetadata, upsertKnownSeriesForBook } from "../../../lib/series";
 import { createReadingMilestoneNotifications } from "../../../lib/notifications";
 import { withSqlDebug, type SqlDebugParam } from "../../../lib/sqlDebug";
+import { normalizeProgressInputMode, type ProgressInputMode } from "../../../lib/readingProgress";
 
 export const prerender = false;
 
@@ -39,6 +40,8 @@ type ShelfEntryInput = {
 	rating?: unknown;
 	totalPages?: unknown;
 	currentPage?: unknown;
+	preferredProgressType?: unknown;
+	progressType?: unknown;
 	finishedDate?: unknown;
 	coverUrl?: unknown;
 	format?: unknown;
@@ -97,6 +100,7 @@ function userBookUpsertDebugParams(input: {
 	rating: number | null;
 	effectiveTotalPages: number;
 	currentPage: number;
+	preferredProgressType: ProgressInputMode | "";
 	finishedDate: string | null;
 	finishedReflection: string;
 	reviewTitle: string;
@@ -110,6 +114,7 @@ function userBookUpsertDebugParams(input: {
 		{ name: "rating", pgType: "int", value: input.rating },
 		{ name: "totalPages", pgType: "int", value: input.effectiveTotalPages },
 		{ name: "currentPage", pgType: "int", value: input.currentPage },
+		{ name: "preferredProgressType", pgType: "text", value: input.preferredProgressType },
 		{ name: "finishedDate", pgType: "date", value: input.finishedDate },
 		{ name: "finishedReflection", pgType: "text", value: input.finishedReflection },
 		{ name: "reviewTitle", pgType: "text", value: input.reviewTitle },
@@ -412,6 +417,7 @@ async function ensureShelfSchema() {
 		)
 	`;
 	await sql`create index if not exists idx_progress_event_user_recorded_at on user_reading_progress_event(user_id, recorded_at desc)`;
+	await sql`alter table user_book add column if not exists preferred_progress_type text not null default 'page'`;
 }
 
 export const GET: APIRoute = async ({ request, url }) => {
@@ -431,6 +437,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			rating: number | null;
 			total_pages: number;
 			current_page: number;
+			preferred_progress_type: string;
 			finished_date: string | null;
 			finished_reflection: string;
 			review_title: string;
@@ -453,6 +460,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 				ub.rating,
 				coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages,
 				ub.current_page,
+				coalesce(nullif(trim(ub.preferred_progress_type), ''), 'page') as preferred_progress_type,
 				ub.finished_date::text as finished_date,
 				coalesce(ub.finished_reflection, '') as finished_reflection,
 				coalesce(ub.review_title, '') as review_title,
@@ -473,7 +481,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			join book b on b.id = ub.book_id
 			left join book_genre bg on bg.book_id = b.id
 			where ub.user_id = ${userId}::uuid
-			group by b.id, ub.user_id, ub.book_id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection, ub.review_title, ub.review_spoiler, ub.review_updated_at
+			group by b.id, ub.user_id, ub.book_id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.preferred_progress_type, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection, ub.review_title, ub.review_spoiler, ub.review_updated_at
 			order by ub.updated_at desc
 		`;
 
@@ -485,6 +493,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			rating: normalizeRating(row.rating),
 			totalPages: normalizePositiveInt(row.total_pages),
 			currentPage: normalizePositiveInt(row.current_page),
+			preferredProgressType: normalizeProgressInputMode(row.preferred_progress_type),
 			finishedDate: row.finished_date || "",
 			finishedReflection: row.finished_reflection || "",
 			reviewTitle: row.review_title || "",
@@ -550,6 +559,13 @@ export const POST: APIRoute = async ({ request }) => {
 		const rating = status === "finished" ? normalizeRating(entry.rating) : null;
 		const totalPages = normalizePositiveInt(entry.totalPages);
 		const currentPage = normalizePositiveInt(entry.currentPage);
+		const rawPreferredProgressType = entry.preferredProgressType ?? entry.progressType;
+		const hasPreferredProgressType = rawPreferredProgressType !== undefined
+			&& rawPreferredProgressType !== null
+			&& normalizeText(rawPreferredProgressType) !== "";
+		const preferredProgressType = hasPreferredProgressType
+			? normalizeProgressInputMode(rawPreferredProgressType)
+			: "";
 		const finishedDateRaw = normalizeText(entry.finishedDate);
 		const finishedDate = status === "finished" && finishedDateRaw ? finishedDateRaw : "";
 		const finishedReflection = status === "finished"
@@ -577,6 +593,7 @@ export const POST: APIRoute = async ({ request }) => {
 			status,
 			totalPages,
 			currentPage,
+			preferredProgressType,
 			isbn13,
 			googleBooksId
 		};
@@ -883,6 +900,7 @@ export const POST: APIRoute = async ({ request }) => {
 				rating,
 				effectiveTotalPages,
 				currentPage,
+				preferredProgressType,
 				finishedDate: finishedDateParam,
 				finishedReflection,
 				reviewTitle,
@@ -897,6 +915,7 @@ export const POST: APIRoute = async ({ request }) => {
 				rating,
 				total_pages,
 				current_page,
+				preferred_progress_type,
 				finished_date,
 				finished_reflection,
 				review_title,
@@ -913,6 +932,7 @@ export const POST: APIRoute = async ({ request }) => {
 				${rating}::int,
 				${effectiveTotalPages}::int,
 				${currentPage}::int,
+				${(preferredProgressType || "page")}::text,
 				${finishedDateParam}::date,
 				${finishedReflection}::text,
 				${reviewTitle}::text,
@@ -930,6 +950,10 @@ export const POST: APIRoute = async ({ request }) => {
 					else user_book.total_pages
 				end,
 				current_page = excluded.current_page,
+				preferred_progress_type = case
+					when ${preferredProgressType}::text <> '' then ${preferredProgressType}::text
+					else user_book.preferred_progress_type
+				end,
 				finished_date = excluded.finished_date,
 				finished_reflection = excluded.finished_reflection,
 				review_title = excluded.review_title,
@@ -1027,6 +1051,7 @@ export const POST: APIRoute = async ({ request }) => {
 			rating: number | null;
 			total_pages: number;
 			current_page: number;
+			preferred_progress_type: string;
 			finished_date: string | null;
 			first_added_at: string;
 			updated_at: string;
@@ -1052,6 +1077,7 @@ export const POST: APIRoute = async ({ request }) => {
 				ub.rating,
 				coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages,
 				ub.current_page,
+				coalesce(nullif(trim(ub.preferred_progress_type), ''), 'page') as preferred_progress_type,
 				ub.finished_date::text as finished_date,
 				ub.first_added_at::text as first_added_at,
 				ub.updated_at::text as updated_at,
@@ -1076,7 +1102,7 @@ export const POST: APIRoute = async ({ request }) => {
 			left join book_genre bg on bg.book_id = b.id
 			where ub.user_id = ${userId}::uuid
 				and ub.book_id = ${bookId}
-			group by b.id, ub.user_id, ub.book_id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection, ub.review_title, ub.review_spoiler, ub.review_updated_at
+			group by b.id, ub.user_id, ub.book_id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.preferred_progress_type, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection, ub.review_title, ub.review_spoiler, ub.review_updated_at
 			limit 1
 		`;
 		const persisted = persistedRows[0];
@@ -1089,6 +1115,7 @@ export const POST: APIRoute = async ({ request }) => {
 			rating: normalizeRating(persisted.rating),
 			totalPages: normalizePositiveInt(persisted.total_pages),
 			currentPage: normalizePositiveInt(persisted.current_page),
+			preferredProgressType: normalizeProgressInputMode(persisted.preferred_progress_type),
 			finishedDate: persisted.finished_date || "",
 			addedAt: Date.parse(persisted.first_added_at || "") || Date.now(),
 			coverUrl: persisted.cover_url || "",

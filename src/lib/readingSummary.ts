@@ -1,5 +1,6 @@
 import { resolveMomentumPrediction } from "./momentumPrediction.ts";
 import { calculateReadingStreak } from "./readingLife.ts";
+import { normalizeProgressInputMode, type ProgressInputMode } from "./readingProgress.ts";
 
 export type ReadingSummaryCurrentBook = {
 	bookId: number;
@@ -14,6 +15,7 @@ export type ReadingSummaryCurrentBook = {
 	description: string;
 	currentPage: number;
 	totalPages: number;
+	preferredProgressType: ProgressInputMode;
 	updatedAt: string;
 	firstAddedAt: string;
 	progressUpdates: number;
@@ -60,6 +62,7 @@ type CurrentBookRow = {
 	google_books_id: string;
 	current_page: number;
 	total_pages: number;
+	preferred_progress_type: string;
 	updated_at: string;
 	first_added_at: string;
 	progress_updates: number;
@@ -182,6 +185,7 @@ export async function ensureReadingProgressEventSchema(sql: ReturnType<typeof im
 		)
 	`;
 	await sql`create index if not exists idx_progress_event_user_recorded_at on user_reading_progress_event(user_id, recorded_at desc)`;
+	await sql`alter table user_book add column if not exists preferred_progress_type text not null default 'page'`;
 }
 
 export async function loadReaderReadingSummary(
@@ -204,6 +208,7 @@ export async function loadReaderReadingSummary(
 				b.google_books_id,
 				ub.current_page,
 				coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages,
+				coalesce(nullif(trim(ub.preferred_progress_type), ''), 'page') as preferred_progress_type,
 				ub.updated_at::text as updated_at,
 				coalesce(ub.first_added_at::text, ub.updated_at::text) as first_added_at,
 				coalesce(pe.progress_updates, 0)::int as progress_updates,
@@ -245,6 +250,7 @@ export async function loadReaderReadingSummary(
 		description: "",
 		currentPage: toPositiveInt(row.current_page),
 		totalPages: toPositiveInt(row.total_pages),
+		preferredProgressType: normalizeProgressInputMode(row.preferred_progress_type),
 		updatedAt: String(row.updated_at || "").trim(),
 		firstAddedAt: String(row.first_added_at || row.updated_at || "").trim(),
 		progressUpdates: toPositiveInt(row.progress_updates),

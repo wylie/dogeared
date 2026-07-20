@@ -560,6 +560,8 @@ type ShelfEntryOptions = {
 	status: string;
 	totalPages?: number;
 	currentPage?: number;
+	preferredProgressType?: string;
+	progressType?: string;
 	finishedDate?: string;
 	source?: string;
 	sourceWorkId?: string;
@@ -602,6 +604,7 @@ export function buildShelfEntryFromRecord(record: Record<string, unknown>, optio
 		rating: null,
 		totalPages,
 		currentPage: Math.max(0, Number(options.currentPage ?? 0) || 0),
+		preferredProgressType: String(options.preferredProgressType ?? options.progressType ?? "").trim(),
 		finishedDate: String(options.finishedDate || "").trim(),
 		finishedReflection: String(options.finishedReflection || "").trim().slice(0, 4000),
 		reviewTitle: String(options.reviewTitle || "").trim().slice(0, 160),

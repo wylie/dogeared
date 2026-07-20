@@ -511,6 +511,7 @@ export async function mergeCatalogWorks(sql: Sql, input: { groupKey?: unknown; t
 			recorded_at timestamptz not null default now()
 		)
 	`;
+	await sql`alter table user_book add column if not exists preferred_progress_type text not null default 'page'`;
 	const groupKey = normalizeCatalogText(input.groupKey);
 	const targetBookId = Math.max(0, Math.floor(Number(input.targetBookId || 0)));
 	const sourceBookId = Math.max(0, Math.floor(Number(input.sourceBookId || 0)));
@@ -691,6 +692,10 @@ export async function mergeCatalogWorks(sql: Sql, input: { groupKey?: unknown; t
 					(array_agg(ub.rating order by (ub.rating is not null) desc, ub.updated_at desc))[1] as rating,
 					max(ub.total_pages) as total_pages,
 					max(ub.current_page) as current_page,
+					coalesce(
+						(array_remove(array_agg(nullif(trim(coalesce(ub.preferred_progress_type, '')), '') order by case when ub.book_id = ${targetBookId} then 0 else 1 end, ub.updated_at desc), null))[1],
+						'page'
+					) as preferred_progress_type,
 					(array_remove(array_agg(ub.finished_date order by (ub.finished_date is not null) desc, ub.updated_at desc), null))[1] as finished_date,
 					coalesce((array_remove(array_agg(nullif(trim(coalesce(ub.finished_reflection, '')), '') order by ub.review_updated_at desc nulls last, ub.updated_at desc), null))[1], '') as finished_reflection,
 					coalesce((array_remove(array_agg(nullif(trim(coalesce(ub.review_title, '')), '') order by ub.review_updated_at desc nulls last, ub.updated_at desc), null))[1], '') as review_title,
@@ -705,11 +710,11 @@ export async function mergeCatalogWorks(sql: Sql, input: { groupKey?: unknown; t
 			)
 			insert into user_book (
 				user_id, book_id, status, rating, total_pages, current_page, finished_date,
-				finished_reflection, review_title, review_spoiler, review_updated_at,
+				preferred_progress_type, finished_reflection, review_title, review_spoiler, review_updated_at,
 				first_added_at, updated_at, edition_id
 			)
 			select user_id, book_id, status, rating, total_pages, current_page, finished_date,
-				finished_reflection, review_title, review_spoiler, review_updated_at,
+				preferred_progress_type, finished_reflection, review_title, review_spoiler, review_updated_at,
 				first_added_at, updated_at, edition_id
 			from merged
 			on conflict (user_id, book_id) do update set
@@ -717,6 +722,10 @@ export async function mergeCatalogWorks(sql: Sql, input: { groupKey?: unknown; t
 				rating = coalesce(excluded.rating, user_book.rating),
 				total_pages = greatest(user_book.total_pages, excluded.total_pages),
 				current_page = greatest(user_book.current_page, excluded.current_page),
+				preferred_progress_type = case
+					when user_book.preferred_progress_type in ('percent', 'chapter', 'location', 'audio') then user_book.preferred_progress_type
+					else excluded.preferred_progress_type
+				end,
 				finished_date = coalesce(excluded.finished_date, user_book.finished_date),
 				finished_reflection = case when excluded.finished_reflection <> '' then excluded.finished_reflection else user_book.finished_reflection end,
 				review_title = case when excluded.review_title <> '' then excluded.review_title else user_book.review_title end,
