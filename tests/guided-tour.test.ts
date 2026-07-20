@@ -90,11 +90,13 @@ test("guided tip component keeps one ordered catalog with contextual rules", () 
 test("guided tips are anchored coach marks that hide when targets leave view", () => {
 	const source = readFileSync("src/components/GuidedTip.astro", "utf8");
 	assert.equal(source.includes("data-coach-mark"), true);
-	assert.equal(source.includes("position: absolute"), true);
-	assert.equal(source.includes("position: fixed"), false);
+	assert.equal(source.includes("position: fixed"), true);
 	assert.equal(source.includes("function isAnchorVisible"), true);
-	assert.equal(source.includes("rect.bottom > viewportPadding"), true);
-	assert.equal(source.includes("window.scrollY"), true);
+	assert.equal(source.includes("getSafeViewportBounds"), true);
+	assert.equal(source.includes("rect.bottom > bounds.top"), true);
+	assert.equal(source.includes("dismissForAnchorLoss"), true);
+	assert.equal(source.includes("positionFallbackTimer"), true);
+	assert.equal(source.includes("window.scrollY"), false);
 	assert.equal(source.includes("window.addEventListener(\"scroll\""), true);
 	assert.equal(source.includes("concealTip()"), true);
 	assert.equal(source.includes("root.classList.add(\"is-visible\")"), true);
@@ -113,8 +115,18 @@ test("post-progress journal prompt reuses the anchored coach mark surface", () =
 	assert.equal(guidedTip.includes('document.addEventListener("click"'), true);
 	assert.equal(guidedTip.includes('dismissTransientTip("outside")'), true);
 	assert.equal(guidedTip.includes('dismissTransientTip("escape")'), true);
+	assert.equal(guidedTip.includes("getSafeViewportBounds"), true);
+	assert.equal(guidedTip.includes("MutationObserver"), true);
+	assert.equal(guidedTip.includes("restoreTriggerFocus"), true);
+	assert.equal(guidedTip.includes("triggerElement"), true);
+	assert.equal(guidedTip.includes('dismissForAnchorLoss("anchor-removed")'), true);
+	assert.equal(guidedTip.includes('position: fixed'), true);
 	assert.equal(profilePage.includes('window.dispatchEvent(new CustomEvent("dogeared:progress-journal-prompt"'), true);
 	assert.equal(profilePage.includes('data-progress-journal-anchor'), true);
+	assert.equal(profilePage.includes("resolveJournalProgressPromptAnchor"), true);
+	assert.equal(profilePage.includes(".progress-inline-controls"), true);
+	assert.equal(profilePage.includes("trigger: trigger instanceof HTMLElement ? trigger : anchor"), true);
+	assert.equal(profilePage.includes("bookTitle: card.dataset.momentumTitle"), true);
 	assert.equal(profilePage.includes('insertAdjacentElement("afterend", prompt)'), false);
 });
 

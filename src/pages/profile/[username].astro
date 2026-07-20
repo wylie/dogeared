@@ -4792,9 +4792,34 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 	};
 
-	const showJournalProgressPrompt = (card, bookId, currentPage) => {
+	const resolveJournalProgressPromptAnchor = (bookId, fallback) => {
+		const targetBookId = String(Math.max(0, Number(bookId || 0) || 0));
+		const candidates = Array.from(document.querySelectorAll("[data-progress-journal-anchor]"));
+		const card = candidates.find((candidate) => candidate instanceof HTMLElement && candidate.dataset.momentumBookId === targetBookId);
+		if (card instanceof HTMLElement) {
+			const controls = card.querySelector(".progress-inline-controls");
+			if (controls instanceof HTMLElement) return controls;
+			const saveButton = card.querySelector('[data-action="save-reading-progress"]');
+			if (saveButton instanceof HTMLElement) return saveButton;
+			return card;
+		}
+		if (fallback instanceof HTMLElement && document.documentElement.contains(fallback)) {
+			const fallbackCard = fallback.closest(".book-card");
+			if (fallbackCard instanceof HTMLElement && fallbackCard.dataset.momentumBookId === targetBookId) {
+				const controls = fallbackCard.querySelector(".progress-inline-controls");
+				if (controls instanceof HTMLElement) return controls;
+				return fallbackCard;
+			}
+			return fallback;
+		}
+		return null;
+	};
+
+	const showJournalProgressPrompt = (card, bookId, currentPage, trigger) => {
 		if (!(card instanceof HTMLElement) || !bookId) return;
 		if (isJournalProgressPromptDismissed(bookId, currentPage)) return;
+		const anchor = resolveJournalProgressPromptAnchor(bookId, trigger instanceof HTMLElement ? trigger : card);
+		if (!(anchor instanceof HTMLElement)) return;
 		const params = new URLSearchParams({
 			bookId: String(bookId),
 			readingPositionType: "page",
@@ -4802,9 +4827,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		});
 		window.dispatchEvent(new CustomEvent("dogeared:progress-journal-prompt", {
 			detail: {
-				anchor: card,
+				anchor,
+				trigger: trigger instanceof HTMLElement ? trigger : anchor,
 				bookId,
 				currentPage,
+				bookTitle: card.dataset.momentumTitle || "",
 				href: `/journal?${params.toString()}#new-entry`
 			}
 		}));
@@ -5031,7 +5058,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 						dateNode.textContent = `Updated ${updatedLabel}`;
 					}
 					if (hasForwardProgress && directBookId > 0) {
-						showJournalProgressPrompt(card, directBookId, nextCurrentPage);
+						showJournalProgressPrompt(card, directBookId, nextCurrentPage, progressSave);
 					}
 				} catch (uiError) {
 					console.warn("Progress saved but local UI sync failed.", uiError);

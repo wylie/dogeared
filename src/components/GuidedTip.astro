@@ -10,6 +10,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			<p class="guided-tip-status" data-guided-tip-status hidden></p>
 			<h2 id="guided-tip-title" data-guided-tip-title></h2>
 			<p id="guided-tip-description" data-guided-tip-description></p>
+			<p id="guided-tip-book-context" class="guided-tip-sr-only" data-guided-tip-book-context hidden></p>
 			<div class="guided-tip-actions">
 				<a class="guided-tip-primary" data-guided-tip-primary href="/search">Search Books</a>
 				<button type="button" class="guided-tip-dismiss" data-guided-tip-dismiss>Dismiss</button>
@@ -26,6 +27,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 
 		const titleEl = root.querySelector("[data-guided-tip-title]");
 		const descriptionEl = root.querySelector("[data-guided-tip-description]");
+		const bookContextEl = root.querySelector("[data-guided-tip-book-context]");
 		const statusEl = root.querySelector("[data-guided-tip-status]");
 		const iconEl = root.querySelector("[data-guided-tip-icon]");
 		const primaryEl = root.querySelector("[data-guided-tip-primary]");
@@ -158,8 +160,10 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		let activeStats = null;
 		let refreshTimer = 0;
 		let positionFrame = 0;
+		let positionFallbackTimer = 0;
 		let outsideDismissPausedUntil = 0;
 		let suppressRegularTipsUntil = 0;
+		let restoreFocusEl = null;
 
 		function isTipAvailable(tip, settings, stats) {
 			if (!settings?.showHelpfulTips) return false;
@@ -183,28 +187,82 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 
 		function isAnchorVisible(anchor) {
 			if (!(anchor instanceof HTMLElement)) return false;
+			if (!document.documentElement.contains(anchor)) return false;
 			if (anchor.hidden) return false;
 			const style = window.getComputedStyle(anchor);
 			if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity || 1) === 0) return false;
 			const rect = anchor.getBoundingClientRect();
 			if (rect.width <= 0 || rect.height <= 0) return false;
-			const viewportPadding = 8;
-			return rect.bottom > viewportPadding
-				&& rect.right > viewportPadding
-				&& rect.top < window.innerHeight - viewportPadding
-				&& rect.left < window.innerWidth - viewportPadding;
+			const bounds = getSafeViewportBounds();
+			return rect.bottom > bounds.top
+				&& rect.right > bounds.left
+				&& rect.top < bounds.bottom
+				&& rect.left < bounds.right;
 		}
 
-		function resolvePlacement(tip, rect, width) {
+		function isElementVisible(element) {
+			if (!(element instanceof HTMLElement) || element.hidden) return false;
+			const style = window.getComputedStyle(element);
+			if (style.display === "none" || style.visibility === "hidden") return false;
+			const rect = element.getBoundingClientRect();
+			return rect.width > 0 && rect.height > 0;
+		}
+
+		function getSafeViewportBounds() {
+			const margin = 12;
+			const isSmallViewport = window.matchMedia("(max-width: 720px)").matches;
+			let top = margin;
+			let bottom = window.innerHeight - (isSmallViewport ? 72 : margin);
+			const leftHandNav = document.getElementById("left-hand-nav");
+			if (isSmallViewport && leftHandNav instanceof HTMLElement && isElementVisible(leftHandNav)) {
+				const navStyle = window.getComputedStyle(leftHandNav);
+				const navRect = leftHandNav.getBoundingClientRect();
+				if ((navStyle.position === "sticky" || navStyle.position === "fixed") && navRect.top <= margin && navRect.bottom > top) {
+					top = Math.min(window.innerHeight - 120, Math.max(top, navRect.bottom + 8));
+				}
+			}
+			const fixedObstacles = [document.querySelector(".floating-actions"), document.querySelector("[data-feedback-error-prompt]:not([hidden])")];
+			for (const obstacle of fixedObstacles) {
+				if (!(obstacle instanceof HTMLElement) || !isElementVisible(obstacle)) continue;
+				const obstacleStyle = window.getComputedStyle(obstacle);
+				if (obstacleStyle.position !== "fixed" && obstacleStyle.position !== "sticky") continue;
+				const obstacleRect = obstacle.getBoundingClientRect();
+				if (obstacleRect.top > top && obstacleRect.top < bottom) bottom = Math.min(bottom, obstacleRect.top - 10);
+			}
+			return {
+				top: Math.max(margin, top),
+				right: Math.max(margin + 96, window.innerWidth - margin),
+				bottom: Math.max(top + 96, bottom),
+				left: margin
+			};
+		}
+
+		function clamp(value, min, max) {
+			if (max < min) return min;
+			return Math.min(Math.max(value, min), max);
+		}
+
+		function resolvePlacement(tip, rect, width, height, bounds) {
 			const preferred = String(tip?.placement || "").trim();
-			const canBelow = rect.bottom + 14 + 170 < window.innerHeight;
-			const canAbove = rect.top - 14 - 170 > 16;
+			const gap = 14;
+			const minUsableHeight = Math.min(132, height);
+			const below = bounds.bottom - (rect.bottom + gap);
+			const above = rect.top - gap - bounds.top;
+			const left = rect.left - gap - bounds.left;
+			const right = bounds.right - (rect.right + gap);
+			const canBelow = below >= minUsableHeight;
+			const canAbove = above >= minUsableHeight;
+			const canLeft = left >= width;
+			const canRight = right >= width;
 			if (preferred === "below" && canBelow) return "below";
 			if (preferred === "above" && canAbove) return "above";
-			if (preferred === "left" && rect.left - width - 14 > 16) return "left";
-			if (preferred === "right" && rect.right + width + 14 < window.innerWidth - 16) return "right";
-			if (rect.width > 420 || rect.left < width + 32) return canBelow ? "below" : (canAbove ? "above" : "right");
-			return rect.right + width + 14 < window.innerWidth - 16 ? "right" : (rect.left - width - 14 > 16 ? "left" : "below");
+			if (preferred === "left" && canLeft) return "left";
+			if (preferred === "right" && canRight) return "right";
+			if (window.matchMedia("(max-width: 720px)").matches) return below >= above ? "below" : "above";
+			if (canRight) return "right";
+			if (canLeft) return "left";
+			if (canBelow || below >= above) return "below";
+			return "above";
 		}
 
 		function concealTip() {
@@ -220,41 +278,84 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			window.requestAnimationFrame(() => root.classList.add("is-visible"));
 		}
 
+		function clearRestoreFocus() {
+			restoreFocusEl = null;
+		}
+
+		function restoreTriggerFocus() {
+			const target = restoreFocusEl;
+			clearRestoreFocus();
+			if (!(target instanceof HTMLElement) || !document.documentElement.contains(target)) return;
+			try {
+				target.focus({ preventScroll: true });
+			} catch {
+				target.focus();
+			}
+		}
+
+		function dismissForAnchorLoss(reason) {
+			if (activeTip?.transient) {
+				dismissTransientTip(reason);
+				return;
+			}
+			concealTip();
+		}
+
 		function positionTip(anchor) {
 			if (!(anchor instanceof HTMLElement) || !isAnchorVisible(anchor)) {
-				concealTip();
+				dismissForAnchorLoss(anchor instanceof HTMLElement && !document.documentElement.contains(anchor) ? "anchor-removed" : "anchor-hidden");
 				return;
 			}
 			const rect = anchor.getBoundingClientRect();
 			const gap = 14;
 			const isSmallViewport = window.matchMedia("(max-width: 720px)").matches;
+			const bounds = getSafeViewportBounds();
 			const width = isSmallViewport
-				? Math.min(360, Math.max(260, window.innerWidth - 24))
-				: Math.min(360, Math.max(280, window.innerWidth - 32));
+				? Math.min(360, Math.max(260, bounds.right - bounds.left))
+				: Math.min(360, Math.max(280, bounds.right - bounds.left));
+			root.style.width = `${width}px`;
+			root.style.maxWidth = `${width}px`;
+			root.style.maxHeight = "";
+			root.style.overflowY = "";
 			const measuredHeight = root.offsetHeight || 180;
-			const placement = resolvePlacement(activeTip, rect, width);
-			let left = rect.right + gap + window.scrollX;
-			let top = rect.top + window.scrollY;
+			const placement = resolvePlacement(activeTip, rect, width, measuredHeight, bounds);
+			let maxHeight = Math.max(96, bounds.bottom - bounds.top);
+			let left = rect.right + gap;
+			let top = clamp(rect.top, bounds.top, bounds.bottom - measuredHeight);
 			if (placement === "left") {
-				left = rect.left - width - gap + window.scrollX;
+				left = rect.left - width - gap;
 			} else if (placement === "below" || placement === "above") {
-				left = Math.min(Math.max(rect.left + rect.width / 2 - width / 2, 12), window.innerWidth - width - 12) + window.scrollX;
-				top = (placement === "below" ? rect.bottom + gap : rect.top - measuredHeight - gap) + window.scrollY;
+				left = clamp(rect.left + rect.width / 2 - width / 2, bounds.left, bounds.right - width);
+				if (placement === "below") {
+					top = rect.bottom + gap;
+					maxHeight = Math.max(96, bounds.bottom - top);
+				} else {
+					maxHeight = Math.max(96, rect.top - gap - bounds.top);
+					top = rect.top - gap - Math.min(measuredHeight, maxHeight);
+					top = Math.max(bounds.top, top);
+				}
+			} else {
+				maxHeight = Math.max(96, bounds.bottom - bounds.top);
 			}
-			top = Math.min(Math.max(top, window.scrollY + 12), window.scrollY + window.innerHeight - measuredHeight - 12);
+			if (placement === "right" || placement === "left") {
+				top = clamp(rect.top + rect.height / 2 - measuredHeight / 2, bounds.top, bounds.bottom - measuredHeight);
+			}
+			left = clamp(left, bounds.left, bounds.right - width);
+			top = clamp(top, bounds.top, bounds.bottom - Math.min(measuredHeight, maxHeight));
 			root.style.left = `${left}px`;
 			root.style.right = "auto";
 			root.style.bottom = "auto";
 			root.style.top = `${top}px`;
-			root.style.maxWidth = `${width}px`;
+			root.style.maxHeight = `${maxHeight}px`;
+			root.style.overflowY = measuredHeight > maxHeight ? "auto" : "";
 			root.dataset.placement = placement;
 			if (arrowEl instanceof HTMLElement) {
 				if (placement === "below" || placement === "above") {
-					const arrowLeft = Math.min(Math.max(rect.left + window.scrollX + rect.width / 2 - left - 8, 18), width - 28);
+					const arrowLeft = clamp(rect.left + rect.width / 2 - left - 8, 18, width - 28);
 					arrowEl.style.left = `${arrowLeft}px`;
 					arrowEl.style.top = "";
 				} else {
-					const arrowTop = Math.min(Math.max(rect.top + window.scrollY + rect.height / 2 - top - 8, 18), measuredHeight - 28);
+					const arrowTop = clamp(rect.top + rect.height / 2 - top - 8, 18, Math.min(measuredHeight, maxHeight) - 28);
 					arrowEl.style.top = `${arrowTop}px`;
 					arrowEl.style.left = "";
 				}
@@ -265,16 +366,25 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		function schedulePosition() {
 			if (!activeTip) return;
 			window.cancelAnimationFrame(positionFrame);
-			positionFrame = window.requestAnimationFrame(() => {
+			window.clearTimeout(positionFallbackTimer);
+			const run = () => {
+				window.clearTimeout(positionFallbackTimer);
 				const anchor = findAnchor(activeTip);
 				if (anchor instanceof HTMLElement) positionTip(anchor);
-				else concealTip();
-			});
+				else dismissForAnchorLoss("anchor-removed");
+			};
+			positionFrame = window.requestAnimationFrame(run);
+			positionFallbackTimer = window.setTimeout(run, 80);
 		}
 
 		function showTip(tip) {
 			const anchor = findAnchor(tip);
 			if (!(anchor instanceof HTMLElement)) return hideTip();
+			if (activeTip?.transient && tip?.transient) dispatchProgressPromptDismissed(activeTip, "replaced");
+			const activeElement = document.activeElement;
+			restoreFocusEl = tip.triggerElement instanceof HTMLElement
+				? tip.triggerElement
+				: (activeElement instanceof HTMLElement && !root.contains(activeElement) ? activeElement : null);
 			activeTip = tip;
 			root.dataset.tipMode = tip.transient ? "transient" : "guided";
 			if (statusEl instanceof HTMLElement) {
@@ -284,6 +394,12 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			}
 			titleEl.textContent = tip.title;
 			descriptionEl.textContent = tip.description;
+			if (bookContextEl instanceof HTMLElement) {
+				const bookTitle = String(tip.bookTitle || "").trim();
+				bookContextEl.textContent = bookTitle ? `Prompt opened from progress controls for ${bookTitle}.` : "";
+				bookContextEl.hidden = !bookTitle;
+				root.setAttribute("aria-describedby", bookTitle ? "guided-tip-description guided-tip-book-context" : "guided-tip-description");
+			}
 			if (iconEl instanceof HTMLElement) iconEl.textContent = tip.icon || "auto_stories";
 			primaryEl.textContent = tip.primaryLabel || "Continue";
 			primaryEl.href = tip.primaryHref || "#";
@@ -292,16 +408,28 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			root.classList.remove("is-visible");
 			root.setAttribute("aria-hidden", "true");
 			root.setAttribute("inert", "");
-			schedulePosition();
+			positionTip(anchor);
+			if (tip.transient) {
+				window.requestAnimationFrame(() => {
+					if (activeTip === tip && !root.hidden) primaryEl.focus({ preventScroll: true });
+				});
+			}
 		}
 
-		function hideTip() {
+		function hideTip(options = {}) {
+			const shouldRestoreFocus = options.restoreFocus !== false && !!activeTip?.transient;
 			activeTip = null;
 			root.classList.remove("is-visible");
 			root.setAttribute("aria-hidden", "true");
 			root.setAttribute("inert", "");
 			root.hidden = true;
 			delete root.dataset.tipMode;
+			root.style.maxHeight = "";
+			root.style.overflowY = "";
+			window.cancelAnimationFrame(positionFrame);
+			window.clearTimeout(positionFallbackTimer);
+			if (shouldRestoreFocus) restoreTriggerFocus();
+			else clearRestoreFocus();
 		}
 
 		function dispatchProgressPromptDismissed(tip, reason) {
@@ -319,7 +447,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			if (!activeTip?.transient) return false;
 			dispatchProgressPromptDismissed(activeTip, reason);
 			suppressRegularTipsUntil = Date.now() + 4000;
-			hideTip();
+			hideTip({ restoreFocus: true });
 			return true;
 		}
 
@@ -377,7 +505,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 			event.preventDefault();
 			if (activeTip?.transient) {
 				dispatchProgressPromptDismissed(activeTip, "primary");
-				hideTip();
+				hideTip({ restoreFocus: false });
 				if (href.startsWith("#")) {
 					document.querySelector(href)?.scrollIntoView({ behavior: "smooth", block: "start" });
 					const target = document.querySelector(href);
@@ -439,6 +567,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		window.addEventListener("dogeared:progress-journal-prompt", (event) => {
 			const detail = event instanceof CustomEvent ? event.detail || {} : {};
 			const anchor = detail.anchor instanceof HTMLElement ? detail.anchor : null;
+			const trigger = detail.trigger instanceof HTMLElement ? detail.trigger : anchor;
 			const bookId = Math.max(0, Number(detail.bookId || 0) || 0);
 			const currentPage = Math.max(0, Number(detail.currentPage || 0) || 0);
 			const href = String(detail.href || "").trim();
@@ -457,10 +586,18 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 				dismissLabel: "Not now",
 				placement: "below",
 				transient: true,
+				triggerElement: trigger,
+				bookTitle: String(detail.bookTitle || "").trim(),
 				bookId,
 				currentPage
 			});
 		});
+
+		const anchorObserver = new MutationObserver(() => {
+			if (!activeTip?.transient) return;
+			schedulePosition();
+		});
+		anchorObserver.observe(document.body, { childList: true, subtree: true });
 
 		void refreshStatus();
 	})();
@@ -469,7 +606,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 
 <style>
 	.guided-tip {
-		position: absolute;
+		position: fixed;
 		z-index: 12000;
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);
@@ -485,6 +622,7 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 		opacity: 0;
 		transform: translateY(4px);
 		pointer-events: none;
+		overscroll-behavior: contain;
 		transition:
 			opacity 180ms ease,
 			transform 180ms ease,
@@ -605,6 +743,17 @@ const { isAuthenticated = false } = Astro.props as { isAuthenticated?: boolean }
 	}
 	.guided-tip[data-placement="bottom"] .guided-tip-arrow {
 		display: none;
+	}
+	.guided-tip-sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 	@media (max-width: 720px) {
 		.guided-tip {
