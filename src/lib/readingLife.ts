@@ -56,7 +56,10 @@ export type ReadingLifeTimelineItem = ReadingLifeFinishedBook & {
 export type ReadingLifeCalendarDay = {
 	date: string;
 	pages: number;
+	sessions: number;
+	booksRead: number;
 	completions: number;
+	finishedTitles: string[];
 	level: number;
 };
 
@@ -248,21 +251,29 @@ export function buildReadingCalendar(input: {
 	const start = Date.UTC(input.year, 0, 1);
 	const end = Date.UTC(input.year + 1, 0, 1);
 	const map = new Map<string, ReadingLifeCalendarDay>();
+	const bookIdsByDay = new Map<string, Set<number>>();
 	for (let time = start; time < end; time += MS_PER_DAY) {
 		const key = new Date(time).toISOString().slice(0, 10);
-		map.set(key, { date: key, pages: 0, completions: 0, level: 0 });
+		map.set(key, { date: key, pages: 0, sessions: 0, booksRead: 0, completions: 0, finishedTitles: [], level: 0 });
+		bookIdsByDay.set(key, new Set<number>());
 	}
 	for (const event of input.progressEvents) {
 		const key = dateKey(event.date);
 		const day = map.get(key);
 		if (!day) continue;
 		day.pages += Math.max(0, Math.round(toNumber(event.pageDelta)));
+		day.sessions += 1;
+		const bookId = Math.max(0, Math.round(toNumber(event.bookId)));
+		if (bookId > 0) bookIdsByDay.get(key)?.add(bookId);
 	}
 	for (const book of input.finishedBooks) {
 		const key = getFinishedDate(book);
 		const day = map.get(key);
 		if (!day) continue;
 		day.completions += 1;
+		day.finishedTitles.push(cleanText(book.title, "Untitled"));
+		const bookId = Math.max(0, Math.round(toNumber(book.bookId || book.id)));
+		if (bookId > 0) bookIdsByDay.get(key)?.add(bookId);
 		if (day.pages === 0) day.pages += Math.max(0, Math.round(toNumber(book.pageCount)));
 	}
 	const days = Array.from(map.values());
@@ -270,7 +281,13 @@ export function buildReadingCalendar(input: {
 	return days.map((day) => {
 		const activity = day.pages + (day.completions * 80);
 		const level = activity <= 0 ? 0 : Math.max(1, Math.min(4, Math.ceil((activity / Math.max(1, maxPages + 80)) * 4)));
-		return { ...day, level };
+		const bookCount = bookIdsByDay.get(day.date)?.size || 0;
+		return {
+			...day,
+			booksRead: bookCount,
+			finishedTitles: [...day.finishedTitles].sort((a, b) => a.localeCompare(b)),
+			level
+		};
 	});
 }
 

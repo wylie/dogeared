@@ -7,6 +7,7 @@ import { loadFinishedBooksForReader } from "../lib/finishedBooks";
 import {
 	buildReadingLifeSummary,
 	filterReadingTimeline,
+	type ReadingLifeCalendarDay,
 	type ReadingLifeCurrentBook,
 	type ReadingLifeFinishedBook,
 	type ReadingLifeProgressEvent
@@ -37,8 +38,43 @@ function formatDate(value: string) {
 	return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(date);
 }
 
+function formatFullDate(value: string) {
+	if (!value) return "Date unavailable";
+	const date = new Date(`${value}T00:00:00Z`);
+	if (!Number.isFinite(date.getTime())) return value;
+	return new Intl.DateTimeFormat("en", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }).format(date);
+}
+
 function formatMonthName(month: number) {
 	return new Intl.DateTimeFormat("en", { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2026, month - 1, 1)));
+}
+
+function pluralize(count: number, singular: string, plural = `${singular}s`) {
+	return `${count.toLocaleString()} ${count === 1 ? singular : plural}`;
+}
+
+function calendarDayHasReading(day: ReadingLifeCalendarDay) {
+	return day.pages > 0 || day.sessions > 0 || day.booksRead > 0 || day.completions > 0;
+}
+
+function calendarDayPrimaryLine(day: ReadingLifeCalendarDay) {
+	if (!calendarDayHasReading(day)) return "No reading recorded.";
+	if (day.pages > 0 && day.booksRead > 0) {
+		return `${pluralize(day.pages, "page")} across ${pluralize(day.booksRead, "book")}`;
+	}
+	if (day.pages > 0) return `${pluralize(day.pages, "page")} recorded`;
+	return `${pluralize(day.booksRead, "book")} read`;
+}
+
+function calendarDayAriaLabel(day: ReadingLifeCalendarDay) {
+	const date = formatFullDate(day.date);
+	if (!calendarDayHasReading(day)) return `${date}: No reading recorded.`;
+	return [
+		`${date}: ${pluralize(day.pages, "page")}`,
+		pluralize(day.sessions, "reading session"),
+		`${pluralize(day.booksRead, "book")} read`,
+		`${pluralize(day.completions, "book")} finished`
+	].join(", ") + ".";
 }
 
 function formatRating(value: number | null | undefined) {
@@ -390,15 +426,24 @@ const months = Array.from({ length: 12 }, (_, index) => index + 1);
 						<p>{calendarSummary.activeDays.toLocaleString()} active days · {calendarSummary.completions.toLocaleString()} finishes</p>
 					</div>
 					<p class="text-alt">Calendar summary: {calendarSummary.pages.toLocaleString()} pages recorded across {calendarSummary.activeDays.toLocaleString()} active days in {currentYear}.</p>
-					<div class="calendar-grid" role="img" aria-label={`Reading activity heatmap for ${currentYear}. ${calendarSummary.activeDays} active days, ${calendarSummary.pages} pages recorded, ${calendarSummary.completions} finished books.`}>
+					<div class="calendar-grid" role="group" aria-label={`Reading activity heatmap for ${currentYear}. ${calendarSummary.activeDays} active days, ${calendarSummary.pages} pages recorded, ${calendarSummary.completions} finished books.`}>
 						{calendarDays.map((day) => (
-							<span
+							<button
+								type="button"
 								class={`calendar-day level-${day.level}`}
-								title={`${formatDate(day.date)}: ${day.pages.toLocaleString()} pages, ${day.completions.toLocaleString()} finished`}
-								aria-hidden="true"
-							></span>
+								data-calendar-day
+								data-date-label={formatFullDate(day.date)}
+								data-primary-line={calendarDayPrimaryLine(day)}
+								data-pages={String(day.pages)}
+								data-sessions={String(day.sessions)}
+								data-books-read={String(day.booksRead)}
+								data-completions={String(day.completions)}
+								data-finished-titles={JSON.stringify(day.finishedTitles)}
+								aria-label={calendarDayAriaLabel(day)}
+							></button>
 						))}
 					</div>
+					<div id="calendar-day-tooltip" class="calendar-day-tooltip" role="tooltip" hidden></div>
 					<div class="calendar-legend" aria-hidden="true">
 						<span>Less</span>
 						<i class="level-0"></i>
@@ -829,17 +874,107 @@ const months = Array.from({ length: 12 }, (_, index) => index + 1);
 		padding-bottom: 0.25rem;
 	}
 	.calendar-day {
+		appearance: none;
 		width: 100%;
 		min-width: 8px;
 		aspect-ratio: 1;
+		border: 0;
 		border-radius: 3px;
 		background: rgba(87, 117, 144, 0.14);
+		cursor: pointer;
+		padding: 0;
+	}
+	.calendar-day:hover,
+	.calendar-day:focus-visible {
+		box-shadow: 0 0 0 2px rgba(31, 122, 69, 0.5);
+		outline: 2px solid rgba(31, 122, 69, 0.68);
+		outline-offset: 1px;
 	}
 	.level-0 { background: rgba(87, 117, 144, 0.14); }
 	.level-1 { background: #d9ead2; }
 	.level-2 { background: #bfd9ab; }
 	.level-3 { background: #75bd9f; }
 	.level-4 { background: #277da1; }
+	.calendar-day-tooltip {
+		position: fixed;
+		width: min(280px, calc(100vw - 1.5rem));
+		max-height: calc(100dvh - 1.5rem - 92px);
+		overflow: auto;
+		background: #ffffff;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-popover);
+		padding: 0.65rem 0.75rem;
+		z-index: 45;
+		pointer-events: none;
+		overflow-wrap: anywhere;
+	}
+	.calendar-day-tooltip[hidden] {
+		display: none;
+	}
+	.calendar-day-tooltip::after {
+		content: "";
+		position: absolute;
+		width: 10px;
+		height: 10px;
+		background: #ffffff;
+		border: var(--border-subtle);
+		transform: rotate(45deg);
+	}
+	.calendar-day-tooltip[data-placement="bottom"]::after {
+		top: -6px;
+		left: var(--arrow-x, 50%);
+		border-right: 0;
+		border-bottom: 0;
+	}
+	.calendar-day-tooltip[data-placement="top"]::after {
+		bottom: -6px;
+		left: var(--arrow-x, 50%);
+		border-left: 0;
+		border-top: 0;
+	}
+	.calendar-day-tooltip[data-placement="right"]::after {
+		left: -6px;
+		top: var(--arrow-y, 50%);
+		border-right: 0;
+		border-top: 0;
+	}
+	.calendar-day-tooltip[data-placement="left"]::after {
+		right: -6px;
+		top: var(--arrow-y, 50%);
+		border-left: 0;
+		border-bottom: 0;
+	}
+	.calendar-tooltip-date,
+	.calendar-tooltip-line,
+	.calendar-tooltip-finished-label {
+		margin: 0;
+	}
+	.calendar-tooltip-date {
+		color: var(--color-text);
+		font-size: 0.94rem;
+		font-weight: 800;
+		line-height: 1.25;
+	}
+	.calendar-tooltip-line {
+		margin-top: 0.28rem;
+		color: var(--color-text-muted);
+		font-size: 0.86rem;
+		line-height: 1.35;
+	}
+	.calendar-tooltip-finished-label {
+		margin-top: 0.45rem;
+		color: var(--color-text);
+		font-size: 0.84rem;
+		font-weight: 800;
+	}
+	.calendar-tooltip-finished-list {
+		margin: 0.18rem 0 0;
+		padding-left: 1rem;
+		color: var(--color-text-muted);
+		font-size: 0.84rem;
+		line-height: 1.32;
+	}
 	.calendar-legend {
 		display: flex;
 		gap: 0.3rem;
@@ -938,6 +1073,161 @@ const months = Array.from({ length: 12 }, (_, index) => index + 1);
 <script>
 	const READING_LIFE_REFRESH_EVENT = "dogeared:reading-data-changed";
 	let readingLifeRefreshTimer = 0;
+	let activeCalendarDay = null;
+	let hoveredCalendarDay = null;
+
+	function pluralizeCalendarCount(count, singular, plural = `${singular}s`) {
+		return `${Number(count || 0).toLocaleString()} ${Number(count || 0) === 1 ? singular : plural}`;
+	}
+
+	function getCalendarTooltip() {
+		return document.getElementById("calendar-day-tooltip");
+	}
+
+	function parseFinishedTitles(button) {
+		try {
+			const parsed = JSON.parse(String(button?.dataset?.finishedTitles || "[]"));
+			return Array.isArray(parsed) ? parsed.map((title) => String(title || "").trim()).filter(Boolean) : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function renderCalendarTooltip(button) {
+		const tooltip = getCalendarTooltip();
+		if (!(tooltip instanceof HTMLElement)) return null;
+		const pages = Math.max(0, Number(button.dataset.pages || 0) || 0);
+		const sessions = Math.max(0, Number(button.dataset.sessions || 0) || 0);
+		const booksRead = Math.max(0, Number(button.dataset.booksRead || 0) || 0);
+		const completions = Math.max(0, Number(button.dataset.completions || 0) || 0);
+		const finishedTitles = parseFinishedTitles(button);
+		const hasReading = pages > 0 || sessions > 0 || booksRead > 0 || completions > 0;
+		const fragment = document.createDocumentFragment();
+		const heading = document.createElement("p");
+		heading.className = "calendar-tooltip-date";
+		heading.textContent = String(button.dataset.dateLabel || "Date unavailable");
+		fragment.append(heading);
+		const primary = document.createElement("p");
+		primary.className = "calendar-tooltip-line";
+		primary.textContent = String(button.dataset.primaryLine || (hasReading ? `${pluralizeCalendarCount(pages, "page")} recorded` : "No reading recorded."));
+		fragment.append(primary);
+		if (hasReading) {
+			const sessionsLine = document.createElement("p");
+			sessionsLine.className = "calendar-tooltip-line";
+			sessionsLine.textContent = pluralizeCalendarCount(sessions, "reading session");
+			fragment.append(sessionsLine);
+		}
+		if (finishedTitles.length > 0) {
+			const label = document.createElement("p");
+			label.className = "calendar-tooltip-finished-label";
+			label.textContent = "Finished:";
+			fragment.append(label);
+			const list = document.createElement("ul");
+			list.className = "calendar-tooltip-finished-list";
+			for (const title of finishedTitles) {
+				const item = document.createElement("li");
+				item.textContent = title;
+				list.append(item);
+			}
+			fragment.append(list);
+		}
+		tooltip.replaceChildren(fragment);
+		return tooltip;
+	}
+
+	function clampCalendarTooltip(value, min, max) {
+		if (max < min) return min;
+		return Math.max(min, Math.min(max, value));
+	}
+
+	function positionCalendarTooltip(button) {
+		const tooltip = getCalendarTooltip();
+		if (!(tooltip instanceof HTMLElement)) return;
+		const rect = button.getBoundingClientRect();
+		const gutter = 12;
+		const gap = 10;
+		const bottomReserve = 92;
+		const bottomLimit = Math.max(gutter, window.innerHeight - gutter - bottomReserve);
+		tooltip.hidden = false;
+		tooltip.style.visibility = "hidden";
+		tooltip.style.left = "0px";
+		tooltip.style.top = "0px";
+		const tipRect = tooltip.getBoundingClientRect();
+		const centeredLeft = rect.left + (rect.width / 2) - (tipRect.width / 2);
+		const centeredTop = rect.top + (rect.height / 2) - (tipRect.height / 2);
+		const placements = [
+			{
+				name: "bottom",
+				fits: rect.bottom + gap + tipRect.height <= bottomLimit,
+				space: Math.max(0, bottomLimit - rect.bottom - gap),
+				left: clampCalendarTooltip(centeredLeft, gutter, window.innerWidth - gutter - tipRect.width),
+				top: rect.bottom + gap
+			},
+			{
+				name: "top",
+				fits: rect.top - gap - tipRect.height >= gutter,
+				space: Math.max(0, rect.top - gutter - gap),
+				left: clampCalendarTooltip(centeredLeft, gutter, window.innerWidth - gutter - tipRect.width),
+				top: rect.top - gap - tipRect.height
+			},
+			{
+				name: "right",
+				fits: rect.right + gap + tipRect.width <= window.innerWidth - gutter,
+				space: Math.max(0, window.innerWidth - gutter - rect.right - gap),
+				left: rect.right + gap,
+				top: clampCalendarTooltip(centeredTop, gutter, bottomLimit - tipRect.height)
+			},
+			{
+				name: "left",
+				fits: rect.left - gap - tipRect.width >= gutter,
+				space: Math.max(0, rect.left - gutter - gap),
+				left: rect.left - gap - tipRect.width,
+				top: clampCalendarTooltip(centeredTop, gutter, bottomLimit - tipRect.height)
+			}
+		];
+		const placement = placements.find((item) => item.fits) || [...placements].sort((a, b) => b.space - a.space)[0];
+		const left = clampCalendarTooltip(placement.left, gutter, window.innerWidth - gutter - tipRect.width);
+		const top = clampCalendarTooltip(placement.top, gutter, bottomLimit - tipRect.height);
+		tooltip.dataset.placement = placement.name;
+		tooltip.style.left = `${Math.round(left)}px`;
+		tooltip.style.top = `${Math.round(top)}px`;
+		tooltip.style.setProperty("--arrow-x", `${Math.round(clampCalendarTooltip(rect.left + (rect.width / 2) - left, 14, tipRect.width - 14))}px`);
+		tooltip.style.setProperty("--arrow-y", `${Math.round(clampCalendarTooltip(rect.top + (rect.height / 2) - top, 14, tipRect.height - 14))}px`);
+		tooltip.style.visibility = "";
+	}
+
+	function showCalendarTooltip(button) {
+		if (!(button instanceof HTMLElement)) return;
+		const tooltip = renderCalendarTooltip(button);
+		if (!(tooltip instanceof HTMLElement)) return;
+		if (activeCalendarDay instanceof HTMLElement && activeCalendarDay !== button) {
+			activeCalendarDay.removeAttribute("aria-describedby");
+		}
+		activeCalendarDay = button;
+		button.setAttribute("aria-describedby", tooltip.id);
+		positionCalendarTooltip(button);
+	}
+
+	function hideCalendarTooltip() {
+		const tooltip = getCalendarTooltip();
+		if (activeCalendarDay instanceof HTMLElement) activeCalendarDay.removeAttribute("aria-describedby");
+		activeCalendarDay = null;
+		if (tooltip instanceof HTMLElement) tooltip.hidden = true;
+	}
+
+	function syncCalendarTooltipPosition() {
+		if (!(activeCalendarDay instanceof HTMLElement)) return;
+		if (!document.body.contains(activeCalendarDay)) {
+			hideCalendarTooltip();
+			return;
+		}
+		const rect = activeCalendarDay.getBoundingClientRect();
+		if (rect.bottom <= 0 || rect.top >= window.innerHeight || rect.right <= 0 || rect.left >= window.innerWidth) {
+			hideCalendarTooltip();
+			return;
+		}
+		positionCalendarTooltip(activeCalendarDay);
+	}
 
 	async function refreshReadingLifeSections() {
 		try {
@@ -948,11 +1238,12 @@ const months = Array.from({ length: 12 }, (_, index) => index + 1);
 			if (!response.ok) return;
 			const html = await response.text();
 			const doc = new DOMParser().parseFromString(html, "text/html");
-			for (const id of ["overview", "timeline"]) {
+			for (const id of ["overview", "timeline", "calendar"]) {
 				const current = document.getElementById(id);
 				const next = doc.getElementById(id);
 				if (current instanceof HTMLElement && next instanceof HTMLElement) current.replaceWith(next);
 			}
+			hideCalendarTooltip();
 		} catch {
 			// Keep the current view if the targeted refresh is unavailable.
 		}
@@ -978,4 +1269,43 @@ const months = Array.from({ length: 12 }, (_, index) => index + 1);
 	} catch {
 		// Storage and same-page events cover browsers without BroadcastChannel.
 	}
+
+	document.addEventListener("pointerover", (event) => {
+		const target = event.target instanceof Element ? event.target.closest("[data-calendar-day]") : null;
+		if (!(target instanceof HTMLElement)) return;
+		hoveredCalendarDay = target;
+		showCalendarTooltip(target);
+	});
+	document.addEventListener("pointerout", (event) => {
+		const target = event.target instanceof Element ? event.target.closest("[data-calendar-day]") : null;
+		if (!(target instanceof HTMLElement)) return;
+		const related = event.relatedTarget instanceof Element ? event.relatedTarget.closest("[data-calendar-day]") : null;
+		if (related === target) return;
+		if (hoveredCalendarDay === target) hoveredCalendarDay = null;
+		if (document.activeElement !== target) hideCalendarTooltip();
+	});
+	document.addEventListener("focusin", (event) => {
+		const target = event.target instanceof Element ? event.target.closest("[data-calendar-day]") : null;
+		if (target instanceof HTMLElement) showCalendarTooltip(target);
+	});
+	document.addEventListener("focusout", (event) => {
+		const target = event.target instanceof Element ? event.target.closest("[data-calendar-day]") : null;
+		if (!(target instanceof HTMLElement)) return;
+		window.setTimeout(() => {
+			if (hoveredCalendarDay !== target && document.activeElement !== target) hideCalendarTooltip();
+		}, 0);
+	});
+	document.addEventListener("click", (event) => {
+		const target = event.target instanceof Element ? event.target.closest("[data-calendar-day]") : null;
+		if (target instanceof HTMLElement) {
+			showCalendarTooltip(target);
+			return;
+		}
+		hideCalendarTooltip();
+	});
+	document.addEventListener("keydown", (event) => {
+		if (event.key === "Escape") hideCalendarTooltip();
+	});
+	window.addEventListener("scroll", syncCalendarTooltipPosition, { passive: true });
+	window.addEventListener("resize", syncCalendarTooltipPosition);
 </script>

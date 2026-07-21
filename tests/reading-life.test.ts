@@ -162,19 +162,41 @@ test("reading life canonicalizes finished Works before overview and timeline cou
 
 test("calendar groups progress and completion activity by date", () => {
 	const days = buildReadingCalendar({
-		finishedBooks,
+		finishedBooks: [
+			...finishedBooks,
+			{
+				id: 4,
+				title: "Second Finish",
+				author: "Mira Chen",
+				pageCount: 90,
+				finishedDate: "2026-01-12"
+			}
+		],
 		progressEvents: [
-			{ date: "2026-01-12", pageDelta: 40 },
-			{ date: "2026-01-13", pageDelta: 20 }
+			{ bookId: 1, date: "2026-01-12", pageDelta: 25 },
+			{ bookId: 2, date: "2026-01-12", pageDelta: 15 },
+			{ bookId: 2, date: "2026-01-13", pageDelta: 20 }
 		],
 		year: 2026
 	});
 	const completionDay = days.find((day) => day.date === "2026-01-12");
 	const progressDay = days.find((day) => day.date === "2026-01-13");
+	const emptyDay = days.find((day) => day.date === "2026-01-14");
 	assert.equal(completionDay?.pages, 40);
-	assert.equal(completionDay?.completions, 1);
+	assert.equal(completionDay?.sessions, 2);
+	assert.equal(completionDay?.booksRead, 3);
+	assert.equal(completionDay?.completions, 2);
+	assert.deepEqual(completionDay?.finishedTitles, ["Second Finish", "Winter Pages"]);
 	assert.equal(progressDay?.pages, 20);
+	assert.equal(progressDay?.sessions, 1);
+	assert.equal(progressDay?.booksRead, 1);
+	assert.equal(progressDay?.completions, 0);
 	assert.equal(progressDay?.level > 0, true);
+	assert.equal(emptyDay?.pages, 0);
+	assert.equal(emptyDay?.sessions, 0);
+	assert.equal(emptyDay?.booksRead, 0);
+	assert.equal(emptyDay?.completions, 0);
+	assert.deepEqual(emptyDay?.finishedTitles, []);
 });
 
 test("genre insights calculate books, pages, and average ratings", () => {
@@ -193,11 +215,39 @@ test("My Reading Life refreshes visible annual summary and timeline after readin
 	assert.match(refreshScript, /dogeared:reading-data-changed/);
 	assert.match(refreshScript, /fetch\(window\.location\.href/);
 	assert.match(refreshScript, /"X-Dogeared-Partial": "reading-life-summary"/);
-	assert.match(refreshScript, /\["overview", "timeline"\]/);
+	assert.match(refreshScript, /\["overview", "timeline", "calendar"\]/);
 	assert.match(refreshScript, /current\.replaceWith\(next\)/);
 	assert.match(refreshScript, /dogeared:reading-data-changed-at/);
 	assert.match(refreshScript, /BroadcastChannel\("dogeared:reading-data"\)/);
 	assert.doesNotMatch(refreshScript, /window\.location\.reload/);
+});
+
+test("Reading Calendar days expose accessible summaries and anchored tooltip behavior", () => {
+	const source = readFileSync("src/pages/reading-life.astro", "utf8");
+
+	assert.match(source, /type ReadingLifeCalendarDay/);
+	assert.match(source, /function calendarDayAriaLabel/);
+	assert.match(source, /No reading recorded\./);
+	assert.match(source, /class="calendar-grid" role="group"/);
+	assert.match(source, /data-calendar-day/);
+	assert.match(source, /data-date-label=\{formatFullDate\(day\.date\)\}/);
+	assert.match(source, /data-primary-line=\{calendarDayPrimaryLine\(day\)\}/);
+	assert.match(source, /data-sessions=\{String\(day\.sessions\)\}/);
+	assert.match(source, /data-books-read=\{String\(day\.booksRead\)\}/);
+	assert.match(source, /data-finished-titles=\{JSON\.stringify\(day\.finishedTitles\)\}/);
+	assert.match(source, /aria-label=\{calendarDayAriaLabel\(day\)\}/);
+	assert.match(source, /id="calendar-day-tooltip"/);
+	assert.match(source, /role="tooltip"/);
+	assert.match(source, /function positionCalendarTooltip\(button\)/);
+	assert.match(source, /bottomReserve = 92/);
+	assert.match(source, /space: Math\.max/);
+	assert.match(source, /sort\(\(a, b\) => b\.space - a\.space\)/);
+	assert.match(source, /document\.addEventListener\("pointerover"/);
+	assert.match(source, /document\.addEventListener\("focusin"/);
+	assert.match(source, /document\.addEventListener\("click"/);
+	assert.match(source, /event\.key === "Escape"/);
+	assert.match(source, /window\.addEventListener\("scroll", syncCalendarTooltipPosition/);
+	assert.match(source, /activeCalendarDay\.removeAttribute\("aria-describedby"\)/);
 });
 
 test("Reading Timeline author links use canonical author slugs, not numeric author ids", () => {
