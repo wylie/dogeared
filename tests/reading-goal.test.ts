@@ -140,6 +140,28 @@ test("profile page renders reading goal between profile card and shelf summary",
 	assert.equal(source.includes('aria-label="Reading goal progress"'), true);
 });
 
+test("reading progress bars use the shared rounded progress treatment", () => {
+	const globalCss = readFileSync("src/assets/global.css", "utf8");
+	const profile = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const readingLife = readFileSync("src/pages/reading-life.astro", "utf8");
+	const profileCardTemplate = readFileSync("src/lib/profileBookCardTemplate.ts", "utf8");
+
+	assert.match(globalCss, /\.progress-bar-track \{[\s\S]+border-radius: var\(--radius-pill\)/);
+	assert.match(globalCss, /\.progress-bar-track \{[\s\S]+overflow: hidden/);
+	assert.match(globalCss, /\.progress-bar-fill \{[\s\S]+max-width: 100%/);
+	assert.match(globalCss, /\.progress-bar-fill \{[\s\S]+border-radius: inherit/);
+
+	assert.equal(profile.includes('class="reading-goal-bar progress-bar-track"'), true);
+	assert.equal(profile.includes('class="progress-track progress-bar-track"'), true);
+	assert.equal(profile.includes('class="progress-fill progress-bar-fill"'), true);
+	assert.equal(profile.includes('progressTrack.className = "progress-track progress-bar-track"'), true);
+	assert.equal(profile.includes('progressFill.className = "progress-fill progress-bar-fill"'), true);
+	assert.equal(readingLife.includes('class="goal-bar progress-bar-track"'), true);
+	assert.equal(readingLife.includes('class="progress-bar-fill"'), true);
+	assert.equal(profileCardTemplate.includes('progress-wrap progress-bar-track'), true);
+	assert.equal(profileCardTemplate.includes('progress-bar progress-bar-fill'), true);
+});
+
 test("profile refreshes annual reading goal and shelf summary after shelf mutations", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	const refreshHelper = source.slice(

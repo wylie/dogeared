@@ -136,6 +136,18 @@ select:not([multiple]):disabled {
   cursor: not-allowed;
 }
 
+.progress-bar-track {
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  border-radius: inherit;
+}
+
 .special-font {
   font-family: "Copse", serif;
   font-weight: 400;

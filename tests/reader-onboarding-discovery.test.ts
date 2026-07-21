@@ -173,7 +173,7 @@ test("profile progress saves refresh all derived reading UI without reload", () 
 	assert.equal(source.includes('event.key === "dogeared:reading-data-changed-at"'), true);
 	assert.equal(source.includes("function ensureProgressDisplay(card, currentPage, totalPages)"), true);
 	assert.equal(source.includes('progressNode.className = "meta progress-current-value"'), true);
-	assert.equal(source.includes('progressTrack.className = "progress-track"'), true);
+	assert.equal(source.includes('progressTrack.className = "progress-track progress-bar-track"'), true);
 	assert.equal(source.includes('card.dataset.momentumProgressUpdates = String(persistedProgressUpdates > 0'), true);
 	assert.equal(source.includes("function recalcMomentumFromDom()"), false);
 	const progressSaveStart = source.indexOf('if (progressSave instanceof HTMLButtonElement)');

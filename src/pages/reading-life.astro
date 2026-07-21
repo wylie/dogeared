@@ -292,14 +292,14 @@ const months = Array.from({ length: 12 }, (_, index) => index + 1);
 							<span>{readingLife.overview.goalProgress.paceLabel}</span>
 						</div>
 						<div
-							class="goal-bar"
+							class="goal-bar progress-bar-track"
 							role="progressbar"
 							aria-label="Reading goal progress"
 							aria-valuemin="0"
 							aria-valuemax="100"
 							aria-valuenow={String(readingLife.overview.goalProgress.barPercent)}
 						>
-							<span style={`width:${readingLife.overview.goalProgress.barPercent}%`}></span>
+							<span class="progress-bar-fill" style={`width:${readingLife.overview.goalProgress.barPercent}%`}></span>
 						</div>
 					</div>
 					{currentBooks.length > 0 && (
@@ -693,13 +693,9 @@ const months = Array.from({ length: 12 }, (_, index) => index + 1);
 	}
 	.goal-bar {
 		height: 0.8rem;
-		border-radius: 999px;
 		background: rgba(87, 117, 144, 0.18);
-		overflow: hidden;
 	}
 	.goal-bar span {
-		display: block;
-		height: 100%;
 		background: var(--color-primary);
 	}
 	.current-books {

@@ -61,7 +61,7 @@ export function renderProfileBookCard(entry: ProfileEntry, options: RenderOption
 	const rating = normalizeRating(entry.rating);
 	const percent = progressPercent(entry);
 	const progress = (entry.status !== "want_to_read" && total > 0)
-		? `<div class="progress-wrap"><div class="progress-bar" style="width:${percent}%"></div></div><p class="meta">${current}/${total} pages (${percent}%)</p>`
+		? `<div class="progress-wrap progress-bar-track"><div class="progress-bar progress-bar-fill" style="width:${percent}%"></div></div><p class="meta">${current}/${total} pages (${percent}%)</p>`
 		: "";
 	const progressEditor = entry.status === "reading"
 		? `<div class="progress-editor">
