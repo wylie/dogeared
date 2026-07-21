@@ -1,0 +1,95 @@
+---
+type Props = {
+	currentPage: number;
+	totalPages: number;
+	previousHref?: string;
+	nextHref?: string;
+	label?: string;
+	previousLabel?: string;
+	nextLabel?: string;
+};
+
+const {
+	currentPage,
+	totalPages,
+	previousHref = "",
+	nextHref = "",
+	label = "Pagination",
+	previousLabel = "Previous",
+	nextLabel = "Next"
+} = Astro.props;
+
+const safeTotalPages = Math.max(1, Math.floor(Number(totalPages || 1)));
+const safeCurrentPage = Math.max(1, Math.min(safeTotalPages, Math.floor(Number(currentPage || 1))));
+const previousDisabled = safeCurrentPage <= 1 || !previousHref;
+const nextDisabled = safeCurrentPage >= safeTotalPages || !nextHref;
+---
+
+<nav class="pagination" aria-label={label}>
+	{previousDisabled ? (
+		<span class="pagination-control is-disabled" aria-disabled="true">{previousLabel}</span>
+	) : (
+		<a class="pagination-control" href={previousHref} aria-label={`${previousLabel}, page ${safeCurrentPage - 1}`}>{previousLabel}</a>
+	)}
+	<span class="pagination-status" aria-live="polite">Page {safeCurrentPage} of {safeTotalPages}</span>
+	{nextDisabled ? (
+		<span class="pagination-control is-disabled" aria-disabled="true">{nextLabel}</span>
+	) : (
+		<a class="pagination-control" href={nextHref} aria-label={`${nextLabel}, page ${safeCurrentPage + 1}`}>{nextLabel}</a>
+	)}
+</nav>
+
+<style>
+	.pagination {
+		margin-top: 0.6rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		color: var(--color-text-muted);
+		flex-wrap: nowrap;
+	}
+	.pagination-control {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 2rem;
+		border: var(--border-subtle);
+		border-radius: 999px;
+		padding: 0.35rem 0.8rem;
+		background: var(--color-nav-surface);
+		color: var(--color-nav);
+		font: inherit;
+		font-weight: 700;
+		line-height: 1;
+		text-decoration: none;
+		white-space: nowrap;
+		box-sizing: border-box;
+	}
+	a.pagination-control:hover,
+	a.pagination-control:focus-visible {
+		background: var(--color-nav-surface-hover);
+		color: var(--color-nav-hover);
+	}
+	.pagination-control.is-disabled {
+		color: var(--color-text-subtle);
+		opacity: 0.55;
+		cursor: default;
+	}
+	.pagination-status {
+		color: #4b5563;
+		font-size: 0.85rem;
+		white-space: nowrap;
+	}
+	@media (max-width: 420px) {
+		.pagination {
+			gap: 0.35rem;
+		}
+		.pagination-control {
+			padding-inline: 0.62rem;
+		}
+		.pagination-status {
+			font-size: 0.8rem;
+		}
+	}
+</style>

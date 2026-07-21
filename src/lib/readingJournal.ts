@@ -632,6 +632,45 @@ export async function deleteJournalNote(sql: Sql, userId: string, entryId: numbe
 	return rows.length > 0;
 }
 
+export async function countJournalEntries(
+	sql: Sql,
+	userId: string,
+	query = "",
+	bookId = 0,
+	options: JournalSearchOptions = {}
+) {
+	await ensureReadingJournalSchema(sql);
+	if (!userId) return 0;
+	const normalizedQuery = String(query || "").replace(/\s+/g, " ").trim();
+	const pattern = `%${normalizedQuery}%`;
+	const normalizedBookId = Math.max(0, Number(options.bookId || bookId || 0) || 0);
+	const dateFilter = String(options.date || "").trim().slice(0, 10);
+	const rows = await sql<Array<{ count: number }>>`
+		select count(*)::int as count
+		from reading_journal_note j
+		left join book b on b.id = j.book_id
+		where j.user_id = ${userId}::uuid
+			and (${normalizedBookId} = 0 or j.book_id = ${normalizedBookId})
+			and (${dateFilter} = '' or j.entry_at::date = ${dateFilter || null}::date)
+			and (
+				${normalizedQuery} = ''
+				or coalesce(b.title, '') ilike ${pattern}
+				or coalesce(b.primary_author, '') ilike ${pattern}
+				or j.entry_title ilike ${pattern}
+				or j.body ilike ${pattern}
+				or j.chapter_location ilike ${pattern}
+				or j.reading_position_value ilike ${pattern}
+				or j.mood ilike ${pattern}
+				or exists (
+					select 1
+					from unnest(j.personal_tags) tag
+					where tag ilike ${pattern}
+				)
+			)
+	`;
+	return Math.max(0, Number(rows[0]?.count || 0) || 0);
+}
+
 export async function searchJournalEntries(
 	sql: Sql,
 	userId: string,

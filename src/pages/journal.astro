@@ -1,8 +1,9 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import Pagination from "../components/Pagination.astro";
 import { resolveUserBySession } from "../lib/auth";
 import { getNeonSql } from "../lib/neon";
-import { formatReadingPosition, searchJournalEntries, type JournalSearchResult } from "../lib/readingJournal";
+import { countJournalEntries, formatReadingPosition, searchJournalEntries, type JournalSearchResult } from "../lib/readingJournal";
 
 export const prerender = false;
 
@@ -11,7 +12,7 @@ const viewerUserId = session?.userId || "";
 const query = String(Astro.url.searchParams.get("q") || "").replace(/\s+/g, " ").trim();
 const filterBookId = Math.max(0, Number(Astro.url.searchParams.get("bookId") || 0) || 0);
 const filterDate = String(Astro.url.searchParams.get("date") || "").trim().slice(0, 10);
-const currentPage = Math.max(1, Number(Astro.url.searchParams.get("page") || 1) || 1);
+const requestedPage = Math.max(1, Number(Astro.url.searchParams.get("page") || 1) || 1);
 const pageSize = 20;
 const initialReadingPositionType = String(
 	Astro.url.searchParams.get("readingPositionType")
@@ -23,11 +24,17 @@ const initialReadingPositionValue = String(Astro.url.searchParams.get("readingPo
 let entries: JournalSearchResult[] = [];
 let ownedBookOptions: Array<{ id: number; title: string; author: string }> = [];
 let loadError = "";
+let totalJournalEntries = 0;
+let totalPages = 1;
+let currentPage = requestedPage;
 
 if (viewerUserId) {
 	try {
 		const sql = getNeonSql();
-		entries = await searchJournalEntries(sql, viewerUserId, query, pageSize + 1, filterBookId, {
+		totalJournalEntries = await countJournalEntries(sql, viewerUserId, query, filterBookId, { date: filterDate });
+		totalPages = Math.max(1, Math.ceil(totalJournalEntries / pageSize));
+		currentPage = Math.min(requestedPage, totalPages);
+		entries = await searchJournalEntries(sql, viewerUserId, query, pageSize, filterBookId, {
 			date: filterDate,
 			offset: (currentPage - 1) * pageSize
 		});
@@ -51,9 +58,6 @@ if (viewerUserId) {
 		loadError = error instanceof Error ? error.message : "Failed to load journal.";
 	}
 }
-
-const hasNextPage = entries.length > pageSize;
-entries = entries.slice(0, pageSize);
 
 function formatDate(value: string) {
 	const date = new Date(String(value || ""));
@@ -284,11 +288,15 @@ const sectionLinks = viewerUserId ? [
 									</li>
 								))}
 							</ul>
-							<nav class="journal-pagination" aria-label="Journal pages">
-								<a href={currentPage > 1 ? pageHref(currentPage - 1) : undefined} aria-disabled={currentPage <= 1}>Previous</a>
-								<span>Page {currentPage}</span>
-								<a href={hasNextPage ? pageHref(currentPage + 1) : undefined} aria-disabled={!hasNextPage}>Next</a>
-							</nav>
+							{totalPages > 1 && (
+								<Pagination
+									currentPage={currentPage}
+									totalPages={totalPages}
+									previousHref={currentPage > 1 ? pageHref(currentPage - 1) : ""}
+									nextHref={currentPage < totalPages ? pageHref(currentPage + 1) : ""}
+									label="Journal pagination"
+								/>
+							)}
 						</>
 					)}
 				</section>
@@ -567,10 +575,6 @@ const sectionLinks = viewerUserId ? [
 	.journal-empty-state p { margin: 0.3rem 0; color: var(--color-text-muted); line-height: 1.45; }
 	.journal-tags { list-style: none; display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0; margin: 0.45rem 0; }
 	.journal-tags li { border-radius: 999px; background: var(--color-chip-topic); color: var(--color-nav); padding: 0.18rem 0.5rem; font-size: 0.78rem; font-weight: 760; }
-	.journal-pagination { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 1rem; color: var(--color-text-muted); }
-	.journal-pagination a { color: var(--color-nav); font-weight: 760; text-decoration: none; }
-	.journal-pagination a[aria-disabled="true"] { color: var(--color-text-subtle); pointer-events: none; }
-	.journal-pagination a:hover, .journal-pagination a:focus-visible { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
 	@media (max-width: 680px) {
 		.journal-hero-head { grid-template-columns: 1fr; gap: 0.7rem; }
 		.journal-search-form, .journal-grid-two, .position-row { grid-template-columns: 1fr; }

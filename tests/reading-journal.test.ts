@@ -174,7 +174,9 @@ test("journal UI is wired into book, private journal page, navigation, and autos
 	assert.match(journalPage, /data-action="view-journal-entry"/);
 	assert.match(journalPage, /data-action="edit-journal-entry"/);
 	assert.match(journalPage, /data-action="delete-journal-entry"/);
-	assert.match(journalPage, /journal-pagination/);
+	assert.match(journalPage, /<Pagination/);
+	assert.match(journalPage, /countJournalEntries/);
+	assert.doesNotMatch(journalPage, /journal-pagination/);
 	assert.match(journalPage, /robots="noindex,nofollow"/);
 	assert.match(nav, /Reading Journal/);
 	assert.match(nav, /routeMatches/);

@@ -1,6 +1,7 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import BookCard from "../../components/BookCard.astro";
+import Pagination from "../../components/Pagination.astro";
 import ShelfDropdown from "../../components/ShelfDropdown.astro";
 import Chip from "../../components/Chip.astro";
 import RatingControl from "../../components/RatingControl.astro";
@@ -1430,11 +1431,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 							</ul>
 						)}
 						{pagedRecent.totalPages > 1 && (
-							<div class="section-pagination">
-								<a class="owner-edit-link" href={paginationHref("ra_page", pagedRecent.currentPage - 1, "recent-activity")} aria-disabled={pagedRecent.currentPage <= 1}>Previous</a>
-								<span>Page {pagedRecent.currentPage} of {pagedRecent.totalPages}</span>
-								<a class="owner-edit-link" href={paginationHref("ra_page", pagedRecent.currentPage + 1, "recent-activity")} aria-disabled={pagedRecent.currentPage >= pagedRecent.totalPages}>Next</a>
-							</div>
+							<Pagination
+								currentPage={pagedRecent.currentPage}
+								totalPages={pagedRecent.totalPages}
+								previousHref={pagedRecent.currentPage > 1 ? paginationHref("ra_page", pagedRecent.currentPage - 1, "recent-activity") : ""}
+								nextHref={pagedRecent.currentPage < pagedRecent.totalPages ? paginationHref("ra_page", pagedRecent.currentPage + 1, "recent-activity") : ""}
+								label="Recent activity pagination"
+							/>
 						)}
 					</section>
 				)}
@@ -1710,11 +1713,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 							</ul>
 						)}
 						{pagedReading.totalPages > 1 && (
-							<div class="section-pagination">
-								<a class="owner-edit-link" href={paginationHref("cr_page", pagedReading.currentPage - 1, "currently-reading")} aria-disabled={pagedReading.currentPage <= 1}>Previous</a>
-								<span>Page {pagedReading.currentPage} of {pagedReading.totalPages}</span>
-								<a class="owner-edit-link" href={paginationHref("cr_page", pagedReading.currentPage + 1, "currently-reading")} aria-disabled={pagedReading.currentPage >= pagedReading.totalPages}>Next</a>
-							</div>
+							<Pagination
+								currentPage={pagedReading.currentPage}
+								totalPages={pagedReading.totalPages}
+								previousHref={pagedReading.currentPage > 1 ? paginationHref("cr_page", pagedReading.currentPage - 1, "currently-reading") : ""}
+								nextHref={pagedReading.currentPage < pagedReading.totalPages ? paginationHref("cr_page", pagedReading.currentPage + 1, "currently-reading") : ""}
+								label="Currently Reading pagination"
+							/>
 						)}
 					</section>
 				)}
@@ -1783,11 +1788,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 							</ul>
 						)}
 						{pagedWantToRead.totalPages > 1 && (
-							<div class="section-pagination">
-								<a class="owner-edit-link" href={paginationHref("wr_page", pagedWantToRead.currentPage - 1, "want-to-read")} aria-disabled={pagedWantToRead.currentPage <= 1}>Previous</a>
-								<span>Page {pagedWantToRead.currentPage} of {pagedWantToRead.totalPages}</span>
-								<a class="owner-edit-link" href={paginationHref("wr_page", pagedWantToRead.currentPage + 1, "want-to-read")} aria-disabled={pagedWantToRead.currentPage >= pagedWantToRead.totalPages}>Next</a>
-							</div>
+							<Pagination
+								currentPage={pagedWantToRead.currentPage}
+								totalPages={pagedWantToRead.totalPages}
+								previousHref={pagedWantToRead.currentPage > 1 ? paginationHref("wr_page", pagedWantToRead.currentPage - 1, "want-to-read") : ""}
+								nextHref={pagedWantToRead.currentPage < pagedWantToRead.totalPages ? paginationHref("wr_page", pagedWantToRead.currentPage + 1, "want-to-read") : ""}
+								label="Want to Read pagination"
+							/>
 						)}
 					</section>
 				)}
@@ -1863,11 +1870,13 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 							</ul>
 						)}
 						{pagedFinished.totalPages > 1 && (
-							<div class="section-pagination">
-								<a class="owner-edit-link" href={paginationHref("rd_page", pagedFinished.currentPage - 1, "read")} aria-disabled={pagedFinished.currentPage <= 1}>Previous</a>
-								<span>Page {pagedFinished.currentPage} of {pagedFinished.totalPages}</span>
-								<a class="owner-edit-link" href={paginationHref("rd_page", pagedFinished.currentPage + 1, "read")} aria-disabled={pagedFinished.currentPage >= pagedFinished.totalPages}>Next</a>
-							</div>
+							<Pagination
+								currentPage={pagedFinished.currentPage}
+								totalPages={pagedFinished.totalPages}
+								previousHref={pagedFinished.currentPage > 1 ? paginationHref("rd_page", pagedFinished.currentPage - 1, "read") : ""}
+								nextHref={pagedFinished.currentPage < pagedFinished.totalPages ? paginationHref("rd_page", pagedFinished.currentPage + 1, "read") : ""}
+								label="Read shelf pagination"
+							/>
 						)}
 					</section>
 				)}
@@ -3067,20 +3076,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		background: var(--color-primary);
 	}
 	.rating-meta { color: var(--color-rating); font-weight: 700; }
-	.section-pagination {
-		margin-top: 0.6rem;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-	.section-pagination span {
-		font-size: 0.85rem;
-		color: #4b5563;
-	}
-	.section-pagination a[aria-disabled="true"] {
-		pointer-events: none;
-		opacity: 0.55;
-	}
 	.finish-rating-overlay {
 		position: fixed;
 		inset: 0;

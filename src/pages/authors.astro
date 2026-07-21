@@ -1,5 +1,6 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import Pagination from "../components/Pagination.astro";
 import { getNeonSql } from "../lib/neon";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../lib/seo";
 import { authorHref } from "../lib/author";
@@ -151,11 +152,13 @@ const authorsStructuredData = JSON.stringify([
 				</li>
 			))}
 		</ul>
-		<div class="pager">
-			<a href={currentPage > 1 ? pageHref(currentPage - 1) : undefined} aria-disabled={currentPage <= 1}>Previous</a>
-			<span>Page {currentPage} of {totalPages}</span>
-			<a href={currentPage < totalPages ? pageHref(currentPage + 1) : undefined} aria-disabled={currentPage >= totalPages}>Next</a>
-		</div>
+		<Pagination
+			currentPage={currentPage}
+			totalPages={totalPages}
+			previousHref={currentPage > 1 ? pageHref(currentPage - 1) : ""}
+			nextHref={currentPage < totalPages ? pageHref(currentPage + 1) : ""}
+			label="Authors pagination"
+		/>
 	</div>
 </Layout>
 
@@ -183,7 +186,5 @@ const authorsStructuredData = JSON.stringify([
 	.author-card img, .avatar-fallback { width: 56px; height: 56px; border-radius: 999px; object-fit: cover; background: #ece7dc; display: grid; place-items: center; }
 	.author-card strong { display: block; }
 	.author-card p { margin: 0.2rem 0 0; color: var(--color-text-muted); font-size: 0.88rem; }
-	.pager { display: flex; justify-content: space-between; align-items: center; }
-	.pager a[aria-disabled="true"] { pointer-events: none; opacity: 0.45; }
 	@media (max-width: 760px) { .author-grid { grid-template-columns: 1fr; } }
 </style>
