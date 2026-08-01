@@ -17,13 +17,23 @@ test("BookCard recommendation feedback buttons stay centered and single-line on 
 test("mobile left navigation footer compresses into a horizontal no-wrap row", () => {
 	const source = read("../src/components/LeftHand.astro");
 	const layout = read("../src/layouts/Layout.astro");
+	const privacyIndex = source.indexOf(">Privacy</a>");
+	const supportIndex = source.indexOf(">Support DogEared</a>");
+	const betaIndex = source.indexOf(">DogEared Beta {releaseVersion || appVersion}</a>");
+	const builtIndex = source.indexOf(">Built by Argon Collective LLC</span>");
 
 	assert.equal(source.includes("founding-reader-badge"), false);
-	assert.match(source, /@media \(max-width: 900px\)\s*{[\s\S]*?#left-hand-nav \.sidebar-footer\s*{[^}]*display: flex;/s);
+	assert.match(source, /<nav class="sidebar-footer-nav" aria-label="Footer navigation">/);
+	assert.equal(source.includes("<p>Built by"), false);
+	assert.equal(privacyIndex > -1, true);
+	assert.equal(supportIndex > privacyIndex, true);
+	assert.equal(betaIndex > supportIndex, true);
+	assert.equal(builtIndex > betaIndex, true);
 	assert.match(source, /#left-hand-nav \.sidebar-footer\s*{[^}]*overflow-x: auto;/s);
 	assert.match(source, /#left-hand-nav \.sidebar-footer\s*{[^}]*white-space: nowrap;/s);
-	assert.match(source, /#left-hand-nav \.footer-program-meta\s*{[^}]*flex-wrap: nowrap;/s);
-	assert.match(source, /#left-hand-nav \.sidebar-footer nav\s*{[^}]*flex-wrap: nowrap;/s);
+	assert.match(source, /#left-hand-nav \.sidebar-footer-nav ul\s*{[^}]*flex-wrap: nowrap;/s);
+	assert.match(source, /#left-hand-nav \.sidebar-footer-nav ul\s*{[^}]*justify-content: space-between;/s);
+	assert.match(source, /#left-hand-nav \.sidebar-footer-nav ul\s*{[^}]*gap: clamp\(0\.45rem, 3vw, 0\.9rem\);/s);
 	assert.match(layout, /@media \(max-width: 900px\)\s*{[\s\S]*?\.content-column\s*{[^}]*padding-top: 1\.15rem;/s);
 	assert.match(layout, /\.content-column\s*{[^}]*padding-inline: 0\.65rem;/s);
 });

@@ -206,15 +206,22 @@ const adminNavItems: NavItem[] = [
         ))}
       </ul>
     )}
-    <footer class="sidebar-footer" aria-label="Site information">
-      <p>Built by <a href="https://argoncollective.com" target="_blank" rel="noopener noreferrer">Argon Collective LLC</a></p>
-      <p class="footer-program-meta">
-        <span>DogEared Beta</span>
-        <a href="/release-notes">{releaseVersion || appVersion}</a>
-      </p>
-      <nav aria-label="Site links">
-        <a href="/privacy" class={routeMatches('/privacy') ? 'active' : 'hover'} aria-current={routeMatches('/privacy') ? 'page' : undefined}>Privacy</a>
-        <a href="/support" class={routeMatches('/support') ? 'active' : 'hover'} aria-current={routeMatches('/support') ? 'page' : undefined}>Support DogEared</a>
+    <footer class="sidebar-footer">
+      <nav class="sidebar-footer-nav" aria-label="Footer navigation">
+        <ul>
+          <li>
+            <a href="/privacy" class={routeMatches('/privacy') ? 'active' : 'hover'} aria-current={routeMatches('/privacy') ? 'page' : undefined}>Privacy</a>
+          </li>
+          <li>
+            <a href="/support" class={routeMatches('/support') ? 'active' : 'hover'} aria-current={routeMatches('/support') ? 'page' : undefined}>Support DogEared</a>
+          </li>
+          <li>
+            <a href="/release-notes" class={routeMatches('/release-notes') ? 'active' : 'hover'} aria-current={routeMatches('/release-notes') ? 'page' : undefined}>DogEared Beta {releaseVersion || appVersion}</a>
+          </li>
+          <li>
+            <span>Built by Argon Collective LLC</span>
+          </li>
+        </ul>
       </nav>
     </footer>
   </div>
@@ -302,55 +309,33 @@ const adminNavItems: NavItem[] = [
     font-size: 0.78rem;
     line-height: 1.35;
   }
-  .sidebar-footer p {
+  .sidebar-footer-nav ul {
+    list-style: none;
     margin: 0;
-  }
-  .footer-program-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.18rem 0.45rem;
-    margin-top: 0.5rem !important;
-    color: var(--color-text-subtle);
-    font-size: 0.72rem;
-  }
-  .footer-program-meta a {
-    color: var(--color-nav);
-    font-weight: 760;
-    text-decoration: none;
-  }
-  .footer-program-meta a:hover,
-  .footer-program-meta a:focus-visible {
-    color: var(--color-nav-hover);
-    text-decoration: underline;
-  }
-  .footer-program-meta a::before {
-    content: "·";
-    margin-right: 0.45rem;
-    color: var(--color-border);
-  }
-  .sidebar-footer nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem 0.65rem;
-    margin-top: 0.45rem;
+    padding: 0;
+    display: grid;
+    gap: 0.34rem;
   }
   .sidebar-footer a {
     color: var(--color-nav);
     text-decoration: none;
   }
-  .sidebar-footer nav a {
+  .sidebar-footer a,
+  .sidebar-footer span {
     display: inline-flex;
     align-items: center;
     min-height: 24px;
+  }
+  .sidebar-footer a {
     text-underline-offset: 3px;
     text-decoration-thickness: 1px;
   }
-  .sidebar-footer nav a:hover,
-  .sidebar-footer nav a:focus-visible {
+  .sidebar-footer a:hover,
+  .sidebar-footer a:focus-visible {
     color: var(--color-nav-hover);
     text-decoration: underline;
   }
-  .sidebar-footer nav a.active {
+  .sidebar-footer a.active {
     color: var(--color-nav-active);
     text-decoration: underline;
   }
@@ -770,9 +755,6 @@ const adminNavItems: NavItem[] = [
     }
     #left-hand-nav .sidebar-footer {
       grid-area: footer;
-      display: flex;
-      align-items: center;
-      gap: 0.45rem;
       margin-top: 0.22rem;
       padding: 0.28rem 0 0;
       min-width: 0;
@@ -787,36 +769,20 @@ const adminNavItems: NavItem[] = [
     #left-hand-nav .sidebar-footer::-webkit-scrollbar {
       display: none;
     }
-    #left-hand-nav .sidebar-footer p,
-    #left-hand-nav .sidebar-footer nav {
-      flex: 0 0 auto;
-    }
-    #left-hand-nav .sidebar-footer p + p::before,
-    #left-hand-nav .sidebar-footer nav::before {
-      content: "·";
-      margin-right: 0.45rem;
-      color: var(--color-border);
-    }
-    #left-hand-nav .footer-program-meta {
-      display: inline-flex;
+    #left-hand-nav .sidebar-footer-nav ul {
+      display: flex;
       flex-wrap: nowrap;
-      gap: 0.28rem;
-      margin-top: 0 !important;
-      font-size: inherit;
+      justify-content: space-between;
+      align-items: center;
+      gap: clamp(0.45rem, 3vw, 0.9rem);
+      min-width: max-content;
+      width: 100%;
     }
-    #left-hand-nav .footer-program-meta a::before {
-      content: "";
-      margin-right: 0;
-    }
-    #left-hand-nav .sidebar-footer nav {
-      display: inline-flex;
-      flex-wrap: nowrap;
-      gap: 0.45rem;
-      margin-top: 0;
-    }
-    #left-hand-nav .sidebar-footer nav a {
+    #left-hand-nav .sidebar-footer a,
+    #left-hand-nav .sidebar-footer span {
       min-height: 32px;
       align-items: center;
+      white-space: nowrap;
     }
   }
   @media (max-width: 680px) {
