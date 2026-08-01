@@ -158,6 +158,11 @@ if (session?.userId) {
 		customShelfOptionsJson = "[]";
 	}
 }
+
+const completedResultCount = results.length + collectionResults.length;
+const completionStatus = query && !errorMessage
+	? `${completedResultCount.toLocaleString()} result${completedResultCount === 1 ? "" : "s"} found for ${query}.`
+	: "";
 ---
 
 <Layout
@@ -169,6 +174,22 @@ if (session?.userId) {
 		<div slot="right" class="search-page" id="search-page" data-guided-anchor="search-page" data-query={query} data-authenticated={String(isAuthenticated)}>
 		<h1>Search</h1>
 		{!query && <p>Search for a favorite title, then add it to Want to Read, Currently Reading, or Read to build recommendations.</p>}
+		<p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{completionStatus}</p>
+		<div id="search-pending-state" class="search-pending-state" role="status" aria-live="polite" aria-atomic="true" hidden>
+			<p><span class="search-spinner" aria-hidden="true"></span><span>Searching books...</span></p>
+			<ul class="search-results search-results-skeleton" aria-hidden="true">
+				{Array.from({ length: 4 }).map(() => (
+					<li class="book-card-skeleton">
+						<span class="skeleton-cover"></span>
+						<span class="skeleton-lines">
+							<span></span>
+							<span></span>
+							<span></span>
+						</span>
+					</li>
+				))}
+			</ul>
+		</div>
 		{query && errorMessage && (
 			<div class="search-state search-state-error" role="status">
 				<p>{errorMessage}</p>
@@ -297,6 +318,83 @@ if (session?.userId) {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0.75rem;
+	}
+	.search-pending-state {
+		margin-top: 0.85rem;
+	}
+	.search-pending-state p {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		margin: 0 0 0.7rem;
+		color: var(--color-text-muted);
+		font-weight: 700;
+	}
+	.search-spinner {
+		width: 1rem;
+		height: 1rem;
+		border: 2px solid rgba(87, 117, 144, 0.28);
+		border-top-color: var(--color-primary);
+		border-radius: 999px;
+		animation: search-spin 720ms linear infinite;
+	}
+	@keyframes search-spin {
+		to { transform: rotate(360deg); }
+	}
+	.book-card-skeleton {
+		min-height: 174px;
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.64);
+		padding: 0.68rem;
+		display: grid;
+		grid-template-columns: 84px minmax(0, 1fr);
+		gap: 0.68rem;
+	}
+	.skeleton-cover,
+	.skeleton-lines span {
+		display: block;
+		border-radius: var(--radius-sm);
+		background: linear-gradient(90deg, rgba(87, 117, 144, 0.09), rgba(255, 255, 255, 0.78), rgba(87, 117, 144, 0.09));
+		background-size: 220% 100%;
+		animation: search-skeleton 1100ms ease-in-out infinite;
+	}
+	.skeleton-cover {
+		width: 84px;
+		height: 126px;
+	}
+	.skeleton-lines {
+		display: grid;
+		align-content: start;
+		gap: 0.5rem;
+		padding-top: 0.1rem;
+	}
+	.skeleton-lines span {
+		height: 0.85rem;
+	}
+	.skeleton-lines span:first-child {
+		width: 78%;
+		height: 1.05rem;
+	}
+	.skeleton-lines span:nth-child(2) {
+		width: 52%;
+	}
+	.skeleton-lines span:nth-child(3) {
+		width: 92%;
+	}
+	@keyframes search-skeleton {
+		to { background-position: -220% 0; }
+	}
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 	.search-state {
 		display: grid;
@@ -436,17 +534,12 @@ if (session?.userId) {
 	}
 
 	.shelf-menu {
-		position: absolute;
-		top: calc(100% + 4px);
-		right: 0;
-		left: auto;
 		min-width: 180px;
 		background: #fff;
 		border: none;
 		border-radius: var(--radius-md);
 		box-shadow: var(--shadow-popover);
 		padding: 0.28rem;
-		z-index: 25;
 	}
 
 	.shelf-option {

@@ -27,6 +27,7 @@ const initialIcon = displayIconOverride || statusIcon;
 const hideLabel = String(attrs["data-hide-label"] || "").trim() === "true";
 const currentCustomShelfId = Math.max(0, Number(attrs["data-current-custom-shelf-id"] || 0) || 0);
 const customShelvesRaw = String(attrs["data-custom-shelves"] || "[]");
+const menuId = `shelf-menu-${Math.random().toString(36).slice(2, 10)}`;
 let customShelves: Array<{ id: number; name: string; icon: string }> = [];
 try {
 	const parsed = JSON.parse(customShelvesRaw);
@@ -56,18 +57,21 @@ try {
 		data-status={initialStatus}
 		data-display-icon={displayIconOverride}
 		aria-expanded="false"
+		aria-haspopup="menu"
+		aria-controls={menuId}
 		aria-label={`Shelf: ${initialLabel}. Open shelf options`}
 		title={`Shelf: ${initialLabel}`}
 	>
 		<span class="material-icons shelf-plus" aria-hidden="true">{initialIcon}</span>
 	</button>
 	{!hideLabel && <p class="shelf-state">{initialLabel}</p>}
-	<div class="shelf-menu" hidden>
+	<div id={menuId} class="shelf-menu" role="menu" aria-label="Shelf options" hidden>
 		<button
 			type="button"
 			class={`shelf-option${initialStatus === "want_to_read" ? " is-current" : ""}`}
 			data-action="set-shelf"
 			data-status="want_to_read"
+			role="menuitem"
 		>
 			<span class="material-icons shelf-option-icon" aria-hidden="true">add</span>
 			<span>Want to Read</span>
@@ -77,6 +81,7 @@ try {
 			class={`shelf-option${initialStatus === "reading" ? " is-current" : ""}`}
 			data-action="set-shelf"
 			data-status="reading"
+			role="menuitem"
 		>
 			<span class="material-icons shelf-option-icon" aria-hidden="true">menu_book</span>
 			<span>Currently Reading</span>
@@ -86,6 +91,7 @@ try {
 			class={`shelf-option${initialStatus === "finished" ? " is-current" : ""}`}
 			data-action="set-shelf"
 			data-status="finished"
+			role="menuitem"
 		>
 			<span class="material-icons shelf-option-icon" aria-hidden="true">check</span>
 			<span>Read</span>
@@ -100,6 +106,7 @@ try {
 							class={`shelf-option${currentCustomShelfId === shelf.id ? " is-current" : ""}`}
 							data-action="assign-custom-shelf"
 							data-shelf-id={String(shelf.id)}
+							role="menuitem"
 						>
 							<span class="material-icons shelf-option-icon" aria-hidden="true">{shelf.icon}</span>
 							<span>{shelf.name}</span>
@@ -113,6 +120,7 @@ try {
 			type="button"
 			class="shelf-option shelf-option-danger"
 			data-action="remove-from-shelves"
+			role="menuitem"
 		>
 			<span class="material-icons shelf-option-icon" aria-hidden="true">remove_circle</span>
 			<span>Remove from Shelves</span>
@@ -161,17 +169,52 @@ try {
 		color: #1f5138;
 	}
 	.shelf-menu {
-		position: absolute;
-		top: var(--shelf-menu-top, calc(var(--shelf-trigger-height, 44px) + 4px));
-		right: 0 !important;
-		left: auto !important;
+		--shelf-menu-gap: 0.38rem;
+		--shelf-menu-caret-size: 10px;
+		--shelf-caret-left: 22px;
+		--shelf-caret-top: 22px;
+		position: fixed;
+		top: var(--shelf-menu-y, 0);
+		left: var(--shelf-menu-x, 0) !important;
+		right: auto !important;
 		min-width: 180px;
+		max-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 16px);
+		max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px);
+		overflow: auto;
+		overscroll-behavior: contain;
 		background: #fff;
 		border: none;
 		border-radius: var(--radius-md);
 		box-shadow: var(--shadow-popover);
 		padding: 0.28rem;
-		z-index: 25;
+		z-index: 120;
+	}
+	.shelf-menu::before {
+		content: "";
+		position: absolute;
+		width: var(--shelf-menu-caret-size);
+		height: var(--shelf-menu-caret-size);
+		background: #fff;
+		box-shadow: -2px -2px 3px rgba(31, 41, 55, 0.04);
+		transform: rotate(45deg);
+	}
+	.shelf-menu[data-placement="bottom"]::before {
+		top: calc(var(--shelf-menu-caret-size) / -2);
+		left: var(--shelf-caret-left);
+	}
+	.shelf-menu[data-placement="top"]::before {
+		bottom: calc(var(--shelf-menu-caret-size) / -2);
+		left: var(--shelf-caret-left);
+		box-shadow: 2px 2px 3px rgba(31, 41, 55, 0.04);
+	}
+	.shelf-menu[data-placement="right"]::before {
+		left: calc(var(--shelf-menu-caret-size) / -2);
+		top: var(--shelf-caret-top);
+	}
+	.shelf-menu[data-placement="left"]::before {
+		right: calc(var(--shelf-menu-caret-size) / -2);
+		top: var(--shelf-caret-top);
+		box-shadow: 2px 2px 3px rgba(31, 41, 55, 0.04);
 	}
 	.shelf-menu [data-custom-shelf-options] {
 		display: contents;

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
 	buildShelfEntryFromRecord,
 	normalizeRatingValue,
@@ -51,6 +52,23 @@ test("buildShelfEntryFromRecord returns normalized shelf entry", () => {
 	assert.equal(entry.currentPage, 15);
 	assert.equal(entry.status, "reading");
 	assert.equal(entry.isbn13, "9780000000002");
+});
+
+test("shelf menus use anchored viewport positioning and accessible menu semantics", () => {
+	const clientSource = readFileSync(new URL("../src/lib/shelfClient.ts", import.meta.url), "utf8");
+	const dropdownSource = readFileSync(new URL("../src/components/ShelfDropdown.astro", import.meta.url), "utf8");
+	const cardSource = readFileSync(new URL("../src/components/BookCard.astro", import.meta.url), "utf8");
+
+	assert.match(clientSource, /function positionShelfMenu/);
+	assert.match(clientSource, /window\.visualViewport/);
+	assert.match(clientSource, /getBoundingClientRect\(\)/);
+	assert.match(clientSource, /data-placement/);
+	assert.match(clientSource, /restoreFocus/);
+	assert.match(dropdownSource, /aria-haspopup="menu"/);
+	assert.match(dropdownSource, /role="menu"/);
+	assert.match(dropdownSource, /role="menuitem"/);
+	assert.match(dropdownSource, /position: fixed/);
+	assert.doesNotMatch(cardSource, /\.shelf-dropdown \.shelf-menu\)[\s\S]*top: calc\(100% \+ 4px\)/);
 });
 
 test("syncShelfEntryToServer reports unauthorized and sets redirect", async () => {

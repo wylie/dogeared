@@ -111,9 +111,13 @@ const adminNavItems: NavItem[] = [
         </h2>
       </div>
     </div>
-    <form action="/search" method="get">
+    <form action="/search" method="get" data-search-form>
       <label class="visually-hidden" for="left-hand-search">Search books and authors</label>
       <input id="left-hand-search" type="search" name="q" placeholder="Search for Books" value={query} />
+      <p class="search-submit-status" data-search-submit-status role="status" aria-live="polite" hidden>
+        <span class="search-submit-spinner" aria-hidden="true"></span>
+        <span>Searching books...</span>
+      </p>
     </form>
     <nav id="left-hand-primary-links" class="primary-links" aria-label="Primary navigation">
       <section class="nav-group nav-group-you">
@@ -450,6 +454,31 @@ const adminNavItems: NavItem[] = [
   input[type="search"]:focus {
     background: #fff;
     border-color: var(--color-border);
+  }
+  .search-submit-status {
+    display: flex;
+    align-items: center;
+    gap: 0.42rem;
+    min-height: 1.35rem;
+    margin: 0.35rem 0 0;
+    color: var(--color-text-muted);
+    font-size: 0.82rem;
+    font-weight: 650;
+  }
+  .search-submit-status[hidden] {
+    display: flex;
+    visibility: hidden;
+  }
+  .search-submit-spinner {
+    width: 0.86rem;
+    height: 0.86rem;
+    border: 2px solid rgba(87, 117, 144, 0.28);
+    border-top-color: var(--color-primary);
+    border-radius: 999px;
+    animation: search-submit-spin 720ms linear infinite;
+  }
+  @keyframes search-submit-spin {
+    to { transform: rotate(360deg); }
   }
   .visually-hidden {
     position: absolute;
@@ -828,6 +857,9 @@ const adminNavItems: NavItem[] = [
   const leftHandLoginEmail = document.getElementById("left-hand-login-email");
   const leftHandLoginFeedback = document.getElementById("left-hand-login-feedback");
   const leftHandSecondaryLinks = document.getElementById("left-hand-secondary-links");
+  const leftHandSearchForm = leftHandNav?.querySelector("[data-search-form]");
+  const leftHandSearchInput = document.getElementById("left-hand-search");
+  const leftHandSearchStatus = leftHandNav?.querySelector("[data-search-submit-status]");
   const NAV_SCROLL_KEY_PRIMARY = "dogeared:left-nav:primary-scroll-left";
   const NAV_SCROLL_KEY_SECONDARY = "dogeared:left-nav:secondary-scroll-left";
 
@@ -1009,6 +1041,29 @@ const adminNavItems: NavItem[] = [
       showLoginFeedback(String(data?.message || "Check your email for your magic link."));
     } catch {
       showLoginFeedback("Failed to send magic link.", true);
+    }
+  });
+
+  leftHandSearchForm?.addEventListener("submit", (event) => {
+    if (!(leftHandSearchForm instanceof HTMLFormElement)) return;
+    const input = leftHandSearchInput instanceof HTMLInputElement ? leftHandSearchInput : null;
+    const query = String(input?.value || "").trim();
+    if (!query) return;
+    if (leftHandSearchForm.dataset.searching === "true") {
+      event.preventDefault();
+      return;
+    }
+    leftHandSearchForm.dataset.searching = "true";
+    leftHandSearchForm.setAttribute("aria-busy", "true");
+    if (input) input.readOnly = true;
+    if (leftHandSearchStatus instanceof HTMLElement) {
+      leftHandSearchStatus.hidden = false;
+    }
+    const searchPage = document.getElementById("search-page");
+    if (searchPage instanceof HTMLElement) {
+      searchPage.classList.add("is-searching");
+      const pending = document.getElementById("search-pending-state");
+      if (pending instanceof HTMLElement) pending.hidden = false;
     }
   });
 
