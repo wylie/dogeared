@@ -7,6 +7,7 @@ import {
 	parseCategories,
 	resolveShelfSaveMessage,
 	removeBookFromAllShelvesOnServer,
+	removeShelfEntryWithRetry,
 	saveShelfEntryWithRetry,
 	syncShelfRatingToServer,
 	statusLabel,
@@ -296,6 +297,77 @@ test("saveShelfEntryWithRetry retries transient server failures and succeeds", a
 		assert.equal(result.ok, true);
 		assert.equal(attempts, 2);
 		assert.equal(result.message, "");
+	} finally {
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
+		(globalThis as Record<string, unknown>).window = originalWindow;
+	}
+});
+
+test("saveShelfEntryWithRetry coalesces duplicate in-flight mutations", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWindow = (globalThis as Record<string, unknown>).window;
+	let releaseFetch: (() => void) | undefined;
+	const fetchGate = new Promise<void>((resolve) => {
+		releaseFetch = resolve;
+	});
+	let attempts = 0;
+
+	(globalThis as unknown as { fetch: typeof fetch }).fetch = (async () => {
+		attempts += 1;
+		await fetchGate;
+		return new Response(JSON.stringify({ ok: true, entry: { id: "entry_dedupe" } }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" }
+		});
+	}) as typeof fetch;
+	(globalThis as Record<string, unknown>).window = { location: { href: "" } };
+
+	try {
+		const entry = { title: "Dedupe Book", author: "Test Author", status: "reading" };
+		const first = saveShelfEntryWithRetry(entry);
+		const second = saveShelfEntryWithRetry(entry);
+		assert.equal(attempts, 1);
+		releaseFetch?.();
+		const [firstResult, secondResult] = await Promise.all([first, second]);
+		assert.equal(firstResult.ok, true);
+		assert.equal(secondResult.ok, true);
+		assert.equal(attempts, 1);
+	} finally {
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
+		(globalThis as Record<string, unknown>).window = originalWindow;
+	}
+});
+
+test("removeShelfEntryWithRetry coalesces duplicate in-flight mutations", async () => {
+	const originalFetch = globalThis.fetch;
+	const originalWindow = (globalThis as Record<string, unknown>).window;
+	let releaseFetch: (() => void) | undefined;
+	const fetchGate = new Promise<void>((resolve) => {
+		releaseFetch = resolve;
+	});
+	let attempts = 0;
+
+	(globalThis as unknown as { fetch: typeof fetch }).fetch = (async (_url, init) => {
+		attempts += 1;
+		assert.equal((init as RequestInit).method, "DELETE");
+		await fetchGate;
+		return new Response(JSON.stringify({ ok: true }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" }
+		});
+	}) as typeof fetch;
+	(globalThis as Record<string, unknown>).window = { location: { href: "" } };
+
+	try {
+		const entry = { title: "Remove Dedupe Book", author: "Test Author", status: "finished" };
+		const first = removeShelfEntryWithRetry(entry);
+		const second = removeShelfEntryWithRetry(entry);
+		assert.equal(attempts, 1);
+		releaseFetch?.();
+		const [firstResult, secondResult] = await Promise.all([first, second]);
+		assert.equal(firstResult.ok, true);
+		assert.equal(secondResult.ok, true);
+		assert.equal(attempts, 1);
 	} finally {
 		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
 		(globalThis as Record<string, unknown>).window = originalWindow;

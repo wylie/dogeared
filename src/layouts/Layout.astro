@@ -49,12 +49,20 @@ const iconStylesheetHref = "https://fonts.googleapis.com/icon?family=Material+Ic
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
 const allowAuthPrompt = !isAuthenticated && allowsAuthPrompt(currentPath);
-const adminSession = isAuthenticated ? await resolveAdminSession(Astro.request) : { isAdmin: false };
+const sql = getNeonSql();
+const [
+	adminSession,
+	activeAnnouncement,
+	foundingReaderConfig,
+	latestRelease
+] = await Promise.all([
+	isAuthenticated ? resolveAdminSession(Astro.request) : Promise.resolve({ isAdmin: false }),
+	loadActiveAnnouncement(),
+	loadFoundingReaderConfig(sql).catch(() => DEFAULT_FOUNDING_READER_CONFIG),
+	loadLatestPublishedRelease(sql).catch(() => null)
+]);
 const isAdmin = !!adminSession.isAdmin;
-const activeAnnouncement = await loadActiveAnnouncement();
-const foundingReaderConfig = await loadFoundingReaderConfig(getNeonSql()).catch(() => DEFAULT_FOUNDING_READER_CONFIG);
 const appVersion = resolveAppVersion();
-const latestRelease = await loadLatestPublishedRelease(getNeonSql()).catch(() => null);
 const releaseVersion = latestRelease && latestRelease.version ? latestRelease.version : appVersion;
 const gitCommit = resolveGitCommit();
 const metadata = buildPageMetadata({

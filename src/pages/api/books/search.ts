@@ -340,14 +340,61 @@ export const GET: APIRoute = async ({ request, url }) => {
 
 	const startIndex = (page - 1) * pageSize;
 	const apiKey = String(import.meta.env.GOOGLE_BOOKS_API_KEY || "").trim();
+	const perfStartedAt = performance.now();
+	const perfStages: Record<string, number> = {};
+	const markPerfStage = (stage: string) => {
+		if (!import.meta.env.DEV) return;
+		perfStages[stage] = Math.round((performance.now() - perfStartedAt) * 10) / 10;
+	};
+	const logPerf = (outcome: string, extra: Record<string, unknown> = {}) => {
+		if (!import.meta.env.DEV) return;
+		console.info("[perf.search.books]", {
+			query,
+			page,
+			pageSize,
+			outcome,
+			totalMs: Math.round((performance.now() - perfStartedAt) * 10) / 10,
+			stages: perfStages,
+			...extra
+		});
+	};
 
 	try {
-		const sql = getNeonSql();
-		await sql`alter table book add column if not exists publisher text not null default ''`;
-		await ensureSeriesSchema(sql);
-		const collectionResultsPromise = page === 1
-			? searchCollections(sql, query, 4).then((collections): CollectionSearchResult[] => collections.map((collection) => ({
-				title: collection.title,
+			const sql = getNeonSql();
+			await sql`alter table book add column if not exists publisher text not null default ''`;
+			await ensureSeriesSchema(sql);
+			const fetchGoogleItems = async (q: string) => {
+				if (!apiKey) return [] as any[];
+				const params = new URLSearchParams({
+					q,
+					key: apiKey,
+					maxResults: String(pageSize),
+					startIndex: String(startIndex),
+					printType: "books",
+					orderBy: "relevance",
+					langRestrict: "en"
+				});
+				const response = await fetch(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
+				if (!response.ok) return [];
+				const data = await response.json();
+				return Array.isArray(data.items) ? data.items : [];
+			};
+
+			const fetchOpenLibraryItems = async (q: string) => {
+				const params = new URLSearchParams({
+					q,
+					limit: String(pageSize),
+					offset: String(startIndex)
+				});
+				const response = await fetch(`https://openlibrary.org/search.json?${params.toString()}`);
+				if (!response.ok) return [] as any[];
+				const payload = await response.json().catch(() => null) as { docs?: any[] } | null;
+				return Array.isArray(payload?.docs) ? payload.docs : [];
+			};
+
+			const collectionResultsPromise = page === 1
+				? searchCollections(sql, query, 4).then((collections): CollectionSearchResult[] => collections.map((collection) => ({
+					title: collection.title,
 				slug: collection.slug,
 				subtitle: collection.subtitle,
 				description: collection.description,
@@ -356,13 +403,13 @@ export const GET: APIRoute = async ({ request, url }) => {
 				bookCount: collection.bookCount,
 				featured: collection.featured
 			}))).catch(() => [])
-			: Promise.resolve([] as CollectionSearchResult[]);
-		const queryLike = `%${query}%`;
-		const queryDigits = query.replace(/[^0-9Xx]/g, "").toUpperCase();
-		const dbdRows = await withRuntimeCache(
-			`search:dbd:${query.toLowerCase()}:${page}:${pageSize}`,
-			20_000,
-			() => sql<Array<{
+				: Promise.resolve([] as CollectionSearchResult[]);
+			const queryLike = `%${query}%`;
+			const queryDigits = query.replace(/[^0-9Xx]/g, "").toUpperCase();
+			const dbdRowsPromise = withRuntimeCache(
+				`search:dbd:${query.toLowerCase()}:${page}:${pageSize}`,
+				20_000,
+				() => sql<Array<{
 				id: number;
 				author_id: number | null;
 				title: string;
@@ -414,12 +461,34 @@ export const GET: APIRoute = async ({ request, url }) => {
 					b.updated_at desc,
 					b.id desc
 				limit ${pageSize}
-				offset ${startIndex}
-			`
-		);
-		const dbdMapped: SearchResult[] = dbdRows.map((row) => ({
-			source: "dbd",
-			title: row.title,
+					offset ${startIndex}
+				`
+			);
+			const googleQueries = expandedQueryVariants(query);
+			const googleFetchedSetsPromise = Promise.all(
+				googleQueries.map((q) => withRuntimeCache(
+					`search:google:${q.toLowerCase()}:${page}:${pageSize}`,
+					45_000,
+					() => fetchGoogleItems(q)
+				))
+			);
+			const openQueries = expandedQueryVariants(query);
+			const openFetchedSetsPromise = Promise.all(
+				openQueries.map((q) => withRuntimeCache(
+					`search:openlibrary:${q.toLowerCase()}:${page}:${pageSize}`,
+					45_000,
+					() => fetchOpenLibraryItems(q)
+				))
+			);
+				const [dbdRows, googleFetchedSets, openFetchedSets] = await Promise.all([
+					dbdRowsPromise,
+					googleFetchedSetsPromise,
+					openFetchedSetsPromise
+				]);
+				markPerfStage("catalog_and_providers_loaded");
+				const dbdMapped: SearchResult[] = dbdRows.map((row) => ({
+				source: "dbd",
+				title: row.title,
 			subtitle: "",
 			authors: [String(row.primary_author || "").trim()].filter(Boolean),
 			description: row.synopsis || "",
@@ -437,36 +506,10 @@ export const GET: APIRoute = async ({ request, url }) => {
 			authorId: Number(row.author_id || 0) || 0,
 			seriesName: String(row.series_name || "").trim(),
 			seriesBookOrder: Number(row.series_book_order || 0) || 0,
-			seriesLabel: formatSeriesSearchLabel(String(row.series_name || ""), Number(row.series_book_order || 0) || 0)
-		}));
-
-		const fetchGoogleItems = async (q: string) => {
-			if (!apiKey) return [] as any[];
-			const params = new URLSearchParams({
-				q,
-				key: apiKey,
-				maxResults: String(pageSize),
-				startIndex: String(startIndex),
-				printType: "books",
-				orderBy: "relevance",
-				langRestrict: "en"
-			});
-			const response = await fetch(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
-			if (!response.ok) return [];
-			const data = await response.json();
-			return Array.isArray(data.items) ? data.items : [];
-		};
-
-		const googleQueries = expandedQueryVariants(query);
-		const googleFetchedSets = await Promise.all(
-			googleQueries.map((q) => withRuntimeCache(
-				`search:google:${q.toLowerCase()}:${page}:${pageSize}`,
-				45_000,
-				() => fetchGoogleItems(q)
-			))
-		);
-		const byId = new Map<string, any>();
-		for (const set of googleFetchedSets) {
+				seriesLabel: formatSeriesSearchLabel(String(row.series_name || ""), Number(row.series_book_order || 0) || 0)
+			}));
+			const byId = new Map<string, any>();
+			for (const set of googleFetchedSets) {
 			for (const item of Array.isArray(set) ? set : []) {
 				const id = String(item?.id || "");
 				if (!id) continue;
@@ -510,31 +553,10 @@ export const GET: APIRoute = async ({ request, url }) => {
 				sourceEditionId: "",
 				seriesName: inferredSeries?.seriesName || "",
 				seriesBookOrder: inferredSeries?.bookOrder || 0,
-				seriesLabel: formatSeriesSearchLabel(inferredSeries?.seriesName || "", inferredSeries?.bookOrder || 0)
-			};
-		});
-
-		const fetchOpenLibraryItems = async (q: string) => {
-			const params = new URLSearchParams({
-				q,
-				limit: String(pageSize),
-				offset: String(startIndex)
+					seriesLabel: formatSeriesSearchLabel(inferredSeries?.seriesName || "", inferredSeries?.bookOrder || 0)
+				};
 			});
-			const response = await fetch(`https://openlibrary.org/search.json?${params.toString()}`);
-			if (!response.ok) return [] as any[];
-			const payload = await response.json().catch(() => null) as { docs?: any[] } | null;
-			return Array.isArray(payload?.docs) ? payload.docs : [];
-		};
-
-		const openQueries = expandedQueryVariants(query);
-		const openFetchedSets = await Promise.all(
-			openQueries.map((q) => withRuntimeCache(
-				`search:openlibrary:${q.toLowerCase()}:${page}:${pageSize}`,
-				45_000,
-				() => fetchOpenLibraryItems(q)
-			))
-		);
-		const openByWork = new Map<string, any>();
+			const openByWork = new Map<string, any>();
 		for (const set of openFetchedSets) {
 			for (const doc of Array.isArray(set) ? set : []) {
 				const key = String(doc?.key || "").trim() || [
@@ -658,14 +680,16 @@ export const GET: APIRoute = async ({ request, url }) => {
 				seriesLabel: item.seriesLabel || formatSeriesSearchLabel(resolvedSeriesName, resolvedSeriesBookOrder)
 			};
 		};
-		const mappedWithIds = (await Promise.all(mapped.map(resolveSearchResult)))
-			.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.catalog", index, query }))
-			.filter((result): result is SearchResult => !!result);
-		const results = dedupeVariants(mappedWithIds, query)
-			.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.dedupe", index, query }))
-			.filter((result): result is SearchResult => !!result);
-		const collectionResults = await collectionResultsPromise;
-		const hasMore = dbdRows.length >= pageSize || items.length >= pageSize || openItems.length >= pageSize;
+			const mappedWithIds = (await Promise.all(mapped.map(resolveSearchResult)))
+				.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.catalog", index, query }))
+				.filter((result): result is SearchResult => !!result);
+			markPerfStage("canonical_resolution_complete");
+			const results = dedupeVariants(mappedWithIds, query)
+				.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.dedupe", index, query }))
+				.filter((result): result is SearchResult => !!result);
+			const collectionResults = await collectionResultsPromise;
+			markPerfStage("collections_loaded");
+			const hasMore = dbdRows.length >= pageSize || items.length >= pageSize || openItems.length >= pageSize;
 		const session = await resolveUserBySession(request).catch(() => null);
 		await recordProductAnalyticsEventSafe(sql, {
 			eventName: "search_performed",
@@ -680,17 +704,24 @@ export const GET: APIRoute = async ({ request, url }) => {
 				page,
 				hasCollections: collectionResults.length > 0,
 				hasMore
-			}
-		});
-		return new Response(JSON.stringify({ results, collectionResults, hasMore, page }), {
+				}
+			});
+			markPerfStage("analytics_recorded");
+			logPerf("success", {
+				resultCount: results.length,
+				collectionCount: collectionResults.length,
+				hasMore
+			});
+			return new Response(JSON.stringify({ results, collectionResults, hasMore, page }), {
 			status: 200,
 			headers: {
 				"Content-Type": "application/json",
 				"Cache-Control": createPublicCacheControl(30, 120)
 			}
 		});
-	} catch {
-		return new Response(JSON.stringify({ results: [], hasMore: false }), {
+		} catch (error) {
+			logPerf("error", { error: error instanceof Error ? error.message : "Unknown error" });
+			return new Response(JSON.stringify({ results: [], hasMore: false }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" }
 		});

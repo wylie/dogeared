@@ -528,15 +528,32 @@ export const GET: APIRoute = async ({ request, url }) => {
 export const POST: APIRoute = async ({ request }) => {
 	let debugStage = "start";
 	let debugContext: Record<string, unknown> = {};
+	const perfStartedAt = performance.now();
+	const perfStages: Record<string, number> = {};
+	const markPerfStage = (stage: string) => {
+		if (!import.meta.env.DEV) return;
+		perfStages[stage] = Math.round((performance.now() - perfStartedAt) * 10) / 10;
+	};
+	const logPerf = (outcome: string, extra: Record<string, unknown> = {}) => {
+		if (!import.meta.env.DEV) return;
+		console.info("[perf.shelf.upsert]", {
+			outcome,
+			stage: debugStage,
+			totalMs: Math.round((performance.now() - perfStartedAt) * 10) / 10,
+			stages: perfStages,
+			...extra
+		});
+	};
 	try {
 		await ensureShelfSchema();
 		debugStage = "session";
 		const session = await resolveUserBySession(request);
 		if (!session?.userId) return new Response(JSON.stringify({ error: "You must be logged in to save shelf entries." }), { status: 401, headers: { "Content-Type": "application/json" } });
 		debugStage = "parse_body";
-		const body = await request.json() as { entry?: ShelfEntryInput };
-		const entry = body?.entry || {};
-		debugContext.rawEntry = entry;
+			const body = await request.json() as { entry?: ShelfEntryInput };
+			const entry = body?.entry || {};
+			markPerfStage("schema_session_body");
+			debugContext.rawEntry = entry;
 		const directBookId = normalizePositiveInt(entry.bookId);
 		const bookPayload = fromShelfEntryInput(entry);
 		const rawTitle = bookPayload.title;
@@ -598,8 +615,8 @@ export const POST: APIRoute = async ({ request }) => {
 			googleBooksId
 		};
 		const shouldAttemptMetadataEnrichment = directBookId <= 0;
-		if (shouldAttemptMetadataEnrichment && (!synopsis || !coverUrl || !publishedYear || !language || !publisher || (!isbn10 && !isbn13) || !googleBooksId)) {
-			const enriched = await inferMetadataForBook({ title, author, isbn10, isbn13, googleBooksId });
+			if (shouldAttemptMetadataEnrichment && (!synopsis || !coverUrl || !publishedYear || !language || !publisher || (!isbn10 && !isbn13) || !googleBooksId)) {
+				const enriched = await inferMetadataForBook({ title, author, isbn10, isbn13, googleBooksId });
 			if (!synopsis) synopsis = enriched.synopsis || synopsis;
 			if (!coverUrl) coverUrl = enriched.coverUrl || coverUrl;
 			if (!language) language = enriched.language || language;
@@ -608,8 +625,9 @@ export const POST: APIRoute = async ({ request }) => {
 			if (!isbn10) isbn10 = enriched.isbn10 || isbn10;
 			if (!googleBooksId) googleBooksId = enriched.googleBooksId || googleBooksId;
 			if (!pageCount && enriched.pageCount > 0) pageCount = enriched.pageCount;
-			if (!publisher) publisher = enriched.publisher || publisher;
-		}
+				if (!publisher) publisher = enriched.publisher || publisher;
+			}
+			markPerfStage("metadata_ready");
 		const workKey = canonicalCatalogWorkKey({ title, author, isbn10, isbn13 });
 		const source = normalizeCatalogText(entry.source);
 		const sourceWorkId = normalizeCatalogText(entry.sourceWorkId);
@@ -663,8 +681,8 @@ export const POST: APIRoute = async ({ request }) => {
 				resolvedWorkId = Number(representativeRows[0]?.work_id || directRows[0]?.work_id || 0) || 0;
 			}
 		}
-		if (resolvedBookId <= 0) {
-			const resolution = await resolveCanonicalCatalogWork(sql, {
+			if (resolvedBookId <= 0) {
+				const resolution = await resolveCanonicalCatalogWork(sql, {
 				canonicalWorkKey: workKey,
 				title,
 				author,
@@ -678,8 +696,9 @@ export const POST: APIRoute = async ({ request }) => {
 				publishedYear
 			});
 			resolvedBookId = Number(resolution?.bookId || 0) || 0;
-			resolvedWorkId = Number(resolution?.workId || 0) || 0;
-		}
+				resolvedWorkId = Number(resolution?.workId || 0) || 0;
+			}
+			markPerfStage("canonical_resolution_complete");
 
 		const previousRows = await sql<Array<{
 			status: ShelfStatus;
@@ -780,8 +799,8 @@ export const POST: APIRoute = async ({ request }) => {
 			bookId = Number(bookRows[0]?.id || 0);
 			canonicalPageCount = Math.max(canonicalPageCount, Number(bookRows[0]?.page_count || 0) || 0);
 		}
-		if (!bookId) throw new Error("Book upsert failed.");
-		debugContext.bookId = bookId;
+			if (!bookId) throw new Error("Book upsert failed.");
+			debugContext.bookId = bookId;
 		debugStage = "upsert_sources";
 		await upsertBookSources(sql, bookId, sources);
 		debugStage = "upsert_work_edition";
@@ -815,7 +834,7 @@ export const POST: APIRoute = async ({ request }) => {
 			bookId = workEdition.representativeBookId;
 		}
 		debugContext.workEdition = workEdition;
-		if (workEdition.editionId > 0) {
+			if (workEdition.editionId > 0) {
 			debugStage = "canonical_page_count";
 			const canonicalPageRows = await sql<Array<{ page_count: number }>>`
 				select
@@ -829,8 +848,9 @@ export const POST: APIRoute = async ({ request }) => {
 				where be.id = ${workEdition.editionId}
 				limit 1
 			`;
-			canonicalPageCount = Math.max(canonicalPageCount, Number(canonicalPageRows[0]?.page_count || 0) || 0);
-		}
+				canonicalPageCount = Math.max(canonicalPageCount, Number(canonicalPageRows[0]?.page_count || 0) || 0);
+			}
+			markPerfStage("catalog_writes_complete");
 		debugStage = "upsert_series";
 		await upsertKnownSeriesForBook(sql, {
 			bookId,
@@ -891,8 +911,8 @@ export const POST: APIRoute = async ({ request }) => {
 		debugStage = "upsert_user_book";
 		const finishedDateParam = finishedDate ? finishedDate : null;
 		const editionIdParam = workEdition.editionId > 0 ? workEdition.editionId : null;
-		await withSqlDebug(
-			"shelfEntries.userBook.upsert",
+			await withSqlDebug(
+				"shelfEntries.userBook.upsert",
 			userBookUpsertDebugParams({
 				userId,
 				bookId,
@@ -907,7 +927,7 @@ export const POST: APIRoute = async ({ request }) => {
 				reviewSpoiler,
 				editionId: editionIdParam
 			}),
-			() => sql`
+				() => sql`
 			insert into user_book (
 				user_id,
 				book_id,
@@ -966,8 +986,9 @@ export const POST: APIRoute = async ({ request }) => {
 					then excluded.review_updated_at
 					else user_book.review_updated_at
 				end,
-				updated_at = now()
-		`);
+					updated_at = now()
+			`);
+			markPerfStage("user_book_upsert_complete");
 		// Single-shelf mode: putting a book on a default shelf removes it from
 		// all custom shelves for this user.
 		debugStage = "clear_custom_shelves";
@@ -1031,16 +1052,17 @@ export const POST: APIRoute = async ({ request }) => {
 				)
 			`;
 		}
-		if (status === "finished" || deltaPages > 0) {
+			if (status === "finished" || deltaPages > 0) {
 			debugStage = "reading_milestone_notifications";
 			await createReadingMilestoneNotifications(sql, userId, {
 				status,
 				bookId,
 				title
-			});
-		}
+				});
+			}
+			markPerfStage("followups_complete");
 
-		debugStage = "load_persisted_entry";
+			debugStage = "load_persisted_entry";
 		const persistedRows = await sql<Array<{
 			book_id: number;
 			title: string;
@@ -1105,7 +1127,8 @@ export const POST: APIRoute = async ({ request }) => {
 			group by b.id, ub.user_id, ub.book_id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.preferred_progress_type, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection, ub.review_title, ub.review_spoiler, ub.review_updated_at
 			limit 1
 		`;
-		const persisted = persistedRows[0];
+			const persisted = persistedRows[0];
+			markPerfStage("persisted_entry_loaded");
 		const persistedEntry = persisted ? {
 			id: `book_${persisted.book_id}`,
 			bookId: Number(persisted.book_id || 0),
@@ -1135,13 +1158,15 @@ export const POST: APIRoute = async ({ request }) => {
 			updatedAt: Date.parse(persisted.updated_at || "") || Date.now()
 		} : null;
 
-		monitorEvent("shelf.upsert.success", { userId, bookId, status, rating: rating ?? 0, hasProgressDelta: deltaPages > 0 });
-		return new Response(JSON.stringify({ ok: true, bookId, entry: persistedEntry }), {
+			monitorEvent("shelf.upsert.success", { userId, bookId, status, rating: rating ?? 0, hasProgressDelta: deltaPages > 0 });
+			logPerf("success", { bookId, status });
+			return new Response(JSON.stringify({ ok: true, bookId, entry: persistedEntry }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" }
 		});
-	} catch (error) {
-		const message = error instanceof Error ? error.message : "Unknown error";
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Unknown error";
+			logPerf("error", { error: message });
 		if (import.meta.env.DEV) {
 			console.error("[shelf.upsert.debug]", {
 				stage: debugStage,

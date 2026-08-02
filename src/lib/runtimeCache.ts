@@ -4,6 +4,7 @@ type CacheEntry<T> = {
 };
 
 const GLOBAL_KEY = "__dogeared_runtime_cache__";
+const IN_FLIGHT_KEY = "__dogeared_runtime_cache_in_flight__";
 
 function getStore() {
 	const globalObject = globalThis as typeof globalThis & {
@@ -13,6 +14,16 @@ function getStore() {
 		globalObject[GLOBAL_KEY] = new Map<string, CacheEntry<unknown>>();
 	}
 	return globalObject[GLOBAL_KEY] as Map<string, CacheEntry<unknown>>;
+}
+
+function getInFlightStore() {
+	const globalObject = globalThis as typeof globalThis & {
+		[IN_FLIGHT_KEY]?: Map<string, Promise<unknown>>;
+	};
+	if (!globalObject[IN_FLIGHT_KEY]) {
+		globalObject[IN_FLIGHT_KEY] = new Map<string, Promise<unknown>>();
+	}
+	return globalObject[IN_FLIGHT_KEY] as Map<string, Promise<unknown>>;
 }
 
 export async function withRuntimeCache<T>(
@@ -26,9 +37,20 @@ export async function withRuntimeCache<T>(
 	if (existing && existing.expiresAt > now) {
 		return existing.value as T;
 	}
-	const value = await loader();
-	store.set(key, { value, expiresAt: now + Math.max(1, ttlMs) });
-	return value;
+	const inFlight = getInFlightStore();
+	const existingPromise = inFlight.get(key);
+	if (existingPromise) return existingPromise as Promise<T>;
+	const promise = (async () => {
+		const value = await loader();
+		store.set(key, { value, expiresAt: Date.now() + Math.max(1, ttlMs) });
+		return value;
+	})();
+	inFlight.set(key, promise);
+	try {
+		return await promise;
+	} finally {
+		inFlight.delete(key);
+	}
 }
 
 export function createPublicCacheControl(maxAgeSeconds: number, staleWhileRevalidateSeconds = 0) {
@@ -37,4 +59,3 @@ export function createPublicCacheControl(maxAgeSeconds: number, staleWhileRevali
 	if (swr > 0) return `public, max-age=${maxAge}, stale-while-revalidate=${swr}`;
 	return `public, max-age=${maxAge}`;
 }
-

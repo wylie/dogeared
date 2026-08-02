@@ -35,6 +35,11 @@ let ratingCountByBookId = new Map<number, number>();
 let readerCountByBookId = new Map<number, number>();
 let shelfEntryCountByBookId = new Map<number, number>();
 let customShelfOptionsJson = "[]";
+const customShelfOptionsPromise = session?.userId
+	? resolveCustomShelfOptions(getNeonSql(), session.userId)
+		.then((options) => JSON.stringify(options))
+		.catch(() => "[]")
+	: Promise.resolve("[]");
 
 function truncateDescription(value: string, maxLength = 280) {
 	const text = String(value || "")
@@ -110,7 +115,7 @@ if (query) {
 				const bookIds = Array.from(new Set(results.map((result) => Number(result.bookId || 0)).filter((value) => value > 0)));
 				if (bookIds.length > 0) {
 					const sql = getNeonSql();
-					const summaryRows = await sql<Array<{ book_id: number; reader_count: number; shelf_entry_count: number; average_rating: number | null; rating_count: number }>>`
+					const summaryRowsPromise = sql<Array<{ book_id: number; reader_count: number; shelf_entry_count: number; average_rating: number | null; rating_count: number }>>`
 						select
 							ub.book_id,
 							count(distinct ub.user_id)::int as reader_count,
@@ -121,6 +126,15 @@ if (query) {
 						where ub.book_id = any(${bookIds}::bigint[])
 						group by ub.book_id
 					`;
+					const statusRowsPromise = session?.userId
+						? sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
+							select book_id, status, rating
+							from user_book
+							where user_id = ${session.userId}::uuid
+								and book_id = any(${bookIds}::bigint[])
+						`
+						: Promise.resolve([] as Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>);
+					const [summaryRows, statusRows] = await Promise.all([summaryRowsPromise, statusRowsPromise]);
 					readerCountByBookId = new Map(summaryRows.map((row) => [Number(row.book_id || 0), Number(row.reader_count || 0)]));
 					shelfEntryCountByBookId = new Map(summaryRows.map((row) => [Number(row.book_id || 0), Number(row.shelf_entry_count || 0)]));
 					averageRatingByBookId = new Map(
@@ -130,12 +144,6 @@ if (query) {
 						summaryRows.map((row) => [Number(row.book_id || 0), Number(row.rating_count || 0)])
 					);
 					if (session?.userId) {
-						const statusRows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
-							select book_id, status, rating
-							from user_book
-							where user_id = ${session.userId}::uuid
-								and book_id = any(${bookIds}::bigint[])
-						`;
 						viewerStatusByBookId = new Map(statusRows.map((row) => [Number(row.book_id || 0), row.status]));
 						viewerRatingByBookId = new Map(statusRows.map((row) => [
 							Number(row.book_id || 0),
@@ -150,14 +158,7 @@ if (query) {
 	}
 }
 
-if (session?.userId) {
-	try {
-		const sql = getNeonSql();
-		customShelfOptionsJson = JSON.stringify(await resolveCustomShelfOptions(sql, session.userId));
-	} catch {
-		customShelfOptionsJson = "[]";
-	}
-}
+customShelfOptionsJson = await customShelfOptionsPromise;
 
 const completedResultCount = results.length + collectionResults.length;
 const completionStatus = query && !errorMessage
@@ -554,7 +555,9 @@ const completionStatus = query && !errorMessage
 		closeShelfMenus,
 		parseCategories,
 		promptForShelfLogin,
+		isShelfActionBusy,
 		setDropdownLabel,
+		setShelfActionBusy,
 		setShelvedState,
 		showShelfFeedback,
 		statusLabel,
@@ -672,11 +675,12 @@ const completionStatus = query && !errorMessage
 		entries.unshift(nextEntry);
 	}
 
-	function setShelf(dropdown, selectedStatus) {
+	async function setShelf(dropdown, selectedStatus) {
 		if (!isAuthenticated) {
 			promptForShelfLogin();
 			return;
 		}
+		if (isShelfActionBusy(dropdown)) return;
 		const title = String(dropdown.dataset.title || "").trim();
 		if (!title) return;
 		const author = String(dropdown.dataset.author || "").trim();
@@ -697,98 +701,84 @@ const completionStatus = query && !errorMessage
 		const sourceUrl = String(dropdown.dataset.sourceUrl || "").trim();
 		const categories = parseCategories(dropdown.dataset.categories);
 
-		const entries = loadShelfEntries();
-		const existing = findEntry(entries, title, author);
-		if (existing) {
-			const previousStatus = existing.status;
-			if (!existing.totalPages && totalPages > 0) existing.totalPages = totalPages;
-			if (!existing.coverUrl && coverUrl) existing.coverUrl = coverUrl;
-			if (format) existing.format = format;
-			if (language) existing.language = language;
-			if (publisher) existing.publisher = publisher;
-			if (publishedDate) existing.publishedDate = publishedDate;
-			if (isbn10) existing.isbn10 = isbn10;
-			if (isbn13) existing.isbn13 = isbn13;
-			if (googleBooksId) existing.googleBooksId = googleBooksId;
-			if (bookId > 0) existing.bookId = bookId;
-			if (source) existing.source = source;
-			if (sourceWorkId) existing.sourceWorkId = sourceWorkId;
-			if (sourceEditionId) existing.sourceEditionId = sourceEditionId;
-			if (sourceUrl) existing.sourceUrl = sourceUrl;
-			if (categories.length > 0) existing.categories = categories;
-			if (description && !existing.description) existing.description = description;
-			applyStatus(existing, selectedStatus, totalPages || Number(existing.totalPages) || 0);
-			existing.updatedAt = Date.now();
-			saveShelfEntries(entries);
-			if (previousStatus !== selectedStatus) {
-				logShelfUpdate(existing, selectedStatus);
-				showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`, feedbackTimers);
-			} else {
-				showShelfFeedback(dropdown, `Already on ${statusLabel(selectedStatus)}.`, feedbackTimers);
+		setShelfActionBusy(dropdown, true);
+		showShelfFeedback(dropdown, "Saving...", feedbackTimers);
+		try {
+			const entries = loadShelfEntries();
+			const existing = findEntry(entries, title, author);
+			const draft = existing ? { ...existing } : buildShelfEntryFromRecord({
+				bookId,
+				title,
+				author,
+				description,
+				pageCount: totalPages,
+				coverUrl,
+				format,
+				language,
+				publisher,
+				publishedDate,
+				isbn10,
+				isbn13,
+				googleBooksId,
+				categories
+			}, {
+				bookId,
+				status: selectedStatus,
+				totalPages,
+				currentPage: 0,
+				finishedDate: "",
+				source: source || (googleBooksId ? "google_books" : ""),
+				sourceWorkId: sourceWorkId || googleBooksId,
+				sourceEditionId,
+				sourceUrl: sourceUrl || (googleBooksId ? `https://books.google.com/books?id=${encodeURIComponent(googleBooksId)}` : ""),
+				updatedAt: Date.now()
+			});
+
+			const previousStatus = existing?.status || "";
+			if (!draft.totalPages && totalPages > 0) draft.totalPages = totalPages;
+			if (!draft.coverUrl && coverUrl) draft.coverUrl = coverUrl;
+			if (format) draft.format = format;
+			if (language) draft.language = language;
+			if (publisher) draft.publisher = publisher;
+			if (publishedDate) draft.publishedDate = publishedDate;
+			if (isbn10) draft.isbn10 = isbn10;
+			if (isbn13) draft.isbn13 = isbn13;
+			if (googleBooksId) draft.googleBooksId = googleBooksId;
+			if (bookId > 0) draft.bookId = bookId;
+			if (source) draft.source = source;
+			if (sourceWorkId) draft.sourceWorkId = sourceWorkId;
+			if (sourceEditionId) draft.sourceEditionId = sourceEditionId;
+			if (sourceUrl) draft.sourceUrl = sourceUrl;
+			if (categories.length > 0) draft.categories = categories;
+			if (description && !draft.description) draft.description = description;
+			applyStatus(draft, selectedStatus, totalPages || Number(draft.totalPages) || 0);
+			draft.updatedAt = Date.now();
+
+			const result = await saveShelfEntryWithRetry(draft);
+			if (!result.ok) {
+				showShelfFeedback(dropdown, result.message || "Failed to save shelf entry.", feedbackTimers);
+				return;
 			}
+
+			const latest = loadShelfEntries();
+			const localMatch = findEntry(latest, title, author);
+			if (localMatch) Object.assign(localMatch, draft);
+			else latest.unshift(draft);
+			const serverEntry = result?.data && typeof result.data === "object" ? result.data.entry : null;
+			if (serverEntry) mergeServerEntry(latest, draft, serverEntry);
+			saveShelfEntries(latest);
+			if (previousStatus !== selectedStatus) logShelfUpdate(draft, selectedStatus);
 			setDropdownLabel(dropdown, selectedStatus);
 			setShelvedState(dropdown, true);
-			void (async () => {
-				const result = await saveShelfEntryWithRetry(existing);
-				const serverEntry = result?.data && typeof result.data === "object" ? result.data.entry : null;
-				if (result.ok && serverEntry) {
-					const latest = loadShelfEntries();
-					mergeServerEntry(latest, existing, serverEntry);
-					saveShelfEntries(latest);
-					syncExistingState();
-				} else if (!result.ok && result.message) {
-					showShelfFeedback(dropdown, result.message, feedbackTimers);
-				}
-			})();
-			return;
+			syncExistingState();
+			showShelfFeedback(
+				dropdown,
+				previousStatus === selectedStatus ? `Already on ${statusLabel(selectedStatus)}.` : `Saved to ${statusLabel(selectedStatus)}.`,
+				feedbackTimers
+			);
+		} finally {
+			setShelfActionBusy(dropdown, false);
 		}
-
-		const next = buildShelfEntryFromRecord({
-			bookId,
-			title,
-			author,
-			description,
-			pageCount: totalPages,
-			coverUrl,
-			format,
-			language,
-			publisher,
-			publishedDate,
-			isbn10,
-			isbn13,
-			googleBooksId,
-			categories
-		}, {
-			bookId,
-			status: selectedStatus,
-			totalPages,
-			currentPage: 0,
-			finishedDate: "",
-			source: source || (googleBooksId ? "google_books" : ""),
-			sourceWorkId: sourceWorkId || googleBooksId,
-			sourceEditionId,
-			sourceUrl: sourceUrl || (googleBooksId ? `https://books.google.com/books?id=${encodeURIComponent(googleBooksId)}` : ""),
-			updatedAt: Date.now()
-		});
-		applyStatus(next, selectedStatus, totalPages);
-		entries.unshift(next);
-		saveShelfEntries(entries);
-		logShelfUpdate(next, selectedStatus);
-		setDropdownLabel(dropdown, selectedStatus);
-		setShelvedState(dropdown, true);
-		showShelfFeedback(dropdown, `Saved to ${statusLabel(selectedStatus)}.`, feedbackTimers);
-		void (async () => {
-			const result = await saveShelfEntryWithRetry(next);
-			const serverEntry = result?.data && typeof result.data === "object" ? result.data.entry : null;
-			if (result.ok && serverEntry) {
-				const latest = loadShelfEntries();
-				mergeServerEntry(latest, next, serverEntry);
-				saveShelfEntries(latest);
-				syncExistingState();
-			} else if (!result.ok && result.message) {
-				showShelfFeedback(dropdown, result.message, feedbackTimers);
-			}
-		})();
 	}
 
 	function syncExistingState() {
@@ -841,7 +831,7 @@ const completionStatus = query && !errorMessage
 			const dropdown = option.closest(".shelf-dropdown");
 			if (dropdown instanceof HTMLElement) {
 				const status = option.dataset.status || "want_to_read";
-				setShelf(dropdown, status);
+					void setShelf(dropdown, status);
 				closeShelfMenus(shelfDropdowns);
 			}
 			return;

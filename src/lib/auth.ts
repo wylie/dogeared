@@ -3,6 +3,8 @@ import { getNeonSql } from "./neon";
 
 export const SESSION_COOKIE = "dogeared_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+type ResolvedSession = { userId: string; sessionHash: string } | null;
+const sessionByRequest = new WeakMap<Request, Promise<ResolvedSession>>();
 
 function normalizeText(value: unknown) {
 	return String(value || "").trim();
@@ -76,7 +78,7 @@ export async function findUserIdByEmail(email: string) {
 	return String(rows[0]?.id || "");
 }
 
-export async function resolveUserBySession(request: Request) {
+async function resolveUserBySessionUncached(request: Request): Promise<ResolvedSession> {
 	const token = readCookie(request.headers, SESSION_COOKIE);
 	if (!token) return null;
 	const sessionHash = sha256Hex(token);
@@ -92,6 +94,14 @@ export async function resolveUserBySession(request: Request) {
 	const userId = String(rows[0]?.user_id || "");
 	if (!userId) return null;
 	return { userId, sessionHash };
+}
+
+export async function resolveUserBySession(request: Request) {
+	const existing = sessionByRequest.get(request);
+	if (existing) return existing;
+	const promise = resolveUserBySessionUncached(request);
+	sessionByRequest.set(request, promise);
+	return promise;
 }
 
 export async function resolveUserIdFromUserKey(userKey: string) {

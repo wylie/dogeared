@@ -2688,8 +2688,10 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 	import {
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
+		isShelfActionBusy,
 		promptForShelfLogin,
 		setDropdownLabel,
+		setShelfActionBusy,
 		setShelvedState,
 		showShelfFeedback,
 		statusLabel,
@@ -2765,7 +2767,6 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 			if (dropdown instanceof HTMLElement) toggleShelfMenu(dropdown, shelfDropdowns);
 			return;
 		}
-
 		const option = target.closest('[data-action="set-shelf"]');
 		const removeOption = target.closest('[data-action="remove-from-shelves"]');
 		const dropdown = target.closest(".shelf-dropdown");
@@ -2775,15 +2776,22 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 				promptForShelfLogin();
 				return;
 			}
+			if (isShelfActionBusy(dropdown)) return;
 			const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
 			const entry = buildEntry(dropdown, "want_to_read");
-			const result = await removeBookFromAllShelvesOnServer(bookId, entry);
-			if (result.ok) {
-				setShelvedState(dropdown, false);
-				setDropdownLabel(dropdown, "");
-				showShelfFeedback(dropdown, "Removed from shelves.", feedbackTimers);
-			} else {
-				showShelfFeedback(dropdown, resolveShelfRemoveMessage(result), feedbackTimers);
+			setShelfActionBusy(dropdown, true);
+			showShelfFeedback(dropdown, "Removing...", feedbackTimers);
+			try {
+				const result = await removeBookFromAllShelvesOnServer(bookId, entry);
+				if (result.ok) {
+					setShelvedState(dropdown, false);
+					setDropdownLabel(dropdown, "");
+					showShelfFeedback(dropdown, "Removed from shelves.", feedbackTimers);
+				} else {
+					showShelfFeedback(dropdown, resolveShelfRemoveMessage(result), feedbackTimers);
+				}
+			} finally {
+				setShelfActionBusy(dropdown, false);
 			}
 			return;
 		}
@@ -2794,14 +2802,21 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 				promptForShelfLogin();
 				return;
 			}
+			if (isShelfActionBusy(dropdown)) return;
 			const entry = buildEntry(dropdown, status);
 			if (!entry?.title) return;
-			const result = await saveShelfEntryWithRetry(entry);
-			if (result.ok) {
-				setSelected(dropdown, status);
-				showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
-			} else if (result.message) {
-				showShelfFeedback(dropdown, result.message, feedbackTimers);
+			setShelfActionBusy(dropdown, true);
+			showShelfFeedback(dropdown, "Saving...", feedbackTimers);
+			try {
+				const result = await saveShelfEntryWithRetry(entry);
+				if (result.ok) {
+					setSelected(dropdown, status);
+					showShelfFeedback(dropdown, `Saved to ${statusLabel(status)}.`, feedbackTimers);
+				} else if (result.message) {
+					showShelfFeedback(dropdown, result.message, feedbackTimers);
+				}
+			} finally {
+				setShelfActionBusy(dropdown, false);
 			}
 			return;
 		}

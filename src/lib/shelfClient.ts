@@ -117,6 +117,23 @@ export function setShelvedState(dropdown: Element, isShelved: boolean) {
 	else dropdown.classList.remove("is-shelved");
 }
 
+export function isShelfActionBusy(dropdown: Element) {
+	return dropdown instanceof HTMLElement && dropdown.dataset.shelfActionBusy === "true";
+}
+
+export function setShelfActionBusy(dropdown: Element, busy: boolean) {
+	if (!(dropdown instanceof HTMLElement)) return;
+	dropdown.dataset.shelfActionBusy = busy ? "true" : "false";
+	dropdown.classList.toggle("is-saving", busy);
+	dropdown.setAttribute("aria-busy", busy ? "true" : "false");
+	for (const control of Array.from(dropdown.querySelectorAll('[data-action="toggle-shelf"], [role="menuitem"], .shelf-option'))) {
+		if (control instanceof HTMLButtonElement) {
+			control.disabled = busy;
+			control.setAttribute("aria-disabled", busy ? "true" : "false");
+		}
+	}
+}
+
 export function normalizeRatingValue(value: unknown) {
 	if (value === null || value === undefined || String(value).trim() === "") return null;
 	const parsed = Number(value);
@@ -267,7 +284,7 @@ export function showShelfFeedback(
 	delete feedback.dataset.hideTimer;
 	feedback.textContent = message;
 	feedback.hidden = false;
-	const isBusy = /\bsaving\b/i.test(message);
+	const isBusy = /\b(saving|removing)\b/i.test(message);
 	const isError = /\b(failed|unable|error|retry|invalid|network|server)\b/i.test(message);
 	feedback.classList.toggle("is-error", isError);
 	feedback.classList.toggle("is-busy", isBusy);
@@ -618,7 +635,50 @@ export function resolveShelfSaveMessage(result: {
 	return "Failed to save shelf entry.";
 }
 
+const inFlightShelfMutations = new Map<string, Promise<{
+	ok: boolean;
+	unauthorized?: boolean;
+	response?: Response;
+	data?: unknown;
+	error?: unknown;
+	message?: string;
+}>>();
+
+function shelfMutationKey(action: string, entry: unknown) {
+	if (!entry || typeof entry !== "object") return `${action}:unknown`;
+	const record = entry as Record<string, unknown>;
+	return JSON.stringify({
+		action,
+		bookId: Math.max(0, Number(record.bookId || 0) || 0),
+		title: String(record.title || "").trim().toLowerCase(),
+		author: String(record.author || "").trim().toLowerCase(),
+		status: String(record.status || "").trim(),
+		isbn10: String(record.isbn10 || "").trim().toUpperCase(),
+		isbn13: String(record.isbn13 || "").trim().toUpperCase(),
+		googleBooksId: String(record.googleBooksId || "").trim(),
+		source: String(record.source || "").trim(),
+		sourceWorkId: String(record.sourceWorkId || "").trim(),
+		sourceEditionId: String(record.sourceEditionId || "").trim()
+	});
+}
+
 export async function saveShelfEntryWithRetry(
+	entry: unknown,
+	options?: { redirectPath?: string; retries?: number; retryDelayMs?: number }
+) {
+	const mutationKey = shelfMutationKey("save", entry);
+	const existingMutation = inFlightShelfMutations.get(mutationKey);
+	if (existingMutation) return existingMutation;
+	const mutation = saveShelfEntryWithRetryUncached(entry, options);
+	inFlightShelfMutations.set(mutationKey, mutation);
+	try {
+		return await mutation;
+	} finally {
+		inFlightShelfMutations.delete(mutationKey);
+	}
+}
+
+async function saveShelfEntryWithRetryUncached(
 	entry: unknown,
 	options?: { redirectPath?: string; retries?: number; retryDelayMs?: number }
 ) {
@@ -659,6 +719,22 @@ export async function saveShelfEntryWithRetry(
 }
 
 export async function removeShelfEntryWithRetry(
+	entry: unknown,
+	options?: { redirectPath?: string; retries?: number; retryDelayMs?: number }
+) {
+	const mutationKey = shelfMutationKey("remove", entry);
+	const existingMutation = inFlightShelfMutations.get(mutationKey);
+	if (existingMutation) return existingMutation;
+	const mutation = removeShelfEntryWithRetryUncached(entry, options);
+	inFlightShelfMutations.set(mutationKey, mutation);
+	try {
+		return await mutation;
+	} finally {
+		inFlightShelfMutations.delete(mutationKey);
+	}
+}
+
+async function removeShelfEntryWithRetryUncached(
 	entry: unknown,
 	options?: { redirectPath?: string; retries?: number; retryDelayMs?: number }
 ) {
