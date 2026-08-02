@@ -42,13 +42,25 @@ test("mobile primary navigation uses natural item sizing with a consistent gap",
 	const source = read("../src/components/LeftHand.astro");
 
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*display: flex;/s);
-	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*gap: 0\.9rem;/s);
+	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*--mobile-primary-nav-gap: 0\.9rem;/s);
+	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*justify-content: flex-start;/s);
+	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*gap: var\(--mobile-primary-nav-gap\);/s);
 	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*column-gap: 1rem;/s);
-	assert.match(source, /#left-hand-nav \.primary-links \.nav-group\s*{[^}]*display: contents;/s);
-	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul\s*{[^}]*display: contents;/s);
+	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*justify-content: space-(between|around|evenly);/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.nav-group\s*{[^}]*display: flex;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.nav-group\s*{[^}]*flex: 0 0 auto;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul\s*{[^}]*display: flex;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul\s*{[^}]*flex-wrap: nowrap;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul\s*{[^}]*gap: var\(--mobile-primary-nav-gap\);/s);
 	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul > li\s*{[^}]*flex: 0 0 auto;/s);
-	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul > li\s*{[^}]*width: max-content;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul > li\s*{[^}]*width: auto;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul > li\s*{[^}]*margin: 0;/s);
+	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button\s*{[^}]*width: auto;/s);
+	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button\s*{[^}]*padding: 0\.38rem 0\.44rem;/s);
+	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button\s*{[^}]*white-space: nowrap;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.notification-nav-link\s*{[^}]*justify-content: flex-start;/s);
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*overflow-x: auto;/s);
+	assert.match(source, /scrollActivePrimaryNavIntoView/);
 });
 
 test("search loading indicator stays inside the search input without layout shift", () => {

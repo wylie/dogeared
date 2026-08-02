@@ -659,9 +659,11 @@ const adminNavItems: NavItem[] = [
       border: var(--border-strong);
     }
     #left-hand-nav .primary-links {
+      --mobile-primary-nav-gap: 0.9rem;
       display: flex;
       flex-wrap: nowrap;
-      gap: 0.9rem;
+      justify-content: flex-start;
+      gap: var(--mobile-primary-nav-gap);
       border-top: none;
       margin-top: 0;
       padding: 0 0 0.5rem;
@@ -678,38 +680,51 @@ const adminNavItems: NavItem[] = [
     }
     #left-hand-nav .primary-links::-webkit-scrollbar { display: none; }
     #left-hand-nav .primary-links .nav-group {
-      display: contents;
+      display: flex;
+      flex: 0 0 auto;
+      min-width: 0;
     }
     #left-hand-nav .primary-links .nav-group-title {
       display: none;
     }
     #left-hand-nav .primary-links .nav-group > ul {
-      display: contents;
+      display: flex;
+      flex: 0 0 auto;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: var(--mobile-primary-nav-gap);
       padding: 0;
       margin: 0;
       list-style: none;
     }
     #left-hand-nav .primary-links .nav-group > ul > li {
       flex: 0 0 auto;
-      width: max-content;
+      width: auto;
+      margin: 0;
     }
     #left-hand-nav .primary-links a,
     #left-hand-nav .primary-links .nav-text-button {
       display: inline-flex;
+      flex: 0 0 auto;
       align-items: center;
       border: none;
       background: transparent;
       border-radius: var(--radius-pill);
-      padding: 0.38rem 0.2rem;
+      width: auto;
+      padding: 0.38rem 0.44rem;
       line-height: 1.25;
       text-decoration: none;
       color: var(--color-nav);
+      white-space: nowrap;
     }
     #left-hand-nav .primary-links a.active {
       background: var(--color-nav-surface);
       color: var(--color-nav-active);
       text-decoration: none;
       border-left: 0;
+    }
+    #left-hand-nav .primary-links .notification-nav-link {
+      justify-content: flex-start;
     }
     #left-hand-nav .primary-links a.hover:hover,
     #left-hand-nav .primary-links .nav-text-button.hover:hover,
@@ -853,10 +868,23 @@ const adminNavItems: NavItem[] = [
     const secondary = Number(window.sessionStorage.getItem(NAV_SCROLL_KEY_SECONDARY) || "0");
     if (leftHandPrimaryLinks instanceof HTMLElement && Number.isFinite(primary) && primary > 0) {
       leftHandPrimaryLinks.scrollLeft = primary;
+    } else {
+      scrollActivePrimaryNavIntoView();
     }
     if (leftHandSecondaryLinks instanceof HTMLElement && Number.isFinite(secondary) && secondary > 0) {
       leftHandSecondaryLinks.scrollLeft = secondary;
     }
+  }
+
+  function scrollActivePrimaryNavIntoView() {
+    if (!(leftHandPrimaryLinks instanceof HTMLElement)) return;
+    if (!window.matchMedia("(max-width: 900px)").matches) return;
+    const activeLink = leftHandPrimaryLinks.querySelector('[aria-current="page"]');
+    if (!(activeLink instanceof HTMLElement)) return;
+    window.requestAnimationFrame(() => {
+      activeLink.scrollIntoView({ block: "nearest", inline: "center" });
+      persistNavScrollPosition();
+    });
   }
 
   function persistNavScrollPosition() {
@@ -921,6 +949,7 @@ const adminNavItems: NavItem[] = [
     if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = !authenticated;
     if (leftHandLogoutItem instanceof HTMLElement) leftHandLogoutItem.hidden = !authenticated;
     if (leftHandAuthDivider instanceof HTMLElement) leftHandAuthDivider.hidden = !authenticated;
+    scrollActivePrimaryNavIntoView();
     window.requestAnimationFrame(updateMobileStickyOffset);
   }
 
