@@ -38,6 +38,34 @@ test("mobile left navigation footer compresses into a horizontal no-wrap row", (
 	assert.match(layout, /\.content-column\s*{[^}]*padding-inline: 0\.65rem;/s);
 });
 
+test("mobile primary navigation uses natural item sizing with a consistent gap", () => {
+	const source = read("../src/components/LeftHand.astro");
+
+	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*display: flex;/s);
+	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*gap: 0\.9rem;/s);
+	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*column-gap: 1rem;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.nav-group\s*{[^}]*display: contents;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul\s*{[^}]*display: contents;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul > li\s*{[^}]*flex: 0 0 auto;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul > li\s*{[^}]*width: max-content;/s);
+	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*overflow-x: auto;/s);
+});
+
+test("search loading indicator stays inside the search input without layout shift", () => {
+	const source = read("../src/components/LeftHand.astro");
+	const searchPage = read("../src/pages/search.astro");
+
+	assert.match(source, /<div class="search-input-wrap">/);
+	assert.match(source, /\.search-input-wrap\s*{[^}]*position: relative;/s);
+	assert.match(source, /\.search-submit-status\s*{[^}]*position: absolute;/s);
+	assert.match(source, /\.search-submit-status\s*{[^}]*right: 0\.72rem;/s);
+	assert.match(source, /form\[aria-busy="true"\] input\[type="search"\]\s*{[^}]*padding-right: 6\.8rem;/s);
+	assert.match(source, /@media \(max-width: 360px\)\s*{[\s\S]*?#left-hand-nav \.search-submit-label\s*{[^}]*display: none;/s);
+	assert.match(source, /leftHandSearchStatus\.hidden = false;/);
+	assert.equal(searchPage.includes("search-pending-state"), false);
+	assert.equal(searchPage.includes("search-results-skeleton"), false);
+});
+
 test("Home and Discover use tighter mobile section rhythm", () => {
 	const home = read("../src/pages/index.astro");
 	const discover = read("../src/pages/discover.astro");

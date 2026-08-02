@@ -35,10 +35,12 @@ test("search page empty states are actionable", () => {
 	assert.equal(source.includes("Try a broader title, an author name, or fewer keywords."), true);
 	assert.equal(source.includes("Search again"), true);
 	assert.equal(source.includes("Unable to search right now. Please try again in a moment."), true);
-	assert.equal(source.includes("search-pending-state"), true);
-	assert.equal(source.includes("Searching books..."), true);
+	assert.equal(source.includes("search-pending-state"), false);
 	assert.equal(source.includes("completedResultCount"), true);
 	assert.equal(leftHandSource.includes("data-search-form"), true);
+	assert.equal(leftHandSource.includes("search-input-wrap"), true);
+	assert.equal(leftHandSource.includes("search-submit-spinner"), true);
+	assert.equal(leftHandSource.includes("Searching..."), true);
 	assert.equal(leftHandSource.includes("aria-busy"), true);
 	assert.equal(leftHandSource.includes("readOnly = true"), true);
 });
