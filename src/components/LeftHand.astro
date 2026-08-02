@@ -442,23 +442,21 @@ const adminNavItems: NavItem[] = [
     background: #fff;
     border-color: var(--color-border);
   }
-  form[aria-busy="true"] input[type="search"] {
-    padding-right: 6.8rem;
-  }
   .search-input-wrap {
+    --search-clear-control-space: 2.35rem;
     position: relative;
     width: 100%;
   }
   .search-submit-status {
     position: absolute;
     top: 50%;
-    right: 0.72rem;
+    right: var(--search-clear-control-space);
     transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.34rem;
-    max-width: 42%;
+    max-width: min(8rem, calc(100% - var(--search-clear-control-space) - 1rem));
     pointer-events: none;
     color: var(--color-text-muted);
     font-size: 0.78rem;
@@ -657,11 +655,8 @@ const adminNavItems: NavItem[] = [
     }
     #left-hand-nav input[type="search"] {
       margin-top: 0;
-      padding: 0.4rem 6.8rem 0.4rem 0.8rem;
+      padding: 0.4rem 0.8rem;
       border: var(--border-strong);
-    }
-    #left-hand-nav form:not([aria-busy="true"]) input[type="search"] {
-      padding-right: 0.8rem;
     }
     #left-hand-nav .primary-links {
       display: flex;
@@ -813,10 +808,6 @@ const adminNavItems: NavItem[] = [
     }
   }
   @media (max-width: 360px) {
-    #left-hand-nav input[type="search"],
-    #left-hand-nav form[aria-busy="true"] input[type="search"] {
-      padding-right: 2.5rem;
-    }
     #left-hand-nav .search-submit-label {
       display: none;
     }
@@ -1048,7 +1039,6 @@ const adminNavItems: NavItem[] = [
     }
     leftHandSearchForm.dataset.searching = "true";
     leftHandSearchForm.setAttribute("aria-busy", "true");
-    if (input) input.readOnly = true;
     if (leftHandSearchStatus instanceof HTMLElement) {
       leftHandSearchStatus.hidden = false;
     }

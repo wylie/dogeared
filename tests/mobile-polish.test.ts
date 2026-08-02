@@ -56,10 +56,13 @@ test("search loading indicator stays inside the search input without layout shif
 	const searchPage = read("../src/pages/search.astro");
 
 	assert.match(source, /<div class="search-input-wrap">/);
+	assert.match(source, /\.search-input-wrap\s*{[^}]*--search-clear-control-space: 2\.35rem;/s);
 	assert.match(source, /\.search-input-wrap\s*{[^}]*position: relative;/s);
 	assert.match(source, /\.search-submit-status\s*{[^}]*position: absolute;/s);
-	assert.match(source, /\.search-submit-status\s*{[^}]*right: 0\.72rem;/s);
-	assert.match(source, /form\[aria-busy="true"\] input\[type="search"\]\s*{[^}]*padding-right: 6\.8rem;/s);
+	assert.match(source, /\.search-submit-status\s*{[^}]*right: var\(--search-clear-control-space\);/s);
+	assert.match(source, /\.search-submit-status\s*{[^}]*max-width: min\(8rem, calc\(100% - var\(--search-clear-control-space\) - 1rem\)\);/s);
+	assert.doesNotMatch(source, /form\[aria-busy="true"\] input\[type="search"\]\s*{[^}]*padding-right:/s);
+	assert.match(source, /#left-hand-nav input\[type="search"\]\s*{[^}]*padding: 0\.4rem 0\.8rem;/s);
 	assert.match(source, /@media \(max-width: 360px\)\s*{[\s\S]*?#left-hand-nav \.search-submit-label\s*{[^}]*display: none;/s);
 	assert.match(source, /leftHandSearchStatus\.hidden = false;/);
 	assert.equal(searchPage.includes("search-pending-state"), false);

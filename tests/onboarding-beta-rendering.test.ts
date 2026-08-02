@@ -42,7 +42,7 @@ test("search page empty states are actionable", () => {
 	assert.equal(leftHandSource.includes("search-submit-spinner"), true);
 	assert.equal(leftHandSource.includes("Searching..."), true);
 	assert.equal(leftHandSource.includes("aria-busy"), true);
-	assert.equal(leftHandSource.includes("readOnly = true"), true);
+	assert.equal(leftHandSource.includes("readOnly = true"), false);
 });
 
 test("welcome setup copy uses reader-first launch wording", () => {
