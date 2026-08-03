@@ -181,6 +181,11 @@ try {
 	}
 	.shelf-menu {
 		--shelf-menu-gap: 0.38rem;
+		--shelf-menu-viewport-padding: 8px;
+		--shelf-safe-area-top: env(safe-area-inset-top, 0px);
+		--shelf-safe-area-right: env(safe-area-inset-right, 0px);
+		--shelf-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+		--shelf-safe-area-left: env(safe-area-inset-left, 0px);
 		--shelf-menu-caret-size: 10px;
 		--shelf-caret-left: 22px;
 		--shelf-caret-top: 22px;
@@ -189,8 +194,8 @@ try {
 		left: var(--shelf-menu-x, 0) !important;
 		right: auto !important;
 		min-width: 180px;
-		max-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 16px);
-		max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px);
+		max-width: calc(100vw - var(--shelf-safe-area-left) - var(--shelf-safe-area-right) - (var(--shelf-menu-viewport-padding) * 2));
+		max-height: calc(100vh - var(--shelf-safe-area-top) - var(--shelf-safe-area-bottom) - (var(--shelf-menu-viewport-padding) * 2));
 		overflow: auto;
 		overscroll-behavior: contain;
 		background: #fff;
