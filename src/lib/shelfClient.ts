@@ -324,7 +324,69 @@ type ShelfMenuViewport = {
 	height: number;
 };
 
+type ShelfMenuRect = Pick<DOMRect, "top" | "bottom" | "left" | "right" | "width" | "height">;
+
+type ShelfMenuPositionInput = {
+	viewport: ShelfMenuViewport;
+	triggerRect: ShelfMenuRect;
+	menuWidth: number;
+	menuHeight: number;
+	margin: number;
+	gap: number;
+	safeTop: number;
+	safeRight: number;
+	safeBottom: number;
+	safeLeft: number;
+};
+
+export function calculateShelfMenuPosition({
+	viewport,
+	triggerRect,
+	menuWidth,
+	menuHeight,
+	margin,
+	gap,
+	safeTop,
+	safeRight,
+	safeBottom,
+	safeLeft
+}: ShelfMenuPositionInput) {
+	const triggerCenterX = triggerRect.left + triggerRect.width / 2;
+	const triggerCenterY = triggerRect.top + triggerRect.height / 2;
+	const leftMin = safeLeft + margin;
+	const leftMax = viewport.width - safeRight - margin - menuWidth;
+	const topMin = safeTop + margin;
+	const topMax = viewport.height - safeBottom - margin - menuHeight;
+	const spaceAbove = triggerRect.top - topMin;
+	const spaceBelow = viewport.height - safeBottom - margin - triggerRect.bottom;
+	let placement = "bottom";
+	let x = triggerRect.left;
+	let y = triggerRect.bottom + gap;
+
+	if (spaceBelow < menuHeight + gap && spaceAbove > spaceBelow) {
+		placement = "top";
+		y = triggerRect.top - menuHeight - gap;
+	}
+
+	x = clamp(x, leftMin, Math.max(leftMin, leftMax));
+	y = clamp(y, topMin, Math.max(topMin, topMax));
+
+	const caretLeft = clamp(triggerCenterX - x - 5, 12, Math.max(12, menuWidth - 22));
+	const caretTop = clamp(triggerCenterY - y - 5, 12, Math.max(12, menuHeight - 22));
+
+	return {
+		x,
+		y,
+		placement,
+		caretLeft,
+		caretTop,
+		triggerCenterX,
+		triggerCenterY
+	};
+}
+
 let activeShelfAnchor: HTMLElement | null = null;
+let shelfMenuTrackingActive = false;
 
 function shelfMenuViewport(): ShelfMenuViewport {
 	const viewport = window.visualViewport;
@@ -378,32 +440,58 @@ function positionShelfMenu(dropdown: Element, anchor: HTMLElement | null = activ
 	const menuRect = menu.getBoundingClientRect();
 	const menuWidth = menuRect.width;
 	const menuHeight = menuRect.height;
-	const triggerCenterX = triggerRect.left + triggerRect.width / 2;
-	const leftMin = safeLeft + margin;
-	const leftMax = viewport.width - safeRight - margin - menuWidth;
-	const topMin = safeTop + margin;
-	const topMax = viewport.height - safeBottom - margin - menuHeight;
-	const spaceAbove = triggerRect.top - topMin;
-	const spaceBelow = viewport.height - safeBottom - margin - triggerRect.bottom;
-	let placement = "bottom";
-	let x = triggerRect.left;
-	let y = triggerRect.bottom + gap;
-
-	if (spaceBelow < menuHeight + gap && spaceAbove > spaceBelow) {
-		placement = "top";
-		y = triggerRect.top - menuHeight - gap;
-	}
-
-	x = clamp(x, leftMin, Math.max(leftMin, leftMax));
-	y = clamp(y, topMin, Math.max(topMin, topMax));
+	const { x, y, placement, caretLeft, caretTop } = calculateShelfMenuPosition({
+		viewport,
+		triggerRect,
+		menuWidth,
+		menuHeight,
+		margin,
+		gap,
+		safeTop,
+		safeRight,
+		safeBottom,
+		safeLeft
+	});
 	menu.style.setProperty("--shelf-menu-x", `${Math.round(x)}px`);
 	menu.style.setProperty("--shelf-menu-y", `${Math.round(y)}px`);
 	menu.dataset.placement = placement;
 
-	const caretLeft = clamp(triggerCenterX - x - 5, 12, Math.max(12, menuWidth - 22));
-	const caretTop = clamp(triggerCenterY - y - 5, 12, Math.max(12, menuHeight - 22));
 	menu.style.setProperty("--shelf-caret-left", `${Math.round(caretLeft)}px`);
 	menu.style.setProperty("--shelf-caret-top", `${Math.round(caretTop)}px`);
+}
+
+function repositionOpenShelfMenu() {
+	if (typeof document === "undefined") return;
+	if (!(activeShelfAnchor instanceof HTMLElement) || !activeShelfAnchor.isConnected) {
+		closeShelfMenus(Array.from(document.querySelectorAll(".shelf-dropdown")));
+		return;
+	}
+	const dropdown = activeShelfAnchor.closest(".shelf-dropdown");
+	const menu = dropdown?.querySelector(".shelf-menu");
+	if (!(dropdown instanceof HTMLElement) || !(menu instanceof HTMLElement) || menu.hidden) {
+		activeShelfAnchor = null;
+		stopShelfMenuTracking();
+		return;
+	}
+	positionShelfMenu(dropdown, activeShelfAnchor);
+}
+
+function startShelfMenuTracking() {
+	if (typeof window === "undefined" || shelfMenuTrackingActive) return;
+	shelfMenuTrackingActive = true;
+	window.addEventListener("resize", repositionOpenShelfMenu, { passive: true });
+	window.addEventListener("scroll", repositionOpenShelfMenu, { passive: true });
+	window.visualViewport?.addEventListener("resize", repositionOpenShelfMenu, { passive: true });
+	window.visualViewport?.addEventListener("scroll", repositionOpenShelfMenu, { passive: true });
+}
+
+function stopShelfMenuTracking() {
+	if (typeof window === "undefined" || !shelfMenuTrackingActive) return;
+	shelfMenuTrackingActive = false;
+	window.removeEventListener("resize", repositionOpenShelfMenu);
+	window.removeEventListener("scroll", repositionOpenShelfMenu);
+	window.visualViewport?.removeEventListener("resize", repositionOpenShelfMenu);
+	window.visualViewport?.removeEventListener("scroll", repositionOpenShelfMenu);
 }
 
 export function closeShelfMenus(shelfDropdowns: Element[], options?: { restoreFocus?: boolean }) {
@@ -423,6 +511,7 @@ export function closeShelfMenus(shelfDropdowns: Element[], options?: { restoreFo
 		if (trigger instanceof HTMLElement) trigger.setAttribute("aria-expanded", "false");
 		if (activeShelfAnchor instanceof HTMLElement && dropdown.contains(activeShelfAnchor)) activeShelfAnchor = null;
 	}
+	stopShelfMenuTracking();
 	if (options?.restoreFocus) focusTarget?.focus({ preventScroll: true });
 }
 
@@ -488,22 +577,13 @@ export async function toggleShelfMenu(dropdown: Element, shelfDropdowns: Element
 	trigger.setAttribute("aria-expanded", willOpen ? "true" : "false");
 	if (willOpen) {
 		activeShelfAnchor = trigger;
+		startShelfMenuTracking();
 		positionShelfMenu(dropdown, trigger);
 		window.requestAnimationFrame(() => positionShelfMenu(dropdown, trigger));
 	}
 }
 
 if (typeof document !== "undefined") {
-	const repositionOpenShelfMenu = () => {
-		if (!(activeShelfAnchor instanceof HTMLElement)) return;
-		const dropdown = activeShelfAnchor.closest(".shelf-dropdown");
-		const menu = dropdown?.querySelector(".shelf-menu");
-		if (!(dropdown instanceof HTMLElement) || !(menu instanceof HTMLElement) || menu.hidden) {
-			activeShelfAnchor = null;
-			return;
-		}
-		positionShelfMenu(dropdown, activeShelfAnchor);
-	};
 	document.addEventListener("keydown", (event) => {
 		const target = event.target instanceof HTMLElement ? event.target : null;
 		if (event.key === "Escape") {
@@ -548,10 +628,6 @@ if (typeof document !== "undefined") {
 			items[items.length - 1]?.focus({ preventScroll: true });
 		}
 	});
-	window.addEventListener("resize", repositionOpenShelfMenu, { passive: true });
-	window.addEventListener("scroll", repositionOpenShelfMenu, { passive: true });
-	window.visualViewport?.addEventListener("resize", repositionOpenShelfMenu, { passive: true });
-	window.visualViewport?.addEventListener("scroll", repositionOpenShelfMenu, { passive: true });
 }
 
 export async function syncShelfEntryToServer(entry: unknown, redirectPath = "/settings#account-settings") {
