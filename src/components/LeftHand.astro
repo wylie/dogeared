@@ -117,7 +117,7 @@ const adminNavItems: NavItem[] = [
         <input id="left-hand-search" type="search" name="q" placeholder="Search for Books" value={query} />
         <span class="search-submit-status" data-search-submit-status role="status" aria-live="polite" hidden>
           <span class="search-submit-spinner" aria-hidden="true"></span>
-          <span class="search-submit-label">Searching...</span>
+          <span class="search-submit-label visually-hidden">Searching books.</span>
         </span>
       </div>
     </form>
@@ -430,7 +430,7 @@ const adminNavItems: NavItem[] = [
     width: 100%;
     border: 1px solid rgba(87, 117, 144, 0.18);
     border-radius: var(--radius-pill);
-    padding: 0.58rem 0.95rem;
+    padding: 0.58rem calc(var(--search-clear-control-space) + var(--search-spinner-control-space) + 0.75rem) 0.58rem 0.95rem;
     margin-top: 1rem;
     background: rgba(255, 255, 255, 0.72);
     color: var(--color-text);
@@ -444,6 +444,7 @@ const adminNavItems: NavItem[] = [
   }
   .search-input-wrap {
     --search-clear-control-space: 2.35rem;
+    --search-spinner-control-space: 1.35rem;
     position: relative;
     width: 100%;
   }
@@ -455,8 +456,7 @@ const adminNavItems: NavItem[] = [
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.34rem;
-    max-width: min(8rem, calc(100% - var(--search-clear-control-space) - 1rem));
+    width: var(--search-spinner-control-space);
     pointer-events: none;
     color: var(--color-text-muted);
     font-size: 0.78rem;
@@ -482,9 +482,7 @@ const adminNavItems: NavItem[] = [
     to { transform: rotate(360deg); }
   }
   .search-submit-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    color: inherit;
   }
   .visually-hidden {
     position: absolute;
@@ -655,7 +653,7 @@ const adminNavItems: NavItem[] = [
     }
     #left-hand-nav input[type="search"] {
       margin-top: 0;
-      padding: 0.4rem 0.8rem;
+      padding: 0.4rem calc(var(--search-clear-control-space) + var(--search-spinner-control-space) + 0.55rem) 0.4rem 0.8rem;
       border: var(--border-strong);
     }
     #left-hand-nav .primary-links {
@@ -823,11 +821,6 @@ const adminNavItems: NavItem[] = [
     }
     #left-hand-nav h2 a.special-font {
       font-size: clamp(2.1rem, 9.2vw, 2.6rem);
-    }
-  }
-  @media (max-width: 360px) {
-    #left-hand-nav .search-submit-label {
-      display: none;
     }
   }
 </style>

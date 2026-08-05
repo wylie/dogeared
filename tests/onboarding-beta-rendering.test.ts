@@ -40,7 +40,8 @@ test("search page empty states are actionable", () => {
 	assert.equal(leftHandSource.includes("data-search-form"), true);
 	assert.equal(leftHandSource.includes("search-input-wrap"), true);
 	assert.equal(leftHandSource.includes("search-submit-spinner"), true);
-	assert.equal(leftHandSource.includes("Searching..."), true);
+	assert.equal(leftHandSource.includes("Searching books."), true);
+	assert.equal(leftHandSource.includes("Searching..."), false);
 	assert.equal(leftHandSource.includes("aria-busy"), true);
 	assert.equal(leftHandSource.includes("readOnly = true"), false);
 });

@@ -50,94 +50,100 @@ try {
 	class={`shelf-dropdown${hasInitialStatus ? " is-shelved" : ""}`}
 	{...normalizedAttrs}
 >
-	<button
-		type="button"
-		class="shelf-trigger shelf-fab"
-		data-action="toggle-shelf"
-		data-status={initialStatus}
-		data-display-icon={displayIconOverride}
-		aria-expanded="false"
-		aria-haspopup="menu"
-		aria-controls={menuId}
-		aria-label={`Shelf: ${initialLabel}. Open shelf options`}
-		title={`Shelf: ${initialLabel}`}
-	>
-		<span class="material-icons shelf-plus" aria-hidden="true">{initialIcon}</span>
-	</button>
-	{!hideLabel && <p class="shelf-state">{initialLabel}</p>}
-	<div id={menuId} class="shelf-menu" role="menu" aria-label="Shelf options" hidden>
-		<span class="shelf-menu-caret" aria-hidden="true"></span>
+	<div class="shelf-button-wrapper">
 		<button
 			type="button"
-			class={`shelf-option${initialStatus === "want_to_read" ? " is-current" : ""}`}
-			data-action="set-shelf"
-			data-status="want_to_read"
-			role="menuitem"
+			class="shelf-trigger shelf-fab"
+			data-action="toggle-shelf"
+			data-status={initialStatus}
+			data-display-icon={displayIconOverride}
+			aria-expanded="false"
+			aria-haspopup="menu"
+			aria-controls={menuId}
+			aria-label={`Shelf: ${initialLabel}. Open shelf options`}
+			title={`Shelf: ${initialLabel}`}
 		>
-			<span class="material-icons shelf-option-icon" aria-hidden="true">add</span>
-			<span>Want to Read</span>
+			<span class="material-icons shelf-plus" aria-hidden="true">{initialIcon}</span>
 		</button>
-		<button
-			type="button"
-			class={`shelf-option${initialStatus === "reading" ? " is-current" : ""}`}
-			data-action="set-shelf"
-			data-status="reading"
-			role="menuitem"
-		>
-			<span class="material-icons shelf-option-icon" aria-hidden="true">menu_book</span>
-			<span>Currently Reading</span>
-		</button>
-		<button
-			type="button"
-			class={`shelf-option${initialStatus === "finished" ? " is-current" : ""}`}
-			data-action="set-shelf"
-			data-status="finished"
-			role="menuitem"
-		>
-			<span class="material-icons shelf-option-icon" aria-hidden="true">check</span>
-			<span>Read</span>
-		</button>
-		<div data-custom-shelf-options>
-			{customShelves.length > 0 && (
-				<>
-					<div class="shelf-option-divider" role="separator" aria-hidden="true"></div>
-					{customShelves.map((shelf) => (
-						<button
-							type="button"
-							class={`shelf-option${currentCustomShelfId === shelf.id ? " is-current" : ""}`}
-							data-action="assign-custom-shelf"
-							data-shelf-id={String(shelf.id)}
-							role="menuitem"
-						>
-							<span class="material-icons shelf-option-icon" aria-hidden="true">{shelf.icon}</span>
-							<span>{shelf.name}</span>
-						</button>
-					))}
-				</>
-			)}
+		<div id={menuId} class="shelf-menu" role="menu" aria-label="Shelf options" hidden>
+			<button
+				type="button"
+				class={`shelf-option${initialStatus === "want_to_read" ? " is-current" : ""}`}
+				data-action="set-shelf"
+				data-status="want_to_read"
+				role="menuitem"
+			>
+				<span class="material-icons shelf-option-icon" aria-hidden="true">add</span>
+				<span>Want to Read</span>
+			</button>
+			<button
+				type="button"
+				class={`shelf-option${initialStatus === "reading" ? " is-current" : ""}`}
+				data-action="set-shelf"
+				data-status="reading"
+				role="menuitem"
+			>
+				<span class="material-icons shelf-option-icon" aria-hidden="true">menu_book</span>
+				<span>Currently Reading</span>
+			</button>
+			<button
+				type="button"
+				class={`shelf-option${initialStatus === "finished" ? " is-current" : ""}`}
+				data-action="set-shelf"
+				data-status="finished"
+				role="menuitem"
+			>
+				<span class="material-icons shelf-option-icon" aria-hidden="true">check</span>
+				<span>Read</span>
+			</button>
+			<div data-custom-shelf-options>
+				{customShelves.length > 0 && (
+					<>
+						<div class="shelf-option-divider" role="separator" aria-hidden="true"></div>
+						{customShelves.map((shelf) => (
+							<button
+								type="button"
+								class={`shelf-option${currentCustomShelfId === shelf.id ? " is-current" : ""}`}
+								data-action="assign-custom-shelf"
+								data-shelf-id={String(shelf.id)}
+								role="menuitem"
+							>
+								<span class="material-icons shelf-option-icon" aria-hidden="true">{shelf.icon}</span>
+								<span>{shelf.name}</span>
+							</button>
+						))}
+					</>
+				)}
+			</div>
+			<div class="shelf-option-divider" role="separator" aria-hidden="true"></div>
+			<button
+				type="button"
+				class="shelf-option shelf-option-danger"
+				data-action="remove-from-shelves"
+				role="menuitem"
+			>
+				<span class="material-icons shelf-option-icon" aria-hidden="true">remove_circle</span>
+				<span>Remove from Shelves</span>
+			</button>
 		</div>
-		<div class="shelf-option-divider" role="separator" aria-hidden="true"></div>
-		<button
-			type="button"
-			class="shelf-option shelf-option-danger"
-			data-action="remove-from-shelves"
-			role="menuitem"
-		>
-			<span class="material-icons shelf-option-icon" aria-hidden="true">remove_circle</span>
-			<span>Remove from Shelves</span>
-		</button>
 	</div>
+	{!hideLabel && <p class="shelf-state">{initialLabel}</p>}
 	<p class="shelf-feedback" role="status" aria-live="polite" hidden></p>
 </div>
 
 <style>
 	.shelf-dropdown {
-		position: relative;
 		display: inline-flex;
 		flex-direction: column;
 		align-items: flex-start;
 		width: 44px;
 		min-width: 44px;
+		overflow: visible;
+	}
+	.shelf-button-wrapper {
+		position: relative;
+		width: var(--shelf-trigger-width, 44px);
+		min-width: var(--shelf-trigger-min-width, 44px);
 		overflow: visible;
 	}
 	.shelf-dropdown .shelf-trigger.shelf-fab {
@@ -187,14 +193,13 @@ try {
 		--shelf-safe-area-right: env(safe-area-inset-right, 0px);
 		--shelf-safe-area-bottom: env(safe-area-inset-bottom, 0px);
 		--shelf-safe-area-left: env(safe-area-inset-left, 0px);
-		--shelf-menu-caret-size: 10px;
-		position: fixed;
-		top: 0;
-		left: 0 !important;
-		right: auto !important;
+		position: absolute;
+		top: calc(100% + var(--shelf-menu-gap));
+		left: 0;
+		right: auto;
 		min-width: 180px;
-		max-width: calc(100vw - var(--shelf-safe-area-left) - var(--shelf-safe-area-right) - (var(--shelf-menu-viewport-padding) * 2));
-		max-height: calc(100vh - var(--shelf-safe-area-top) - var(--shelf-safe-area-bottom) - (var(--shelf-menu-viewport-padding) * 2));
+		max-width: calc(100vw - var(--shelf-menu-viewport-padding) * 2);
+		max-height: min(360px, calc(100vh - var(--shelf-menu-viewport-padding) * 2));
 		overflow: auto;
 		overscroll-behavior: contain;
 		background: #fff;
@@ -204,18 +209,13 @@ try {
 		padding: 0.28rem;
 		z-index: 120;
 	}
-	.shelf-menu-caret {
-		position: absolute;
-		width: var(--shelf-menu-caret-size);
-		height: var(--shelf-menu-caret-size);
-		background: #fff;
-		box-shadow: -2px -2px 3px rgba(31, 41, 55, 0.04);
-		transform: rotate(45deg);
-		pointer-events: none;
+	.shelf-menu[data-align="end"] {
+		left: auto;
+		right: 0;
 	}
-	.shelf-menu[data-placement="top"] .shelf-menu-caret,
-	.shelf-menu[data-placement="left"] .shelf-menu-caret {
-		box-shadow: 2px 2px 3px rgba(31, 41, 55, 0.04);
+	.shelf-menu[data-placement="top"] {
+		top: auto;
+		bottom: calc(100% + var(--shelf-menu-gap));
 	}
 	.shelf-menu [data-custom-shelf-options] {
 		display: contents;

@@ -55,59 +55,50 @@ test("buildShelfEntryFromRecord returns normalized shelf entry", () => {
 	assert.equal(entry.isbn13, "9780000000002");
 });
 
-test("shelf menus use anchored viewport positioning and accessible menu semantics", () => {
+test("shelf menus render locally inside each ShelfButton wrapper", () => {
 	const clientSource = readFileSync(new URL("../src/lib/shelfClient.ts", import.meta.url), "utf8");
 	const dropdownSource = readFileSync(new URL("../src/components/ShelfDropdown.astro", import.meta.url), "utf8");
 	const cardSource = readFileSync(new URL("../src/components/BookCard.astro", import.meta.url), "utf8");
 
-	assert.match(clientSource, /function positionShelfMenu/);
-	assert.match(clientSource, /from "@floating-ui\/dom"/);
-	assert.match(clientSource, /computePosition\(anchor, menu/);
-	assert.match(clientSource, /placement: "bottom-start"/);
-	assert.match(clientSource, /strategy: "fixed"/);
-	assert.match(clientSource, /offset\(gap\)/);
-	assert.match(clientSource, /flip\(/);
-	assert.match(clientSource, /shift\(/);
-	assert.match(clientSource, /autoUpdate\(activeShelfAnchor, activeShelfMenu/);
-	assert.match(clientSource, /getBoundingClientRect\(\)/);
-	assert.match(clientSource, /let activeShelfAnchor: HTMLElement \| null = null/);
+	assert.doesNotMatch(clientSource, /from "@floating-ui\/dom"/);
+	assert.doesNotMatch(clientSource, /computePosition|autoUpdate|portalShelfMenu|document\.body\.append\(menu\)/);
+	assert.doesNotMatch(clientSource, /triggerCenterY|calculateShelfMenuPosition|--shelf-menu-x|--shelf-menu-y/);
+	assert.match(clientSource, /function placeShelfMenu/);
+	assert.match(clientSource, /trigger\.closest\("\.shelf-button-wrapper"\)/);
+	assert.match(clientSource, /menu\.dataset\.align = "end"/);
+	assert.match(clientSource, /menu\.dataset\.placement = "top"/);
+	assert.match(clientSource, /menu\.dataset\.placement = "bottom"/);
+	assert.match(clientSource, /let activeShelfTrigger: HTMLElement \| null = null/);
 	assert.match(clientSource, /let activeShelfMenu: HTMLElement \| null = null/);
-	assert.match(clientSource, /document\.body\.append\(menu\)/);
 	assert.match(clientSource, /resolveShelfDropdownFromTarget/);
-	assert.match(clientSource, /isTriggerInViewport\(triggerRect, viewport\)/);
-	assert.match(clientSource, /--shelf-safe-area-left/);
-	assert.match(clientSource, /menu\.style\.minWidth = `\$\{Math\.min\(180, availableWidth\)\}px`/);
-	assert.match(clientSource, /activeShelfAnchor = trigger/);
+	assert.match(clientSource, /activeShelfTrigger = trigger/);
 	assert.match(clientSource, /activeShelfMenu = menu/);
-	assert.match(clientSource, /startShelfMenuTracking\(\)/);
-	assert.match(clientSource, /stopShelfMenuTracking\(\)/);
-	assert.match(clientSource, /positionShelfMenu\(trigger, menu\)/);
-	assert.match(clientSource, /function repositionOpenShelfMenu/);
-	assert.match(clientSource, /data-placement/);
 	assert.match(clientSource, /restoreFocus/);
+	assert.match(dropdownSource, /class="shelf-button-wrapper"/);
 	assert.match(dropdownSource, /aria-haspopup="menu"/);
 	assert.match(dropdownSource, /role="menu"/);
 	assert.match(dropdownSource, /role="menuitem"/);
-	assert.match(dropdownSource, /class="shelf-menu-caret"/);
+	assert.match(dropdownSource, /\.shelf-button-wrapper\s*{[^}]*position: relative;/s);
 	assert.match(dropdownSource, /--shelf-menu-viewport-padding: 8px/);
-	assert.match(dropdownSource, /--shelf-safe-area-left: env\(safe-area-inset-left, 0px\)/);
-	assert.match(dropdownSource, /position: fixed/);
-	assert.doesNotMatch(cardSource, /\.shelf-dropdown \.shelf-menu\)[\s\S]*top: calc\(100% \+ 4px\)/);
+	assert.match(dropdownSource, /\.shelf-menu\s*{[^}]*position: absolute;/s);
+	assert.match(dropdownSource, /\.shelf-menu\s*{[^}]*top: calc\(100% \+ var\(--shelf-menu-gap\)\);/s);
+	assert.match(dropdownSource, /\.shelf-menu\s*{[^}]*left: 0;/s);
+	assert.match(dropdownSource, /\.shelf-menu\[data-align="end"\]\s*{[^}]*right: 0;/s);
+	assert.match(dropdownSource, /\.shelf-menu\[data-placement="top"\]\s*{[^}]*bottom: calc\(100% \+ var\(--shelf-menu-gap\)\);/s);
+	assert.doesNotMatch(dropdownSource, /shelf-menu-caret|position: fixed/);
+	assert.match(cardSource, /\.book-card:has\(\.shelf-menu:not\(\[hidden\]\)\)\s*{[^}]*z-index: 50;/s);
 });
 
-test("shelf menus use the clicked ShelfButton as the Floating UI reference element", () => {
+test("shelf menus preserve local trigger state without global menu reuse", () => {
 	const clientSource = readFileSync(new URL("../src/lib/shelfClient.ts", import.meta.url), "utf8");
 
 	assert.match(clientSource, /const trigger = dropdown\.querySelector\('\[data-action="toggle-shelf"\]'\)/);
-	assert.match(clientSource, /activeShelfAnchor = trigger/);
+	assert.match(clientSource, /activeShelfTrigger = trigger/);
 	assert.match(clientSource, /activeShelfDropdown = dropdown/);
 	assert.match(clientSource, /activeShelfMenu = menu/);
-	assert.match(clientSource, /portalShelfMenu\(dropdown, menu\)/);
-	assert.match(clientSource, /await positionShelfMenu\(trigger, menu\)/);
-	assert.match(clientSource, /computePosition\(anchor, menu/);
-	assert.doesNotMatch(clientSource, /triggerCenterY/);
-	assert.doesNotMatch(clientSource, /calculateShelfMenuPosition/);
-	assert.doesNotMatch(clientSource, /--shelf-menu-x|--shelf-menu-y/);
+	assert.match(clientSource, /closeShelfMenus\(shelfDropdowns\)/);
+	assert.match(clientSource, /placeShelfMenu\(trigger, menu\)/);
+	assert.doesNotMatch(clientSource, /activeShelfAnchor|portalShelfMenu|computePosition|document\.body\.append\(menu\)/);
 });
 
 test("syncShelfEntryToServer reports unauthorized and sets redirect", async () => {
