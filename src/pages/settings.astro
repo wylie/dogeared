@@ -258,6 +258,10 @@ const sectionLinks = [
 					<input type="checkbox" id="allow-follow-requests" checked />
 					<span>Allow other readers to follow me</span>
 				</label>
+				<label class="checkbox-row">
+					<input type="checkbox" id="show-achievements" checked />
+					<span>Show earned achievements on my public profile</span>
+				</label>
 			</div>
 		</section>
 
@@ -900,6 +904,7 @@ const sectionLinks = [
 	const shareActivityCheckbox = document.getElementById("share-activity");
 	const allowDiscoveryCheckbox = document.getElementById("allow-discovery");
 	const allowFollowRequestsCheckbox = document.getElementById("allow-follow-requests");
+	const showAchievementsCheckbox = document.getElementById("show-achievements");
 	const notificationCategoryCommunity = document.getElementById("notification-category-community");
 	const notificationCategoryReading = document.getElementById("notification-category-reading");
 	const notificationCategoryDiscovery = document.getElementById("notification-category-discovery");
@@ -1292,7 +1297,8 @@ const sectionLinks = [
 				shareLocation: !!(shareLocationCheckbox instanceof HTMLInputElement && shareLocationCheckbox.checked),
 				shareActivity: !!(shareActivityCheckbox instanceof HTMLInputElement && shareActivityCheckbox.checked),
 				allowDiscovery: !!(allowDiscoveryCheckbox instanceof HTMLInputElement && allowDiscoveryCheckbox.checked),
-				allowFollowRequests: !!(allowFollowRequestsCheckbox instanceof HTMLInputElement && allowFollowRequestsCheckbox.checked)
+				allowFollowRequests: !!(allowFollowRequestsCheckbox instanceof HTMLInputElement && allowFollowRequestsCheckbox.checked),
+				showAchievements: !!(showAchievementsCheckbox instanceof HTMLInputElement && showAchievementsCheckbox.checked)
 			},
 			readingDefaults: {
 				defaultShelf: String(defaultShelfSelect instanceof HTMLSelectElement ? defaultShelfSelect.value : "want_to_read"),
@@ -1338,6 +1344,7 @@ const sectionLinks = [
 		if (shareActivityCheckbox instanceof HTMLInputElement) shareActivityCheckbox.checked = !!privacy.shareActivity;
 		if (allowDiscoveryCheckbox instanceof HTMLInputElement) allowDiscoveryCheckbox.checked = privacy.allowDiscovery !== false;
 		if (allowFollowRequestsCheckbox instanceof HTMLInputElement) allowFollowRequestsCheckbox.checked = privacy.allowFollowRequests !== false;
+		if (showAchievementsCheckbox instanceof HTMLInputElement) showAchievementsCheckbox.checked = privacy.showAchievements !== false;
 
 		const readingDefaults = preferences?.readingDefaults || {};
 		if (defaultShelfSelect instanceof HTMLSelectElement) defaultShelfSelect.value = String(readingDefaults.defaultShelf || "want_to_read");

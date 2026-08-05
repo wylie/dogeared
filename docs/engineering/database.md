@@ -457,6 +457,39 @@ Relationships:
 - Joins `app_user` to `app_user`.
 - Powers follow counts, Following page, reader suggestions exclusions, and profile relationships.
 
+## Achievements
+
+Entities: `achievement_definition`, `user_achievement`
+
+`achievement_definition` is synced from the shared application registry and stores:
+
+- Unique achievement key.
+- Achievement type.
+- Title and description.
+- Material icon identifier.
+- Accent color token.
+- Criteria metadata.
+- Repeatable flag.
+- Optional related Work or Series behavior.
+
+`user_achievement` stores:
+
+- Reader.
+- Achievement definition key.
+- Earned timestamp.
+- Optional related Work.
+- Optional related Series.
+- Visibility (`public` or `hidden`).
+- Structured metadata used for display and backfill auditing.
+
+Relationships:
+
+- Earned achievements belong to `app_user`.
+- Earned achievements reference `achievement_definition`.
+- Optional Work and Series references are nullable on catalog deletion.
+- A unique scoped index prevents duplicate one-time awards for the same user, definition, related Series, and related Work.
+- Achievement-backed notifications reference the earned achievement and definition through `user_notification.metadata`.
+
 ## Notifications
 
 Entity: `user_notification`
@@ -466,11 +499,12 @@ Created lazily by notification service, activity APIs, and admin code. Stores:
 - Recipient user.
 - Optional actor user.
 - Optional activity.
-- Type: `user_follow`, `activity_like`, `activity_comment`, `activity_reply`, `reading_goal_completed`, `reading_streak_milestone`, `series_finished`, `discovery_want_to_read_trending`, `author_new_book`, `import_completed`, or `goodreads_import_completed`.
+- Type: `user_follow`, `activity_like`, `activity_comment`, `activity_reply`, `reading_goal_completed`, achievement-backed `reading_streak_milestone`, achievement-backed `series_finished`, `discovery_want_to_read_trending`, `author_new_book`, `import_completed`, or `goodreads_import_completed`.
 - Category: Community, Reading, Discovery, Milestones, or System.
 - Title, short body, icon, and action URL.
 - Group key and actor count for low-noise grouping.
 - Extensible metadata.
+- Achievement metadata when applicable, including achievement ID, definition key, and accent color token.
 - Created time.
 - Optional read time.
 - Optional deleted time for soft deletion.

@@ -24,6 +24,13 @@
   --color-chip-genre: #eef6ea;
   --color-chip-topic: #edf5fb;
   --color-rating: #9b4818;
+  --achievement-streak-7: #9b4818;
+  --achievement-streak-14: #a64416;
+  --achievement-streak-30: #b45309;
+  --achievement-streak-60: #b42318;
+  --achievement-streak-100: #9f1239;
+  --achievement-streak-365: #7c2d12;
+  --achievement-series-completion: #1f5d87;
   --color-text: #1e262d;
   --color-text-muted: #52606d;
   --color-text-subtle: #586470;

@@ -40,7 +40,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Authors: searchable and sortable author index.
 - Author detail: author profile, editorial collections featuring the author, and a bibliography grouped by series first, with standalone books only when no series relationship is known.
 - Editorial Collections: curated book lists with editorial introductions, book ordering, notes, quotes, and shelf controls. Collection routes remain available, but Collections is hidden from primary navigation until there is useful published content to browse.
-- Profiles: public reader identity and current reading state, including profile card, bio, favorite book/author, concise reading goal summary, shelf summary, current reads, recent activity, and settings access.
+- Profiles: public reader identity and current reading state, including profile card, bio, favorite book/author, concise reading goal summary, shelf summary, public achievement badges, current reads, recent activity, and settings access.
 - My Reading Life: private historical reflection across finished books, pages, streaks, goals, ratings, timeline, reading calendar, genre and author history, milestones, fun statistics, and yearly summaries.
 - Reading Journal: private searchable notebook for what a reader was thinking while reading, including dated entries, optional book context, one optional reading position, moods, and personal tags.
 - Following: reader suggestions, current follows, and activity from followed readers.
@@ -200,9 +200,21 @@ Admins manage collections from `/admin/collections`, where they can create, edit
 
 Authors have an index page, canonical author detail routes, optional bio/photo/source fields, reader and shelf counts, editorial collection references, and book lists. A legacy author query route redirects to the canonical author route.
 
+### Achievements
+
+DogEared persists meaningful non-competitive reading achievements as profile badges. The shared achievement-definition registry stores the achievement key, type, title, description, icon identifier, accent color token, criteria, repeatability, and related Work or Series behavior. Earned achievements store the reader, definition, earned date, optional related Work or Series, visibility, and display metadata.
+
+The same definition powers profile badges, notification icon and accent treatment, badge popovers, descriptions, backfill, and future listings. Initial achievements cover 7, 14, 30, 60, 100, and 365 day reading streaks plus finishing every currently available book in a series. Achievements do not add points, rankings, leaderboards, or competitive scoring.
+
+Achievement notifications are created only after the server verifies eligibility, persists the earned achievement, and links the notification metadata to the achievement definition and earned row. Notification Open actions deep-link to the profile Achievements section and highlight the earned badge. Deleting a notification does not delete the achievement.
+
+Profile badges use shared Material icon identifiers and achievement color tokens from DogEared's palette. Streak badges use a related warm progression by threshold, while series completion uses a contrasting literary blue. Badge details explain the description, earned date, related Series or Work, and how the badge can be earned without exposing private reading-session history or incomplete progress.
+
+Readers can show or hide all achievements on their public profile from Settings. Earned achievements default to public unless the reader hides the section. Historical backfill is handled by `npm run backfill:achievements`, which defaults to dry run, reports eligible users, proposed awards, existing conflicts, and only writes rows with `-- --apply`.
+
 ### Profiles
 
-Profiles show who a reader is and what they are reading now. They include reader identity, bio, favorite book and author, shelf counts, followers/following counts, a concise reading goal summary, custom shelves, current reads, recent activity, profile Reviews, default shelf sections, and settings/profile edit access. Owners can edit profile information directly from their profile page and reorder Reviews alongside shelf sections.
+Profiles show who a reader is and what they are reading now. They include reader identity, bio, favorite book and author, shelf counts, followers/following counts, a concise reading goal summary, custom shelves, achievement badges, current reads, recent activity, profile Reviews, default shelf sections, and settings/profile edit access. Owners can edit profile information directly from their profile page and reorder Achievements and Reviews alongside shelf sections.
 
 ### Shelves
 

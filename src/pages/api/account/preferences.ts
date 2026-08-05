@@ -12,6 +12,7 @@ type Preferences = {
 		shareActivity: boolean;
 		allowDiscovery: boolean;
 		allowFollowRequests: boolean;
+		showAchievements: boolean;
 	};
 	readingDefaults: {
 		defaultShelf: "want_to_read" | "reading" | "finished";
@@ -53,7 +54,8 @@ const DEFAULT_PREFERENCES: Preferences = {
 		shareLocation: true,
 		shareActivity: true,
 		allowDiscovery: true,
-		allowFollowRequests: true
+		allowFollowRequests: true,
+		showAchievements: true
 	},
 	readingDefaults: {
 		defaultShelf: "want_to_read",
@@ -137,7 +139,8 @@ function normalizePreferences(input: unknown): Preferences {
 			shareLocation: toBool(privacy.shareLocation, true),
 			shareActivity: toBool(privacy.shareActivity, true),
 			allowDiscovery: toBool(privacy.allowDiscovery, true),
-			allowFollowRequests: toBool(privacy.allowFollowRequests, true)
+			allowFollowRequests: toBool(privacy.allowFollowRequests, true),
+			showAchievements: toBool(privacy.showAchievements, true)
 		},
 		readingDefaults: {
 			defaultShelf,

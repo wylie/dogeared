@@ -73,9 +73,19 @@ Limitations: Avatar storage accepts data image or URL values in profile data; th
 
 Status: Complete
 
-Readers can set profiles public or private and control location sharing, activity sharing, discovery visibility, and follow availability.
+Readers can set profiles public or private and control location sharing, activity sharing, discovery visibility, follow availability, and whether earned achievements appear on the public profile.
 
 Limitations: Privacy settings are stored inside `profile_data.settings`, not a standalone table.
+
+### Profile Achievements
+
+Status: Complete
+
+Readers earn persistent achievement badges for meaningful, non-competitive reading milestones. Initial badges cover 7, 14, 30, 60, 100, and 365 day reading streaks plus finishing every currently available book in a series. Badges appear on the owner profile and, when public achievement visibility is enabled, on public profiles viewed by other readers.
+
+Each achievement comes from the shared achievement-definition registry, which owns the key, type, title, description, icon identifier, accent color token, criteria, repeatability, and related Series or Work behavior. The same definition powers the profile badge, badge detail popover, notification icon, notification accent, notification title, notification description, and historical backfill. Badge details explain how the achievement can be earned without exposing private journal entries, exact reading-session history, or incomplete progress.
+
+Limitations: Current controls support showing all earned achievements or hiding all achievements publicly. Per-badge visibility is stored in the earned achievement model for future use but is not yet exposed as a separate profile control.
 
 ### Followers Page
 
@@ -407,7 +417,7 @@ Status: Complete
 
 DogEared has a dedicated low-noise notification center for meaningful updates. Notifications are grouped by Today, This Week, and Earlier and include an icon, title, short description, timestamp, read/unread state, and optional action. Readers can open, mark read, mark all read, or delete notifications. The left navigation shows a subtle unread badge only when unread notifications exist.
 
-Supported v1 event types cover community updates (follows, likes, comments, replies), reading and milestone updates (goal completion, streak milestones, finished series), discovery updates (trending Want to Read books and favorite-author imports), and future-ready system imports. Similar events can be grouped within a configurable window so repeated likes or replies become one calm notification. Settings includes in-app category preferences for Community, Reading, Discovery, Milestones, and System. Admin includes a notification operations dashboard for sent today, unread count, common types, and volume over time.
+Supported v1 event types cover community updates (follows, likes, comments, replies), reading and milestone updates (goal completion, achievement-backed streak milestones, achievement-backed finished series), discovery updates (trending Want to Read books and favorite-author imports), and future-ready system imports. Achievement notifications use the same icon, accent color token, title, and description as the earned profile badge, then deep-link to the profile badge. Similar events can be grouped within a configurable window so repeated likes or replies become one calm notification. Settings includes in-app category preferences for Community, Reading, Discovery, Milestones, and System. Admin includes a notification operations dashboard for sent today, unread count, common types, and volume over time.
 
 Limitations: Email and push delivery are future expansion points; v1 is in-app only. Failed notification job reporting is represented as an admin-ready placeholder until asynchronous jobs exist.
 

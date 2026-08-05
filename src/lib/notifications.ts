@@ -1,4 +1,11 @@
 import type { NeonQueryFunction } from "@neondatabase/serverless";
+import {
+	awardAchievement,
+	achievementAnchor,
+	getAchievementDefinition,
+	getReadingStreakAchievementDefinition,
+	renderAchievementTitle
+} from "./achievements";
 
 export type NotificationCategory = "community" | "reading" | "discovery" | "milestones" | "system";
 
@@ -28,6 +35,8 @@ export type NotificationRecord = {
 	actorUsername: string;
 	actorCount: number;
 	bookTitle: string;
+	accentColorToken: string;
+	isAchievement: boolean;
 	groupLabel: "Today" | "This Week" | "Earlier";
 };
 
@@ -54,21 +63,19 @@ const typeCategory: Record<NotificationType, NotificationCategory> = {
 	activity_reply: "community",
 	reading_goal_completed: "milestones",
 	reading_streak_milestone: "milestones",
-	series_finished: "reading",
+	series_finished: "milestones",
 	discovery_want_to_read_trending: "discovery",
 	author_new_book: "discovery",
 	import_completed: "system",
 	goodreads_import_completed: "system"
 };
 
-const typeIcon: Record<NotificationType, string> = {
+const typeIcon: Partial<Record<NotificationType, string>> = {
 	user_follow: "person_add",
 	activity_like: "favorite",
 	activity_comment: "chat_bubble",
 	activity_reply: "forum",
 	reading_goal_completed: "flag",
-	reading_streak_milestone: "local_fire_department",
-	series_finished: "auto_stories",
 	discovery_want_to_read_trending: "explore",
 	author_new_book: "new_releases",
 	import_completed: "check_circle",
@@ -206,19 +213,44 @@ function bodyFor(input: {
 	bookTitle: string;
 	seriesName: string;
 	value: number;
+	achievementDefinitionKey?: string;
 }) {
 	const book = input.bookTitle || "your book";
+	const achievementDefinition = input.achievementDefinitionKey
+		? getAchievementDefinition(input.achievementDefinitionKey)
+		: undefined;
 	if (input.type === "user_follow") return "Open their profile to see what they are reading.";
 	if (input.type === "activity_like") return `Your review of ${book} resonated with another reader.`;
 	if (input.type === "activity_comment") return `There is a new comment on your review of ${book}.`;
 	if (input.type === "activity_reply") return `There is a new reply in a conversation about ${book}.`;
 	if (input.type === "reading_goal_completed") return "Your yearly goal is complete. Keep reading at your own pace.";
+	if (input.type === "reading_streak_milestone" && achievementDefinition) return achievementDefinition.description;
 	if (input.type === "reading_streak_milestone") return "A quiet note that your reading rhythm is holding.";
+	if (input.type === "series_finished" && achievementDefinition) return achievementDefinition.description;
 	if (input.type === "series_finished") return "You reached the end of the available series in DogEared.";
 	if (input.type === "discovery_want_to_read_trending") return "Several readers have added it recently.";
 	if (input.type === "author_new_book") return "A newly imported title is available in DogEared.";
 	if (input.type === "goodreads_import_completed") return "Your Goodreads shelves finished importing.";
 	return "Your import finished.";
+}
+
+function achievementVisual(input: { type: NotificationType; value: number; metadata?: Record<string, unknown>; seriesName?: string }) {
+	const definitionKey = normalizeText(input.metadata?.achievementDefinitionKey || input.metadata?.definitionKey, 120);
+	const definition = definitionKey
+		? getAchievementDefinition(definitionKey)
+		: input.type === "reading_streak_milestone"
+			? getReadingStreakAchievementDefinition(input.value)
+			: input.type === "series_finished"
+				? getAchievementDefinition("series_completion")
+				: undefined;
+	if (!definition) return null;
+	return {
+		definition,
+		title: renderAchievementTitle(definition, { seriesName: input.seriesName || input.metadata?.seriesName }),
+		body: definition.description,
+		icon: definition.iconIdentifier,
+		accentColorToken: definition.accentColorToken
+	};
 }
 
 export async function createNotification(
@@ -283,6 +315,7 @@ export async function createNotification(
 		seriesName: normalizeText(input.seriesName, 160),
 		value
 	};
+	const achievement = achievementVisual({ type, value, metadata, seriesName: input.seriesName });
 	const windowInterval = `${windowHours} hours`;
 
 	if (groupKey) {
@@ -299,18 +332,29 @@ export async function createNotification(
 		const existing = existingRows[0];
 		if (existing?.id) {
 			const actorCount = Math.max(1, Number(existing.actor_count || 1) + 1);
-			const title = titleFor({ type, actorName, actorCount, bookTitle, seriesName: normalizeText(input.seriesName, 160), value });
-			const body = bodyFor({ type, actorName, bookTitle, seriesName: normalizeText(input.seriesName, 160), value });
+			const title = achievement?.title || titleFor({ type, actorName, actorCount, bookTitle, seriesName: normalizeText(input.seriesName, 160), value });
+			const body = achievement?.body || bodyFor({
+				type,
+				actorName,
+				bookTitle,
+				seriesName: normalizeText(input.seriesName, 160),
+				value,
+				achievementDefinitionKey: normalizeText(metadata.achievementDefinitionKey, 120)
+			});
 			const updatedRows = await sql<Array<{ id: number }>>`
 				update user_notification
 				set
 					actor_user_id = coalesce(${actorUserId || null}::uuid, actor_user_id),
 					title = ${title},
 					body = ${body},
-					icon = ${typeIcon[type] || "notifications"},
+					icon = ${achievement?.icon || typeIcon[type] || "notifications"},
 					action_url = case when ${actionUrl} <> '' then ${actionUrl} else action_url end,
 					actor_count = ${actorCount},
-					metadata = metadata || ${JSON.stringify(metadata)}::jsonb,
+					metadata = metadata || ${JSON.stringify({
+						...metadata,
+						achievementDefinitionKey: achievement?.definition.key || metadata.achievementDefinitionKey,
+						accentColorToken: achievement?.accentColorToken || metadata.accentColorToken
+					})}::jsonb,
 					read_at = null,
 					created_at = now()
 				where id = ${existing.id}
@@ -320,8 +364,20 @@ export async function createNotification(
 		}
 	}
 
-	const title = titleFor({ type, actorName, actorCount: 1, bookTitle, seriesName: normalizeText(input.seriesName, 160), value });
-	const body = bodyFor({ type, actorName, bookTitle, seriesName: normalizeText(input.seriesName, 160), value });
+	const title = achievement?.title || titleFor({ type, actorName, actorCount: 1, bookTitle, seriesName: normalizeText(input.seriesName, 160), value });
+	const body = achievement?.body || bodyFor({
+		type,
+		actorName,
+		bookTitle,
+		seriesName: normalizeText(input.seriesName, 160),
+		value,
+		achievementDefinitionKey: normalizeText(metadata.achievementDefinitionKey, 120)
+	});
+	const notificationMetadata = {
+		...metadata,
+		achievementDefinitionKey: achievement?.definition.key || metadata.achievementDefinitionKey,
+		accentColorToken: achievement?.accentColorToken || metadata.accentColorToken
+	};
 	const rows = await sql<Array<{ id: number }>>`
 		insert into user_notification (
 			user_id,
@@ -345,11 +401,11 @@ export async function createNotification(
 			${category},
 			${title},
 			${body},
-			${typeIcon[type] || "notifications"},
+			${achievement?.icon || typeIcon[type] || "notifications"},
 			${actionUrl},
 			${groupKey},
 			1,
-			${JSON.stringify(metadata)}::jsonb
+			${JSON.stringify(notificationMetadata)}::jsonb
 		)
 		returning id
 	`;
@@ -389,6 +445,8 @@ export async function loadNotifications(
 		actor_username: string | null;
 		actor_count: number;
 		book_title: string | null;
+		accent_color_token: string | null;
+		achievement_definition_key: string | null;
 		group_label: string;
 	}>>`
 		select
@@ -404,6 +462,8 @@ export async function loadNotifications(
 			au.username as actor_username,
 			n.actor_count,
 			coalesce(n.metadata->>'bookTitle', b.title, '') as book_title,
+			coalesce(n.metadata->>'accentColorToken', '') as accent_color_token,
+			coalesce(n.metadata->>'achievementDefinitionKey', '') as achievement_definition_key,
 			case
 				when n.created_at >= date_trunc('day', now()) then 'Today'
 				when n.created_at >= now() - interval '7 days' then 'This Week'
@@ -432,6 +492,8 @@ export async function loadNotifications(
 		actorUsername: normalizeText(row.actor_username, 80),
 		actorCount: Math.max(1, normalizePositiveInt(row.actor_count) || 1),
 		bookTitle: normalizeText(row.book_title, 180),
+		accentColorToken: normalizeText(row.accent_color_token, 80),
+		isAchievement: !!normalizeText(row.achievement_definition_key, 120),
 		groupLabel: row.group_label === "Today" || row.group_label === "This Week" ? row.group_label : "Earlier"
 	}));
 }
@@ -511,6 +573,15 @@ export async function createReadingMilestoneNotifications(
 ) {
 	await ensureNotificationSchema(sql);
 	const currentYear = new Date().getFullYear();
+	const usernameRows = await sql<Array<{ username: string | null }>>`
+		select username
+		from app_user
+		where id = ${userId}::uuid
+		limit 1
+	`;
+	const profilePath = usernameRows[0]?.username
+		? `/profile/${encodeURIComponent(String(usernameRows[0].username))}`
+		: "/profile";
 	if (input.status === "finished") {
 		const goalRows = await sql<Array<{ goal: number; finished_count: number }>>`
 			select
@@ -558,15 +629,33 @@ export async function createReadingMilestoneNotifications(
 		`;
 		const series = seriesRows[0];
 		if (series && normalizePositiveInt(series.total_books) > 1 && normalizePositiveInt(series.finished_books) >= normalizePositiveInt(series.total_books)) {
-			await createNotification(sql, {
+			const award = await awardAchievement(sql, {
 				userId,
-				type: "series_finished",
-				bookId: input.bookId,
-				seriesName: series.series_name,
-				groupKey: `series_finished:${series.series_id}`,
-				actionUrl: `/book?bookId=${normalizePositiveInt(input.bookId)}`,
-				groupWindowHours: 24 * 365
+				definitionKey: "series_completion",
+				relatedSeriesId: normalizePositiveInt(series.series_id),
+				metadata: {
+					seriesName: series.series_name,
+					totalBooks: normalizePositiveInt(series.total_books),
+					finishedBooks: normalizePositiveInt(series.finished_books)
+				}
 			});
+			if (award?.inserted) {
+				await createNotification(sql, {
+					userId,
+					type: "series_finished",
+					bookId: input.bookId,
+					seriesName: series.series_name,
+					groupKey: `series_finished:${series.series_id}`,
+					actionUrl: `${profilePath}#${achievementAnchor(award.id)}`,
+					metadata: {
+						achievementId: award.id,
+						achievementDefinitionKey: award.definition.key,
+						seriesId: normalizePositiveInt(series.series_id),
+						seriesName: series.series_name
+					},
+					groupWindowHours: 24 * 365
+				});
+			}
 		}
 	}
 	const streakRows = await sql<Array<{ streak_days: number }>>`
@@ -574,7 +663,7 @@ export async function createReadingMilestoneNotifications(
 			select distinct recorded_at::date as day
 			from user_reading_progress_event
 			where user_id = ${userId}::uuid
-				and recorded_at >= now() - interval '120 days'
+				and recorded_at >= now() - interval '400 days'
 		),
 		numbered as (
 			select day, day - (row_number() over (order by day))::int as grp
@@ -590,14 +679,27 @@ export async function createReadingMilestoneNotifications(
 		)
 	`;
 	const streak = normalizePositiveInt(streakRows[0]?.streak_days);
-	if ([3, 7, 14, 30, 50, 100].includes(streak)) {
-		await createNotification(sql, {
+	const streakDefinition = getReadingStreakAchievementDefinition(streak);
+	if (streakDefinition) {
+		const award = await awardAchievement(sql, {
 			userId,
-			type: "reading_streak_milestone",
-			groupKey: `reading_streak_milestone:${streak}`,
-			actionUrl: "/reading-life",
-			value: streak,
-			groupWindowHours: 24 * 365
+			definitionKey: streakDefinition.key,
+			metadata: { streakDays: streak }
 		});
+		if (award?.inserted) {
+			await createNotification(sql, {
+				userId,
+				type: "reading_streak_milestone",
+				groupKey: `reading_streak_milestone:${streak}`,
+				actionUrl: `${profilePath}#${achievementAnchor(award.id)}`,
+				value: streak,
+				metadata: {
+					achievementId: award.id,
+					achievementDefinitionKey: award.definition.key,
+					streakDays: streak
+				},
+				groupWindowHours: 24 * 365
+			});
+		}
 	}
 }

@@ -80,6 +80,11 @@ function formatAge(value: string) {
 	if (days < 7) return `${days}d ago`;
 	return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+
+function notificationStyle(note: NotificationRecord) {
+	if (!note.accentColorToken) return "";
+	return `--notification-accent:var(${note.accentColorToken});`;
+}
 ---
 
 <Layout title="Notifications" sectionLinks={sectionLinks} robots="noindex,nofollow">
@@ -111,9 +116,10 @@ function formatAge(value: string) {
 						) : (
 							<ul class="notification-list">
 								{grouped[label].map((note) => (
-									<li class={`notification-card${note.readAt ? "" : " is-unread"}`}>
-										<div class="notification-icon" aria-hidden="true">
-											<span class="material-icons">{note.icon}</span>
+									<li class={`notification-card${note.readAt ? "" : " is-unread"}${note.isAchievement ? " is-achievement" : ""}`} style={notificationStyle(note)}>
+										<div class="notification-icon">
+											<span class="material-icons" aria-hidden="true">{note.icon}</span>
+											<span class="sr-only">{note.isAchievement ? "Achievement notification" : "Notification"}</span>
 										</div>
 										<div class="notification-main">
 											<div class="notification-title-row">
@@ -122,7 +128,7 @@ function formatAge(value: string) {
 											</div>
 											<p>{note.body}</p>
 											<p class="notification-meta">
-												<span>{formatAge(note.createdAt)}</span>
+												<time datetime={note.createdAt}>{formatAge(note.createdAt)}</time>
 												<span aria-hidden="true">·</span>
 												<span>{note.category}</span>
 											</p>
@@ -236,6 +242,7 @@ function formatAge(value: string) {
 		padding: 0;
 	}
 	.notification-card {
+		--notification-accent: var(--color-primary);
 		display: grid;
 		grid-template-columns: 42px minmax(0, 1fr);
 		gap: 0.75rem;
@@ -244,10 +251,20 @@ function formatAge(value: string) {
 		background: rgba(255, 255, 255, 0.72);
 		padding: 0.85rem;
 	}
+	.notification-card.is-achievement {
+		border-color: color-mix(in srgb, var(--notification-accent) 38%, transparent);
+		box-shadow: inset 3px 0 0 var(--notification-accent);
+	}
 	.notification-card.is-unread {
 		background: #fff;
 		border-color: rgba(31, 122, 69, 0.42);
 		box-shadow: 0 8px 20px rgba(31, 85, 103, 0.08);
+	}
+	.notification-card.is-achievement.is-unread {
+		border-color: color-mix(in srgb, var(--notification-accent) 48%, transparent);
+		box-shadow:
+			inset 3px 0 0 var(--notification-accent),
+			0 8px 20px rgba(31, 85, 103, 0.08);
 	}
 	.notification-icon {
 		width: 42px;
@@ -257,6 +274,21 @@ function formatAge(value: string) {
 		place-items: center;
 		background: rgba(31, 122, 69, 0.1);
 		color: var(--color-primary);
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+	.notification-card.is-achievement .notification-icon {
+		background: color-mix(in srgb, var(--notification-accent) 16%, white);
+		color: var(--notification-accent);
 	}
 	.notification-title-row {
 		display: flex;

@@ -9,6 +9,12 @@ import { resolveUserBySession } from "../../lib/auth";
 import { getNeonSql } from "../../lib/neon";
 import { resolvePublicProfileBundle, resolvePublicRecentActivity, resolvePublicShelfSummary } from "../../lib/publicProfile";
 import { authorHref } from "../../lib/author";
+import {
+	achievementAnchor,
+	loadEarnedAchievements,
+	resolveAchievementVisibilitySetting,
+	type EarnedAchievement
+} from "../../lib/achievements";
 import { ensureCustomShelfSchema } from "../../lib/customShelves";
 import { filterCanonicalFinishedBooksForYear, loadFinishedBooksForReader } from "../../lib/finishedBooks";
 import { readingGoalYear, resolveReadingGoalProgress } from "../../lib/readingGoal";
@@ -320,6 +326,7 @@ let shelfSectionOrderKeys: string[] = [];
 let shelfSectionOrderByKey = new Map<string, number>();
 const RECENT_ACTIVITY_SECTION_KEY = "recent:activity";
 const REVIEWS_SECTION_KEY = "reviews:section";
+const ACHIEVEMENTS_SECTION_KEY = "achievements:section";
 let customShelfBooksByShelfId = new Map<number, Array<{
 	bookId: number;
 	title: string;
@@ -343,6 +350,9 @@ let readingStreakDateKeys: string[] = [];
 let favoriteBookHref = "";
 let favoriteAuthorHref = "";
 let ownerProfileData: Record<string, unknown> = {};
+let targetProfileData: Record<string, unknown> = {};
+let achievements: EarnedAchievement[] = [];
+let showAchievementsPublic = true;
 const PAGE_SIZE = 12;
 const recentPage = Math.max(1, Number(Astro.url.searchParams.get("ra_page") || "1") || 1);
 const readingPage = Math.max(1, Number(Astro.url.searchParams.get("cr_page") || "1") || 1);
@@ -359,17 +369,17 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 	profile = bundle.profile;
 	canViewActivity = bundle.canViewActivity;
 	isOwnerViewer = !!viewerUserId && viewerUserId === bundle.targetUserId;
-	if (isOwnerViewer) {
-		const ownerRows = await sql<Array<{ profile_data: unknown }>>`
-			select profile_data
-			from app_user
-			where id = ${bundle.targetUserId}::uuid
-			limit 1
-		`;
-		ownerProfileData = (ownerRows[0]?.profile_data && typeof ownerRows[0].profile_data === "object")
-			? ownerRows[0].profile_data as Record<string, unknown>
-			: {};
-	}
+	const targetProfileRows = await sql<Array<{ profile_data: unknown }>>`
+		select profile_data
+		from app_user
+		where id = ${bundle.targetUserId}::uuid
+		limit 1
+	`;
+	targetProfileData = (targetProfileRows[0]?.profile_data && typeof targetProfileRows[0].profile_data === "object")
+		? targetProfileRows[0].profile_data as Record<string, unknown>
+		: {};
+	if (isOwnerViewer) ownerProfileData = targetProfileData;
+	showAchievementsPublic = resolveAchievementVisibilitySetting(targetProfileData);
 	followState = {
 		followersCount: bundle.followersCount,
 		followingCount: bundle.followingCount,
@@ -415,10 +425,13 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 	}
 	await ensureReviewSchema(sql);
 	const emptyReadingSummary = buildReaderReadingSummary({ currentlyReading: [], progressDateKeys: [] });
-	const [summary, updates, readerReadingSummary, wantToReadRows, finishedRows, customShelfRows, customShelfBookRows] = await Promise.all([
+	const [summary, updates, readerReadingSummary, achievementRows, wantToReadRows, finishedRows, customShelfRows, customShelfBookRows] = await Promise.all([
 		resolvePublicShelfSummary(bundle.targetUserId),
 		bundle.canViewActivity ? resolvePublicRecentActivity(bundle.targetUserId, 500, viewerUserId) : Promise.resolve([]),
 		bundle.canViewActivity ? loadReaderReadingSummary(sql, bundle.targetUserId) : Promise.resolve(emptyReadingSummary),
+		(isOwnerViewer || showAchievementsPublic)
+			? loadEarnedAchievements(sql, bundle.targetUserId, { includeHidden: isOwnerViewer, limit: 48 })
+			: Promise.resolve([]),
 		bundle.canViewActivity
 				? sql<Array<{
 					book_id: number;
@@ -535,6 +548,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 	shelfStats = summary;
 	recentActivity = updates;
 	currentlyReading = readerReadingSummary.currentlyReading;
+	achievements = achievementRows;
 	currentlyReading = dedupeByWorkIdentity(currentlyReading);
 	wantToReadBooks = wantToReadRows.map((row) => ({
 		bookId: Number(row.book_id || 0),
@@ -600,7 +614,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		bookCount: Math.max(0, Number(row.book_count || 0) || 0)
 	})).filter((row) => row.id > 0 && row.name);
 	if (isOwnerViewer) {
-		const defaultKeys = ["default:reading", RECENT_ACTIVITY_SECTION_KEY, REVIEWS_SECTION_KEY, "default:want_to_read", "default:finished"];
+		const defaultKeys = [ACHIEVEMENTS_SECTION_KEY, "default:reading", RECENT_ACTIVITY_SECTION_KEY, REVIEWS_SECTION_KEY, "default:want_to_read", "default:finished"];
 		const customKeys = customShelves.map((shelf) => `custom:${shelf.id}`);
 		const allKeys = [...defaultKeys, ...customKeys];
 		const defaultOrder = defaultProfileSectionOrder(customKeys);
@@ -713,6 +727,17 @@ function formatActivityDate(value: string) {
 	});
 }
 
+function achievementAccentStyle(value: string) {
+	const token = String(value || "").trim();
+	const safeToken = /^--[a-z0-9-]+$/i.test(token) ? token : "--color-primary";
+	return `--achievement-accent:var(${safeToken});`;
+}
+
+function achievementEarnedLabel(value: string) {
+	const formatted = formatActivityDate(value);
+	return formatted ? `Earned ${formatted}` : "Earned recently";
+}
+
 function finishedDateTimestamp(value: string) {
 	const parsed = new Date(String(value || "").trim());
 	const time = parsed.getTime();
@@ -751,6 +776,7 @@ function paginationHref(param: string, value: number, anchor: string) {
 
 function defaultProfileSectionOrder(customKeys: string[]) {
 	return [
+		ACHIEVEMENTS_SECTION_KEY,
 		"default:reading",
 		RECENT_ACTIVITY_SECTION_KEY,
 		REVIEWS_SECTION_KEY,
@@ -807,8 +833,10 @@ const baseSectionLinks = [
 	{ id: "reading-goal", label: "Reading Goal" },
 	{ id: "shelf-summary", label: "Shelf Summary" }
 ];
+const canShowAchievementsSection = isOwnerViewer || (showAchievementsPublic && achievements.length > 0);
 const orderedShelfSectionLinks = isOwnerViewer
 	? [
+		{ id: "achievements", label: "Achievements", key: ACHIEVEMENTS_SECTION_KEY },
 		{ id: "currently-reading", label: "Currently Reading", key: "default:reading" },
 		{ id: "recent-activity", label: "Recent Activity", key: RECENT_ACTIVITY_SECTION_KEY },
 		{ id: "reviews", label: "Reviews", key: REVIEWS_SECTION_KEY },
@@ -823,6 +851,7 @@ const orderedShelfSectionLinks = isOwnerViewer
 		.sort((a, b) => shelfSectionOrderValue(String(a.key || "")) - shelfSectionOrderValue(String(b.key || "")))
 		.map(({ id, label }) => ({ id, label }))
 	: [
+		...(canShowAchievementsSection ? [{ id: "achievements", label: "Achievements" }] : []),
 		{ id: "currently-reading", label: "Currently Reading" },
 		{ id: "recent-activity", label: "Recent Activity" },
 		{ id: "reviews", label: "Reviews" },
@@ -853,7 +882,7 @@ const shelfSectionOrderJson = JSON.stringify(
 		: defaultProfileSectionOrder(customShelves.map((shelf) => `custom:${shelf.id}`))
 );
 const profileCanonicalUrl = profile.username ? `/profile/${encodeURIComponent(profile.username)}` : `/profile/${encodeURIComponent(requestedUsername)}`;
-const hasIndexableProfileContent = shelfStats.total > 0 || recentActivity.length > 0 || currentlyReading.length > 0 || wantToReadBooks.length > 0 || finishedBooks.length > 0;
+const hasIndexableProfileContent = shelfStats.total > 0 || recentActivity.length > 0 || currentlyReading.length > 0 || wantToReadBooks.length > 0 || finishedBooks.length > 0 || (showAchievementsPublic && achievements.length > 0);
 const profileRobots = (!notFound && !privateProfile && !!profile.username && hasIndexableProfileContent) ? "index,follow" : "noindex,follow";
 const profileDescription = !notFound && !privateProfile
 	? `${profile.name || `@${profile.username}`}'s reading profile on DogEared. ${shelfStats.total.toLocaleString()} books across shelves.`
@@ -1196,6 +1225,76 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 						))}
 					</div>
 				</section>
+
+				{canShowAchievementsSection && (
+					<section
+						id="achievements"
+						class="activity-card activity-card-plain achievements-section"
+						data-shelf-section-key={ACHIEVEMENTS_SECTION_KEY}
+						style={shelfSectionOrderStyle(ACHIEVEMENTS_SECTION_KEY)}
+					>
+						<div class="custom-shelf-heading-row">
+							<h2><span class="material-icons custom-shelf-heading-icon default-shelf-heading-icon" aria-hidden="true">workspace_premium</span>Achievements</h2>
+							{isOwnerViewer && (
+								<div class="custom-shelf-menu-wrap">
+									<button type="button" class="custom-shelf-menu-trigger" data-action="toggle-custom-shelf-menu" aria-expanded="false" aria-label="Actions for Achievements">
+										<span class="material-icons" aria-hidden="true">more_vert</span>
+									</button>
+									<div class="custom-shelf-menu" hidden>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up" {...shelfSectionMoveAttrs(ACHIEVEMENTS_SECTION_KEY, "up")}>Move up</button>
+										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down" {...shelfSectionMoveAttrs(ACHIEVEMENTS_SECTION_KEY, "down")}>Move down</button>
+									</div>
+								</div>
+							)}
+						</div>
+						{isOwnerViewer && !showAchievementsPublic && achievements.length > 0 && (
+							<p class="section-intro">Achievements are hidden from other readers. You can show them from Settings.</p>
+						)}
+						{achievements.length === 0 ? (
+							<div class="profile-empty-state">
+								<p>Meaningful reading milestones will appear here as you build streaks and finish complete series.</p>
+								{isOwnerViewer && <a href="/search">Find something to read</a>}
+							</div>
+						) : (
+							<ul class="achievement-grid" aria-label="Earned achievements">
+								{achievements.map((achievement) => (
+									<li>
+										<details
+											id={achievementAnchor(achievement.id)}
+											class="achievement-badge"
+											style={achievementAccentStyle(achievement.accentColorToken)}
+										>
+											<summary aria-label={`${achievement.title}. ${achievementEarnedLabel(achievement.earnedAt)}.`}>
+												<span class="achievement-icon" aria-hidden="true">
+													<span class="material-icons">{achievement.iconIdentifier}</span>
+												</span>
+												<span class="achievement-copy">
+													<strong>{achievement.title}</strong>
+													<time datetime={achievement.earnedAt}>{achievementEarnedLabel(achievement.earnedAt)}</time>
+												</span>
+											</summary>
+											<div class="achievement-popover" role="group" aria-label={`${achievement.title} details`}>
+												<div class="achievement-popover-head">
+													<span class="achievement-icon achievement-icon-small" aria-hidden="true">
+														<span class="material-icons">{achievement.iconIdentifier}</span>
+													</span>
+													<div>
+														<h3>{achievement.title}</h3>
+														<p>{achievement.description}</p>
+													</div>
+												</div>
+												<p><time datetime={achievement.earnedAt}>{achievementEarnedLabel(achievement.earnedAt)}.</time></p>
+												{achievement.relatedSeriesName && <p>Series: {achievement.relatedSeriesName}</p>}
+												{achievement.relatedBookTitle && <p>Work: {achievement.relatedBookTitle}</p>}
+												<p>{achievement.howEarned}</p>
+											</div>
+										</details>
+									</li>
+								))}
+							</ul>
+						)}
+					</section>
+				)}
 
 				{isOwnerViewer && (
 					<dialog class="create-shelf-modal" data-create-custom-shelf-modal>
@@ -2257,6 +2356,119 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.profile-empty-state a:hover,
 	.profile-empty-state a:focus-visible {
 		background: var(--color-primary-hover);
+	}
+	.achievements-section {
+		position: relative;
+	}
+	.achievement-grid {
+		list-style: none;
+		margin: 0.7rem 0 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+		gap: 0.55rem;
+	}
+	.achievement-grid li {
+		list-style: none;
+		min-width: 0;
+	}
+	.achievement-badge {
+		--achievement-accent: var(--color-primary);
+		position: relative;
+		border: 1px solid color-mix(in srgb, var(--achievement-accent) 34%, transparent);
+		border-radius: var(--radius-md);
+		background: color-mix(in srgb, var(--achievement-accent) 7%, white);
+		box-shadow: inset 3px 0 0 var(--achievement-accent);
+	}
+	.achievement-badge:target {
+		outline: 3px solid color-mix(in srgb, var(--achievement-accent) 44%, transparent);
+		outline-offset: 3px;
+	}
+	.achievement-badge summary {
+		display: grid;
+		grid-template-columns: 42px minmax(0, 1fr);
+		gap: 0.55rem;
+		align-items: center;
+		min-height: 64px;
+		padding: 0.62rem;
+		cursor: pointer;
+		list-style: none;
+	}
+	.achievement-badge summary::-webkit-details-marker {
+		display: none;
+	}
+	.achievement-badge summary:focus-visible {
+		outline: 3px solid color-mix(in srgb, var(--achievement-accent) 48%, transparent);
+		outline-offset: 2px;
+		border-radius: var(--radius-md);
+	}
+	.achievement-icon {
+		width: 42px;
+		height: 42px;
+		border-radius: var(--radius-pill);
+		display: grid;
+		place-items: center;
+		background: color-mix(in srgb, var(--achievement-accent) 15%, white);
+		color: var(--achievement-accent);
+	}
+	.achievement-icon .material-icons {
+		font-size: 1.45rem;
+	}
+	.achievement-copy {
+		display: grid;
+		gap: 0.15rem;
+		min-width: 0;
+	}
+	.achievement-copy strong {
+		color: var(--color-text);
+		font-size: 0.95rem;
+		line-height: 1.2;
+	}
+	.achievement-copy time {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+	.achievement-popover {
+		position: absolute;
+		left: 0.35rem;
+		right: 0.35rem;
+		top: calc(100% + 0.35rem);
+		z-index: 20;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: #fff;
+		box-shadow: var(--shadow-popover);
+		padding: 0.75rem;
+	}
+	.achievement-popover-head {
+		display: grid;
+		grid-template-columns: 34px minmax(0, 1fr);
+		gap: 0.5rem;
+		align-items: start;
+	}
+	.achievement-icon-small {
+		width: 34px;
+		height: 34px;
+	}
+	.achievement-icon-small .material-icons {
+		font-size: 1.18rem;
+	}
+	.achievement-popover h3,
+	.achievement-popover p {
+		margin: 0;
+	}
+	.achievement-popover h3 {
+		font-size: 1rem;
+		line-height: 1.25;
+	}
+	.achievement-popover p {
+		color: var(--color-text-muted);
+		font-size: 0.9rem;
+		line-height: 1.42;
+	}
+	.achievement-popover > p {
+		margin-top: 0.45rem;
 	}
 	.section-intro {
 		margin: 0.1rem 0 0.7rem;
@@ -3370,6 +3582,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 		.shelf-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 		.shelf-summary-item-total { grid-column: auto; }
+		.achievement-grid { grid-template-columns: 1fr; }
+		.achievement-popover {
+			position: static;
+			margin: 0 0.45rem 0.45rem;
+		}
 		.activity-grid { grid-template-columns: 1fr; }
 		.profile-card-actions { position: static; margin-bottom: 0.2rem; justify-content: flex-end; }
 		.custom-shelf-heading-row { align-items: flex-start; }

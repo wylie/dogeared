@@ -12,6 +12,10 @@ A signed-in user whose username appears in `ADMIN_USERNAMES`. Admins can access 
 
 A reader's target number of finished books for the current year. DogEared calculates progress from finished books with finished dates in that year.
 
+## Achievement
+
+A persistent, non-competitive badge earned from a meaningful reading milestone. Achievements use a shared definition for key, type, title, description, icon, accent color token, criteria, repeatability, and related Work or Series behavior. Earned achievements store the reader, definition, earned date, optional related Work or Series, visibility, and display metadata.
+
 ## Canonical Work
 
 The reader-facing literary Work DogEared uses as the primary catalog identity. A Work represents the intellectual book and owns shelves, ratings, reviews, reading progress, series membership, recommendations, search identity, author-page display, and Readers Also Enjoyed identity.

@@ -6,6 +6,7 @@ export type PrivacySettings = {
 	shareActivity: boolean;
 	allowDiscovery: boolean;
 	allowFollowRequests: boolean;
+	showAchievements: boolean;
 };
 
 export type ViewerProfileAccess = {
@@ -20,7 +21,8 @@ const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
 	shareLocation: true,
 	shareActivity: true,
 	allowDiscovery: true,
-	allowFollowRequests: true
+	allowFollowRequests: true,
+	showAchievements: true
 };
 
 function normalizeText(value: unknown) {
@@ -47,7 +49,8 @@ export function resolvePrivacySettings(profileData: unknown): PrivacySettings {
 		shareLocation: toBool(privacy.shareLocation, DEFAULT_PRIVACY_SETTINGS.shareLocation),
 		shareActivity: toBool(privacy.shareActivity, DEFAULT_PRIVACY_SETTINGS.shareActivity),
 		allowDiscovery: toBool(privacy.allowDiscovery, DEFAULT_PRIVACY_SETTINGS.allowDiscovery),
-		allowFollowRequests: toBool(privacy.allowFollowRequests, DEFAULT_PRIVACY_SETTINGS.allowFollowRequests)
+		allowFollowRequests: toBool(privacy.allowFollowRequests, DEFAULT_PRIVACY_SETTINGS.allowFollowRequests),
+		showAchievements: toBool(privacy.showAchievements, DEFAULT_PRIVACY_SETTINGS.showAchievements)
 	};
 }
 
