@@ -2689,7 +2689,9 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
 		isShelfActionBusy,
+		isShelfDropdownOrMenuTarget,
 		promptForShelfLogin,
+		resolveShelfDropdownFromTarget,
 		setDropdownLabel,
 		setShelfActionBusy,
 		setShelvedState,
@@ -2769,7 +2771,7 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 		}
 		const option = target.closest('[data-action="set-shelf"]');
 		const removeOption = target.closest('[data-action="remove-from-shelves"]');
-		const dropdown = target.closest(".shelf-dropdown");
+		const dropdown = resolveShelfDropdownFromTarget(target);
 		if (removeOption && dropdown instanceof HTMLElement) {
 			closeShelfMenus(shelfDropdowns);
 			if (!isAuthenticated) {
@@ -2821,6 +2823,6 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 			return;
 		}
 
-		if (!target.closest(".shelf-dropdown")) closeShelfMenus(shelfDropdowns);
+		if (!isShelfDropdownOrMenuTarget(target)) closeShelfMenus(shelfDropdowns);
 	});
 </script>

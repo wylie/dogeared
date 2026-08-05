@@ -556,10 +556,12 @@ const completionStatus = query && !errorMessage
 		parseCategories,
 		promptForShelfLogin,
 		isShelfActionBusy,
+		isShelfDropdownOrMenuTarget,
 		setDropdownLabel,
 		setShelfActionBusy,
 		setShelvedState,
 		showShelfFeedback,
+		resolveShelfDropdownFromTarget,
 		statusLabel,
 		saveShelfEntryWithRetry,
 		toggleShelfMenu,
@@ -828,7 +830,7 @@ const completionStatus = query && !errorMessage
 		if (option instanceof HTMLElement) {
 			event.preventDefault();
 			event.stopPropagation();
-			const dropdown = option.closest(".shelf-dropdown");
+			const dropdown = resolveShelfDropdownFromTarget(option);
 			if (dropdown instanceof HTMLElement) {
 				const status = option.dataset.status || "want_to_read";
 					void setShelf(dropdown, status);
@@ -836,7 +838,7 @@ const completionStatus = query && !errorMessage
 			}
 			return;
 		}
-		if (target.closest(".shelf-dropdown")) return;
+		if (isShelfDropdownOrMenuTarget(target)) return;
 		closeAllMenus();
 	});
 

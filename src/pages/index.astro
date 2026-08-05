@@ -1371,7 +1371,9 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 	import {
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
+		isShelfDropdownOrMenuTarget,
 		promptForShelfLogin,
+		resolveShelfDropdownFromTarget,
 		setDropdownLabel,
 		setShelvedState,
 		showShelfFeedback,
@@ -1819,7 +1821,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		if (option instanceof HTMLElement) {
 			event.preventDefault();
 			event.stopPropagation();
-			const dropdown = option.closest(".shelf-dropdown");
+			const dropdown = resolveShelfDropdownFromTarget(option);
 			if (dropdown instanceof HTMLElement) {
 				const status = option.dataset.status || "want_to_read";
 				setShelf(dropdown, status);
@@ -1922,7 +1924,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			void postGuidanceAction({ action: "dismiss-checklist" });
 			return;
 		}
-		if (target.closest(".shelf-dropdown")) return;
+		if (isShelfDropdownOrMenuTarget(target)) return;
 		closeShelfMenus(shelfDropdowns);
 	});
 

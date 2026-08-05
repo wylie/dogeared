@@ -66,6 +66,7 @@ try {
 	</button>
 	{!hideLabel && <p class="shelf-state">{initialLabel}</p>}
 	<div id={menuId} class="shelf-menu" role="menu" aria-label="Shelf options" hidden>
+		<span class="shelf-menu-caret" aria-hidden="true"></span>
 		<button
 			type="button"
 			class={`shelf-option${initialStatus === "want_to_read" ? " is-current" : ""}`}
@@ -187,11 +188,9 @@ try {
 		--shelf-safe-area-bottom: env(safe-area-inset-bottom, 0px);
 		--shelf-safe-area-left: env(safe-area-inset-left, 0px);
 		--shelf-menu-caret-size: 10px;
-		--shelf-caret-left: 22px;
-		--shelf-caret-top: 22px;
 		position: fixed;
-		top: var(--shelf-menu-y, 0);
-		left: var(--shelf-menu-x, 0) !important;
+		top: 0;
+		left: 0 !important;
 		right: auto !important;
 		min-width: 180px;
 		max-width: calc(100vw - var(--shelf-safe-area-left) - var(--shelf-safe-area-right) - (var(--shelf-menu-viewport-padding) * 2));
@@ -205,31 +204,17 @@ try {
 		padding: 0.28rem;
 		z-index: 120;
 	}
-	.shelf-menu::before {
-		content: "";
+	.shelf-menu-caret {
 		position: absolute;
 		width: var(--shelf-menu-caret-size);
 		height: var(--shelf-menu-caret-size);
 		background: #fff;
 		box-shadow: -2px -2px 3px rgba(31, 41, 55, 0.04);
 		transform: rotate(45deg);
+		pointer-events: none;
 	}
-	.shelf-menu[data-placement="bottom"]::before {
-		top: calc(var(--shelf-menu-caret-size) / -2);
-		left: var(--shelf-caret-left);
-	}
-	.shelf-menu[data-placement="top"]::before {
-		bottom: calc(var(--shelf-menu-caret-size) / -2);
-		left: var(--shelf-caret-left);
-		box-shadow: 2px 2px 3px rgba(31, 41, 55, 0.04);
-	}
-	.shelf-menu[data-placement="right"]::before {
-		left: calc(var(--shelf-menu-caret-size) / -2);
-		top: var(--shelf-caret-top);
-	}
-	.shelf-menu[data-placement="left"]::before {
-		right: calc(var(--shelf-menu-caret-size) / -2);
-		top: var(--shelf-caret-top);
+	.shelf-menu[data-placement="top"] .shelf-menu-caret,
+	.shelf-menu[data-placement="left"] .shelf-menu-caret {
 		box-shadow: 2px 2px 3px rgba(31, 41, 55, 0.04);
 	}
 	.shelf-menu [data-custom-shelf-options] {

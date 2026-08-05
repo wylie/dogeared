@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@astrojs/vercel": "^10.0.8",
+    "@floating-ui/dom": "^1.8.0",
     "@neondatabase/serverless": "^1.1.0",
     "astro": "^6.4.7",
     "echarts": "^6.0.0"

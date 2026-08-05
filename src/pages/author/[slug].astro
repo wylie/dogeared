@@ -652,8 +652,10 @@ const authorStructuredData = displayName
 	import {
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
+		isShelfDropdownOrMenuTarget,
 		parseCategories,
 		removeBookFromAllShelvesOnServer,
+		resolveShelfDropdownFromTarget,
 		resolveShelfRemoveMessage,
 		setDropdownLabel,
 		setShelvedState,
@@ -709,7 +711,7 @@ const authorStructuredData = displayName
 
 		const option = target.closest('[data-action="set-shelf"]');
 		if (option instanceof HTMLButtonElement) {
-			const dropdown = option.closest(".shelf-dropdown");
+			const dropdown = resolveShelfDropdownFromTarget(option);
 			if (!(dropdown instanceof HTMLElement)) return;
 			const status = String(option.dataset.status || "want_to_read");
 			const title = String(dropdown.dataset.title || "").trim();
@@ -733,7 +735,7 @@ const authorStructuredData = displayName
 
 		const assignOption = target.closest('[data-action="assign-custom-shelf"]');
 		if (assignOption instanceof HTMLButtonElement) {
-			const dropdown = assignOption.closest(".shelf-dropdown");
+			const dropdown = resolveShelfDropdownFromTarget(assignOption);
 			if (!(dropdown instanceof HTMLElement)) return;
 			const shelfId = Math.max(0, Number(assignOption.dataset.shelfId || 0) || 0);
 			if (!shelfId) return;
@@ -765,7 +767,7 @@ const authorStructuredData = displayName
 
 		const removeOption = target.closest('[data-action="remove-from-shelves"]');
 		if (removeOption instanceof HTMLButtonElement) {
-			const dropdown = removeOption.closest(".shelf-dropdown");
+			const dropdown = resolveShelfDropdownFromTarget(removeOption);
 			if (!(dropdown instanceof HTMLElement)) return;
 			try {
 				const result = await removeBookFromAllShelvesOnServer(dropdown.dataset.bookId, buildEntry(dropdown, "want_to_read"));
@@ -781,7 +783,7 @@ const authorStructuredData = displayName
 			return;
 		}
 
-		if (!target.closest(".shelf-dropdown")) closeShelfMenus(shelfDropdowns);
+		if (!isShelfDropdownOrMenuTarget(target)) closeShelfMenus(shelfDropdowns);
 	});
 </script>
 

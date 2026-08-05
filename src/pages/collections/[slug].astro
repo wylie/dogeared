@@ -135,8 +135,10 @@ const sectionLinks = collection?.books.length ? [
 	import {
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
+		isShelfDropdownOrMenuTarget,
 		promptForShelfLogin,
 		removeBookFromAllShelvesOnServer,
+		resolveShelfDropdownFromTarget,
 		resolveShelfRemoveMessage,
 		setDropdownLabel,
 		setShelvedState,
@@ -188,7 +190,7 @@ const sectionLinks = collection?.books.length ? [
 
 		const option = target.closest('[data-action="set-shelf"]');
 		if (option instanceof HTMLButtonElement) {
-			const dropdown = option.closest(".shelf-dropdown");
+			const dropdown = resolveShelfDropdownFromTarget(option);
 			if (!(dropdown instanceof HTMLElement)) return;
 			if (!isAuthenticated) {
 				promptForShelfLogin();
@@ -210,7 +212,7 @@ const sectionLinks = collection?.books.length ? [
 
 		const remove = target.closest('[data-action="remove-from-shelves"]');
 		if (remove instanceof HTMLButtonElement) {
-			const dropdown = remove.closest(".shelf-dropdown");
+			const dropdown = resolveShelfDropdownFromTarget(remove);
 			if (!(dropdown instanceof HTMLElement)) return;
 			if (!isAuthenticated) {
 				promptForShelfLogin();
@@ -227,7 +229,7 @@ const sectionLinks = collection?.books.length ? [
 			return;
 		}
 
-		if (!target.closest(".shelf-dropdown")) closeShelfMenus(shelfDropdowns);
+		if (!isShelfDropdownOrMenuTarget(target)) closeShelfMenus(shelfDropdowns);
 	});
 </script>
 

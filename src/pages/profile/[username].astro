@@ -3447,7 +3447,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	import {
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
+		isShelfDropdownOrMenuTarget,
 		removeBookFromAllShelvesOnServer,
+		resolveShelfDropdownFromTarget,
 		resolveShelfRemoveMessage,
 		setDropdownLabel,
 		setShelvedState,
@@ -5093,7 +5095,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		if (option) {
 			event.preventDefault();
 			event.stopPropagation();
-			const dropdown = option.closest(".shelf-dropdown");
+			const dropdown = resolveShelfDropdownFromTarget(option);
 			if (!dropdown) return;
 			const status = option.dataset.status || "want_to_read";
 			const entry = buildEntryFromDropdown(dropdown, status);
@@ -5123,7 +5125,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		if (assignOption) {
 			event.preventDefault();
 			event.stopPropagation();
-			const dropdown = assignOption.closest(".shelf-dropdown");
+			const dropdown = resolveShelfDropdownFromTarget(assignOption);
 			if (!(dropdown instanceof HTMLElement)) return;
 			const shelfId = Math.max(0, Number(assignOption.getAttribute("data-shelf-id") || 0) || 0);
 			const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
@@ -5142,7 +5144,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		if (removeOption) {
 			event.preventDefault();
 			event.stopPropagation();
-			const dropdown = removeOption.closest(".shelf-dropdown");
+			const dropdown = resolveShelfDropdownFromTarget(removeOption);
 			if (!(dropdown instanceof HTMLElement)) return;
 			const bookId = Math.max(0, Number(dropdown.dataset.bookId || 0) || 0);
 			const entry = buildEntryFromDropdown(dropdown, "want_to_read");
@@ -5160,7 +5162,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			}
 			return;
 		}
-		if (target.closest(".shelf-dropdown")) return;
+		if (isShelfDropdownOrMenuTarget(target)) return;
 		closeShelfMenus(shelfDropdowns);
 	});
 

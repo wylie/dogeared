@@ -692,7 +692,9 @@ const relatedStructuredDataPayload = JSON.stringify([
 	import {
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
+		isShelfDropdownOrMenuTarget,
 		parseCategories,
+		resolveShelfDropdownFromTarget,
 		setDropdownLabel,
 		showShelfFeedback,
 		statusLabel,
@@ -716,7 +718,7 @@ const relatedStructuredDataPayload = JSON.stringify([
 
 		const option = target.closest('[data-action="set-shelf"]');
 		if (option instanceof HTMLButtonElement) {
-			const dropdown = option.closest(".shelf-dropdown");
+			const dropdown = resolveShelfDropdownFromTarget(option);
 			if (!(dropdown instanceof HTMLElement)) return;
 			const status = String(option.dataset.status || "want_to_read");
 			const title = String(dropdown.dataset.title || "").trim();
@@ -751,7 +753,7 @@ const relatedStructuredDataPayload = JSON.stringify([
 			return;
 		}
 
-		if (!target.closest(".shelf-dropdown")) closeShelfMenus(shelfDropdowns);
+		if (!isShelfDropdownOrMenuTarget(target)) closeShelfMenus(shelfDropdowns);
 	});
 </script>
 

@@ -547,6 +547,7 @@ const sectionLinks = [
 	import {
 		buildShelfEntryFromRecord,
 		closeShelfMenus,
+		resolveShelfDropdownFromTarget,
 		setDropdownLabel,
 		setShelvedState,
 		showShelfFeedback,
@@ -591,10 +592,10 @@ const sectionLinks = [
 		return `<p class="activity-comment-item"${commentId > 0 ? ` data-comment-id="${commentId}"` : ""}><span class="activity-comment-head"><a class="activity-comment-user" href="${profileHref}">@${escapeHtml(username)}</a><span class="activity-comment-meta">${ageLabel ? `<span class="activity-comment-age">${escapeHtml(ageLabel)}</span>` : ""}${isMine ? `<button type="button" class="activity-comment-delete" data-action="delete-comment" data-comment-id="${commentId}" aria-label="Delete comment" title="Delete comment">&times;</button>` : ""}</span></span><span class="activity-comment-body">${escapeHtml(body)}</span></p>`;
 	};
 
-	document.addEventListener("click", (event) => {
+	document.addEventListener("click", async (event) => {
 		const target = event.target;
 		if (!(target instanceof HTMLElement)) return;
-		const dropdown = target.closest(".shelf-dropdown");
+		const dropdown = resolveShelfDropdownFromTarget(target);
 		if (!dropdown) {
 			closeShelfMenus(shelfDropdowns);
 			return;
@@ -603,16 +604,10 @@ const sectionLinks = [
 		if (!(action instanceof HTMLElement)) return;
 		if (action.dataset.action === "toggle-shelf") {
 			toggleShelfMenu(dropdown, shelfDropdowns);
+			return;
 		}
-	});
-
-	for (const dropdown of shelfDropdowns) {
-		dropdown.addEventListener("click", async (event) => {
-			const target = event.target;
-			if (!(target instanceof HTMLElement)) return;
-			const option = target.closest('[data-action="set-shelf"]');
-			if (!(option instanceof HTMLElement)) return;
-			const status = String(option.dataset.status || "want_to_read");
+		if (action.dataset.action === "set-shelf") {
+			const status = String(action.dataset.status || "want_to_read");
 			const entry = buildShelfEntryFromRecord({
 				title: dropdown.getAttribute("data-title"),
 				author: dropdown.getAttribute("data-author"),
@@ -635,8 +630,8 @@ const sectionLinks = [
 			setShelvedState(dropdown, true);
 			closeShelfMenus(shelfDropdowns);
 			showShelfFeedback(dropdown, "Saved.", feedbackTimers);
-		});
-	}
+		}
+	});
 
 	document.addEventListener("click", async (event) => {
 		const target = event.target;
