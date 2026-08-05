@@ -1,6 +1,6 @@
 import type { NeonQueryFunction } from "@neondatabase/serverless";
 
-export type AchievementType = "reading_streak" | "series_completion";
+export type AchievementType = "reading_streak" | "series_completion" | "yearly_goal";
 export type AchievementVisibility = "public" | "hidden";
 
 export type AchievementDefinition = {
@@ -20,6 +20,7 @@ export type EarnedAchievement = {
 	id: number;
 	userId: string;
 	definitionKey: string;
+	scopeKey: string;
 	type: AchievementType;
 	title: string;
 	description: string;
@@ -38,6 +39,14 @@ export type EarnedAchievement = {
 };
 
 const STREAK_MILESTONES = [7, 14, 30, 60, 100, 365] as const;
+const STREAK_ICON_BY_DAYS: Record<typeof STREAK_MILESTONES[number], string> = {
+	7: "eco",
+	14: "filter_vintage",
+	30: "local_fire_department",
+	60: "bolt",
+	100: "wb_sunny",
+	365: "calendar_month"
+};
 
 export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
 	...STREAK_MILESTONES.map((days) => ({
@@ -45,7 +54,7 @@ export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
 		type: "reading_streak" as const,
 		title: `${days} Day Reading Streak`,
 		description: `Your reading rhythm has held for ${days} consecutive days.`,
-		iconIdentifier: "local_fire_department",
+		iconIdentifier: STREAK_ICON_BY_DAYS[days],
 		accentColorToken: `--achievement-streak-${days}`,
 		criteria: { streakDays: days },
 		repeatable: false,
@@ -62,6 +71,17 @@ export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
 		repeatable: false,
 		relatedBehavior: "series",
 		howEarned: "Finish every currently available book in a series to earn this badge."
+	},
+	{
+		key: "yearly_reading_goal",
+		type: "yearly_goal",
+		title: "Yearly Reading Goal",
+		description: "You reached your reading goal for the year.",
+		iconIdentifier: "flag",
+		accentColorToken: "--achievement-yearly-goal",
+		criteria: { annualGoalCompleted: true },
+		repeatable: true,
+		howEarned: "Set a yearly reading goal and finish enough books in that year to earn this badge."
 	}
 ];
 
@@ -132,17 +152,33 @@ export async function ensureAchievementSchema(sql: NeonQueryFunction<false, fals
 			earned_at timestamptz not null default now(),
 			related_book_id bigint references book(id) on delete set null,
 			related_series_id bigint references series(id) on delete set null,
+			scope_key text not null default '',
 			visibility text not null default 'public',
 			metadata jsonb not null default '{}'::jsonb
 		)
 	`;
 	await sql`alter table user_achievement add column if not exists related_book_id bigint references book(id) on delete set null`;
 	await sql`alter table user_achievement add column if not exists related_series_id bigint references series(id) on delete set null`;
+	await sql`alter table user_achievement add column if not exists scope_key text not null default ''`;
 	await sql`alter table user_achievement add column if not exists visibility text not null default 'public'`;
 	await sql`alter table user_achievement add column if not exists metadata jsonb not null default '{}'::jsonb`;
 	await sql`
+		do $$
+		begin
+			if exists (
+				select 1
+				from pg_indexes
+				where schemaname = current_schema()
+					and indexname = 'idx_user_achievement_unique_scope'
+					and indexdef not like '%scope_key%'
+			) then
+				execute 'drop index idx_user_achievement_unique_scope';
+			end if;
+		end $$;
+	`;
+	await sql`
 		create unique index if not exists idx_user_achievement_unique_scope
-		on user_achievement(user_id, definition_key, coalesce(related_series_id, 0), coalesce(related_book_id, 0))
+		on user_achievement(user_id, definition_key, coalesce(related_series_id, 0), coalesce(related_book_id, 0), scope_key)
 	`;
 	await sql`create index if not exists idx_user_achievement_user_earned on user_achievement(user_id, earned_at desc)`;
 	await sql`create index if not exists idx_user_achievement_definition on user_achievement(definition_key, earned_at desc)`;
@@ -192,6 +228,7 @@ export async function awardAchievement(
 		definitionKey: string;
 		relatedBookId?: number;
 		relatedSeriesId?: number;
+		scopeKey?: string;
 		visibility?: AchievementVisibility;
 		earnedAt?: string;
 		metadata?: Record<string, unknown>;
@@ -203,11 +240,13 @@ export async function awardAchievement(
 	if (!userId || !definition) return null;
 	const relatedBookId = positiveInt(input.relatedBookId);
 	const relatedSeriesId = positiveInt(input.relatedSeriesId);
+	const scopeKey = cleanText(input.scopeKey || input.metadata?.scopeKey || input.metadata?.year, 80);
 	const visibility = normalizeVisibility(input.visibility);
 	const earnedAt = cleanText(input.earnedAt, 40);
 	const metadata = {
 		...(input.metadata || {}),
 		definitionKey: definition.key,
+		scopeKey,
 		achievementType: definition.type,
 		iconIdentifier: definition.iconIdentifier,
 		accentColorToken: definition.accentColorToken,
@@ -223,6 +262,7 @@ export async function awardAchievement(
 				definition_key,
 				related_book_id,
 				related_series_id,
+				scope_key,
 				visibility,
 				earned_at,
 				metadata
@@ -232,6 +272,7 @@ export async function awardAchievement(
 				${definition.key},
 				${relatedBookId > 0 ? relatedBookId : null},
 				${relatedSeriesId > 0 ? relatedSeriesId : null},
+				${scopeKey},
 				${visibility},
 				coalesce(nullif(${earnedAt}, '')::timestamptz, now()),
 				${JSON.stringify(metadata)}::jsonb
@@ -247,6 +288,7 @@ export async function awardAchievement(
 			and definition_key = ${definition.key}
 			and coalesce(related_book_id, 0) = ${relatedBookId}
 			and coalesce(related_series_id, 0) = ${relatedSeriesId}
+			and scope_key = ${scopeKey}
 		limit 1
 	`;
 	const row = rows[0];
@@ -265,6 +307,7 @@ export async function loadEarnedAchievements(
 		id: number;
 		user_id: string;
 		definition_key: string;
+		scope_key: string;
 		type: string;
 		title: string;
 		description: string;
@@ -284,6 +327,7 @@ export async function loadEarnedAchievements(
 			ua.id,
 			ua.user_id::text as user_id,
 			ua.definition_key,
+			ua.scope_key,
 			ad.type,
 			ad.title,
 			ad.description,
@@ -312,7 +356,7 @@ export async function loadEarnedAchievements(
 		const fallbackDefinition = getAchievementDefinition(row.definition_key);
 		const definition: AchievementDefinition = {
 			key: cleanText(row.definition_key, 120),
-			type: row.type === "series_completion" ? "series_completion" : "reading_streak",
+			type: row.type === "series_completion" || row.type === "yearly_goal" ? row.type : "reading_streak",
 			title: cleanText(row.title, 180),
 			description: cleanText(row.description, 280),
 			iconIdentifier: cleanText(row.icon_identifier, 80) || fallbackDefinition?.iconIdentifier || "workspace_premium",
@@ -326,6 +370,7 @@ export async function loadEarnedAchievements(
 			id: positiveInt(row.id),
 			userId: cleanText(row.user_id, 80),
 			definitionKey: definition.key,
+			scopeKey: cleanText(row.scope_key || metadata.scopeKey, 80),
 			type: definition.type,
 			title: renderAchievementTitle(definition, { seriesName: relatedSeriesName }),
 			description: definition.description,

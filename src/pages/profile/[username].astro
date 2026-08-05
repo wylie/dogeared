@@ -1101,7 +1101,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 													style={achievementAccentStyle(achievement.accentColorToken)}
 												>
 													<summary aria-label={`${achievement.title}. ${achievementEarnedLabel(achievement.earnedAt)}.`}>
-														<span class="achievement-icon" aria-hidden="true">
+														<span class="achievement-art achievement-art-small" aria-hidden="true">
 															<span class="material-icons">{achievement.iconIdentifier}</span>
 														</span>
 														<span class="achievement-copy">
@@ -1110,7 +1110,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 													</summary>
 													<div class="achievement-popover" role="group" aria-label={`${achievement.title} details`}>
 														<div class="achievement-popover-head">
-															<span class="achievement-icon achievement-icon-small" aria-hidden="true">
+															<span class="achievement-art achievement-art-large" aria-hidden="true">
 																<span class="material-icons">{achievement.iconIdentifier}</span>
 															</span>
 															<div>
@@ -1140,7 +1140,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 																		style={achievementAccentStyle(achievement.accentColorToken)}
 																	>
 																		<summary aria-label={`${achievement.title}. ${achievementEarnedLabel(achievement.earnedAt)}.`}>
-																			<span class="achievement-icon" aria-hidden="true">
+																			<span class="achievement-art achievement-art-small" aria-hidden="true">
 																				<span class="material-icons">{achievement.iconIdentifier}</span>
 																			</span>
 																			<span class="achievement-copy">
@@ -1149,7 +1149,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 																		</summary>
 																		<div class="achievement-popover" role="group" aria-label={`${achievement.title} details`}>
 																			<div class="achievement-popover-head">
-																				<span class="achievement-icon achievement-icon-small" aria-hidden="true">
+																				<span class="achievement-art achievement-art-large" aria-hidden="true">
 																					<span class="material-icons">{achievement.iconIdentifier}</span>
 																				</span>
 																				<div>
@@ -2407,7 +2407,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		display: flex;
 		align-items: flex-start;
 		flex-wrap: wrap;
-		gap: 0.4rem;
+		gap: 0.55rem;
 	}
 	.profile-achievement-row li {
 		list-style: none;
@@ -2415,34 +2415,37 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.achievement-badge {
 		--achievement-accent: var(--color-primary);
 		position: relative;
-		border: 1px solid color-mix(in srgb, var(--achievement-accent) 34%, transparent);
-		border-radius: var(--radius-md);
-		background: color-mix(in srgb, var(--achievement-accent) 7%, white);
-		box-shadow: inset 3px 0 0 var(--achievement-accent);
+		isolation: isolate;
+		border: 1px solid color-mix(in srgb, var(--achievement-accent) 36%, white);
+		border-radius: 18px;
+		background:
+			linear-gradient(180deg, color-mix(in srgb, var(--achievement-accent) 13%, white), rgba(255, 255, 255, 0.92) 72%),
+			#fff;
+		box-shadow:
+			inset 0 0 0 1px rgba(255, 255, 255, 0.74),
+			inset 0 -4px 0 color-mix(in srgb, var(--achievement-accent) 11%, transparent),
+			0 7px 18px rgba(29, 49, 64, 0.1);
 	}
 	.achievement-badge:target {
 		outline: 3px solid color-mix(in srgb, var(--achievement-accent) 44%, transparent);
 		outline-offset: 3px;
 	}
 	.achievement-badge-compact {
-		max-width: 220px;
-		border-radius: var(--radius-pill);
+		width: 132px;
+		max-width: 42vw;
 	}
 	.achievement-badge summary {
 		display: grid;
-		grid-template-columns: 42px minmax(0, 1fr);
-		gap: 0.55rem;
-		align-items: center;
-		min-height: 64px;
-		padding: 0.62rem;
+		justify-items: center;
+		gap: 0.42rem;
+		min-height: 92px;
+		padding: 0.62rem 0.48rem 0.58rem;
 		cursor: pointer;
 		list-style: none;
+		text-align: center;
 	}
 	.achievement-badge-compact summary {
-		grid-template-columns: 28px minmax(0, 1fr);
-		gap: 0.36rem;
-		min-height: 36px;
-		padding: 0.22rem 0.62rem 0.22rem 0.24rem;
+		min-height: 92px;
 	}
 	.achievement-badge summary::-webkit-details-marker {
 		display: none;
@@ -2451,25 +2454,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		outline: 3px solid color-mix(in srgb, var(--achievement-accent) 48%, transparent);
 		outline-offset: 2px;
 		border-radius: var(--radius-md);
-	}
-	.achievement-icon {
-		width: 42px;
-		height: 42px;
-		border-radius: var(--radius-pill);
-		display: grid;
-		place-items: center;
-		background: color-mix(in srgb, var(--achievement-accent) 15%, white);
-		color: var(--achievement-accent);
-	}
-	.achievement-badge-compact .achievement-icon {
-		width: 28px;
-		height: 28px;
-	}
-	.achievement-icon .material-icons {
-		font-size: 1.45rem;
-	}
-	.achievement-badge-compact .achievement-icon .material-icons {
-		font-size: 1.02rem;
 	}
 	.achievement-copy {
 		display: grid;
@@ -2482,8 +2466,8 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		line-height: 1.2;
 	}
 	.achievement-badge-compact .achievement-copy strong {
-		font-size: 0.82rem;
-		line-height: 1.15;
+		font-size: 0.8rem;
+		line-height: 1.12;
 		overflow-wrap: anywhere;
 	}
 	.achievement-copy time {
@@ -2493,10 +2477,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.achievement-popover {
 		position: absolute;
-		left: 0.35rem;
-		right: 0.35rem;
+		left: 0;
 		top: calc(100% + 0.35rem);
 		z-index: 20;
+		width: min(320px, calc(100vw - 2rem));
 		border: var(--border-subtle);
 		border-radius: var(--radius-md);
 		background: #fff;
@@ -2505,16 +2489,9 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.achievement-popover-head {
 		display: grid;
-		grid-template-columns: 34px minmax(0, 1fr);
-		gap: 0.5rem;
+		grid-template-columns: 68px minmax(0, 1fr);
+		gap: 0.65rem;
 		align-items: start;
-	}
-	.achievement-icon-small {
-		width: 34px;
-		height: 34px;
-	}
-	.achievement-icon-small .material-icons {
-		font-size: 1.18rem;
 	}
 	.achievement-popover h3,
 	.achievement-popover p {
@@ -2536,14 +2513,17 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		position: relative;
 	}
 	.profile-achievements-more > summary {
-		display: inline-flex;
+		display: inline-grid;
+		place-items: center;
 		align-items: center;
-		min-height: 36px;
-		border: var(--border-subtle);
-		border-radius: var(--radius-pill);
-		background: rgba(255, 255, 255, 0.68);
+		width: 84px;
+		min-height: 92px;
+		border: 1px dashed rgba(87, 117, 144, 0.34);
+		border-radius: 18px;
+		background: rgba(255, 255, 255, 0.64);
 		color: var(--color-nav);
-		padding: 0.22rem 0.62rem;
+		padding: 0.45rem;
+		text-align: center;
 		font-size: 0.82rem;
 		font-weight: 800;
 		cursor: pointer;
@@ -3690,6 +3670,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			overflow-x: auto;
 			padding-bottom: 0.15rem;
 		}
+		.achievement-badge-compact {
+			width: 124px;
+			max-width: 58vw;
+		}
 		.profile-achievement-row-expanded {
 			flex-wrap: wrap;
 			overflow-x: visible;
@@ -3701,6 +3685,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 		.achievement-popover {
 			position: static;
+			width: auto;
 			margin: 0 0.45rem 0.45rem;
 		}
 		.activity-grid { grid-template-columns: 1fr; }

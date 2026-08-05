@@ -14,7 +14,7 @@ A reader's target number of finished books for the current year. DogEared calcul
 
 ## Achievement
 
-A persistent, non-competitive badge earned from a meaningful reading milestone. Achievements use a shared definition for key, type, title, description, icon, accent color token, criteria, repeatability, and related Work or Series behavior. Earned achievements store the reader, definition, earned date, optional related Work or Series, visibility, and display metadata.
+A persistent, non-competitive badge earned from a meaningful reading milestone. Achievements use a shared definition for key, type, title, description, icon, accent color token, criteria, repeatability, and related Work or Series behavior. Earned achievements store the reader, definition, earned date, optional related Work or Series, optional repeat scope such as a year, visibility, and display metadata. Badge artwork uses DogEared's shared rounded stamp treatment rather than trophies, medals, points, or rarity styling.
 
 ## Canonical Work
 

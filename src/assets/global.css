@@ -24,13 +24,14 @@
   --color-chip-genre: #eef6ea;
   --color-chip-topic: #edf5fb;
   --color-rating: #9b4818;
-  --achievement-streak-7: #9b4818;
-  --achievement-streak-14: #a64416;
-  --achievement-streak-30: #b45309;
-  --achievement-streak-60: #b42318;
-  --achievement-streak-100: #9f1239;
-  --achievement-streak-365: #7c2d12;
-  --achievement-series-completion: #1f5d87;
+  --achievement-streak-7: #2f7d4f;
+  --achievement-streak-14: #4f7f2d;
+  --achievement-streak-30: #b85d1c;
+  --achievement-streak-60: #bd4c2d;
+  --achievement-streak-100: #9b6a08;
+  --achievement-streak-365: #755f05;
+  --achievement-series-completion: #1f6f9b;
+  --achievement-yearly-goal: #6d4aa2;
   --color-text: #1e262d;
   --color-text-muted: #52606d;
   --color-text-subtle: #586470;
@@ -153,6 +154,86 @@ select:not([multiple]):disabled {
   height: 100%;
   max-width: 100%;
   border-radius: inherit;
+}
+
+.achievement-art {
+  --achievement-accent: var(--color-primary);
+  position: relative;
+  isolation: isolate;
+  width: 44px;
+  height: 44px;
+  border: 1px solid color-mix(in srgb, var(--achievement-accent) 42%, white);
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 29% 22%, rgba(255, 255, 255, 0.94) 0 16%, transparent 36%),
+    linear-gradient(145deg, color-mix(in srgb, var(--achievement-accent) 24%, white), color-mix(in srgb, var(--achievement-accent) 8%, white));
+  color: var(--achievement-accent);
+  box-shadow:
+    inset 0 -3px 0 color-mix(in srgb, var(--achievement-accent) 16%, transparent),
+    0 5px 14px rgba(29, 49, 64, 0.1);
+}
+
+.achievement-art::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  z-index: -1;
+  border: 1px dashed color-mix(in srgb, var(--achievement-accent) 42%, transparent);
+  border-radius: 11px;
+  opacity: 0.75;
+}
+
+.achievement-art::after {
+  content: "";
+  position: absolute;
+  right: 7px;
+  bottom: 6px;
+  width: 18px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--achievement-accent) 38%, transparent);
+  opacity: 0.65;
+}
+
+.achievement-art .material-icons {
+  font-size: 1.48rem;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.achievement-art-small {
+  width: 42px;
+  height: 42px;
+}
+
+.achievement-art-small .material-icons {
+  font-size: 1.35rem;
+}
+
+.achievement-art-large {
+  width: 68px;
+  height: 68px;
+  border-radius: 20px;
+}
+
+.achievement-art-large::before {
+  inset: 7px;
+  border-radius: 15px;
+}
+
+.achievement-art-large::after {
+  right: 10px;
+  bottom: 9px;
+  width: 26px;
+  height: 5px;
+}
+
+.achievement-art-large .material-icons {
+  font-size: 2rem;
 }
 
 .special-font {

@@ -242,7 +242,9 @@ function achievementVisual(input: { type: NotificationType; value: number; metad
 			? getReadingStreakAchievementDefinition(input.value)
 			: input.type === "series_finished"
 				? getAchievementDefinition("series_completion")
-				: undefined;
+				: input.type === "reading_goal_completed"
+					? getAchievementDefinition("yearly_reading_goal")
+					: undefined;
 	if (!definition) return null;
 	return {
 		definition,
@@ -600,14 +602,33 @@ export async function createReadingMilestoneNotifications(
 		const goal = normalizePositiveInt(goalRows[0]?.goal);
 		const finishedCount = normalizePositiveInt(goalRows[0]?.finished_count);
 		if (goal > 0 && finishedCount >= goal) {
-			await createNotification(sql, {
+			const award = await awardAchievement(sql, {
 				userId,
-				type: "reading_goal_completed",
-				groupKey: `reading_goal_completed:${currentYear}`,
-				actionUrl: "/reading-life",
-				value: goal,
-				groupWindowHours: 24 * 365
+				definitionKey: "yearly_reading_goal",
+				scopeKey: String(currentYear),
+				metadata: {
+					year: currentYear,
+					goal,
+					finishedCount
+				}
 			});
+			if (award?.inserted) {
+				await createNotification(sql, {
+					userId,
+					type: "reading_goal_completed",
+					groupKey: `reading_goal_completed:${currentYear}`,
+					actionUrl: `${profilePath}#${achievementAnchor(award.id)}`,
+					value: goal,
+					metadata: {
+						achievementId: award.id,
+						achievementDefinitionKey: award.definition.key,
+						year: currentYear,
+						goal,
+						finishedCount
+					},
+					groupWindowHours: 24 * 365
+				});
+			}
 		}
 		const seriesRows = await sql<Array<{ series_id: number; series_name: string; total_books: number; finished_books: number }>>`
 			with target_series as (
