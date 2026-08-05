@@ -52,7 +52,9 @@ test("profiles and settings expose achievement badges and public visibility", ()
 	const api = readFileSync("src/pages/api/account/preferences.ts", "utf8");
 	assert.equal(profile.includes("loadEarnedAchievements"), true);
 	assert.equal(profile.includes('id="achievements"'), true);
-	assert.equal(profile.includes("achievement-grid"), true);
+	assert.equal(profile.includes("profile-achievement-row"), true);
+	assert.equal(profile.includes("profile-achievements-more"), true);
+	assert.equal(profile.includes("achievements-section"), false);
 	assert.equal(profile.includes("achievement-popover"), true);
 	assert.equal(profile.includes("achievementAnchor"), true);
 	assert.equal(settings.includes("show-achievements"), true);

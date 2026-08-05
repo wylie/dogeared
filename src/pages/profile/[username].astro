@@ -326,7 +326,7 @@ let shelfSectionOrderKeys: string[] = [];
 let shelfSectionOrderByKey = new Map<string, number>();
 const RECENT_ACTIVITY_SECTION_KEY = "recent:activity";
 const REVIEWS_SECTION_KEY = "reviews:section";
-const ACHIEVEMENTS_SECTION_KEY = "achievements:section";
+const PROFILE_ACHIEVEMENT_PREVIEW_COUNT = 4;
 let customShelfBooksByShelfId = new Map<number, Array<{
 	bookId: number;
 	title: string;
@@ -614,7 +614,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		bookCount: Math.max(0, Number(row.book_count || 0) || 0)
 	})).filter((row) => row.id > 0 && row.name);
 	if (isOwnerViewer) {
-		const defaultKeys = [ACHIEVEMENTS_SECTION_KEY, "default:reading", RECENT_ACTIVITY_SECTION_KEY, REVIEWS_SECTION_KEY, "default:want_to_read", "default:finished"];
+		const defaultKeys = ["default:reading", RECENT_ACTIVITY_SECTION_KEY, REVIEWS_SECTION_KEY, "default:want_to_read", "default:finished"];
 		const customKeys = customShelves.map((shelf) => `custom:${shelf.id}`);
 		const allKeys = [...defaultKeys, ...customKeys];
 		const defaultOrder = defaultProfileSectionOrder(customKeys);
@@ -776,7 +776,6 @@ function paginationHref(param: string, value: number, anchor: string) {
 
 function defaultProfileSectionOrder(customKeys: string[]) {
 	return [
-		ACHIEVEMENTS_SECTION_KEY,
 		"default:reading",
 		RECENT_ACTIVITY_SECTION_KEY,
 		REVIEWS_SECTION_KEY,
@@ -833,10 +832,9 @@ const baseSectionLinks = [
 	{ id: "reading-goal", label: "Reading Goal" },
 	{ id: "shelf-summary", label: "Shelf Summary" }
 ];
-const canShowAchievementsSection = isOwnerViewer || (showAchievementsPublic && achievements.length > 0);
+const canShowAchievementsInHeader = isOwnerViewer || (showAchievementsPublic && achievements.length > 0);
 const orderedShelfSectionLinks = isOwnerViewer
 	? [
-		{ id: "achievements", label: "Achievements", key: ACHIEVEMENTS_SECTION_KEY },
 		{ id: "currently-reading", label: "Currently Reading", key: "default:reading" },
 		{ id: "recent-activity", label: "Recent Activity", key: RECENT_ACTIVITY_SECTION_KEY },
 		{ id: "reviews", label: "Reviews", key: REVIEWS_SECTION_KEY },
@@ -851,7 +849,6 @@ const orderedShelfSectionLinks = isOwnerViewer
 		.sort((a, b) => shelfSectionOrderValue(String(a.key || "")) - shelfSectionOrderValue(String(b.key || "")))
 		.map(({ id, label }) => ({ id, label }))
 	: [
-		...(canShowAchievementsSection ? [{ id: "achievements", label: "Achievements" }] : []),
 		{ id: "currently-reading", label: "Currently Reading" },
 		{ id: "recent-activity", label: "Recent Activity" },
 		{ id: "reviews", label: "Reviews" },
@@ -869,6 +866,8 @@ const pagedRecent = paginate(recentActivity, recentPage, PAGE_SIZE);
 const pagedReading = paginate(currentlyReading, readingPage, PAGE_SIZE);
 const pagedWantToRead = paginate(wantToReadBooks, wantToReadPage, PAGE_SIZE);
 const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
+const profileAchievementPreview = achievements.slice(0, PROFILE_ACHIEVEMENT_PREVIEW_COUNT);
+const profileAchievementMore = achievements.slice(PROFILE_ACHIEVEMENT_PREVIEW_COUNT);
 const currentGoalYear = readingGoalYear();
 const booksCompletedThisYear = filterCanonicalFinishedBooksForYear(finishedBooks, currentGoalYear)
 	.sort((a, b) => finishedDateTimestamp(b.finishedDate) - finishedDateTimestamp(a.finishedDate));
@@ -1085,6 +1084,95 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 									))}
 								</ul>
 							)}
+							{canShowAchievementsInHeader && achievements.length > 0 && (
+								<div id="achievements" class="profile-achievements" aria-labelledby="profile-achievements-title">
+									<div class="profile-achievements-head">
+										<h2 id="profile-achievements-title">Achievements</h2>
+										{isOwnerViewer && !showAchievementsPublic && (
+											<p>Hidden from other readers</p>
+										)}
+									</div>
+									<ul class="profile-achievement-row" aria-label="Earned achievements">
+										{profileAchievementPreview.map((achievement) => (
+											<li>
+												<details
+													id={achievementAnchor(achievement.id)}
+													class="achievement-badge achievement-badge-compact"
+													style={achievementAccentStyle(achievement.accentColorToken)}
+												>
+													<summary aria-label={`${achievement.title}. ${achievementEarnedLabel(achievement.earnedAt)}.`}>
+														<span class="achievement-icon" aria-hidden="true">
+															<span class="material-icons">{achievement.iconIdentifier}</span>
+														</span>
+														<span class="achievement-copy">
+															<strong>{achievement.title}</strong>
+														</span>
+													</summary>
+													<div class="achievement-popover" role="group" aria-label={`${achievement.title} details`}>
+														<div class="achievement-popover-head">
+															<span class="achievement-icon achievement-icon-small" aria-hidden="true">
+																<span class="material-icons">{achievement.iconIdentifier}</span>
+															</span>
+															<div>
+																<h3>{achievement.title}</h3>
+																<p>{achievement.description}</p>
+															</div>
+														</div>
+														<p><time datetime={achievement.earnedAt}>{achievementEarnedLabel(achievement.earnedAt)}.</time></p>
+														{achievement.relatedSeriesName && <p>Series: {achievement.relatedSeriesName}</p>}
+														{achievement.relatedBookTitle && <p>Work: {achievement.relatedBookTitle}</p>}
+														<p>{achievement.howEarned}</p>
+													</div>
+												</details>
+											</li>
+										))}
+										{profileAchievementMore.length > 0 && (
+											<li class="profile-achievements-more-item">
+												<details class="profile-achievements-more">
+													<summary>+{profileAchievementMore.length} more</summary>
+													<div class="profile-achievements-more-panel" role="group" aria-label="More earned achievements">
+														<ul class="profile-achievement-row profile-achievement-row-expanded">
+															{profileAchievementMore.map((achievement) => (
+																<li>
+																	<details
+																		id={achievementAnchor(achievement.id)}
+																		class="achievement-badge achievement-badge-compact"
+																		style={achievementAccentStyle(achievement.accentColorToken)}
+																	>
+																		<summary aria-label={`${achievement.title}. ${achievementEarnedLabel(achievement.earnedAt)}.`}>
+																			<span class="achievement-icon" aria-hidden="true">
+																				<span class="material-icons">{achievement.iconIdentifier}</span>
+																			</span>
+																			<span class="achievement-copy">
+																				<strong>{achievement.title}</strong>
+																			</span>
+																		</summary>
+																		<div class="achievement-popover" role="group" aria-label={`${achievement.title} details`}>
+																			<div class="achievement-popover-head">
+																				<span class="achievement-icon achievement-icon-small" aria-hidden="true">
+																					<span class="material-icons">{achievement.iconIdentifier}</span>
+																				</span>
+																				<div>
+																					<h3>{achievement.title}</h3>
+																					<p>{achievement.description}</p>
+																				</div>
+																			</div>
+																			<p><time datetime={achievement.earnedAt}>{achievementEarnedLabel(achievement.earnedAt)}.</time></p>
+																			{achievement.relatedSeriesName && <p>Series: {achievement.relatedSeriesName}</p>}
+																			{achievement.relatedBookTitle && <p>Work: {achievement.relatedBookTitle}</p>}
+																			<p>{achievement.howEarned}</p>
+																		</div>
+																	</details>
+																</li>
+															))}
+														</ul>
+													</div>
+												</details>
+											</li>
+										)}
+									</ul>
+								</div>
+							)}
 						</>
 					)}
 				</section>
@@ -1225,76 +1313,6 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 						))}
 					</div>
 				</section>
-
-				{canShowAchievementsSection && (
-					<section
-						id="achievements"
-						class="activity-card activity-card-plain achievements-section"
-						data-shelf-section-key={ACHIEVEMENTS_SECTION_KEY}
-						style={shelfSectionOrderStyle(ACHIEVEMENTS_SECTION_KEY)}
-					>
-						<div class="custom-shelf-heading-row">
-							<h2><span class="material-icons custom-shelf-heading-icon default-shelf-heading-icon" aria-hidden="true">workspace_premium</span>Achievements</h2>
-							{isOwnerViewer && (
-								<div class="custom-shelf-menu-wrap">
-									<button type="button" class="custom-shelf-menu-trigger" data-action="toggle-custom-shelf-menu" aria-expanded="false" aria-label="Actions for Achievements">
-										<span class="material-icons" aria-hidden="true">more_vert</span>
-									</button>
-									<div class="custom-shelf-menu" hidden>
-										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-up" {...shelfSectionMoveAttrs(ACHIEVEMENTS_SECTION_KEY, "up")}>Move up</button>
-										<button type="button" class="custom-shelf-menu-item" data-action="move-shelf-section-down" {...shelfSectionMoveAttrs(ACHIEVEMENTS_SECTION_KEY, "down")}>Move down</button>
-									</div>
-								</div>
-							)}
-						</div>
-						{isOwnerViewer && !showAchievementsPublic && achievements.length > 0 && (
-							<p class="section-intro">Achievements are hidden from other readers. You can show them from Settings.</p>
-						)}
-						{achievements.length === 0 ? (
-							<div class="profile-empty-state">
-								<p>Meaningful reading milestones will appear here as you build streaks and finish complete series.</p>
-								{isOwnerViewer && <a href="/search">Find something to read</a>}
-							</div>
-						) : (
-							<ul class="achievement-grid" aria-label="Earned achievements">
-								{achievements.map((achievement) => (
-									<li>
-										<details
-											id={achievementAnchor(achievement.id)}
-											class="achievement-badge"
-											style={achievementAccentStyle(achievement.accentColorToken)}
-										>
-											<summary aria-label={`${achievement.title}. ${achievementEarnedLabel(achievement.earnedAt)}.`}>
-												<span class="achievement-icon" aria-hidden="true">
-													<span class="material-icons">{achievement.iconIdentifier}</span>
-												</span>
-												<span class="achievement-copy">
-													<strong>{achievement.title}</strong>
-													<time datetime={achievement.earnedAt}>{achievementEarnedLabel(achievement.earnedAt)}</time>
-												</span>
-											</summary>
-											<div class="achievement-popover" role="group" aria-label={`${achievement.title} details`}>
-												<div class="achievement-popover-head">
-													<span class="achievement-icon achievement-icon-small" aria-hidden="true">
-														<span class="material-icons">{achievement.iconIdentifier}</span>
-													</span>
-													<div>
-														<h3>{achievement.title}</h3>
-														<p>{achievement.description}</p>
-													</div>
-												</div>
-												<p><time datetime={achievement.earnedAt}>{achievementEarnedLabel(achievement.earnedAt)}.</time></p>
-												{achievement.relatedSeriesName && <p>Series: {achievement.relatedSeriesName}</p>}
-												{achievement.relatedBookTitle && <p>Work: {achievement.relatedBookTitle}</p>}
-												<p>{achievement.howEarned}</p>
-											</div>
-										</details>
-									</li>
-								))}
-							</ul>
-						)}
-					</section>
-				)}
 
 				{isOwnerViewer && (
 					<dialog class="create-shelf-modal" data-create-custom-shelf-modal>
@@ -2357,20 +2375,42 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	.profile-empty-state a:focus-visible {
 		background: var(--color-primary-hover);
 	}
-	.achievements-section {
-		position: relative;
+	.profile-achievements {
+		margin-top: 0.75rem;
+		padding-top: 0.7rem;
+		border-top: var(--border-subtle);
 	}
-	.achievement-grid {
+	.profile-achievements-head {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+		margin-bottom: 0.45rem;
+	}
+	.profile-achievements-head h2 {
+		margin: 0;
+		color: var(--color-text-subtle);
+		font-size: 0.86rem;
+		font-weight: 800;
+		line-height: 1.2;
+	}
+	.profile-achievements-head p {
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+		font-weight: 700;
+	}
+	.profile-achievement-row {
 		list-style: none;
-		margin: 0.7rem 0 0;
+		margin: 0;
 		padding: 0;
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-		gap: 0.55rem;
+		display: flex;
+		align-items: flex-start;
+		flex-wrap: wrap;
+		gap: 0.4rem;
 	}
-	.achievement-grid li {
+	.profile-achievement-row li {
 		list-style: none;
-		min-width: 0;
 	}
 	.achievement-badge {
 		--achievement-accent: var(--color-primary);
@@ -2384,6 +2424,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		outline: 3px solid color-mix(in srgb, var(--achievement-accent) 44%, transparent);
 		outline-offset: 3px;
 	}
+	.achievement-badge-compact {
+		max-width: 220px;
+		border-radius: var(--radius-pill);
+	}
 	.achievement-badge summary {
 		display: grid;
 		grid-template-columns: 42px minmax(0, 1fr);
@@ -2393,6 +2437,12 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		padding: 0.62rem;
 		cursor: pointer;
 		list-style: none;
+	}
+	.achievement-badge-compact summary {
+		grid-template-columns: 28px minmax(0, 1fr);
+		gap: 0.36rem;
+		min-height: 36px;
+		padding: 0.22rem 0.62rem 0.22rem 0.24rem;
 	}
 	.achievement-badge summary::-webkit-details-marker {
 		display: none;
@@ -2411,8 +2461,15 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		background: color-mix(in srgb, var(--achievement-accent) 15%, white);
 		color: var(--achievement-accent);
 	}
+	.achievement-badge-compact .achievement-icon {
+		width: 28px;
+		height: 28px;
+	}
 	.achievement-icon .material-icons {
 		font-size: 1.45rem;
+	}
+	.achievement-badge-compact .achievement-icon .material-icons {
+		font-size: 1.02rem;
 	}
 	.achievement-copy {
 		display: grid;
@@ -2423,6 +2480,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		color: var(--color-text);
 		font-size: 0.95rem;
 		line-height: 1.2;
+	}
+	.achievement-badge-compact .achievement-copy strong {
+		font-size: 0.82rem;
+		line-height: 1.15;
+		overflow-wrap: anywhere;
 	}
 	.achievement-copy time {
 		color: var(--color-text-muted);
@@ -2469,6 +2531,47 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 	}
 	.achievement-popover > p {
 		margin-top: 0.45rem;
+	}
+	.profile-achievements-more {
+		position: relative;
+	}
+	.profile-achievements-more > summary {
+		display: inline-flex;
+		align-items: center;
+		min-height: 36px;
+		border: var(--border-subtle);
+		border-radius: var(--radius-pill);
+		background: rgba(255, 255, 255, 0.68);
+		color: var(--color-nav);
+		padding: 0.22rem 0.62rem;
+		font-size: 0.82rem;
+		font-weight: 800;
+		cursor: pointer;
+		list-style: none;
+	}
+	.profile-achievements-more > summary::-webkit-details-marker {
+		display: none;
+	}
+	.profile-achievements-more > summary:focus-visible {
+		outline: 3px solid rgba(31, 122, 69, 0.72);
+		outline-offset: 2px;
+	}
+	.profile-achievements-more-panel {
+		position: absolute;
+		left: 0;
+		top: calc(100% + 0.35rem);
+		z-index: 18;
+		width: min(520px, calc(100vw - 2rem));
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: #fff;
+		box-shadow: var(--shadow-popover);
+		padding: 0.65rem;
+	}
+	.profile-achievement-row-expanded {
+		max-height: min(320px, 58vh);
+		overflow: auto;
+		padding-right: 0.2rem;
 	}
 	.section-intro {
 		margin: 0.1rem 0 0.7rem;
@@ -3582,7 +3685,20 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		}
 		.shelf-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 		.shelf-summary-item-total { grid-column: auto; }
-		.achievement-grid { grid-template-columns: 1fr; }
+		.profile-achievement-row {
+			flex-wrap: nowrap;
+			overflow-x: auto;
+			padding-bottom: 0.15rem;
+		}
+		.profile-achievement-row-expanded {
+			flex-wrap: wrap;
+			overflow-x: visible;
+		}
+		.profile-achievements-more-panel {
+			position: static;
+			width: auto;
+			margin-top: 0.4rem;
+		}
 		.achievement-popover {
 			position: static;
 			margin: 0 0.45rem 0.45rem;

@@ -81,7 +81,7 @@ Limitations: Privacy settings are stored inside `profile_data.settings`, not a s
 
 Status: Complete
 
-Readers earn persistent achievement badges for meaningful, non-competitive reading milestones. Initial badges cover 7, 14, 30, 60, 100, and 365 day reading streaks plus finishing every currently available book in a series. Badges appear on the owner profile and, when public achievement visibility is enabled, on public profiles viewed by other readers.
+Readers earn persistent achievement badges for meaningful, non-competitive reading milestones. Initial badges cover 7, 14, 30, 60, 100, and 365 day reading streaks plus finishing every currently available book in a series. Badges appear near the bottom of the main profile header card on the owner profile and, when public achievement visibility is enabled, on public profiles viewed by other readers. The header shows a compact preview row and a small more control when additional badges exist.
 
 Each achievement comes from the shared achievement-definition registry, which owns the key, type, title, description, icon identifier, accent color token, criteria, repeatability, and related Series or Work behavior. The same definition powers the profile badge, badge detail popover, notification icon, notification accent, notification title, notification description, and historical backfill. Badge details explain how the achievement can be earned without exposing private journal entries, exact reading-session history, or incomplete progress.
 

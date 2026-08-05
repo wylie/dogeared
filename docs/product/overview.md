@@ -206,15 +206,15 @@ DogEared persists meaningful non-competitive reading achievements as profile bad
 
 The same definition powers profile badges, notification icon and accent treatment, badge popovers, descriptions, backfill, and future listings. Initial achievements cover 7, 14, 30, 60, 100, and 365 day reading streaks plus finishing every currently available book in a series. Achievements do not add points, rankings, leaderboards, or competitive scoring.
 
-Achievement notifications are created only after the server verifies eligibility, persists the earned achievement, and links the notification metadata to the achievement definition and earned row. Notification Open actions deep-link to the profile Achievements section and highlight the earned badge. Deleting a notification does not delete the achievement.
+Achievement notifications are created only after the server verifies eligibility, persists the earned achievement, and links the notification metadata to the achievement definition and earned row. Notification Open actions deep-link to the profile header Achievements row and highlight the earned badge. Deleting a notification does not delete the achievement.
 
-Profile badges use shared Material icon identifiers and achievement color tokens from DogEared's palette. Streak badges use a related warm progression by threshold, while series completion uses a contrasting literary blue. Badge details explain the description, earned date, related Series or Work, and how the badge can be earned without exposing private reading-session history or incomplete progress.
+Profile badges use shared Material icon identifiers and achievement color tokens from DogEared's palette. Streak badges use a related warm progression by threshold, while series completion uses a contrasting literary blue. Badges appear as a compact row near the bottom of the main profile header card, after identity, biography, details, and favorite genres. The header shows a limited preview with a compact more control for additional badges. Badge details explain the description, earned date, related Series or Work, and how the badge can be earned without exposing private reading-session history or incomplete progress.
 
 Readers can show or hide all achievements on their public profile from Settings. Earned achievements default to public unless the reader hides the section. Historical backfill is handled by `npm run backfill:achievements`, which defaults to dry run, reports eligible users, proposed awards, existing conflicts, and only writes rows with `-- --apply`.
 
 ### Profiles
 
-Profiles show who a reader is and what they are reading now. They include reader identity, bio, favorite book and author, shelf counts, followers/following counts, a concise reading goal summary, custom shelves, achievement badges, current reads, recent activity, profile Reviews, default shelf sections, and settings/profile edit access. Owners can edit profile information directly from their profile page and reorder Achievements and Reviews alongside shelf sections.
+Profiles show who a reader is and what they are reading now. They include reader identity, bio, favorite book and author, shelf counts, followers/following counts, a concise reading goal summary, custom shelves, compact achievement badges inside the profile header card, current reads, recent activity, profile Reviews, default shelf sections, and settings/profile edit access. Owners can edit profile information directly from their profile page and reorder Reviews alongside shelf sections.
 
 ### Shelves
 
