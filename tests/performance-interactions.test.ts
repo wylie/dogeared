@@ -4,18 +4,26 @@ import { readFileSync } from "node:fs";
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 
-test("search API launches catalog and provider work before awaiting results", () => {
+test("search API supports local-first and deferred external results", () => {
 	const source = read("../src/pages/api/books/search.ts");
 	const dbPromise = source.indexOf("const dbdRowsPromise = withRuntimeCache");
+	const localMode = source.indexOf('if (phase === "local")');
+	const externalLoader = source.indexOf("const loadExternalResults = async () => withRuntimeCache");
 	const googlePromise = source.indexOf("const googleFetchedSetsPromise = Promise.all");
 	const openPromise = source.indexOf("const openFetchedSetsPromise = Promise.all");
-	const awaitAll = source.indexOf("const [dbdRows, googleFetchedSets, openFetchedSets] = await Promise.all");
 
 	assert.ok(dbPromise > -1);
-	assert.ok(googlePromise > dbPromise);
+	assert.ok(localMode > dbPromise);
+	assert.ok(externalLoader > dbPromise);
+	assert.ok(googlePromise > externalLoader);
 	assert.ok(openPromise > googlePromise);
-	assert.ok(awaitAll > openPromise);
-	assert.match(source, /markPerfStage\("catalog_and_providers_loaded"\)/);
+	assert.match(source, /normalizeSearchPhase\(url\.searchParams\.get\("mode"\)\)/);
+	assert.match(source, /const queryTokenPatterns = tokenizeQuery\(query\)/);
+	assert.match(source, /from unnest\(\$\{queryTokenPatterns\}::text\[\]\) token_pattern/);
+	assert.match(source, /if \(phase === "local"\)/);
+	assert.match(source, /phase === "external"/);
+	assert.match(source, /markPerfStage\("local_catalog_loaded"\)/);
+	assert.match(source, /markPerfStage\("external_providers_loaded"\)/);
 	assert.match(source, /markPerfStage\("canonical_resolution_complete"\)/);
 });
 
@@ -24,6 +32,11 @@ test("search page parallelizes result decoration and preserves duplicate-submit 
 	const leftHand = read("../src/components/LeftHand.astro");
 
 	assert.match(searchPage, /const customShelfOptionsPromise = session\?\.userId/);
+	assert.match(searchPage, /endpoint\.searchParams\.set\("mode", "local"\)/);
+	assert.match(searchPage, /new AbortController\(\)/);
+	assert.match(searchPage, /externalSearchRequestId/);
+	assert.match(searchPage, /mode: "external"/);
+	assert.match(searchPage, /appendExternalResults/);
 	assert.match(searchPage, /const \[summaryRows, statusRows\] = await Promise\.all\(\[summaryRowsPromise, statusRowsPromise\]\)/);
 	assert.match(leftHand, /leftHandSearchForm\.dataset\.searching === "true"/);
 	assert.match(leftHand, /event\.preventDefault\(\)/);

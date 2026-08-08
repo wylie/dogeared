@@ -56,6 +56,15 @@ function publishedYearOnly(value: string) {
 	return match ? match[1] : "";
 }
 
+function searchResultKey(result: SearchResult) {
+	const authors = Array.isArray(result.authors) ? result.authors : [];
+	const bookId = Number(result.bookId || 0) || 0;
+	if (bookId > 0) return `book:${bookId}`;
+	const identifier = String(result.googleBooksId || result.isbn13 || result.isbn10 || result.sourceWorkId || result.sourceEditionId || "").trim();
+	if (identifier) return `external:${identifier}`;
+	return `title:${String(result.title || "").trim().toLowerCase()}|${String(authors[0] || "").trim().toLowerCase()}`;
+}
+
 function summarizeRawResultForLog(value: unknown, index: number) {
 	if (!value || typeof value !== "object") {
 		return { index, valueType: typeof value };
@@ -84,6 +93,7 @@ if (query) {
 		endpoint.searchParams.set("q", query);
 		endpoint.searchParams.set("page", "1");
 		endpoint.searchParams.set("pageSize", "20");
+		endpoint.searchParams.set("mode", "local");
 		const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
 		if (!response.ok) {
 			errorMessage = "Unable to search right now. Please try again in a moment.";
@@ -172,7 +182,15 @@ const completionStatus = query && !errorMessage
 	metaDescription="Search DogEared for books and add them to your shelves."
 	canonicalUrl="/search"
 >
-		<div slot="right" class="search-page" id="search-page" data-guided-anchor="search-page" data-query={query} data-authenticated={String(isAuthenticated)}>
+		<div
+			slot="right"
+			class="search-page"
+			id="search-page"
+			data-guided-anchor="search-page"
+			data-query={query}
+			data-authenticated={String(isAuthenticated)}
+			data-custom-shelves={customShelfOptionsJson}
+		>
 		<h1>Search</h1>
 		{!query && <p>Search for a favorite title, then add it to Want to Read, Currently Reading, or Read to build recommendations.</p>}
 		<p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{completionStatus}</p>
@@ -183,12 +201,19 @@ const completionStatus = query && !errorMessage
 			</div>
 		)}
 		{query && !errorMessage && results.length === 0 && collectionResults.length === 0 && (
-			<div class="search-state" role="status">
+			<div class="search-state" role="status" data-empty-search-state hidden>
 				<p>No results for "{query}". Try a broader title, an author name, or fewer keywords.</p>
 				<a href="/search">Search again</a>
 			</div>
 		)}
 		{query && !errorMessage && (results.length > 0 || collectionResults.length > 0) && <p>Results for "{query}". Use the shelf button on a card to save books to your Profile.</p>}
+		{query && !errorMessage && (
+			<p id="search-progressive-status" class="meta" role="status" aria-live="polite" data-search-progressive-status>
+				{results.length > 0 || collectionResults.length > 0
+					? "Checking Google Books and Open Library for more matches."
+					: "Searching DogEared first, then checking Google Books and Open Library."}
+			</p>
+		)}
 
 		{query && !errorMessage && collectionResults.length > 0 && (
 			<section class="collection-search-section" aria-labelledby="collection-search-title">
@@ -226,6 +251,11 @@ const completionStatus = query && !errorMessage
 					const categories = Array.isArray(result.categories) ? result.categories : [];
 					return (
 				<BookCard
+					attrs={{
+						'data-search-result-key': searchResultKey(result),
+						'data-search-book-id': String(numericBookId || ""),
+						'data-search-title': result.title
+					}}
 					title={result.title}
 					titleHref={Number(result.bookId || 0) > 0
 						? `/book?bookId=${encodeURIComponent(String(result.bookId || 0))}`
@@ -548,6 +578,197 @@ const completionStatus = query && !errorMessage
 	}
 </style>
 
+<style is:global>
+	#search-results .progressive-book-card {
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		padding: 0.68rem;
+		position: relative;
+		display: grid;
+		grid-template-columns: 84px minmax(0, 1fr);
+		gap: 0.68rem;
+		min-width: 0;
+	}
+	#search-results .progressive-book-card:hover {
+		background: #fff;
+		border-color: var(--color-border);
+	}
+	#search-results .progressive-book-card .progressive-shelf-dropdown {
+		position: absolute;
+		top: 0.6rem;
+		right: 0.6rem;
+		z-index: 5;
+	}
+	#search-results .progressive-cover-wrap {
+		width: 84px;
+		display: grid;
+		gap: 0.5rem;
+		align-self: start;
+	}
+	#search-results .progressive-cover {
+		width: 84px;
+		height: 126px;
+		display: grid;
+		place-items: center;
+		object-fit: cover;
+		border-radius: var(--radius-sm);
+		background: linear-gradient(145deg, #f5efe4, #e7dbc9);
+		box-shadow: 0 8px 16px rgba(29, 49, 64, 0.12);
+		color: var(--color-text-muted);
+	}
+	#search-results .progressive-cover-placeholder .material-icons {
+		font-size: 1.8rem;
+	}
+	#search-results .progressive-card-body {
+		min-width: 0;
+		padding-right: 2.8rem;
+	}
+	#search-results .progressive-card-body h3 {
+		margin: 0;
+		font-size: 1rem;
+		line-height: 1.2;
+		font-weight: 720;
+	}
+	#search-results .progressive-card-body h3 a,
+	#search-results .progressive-card-body .author-link {
+		color: inherit;
+		text-decoration: none;
+	}
+	#search-results .progressive-card-body h3 a:hover,
+	#search-results .progressive-card-body .author-link:hover {
+		text-decoration: underline;
+	}
+	#search-results .progressive-chip-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.28rem;
+		margin-top: 0.35rem;
+	}
+	#search-results .progressive-chip {
+		border-radius: var(--radius-pill);
+		background: var(--color-chip-genre);
+		color: var(--color-nav-active);
+		padding: 0.16rem 0.48rem;
+		font-size: 0.76rem;
+		font-weight: 760;
+		text-decoration: none;
+	}
+	#search-results .progressive-description {
+		margin: 0.45rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.9rem;
+		line-height: 1.45;
+	}
+	#search-results .progressive-shelf-dropdown {
+		display: inline-flex;
+		flex-direction: column;
+		align-items: flex-start;
+		width: 44px;
+		min-width: 44px;
+		overflow: visible;
+	}
+	#search-results .progressive-shelf-dropdown .shelf-button-wrapper {
+		position: relative;
+		width: 44px;
+		min-width: 44px;
+		overflow: visible;
+	}
+	#search-results .progressive-shelf-dropdown .shelf-trigger.shelf-fab {
+		width: 44px;
+		height: 44px;
+		min-width: 44px;
+		min-height: 44px;
+		border: none;
+		border-radius: var(--radius-pill);
+		padding: 0;
+		background: var(--color-primary);
+		color: #fff;
+		cursor: pointer;
+		display: grid;
+		place-items: center;
+		line-height: 1;
+	}
+	#search-results .progressive-shelf-dropdown .shelf-trigger.shelf-fab:hover {
+		background: var(--color-primary-hover);
+	}
+	#search-results .progressive-shelf-dropdown .shelf-plus {
+		font-size: 1.4rem;
+		line-height: 1;
+	}
+	#search-results .progressive-shelf-dropdown .shelf-state {
+		margin: 0.22rem 0 0;
+		font-size: 0.72rem;
+		line-height: 1.1;
+		font-weight: 700;
+		color: #1f5138;
+	}
+	#search-results .progressive-shelf-dropdown .shelf-menu {
+		position: absolute;
+		top: calc(100% + 0.38rem);
+		left: 0;
+		min-width: 180px;
+		max-width: calc(100vw - 16px);
+		max-height: min(360px, calc(100vh - 16px));
+		overflow: auto;
+		background: #fff;
+		border: none;
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-popover);
+		padding: 0.28rem;
+		z-index: 120;
+	}
+	#search-results .progressive-shelf-dropdown .shelf-option {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		width: 100%;
+		text-align: left;
+		border: none;
+		background: transparent;
+		padding: 0.5rem 0.62rem;
+		font-size: 0.92rem;
+		cursor: pointer;
+		color: var(--color-text);
+		font: inherit;
+		line-height: 1.25;
+		border-radius: var(--radius-sm);
+	}
+	#search-results .progressive-shelf-dropdown .shelf-option:hover {
+		background: rgba(87, 117, 144, 0.09);
+	}
+	#search-results .progressive-shelf-dropdown .shelf-option-icon {
+		font-size: 1.15rem;
+		line-height: 1;
+		color: #9aa3af;
+	}
+	#search-results .progressive-shelf-dropdown .shelf-option-divider {
+		height: 1px;
+		margin: 0.22rem 0.18rem;
+		background: var(--color-border-soft);
+	}
+	#search-results .progressive-shelf-dropdown .shelf-feedback {
+		margin: 0.28rem 0 0;
+		width: 100%;
+		min-height: 2.1rem;
+		font-size: 0.82rem;
+		color: var(--color-primary);
+		line-height: 1.25;
+	}
+	@media (max-width: 420px) {
+		#search-results .progressive-book-card {
+			grid-template-columns: 72px minmax(0, 1fr);
+		}
+		#search-results .progressive-cover-wrap,
+		#search-results .progressive-cover {
+			width: 72px;
+		}
+		#search-results .progressive-cover {
+			height: 108px;
+		}
+	}
+</style>
+
 <script>
 	import { resolveClientAuthState } from "../lib/clientAuth.ts";
 	import {
@@ -578,8 +799,11 @@ const completionStatus = query && !errorMessage
 	const searchPage = document.getElementById("search-page");
 	let isAuthenticated = searchPage?.dataset.authenticated === "true";
 	const feedbackTimers = new WeakMap();
-	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
 	initRatingControls();
+
+	function getShelfDropdowns() {
+		return Array.from(document.querySelectorAll(".shelf-dropdown"));
+	}
 
 	function normalizeText(value) {
 		return String(value || "").trim().toLowerCase();
@@ -633,7 +857,7 @@ const completionStatus = query && !errorMessage
 	}
 
 	function closeAllMenus() {
-		closeShelfMenus(shelfDropdowns);
+		closeShelfMenus(getShelfDropdowns());
 	}
 
 	function applyStatus(entry, selectedStatus, totalPages) {
@@ -785,14 +1009,14 @@ const completionStatus = query && !errorMessage
 
 	function syncExistingState() {
 		if (!isAuthenticated) {
-			for (const dropdown of shelfDropdowns) {
+			for (const dropdown of getShelfDropdowns()) {
 				setDropdownLabel(dropdown, "");
 				setShelvedState(dropdown, false);
 			}
 			return;
 		}
 		const entries = loadShelfEntries();
-		for (const dropdown of shelfDropdowns) {
+		for (const dropdown of getShelfDropdowns()) {
 			const title = dropdown.dataset.title || "";
 			const author = dropdown.dataset.author || "";
 			const existing = findEntry(entries, title, author);
@@ -803,6 +1027,261 @@ const completionStatus = query && !errorMessage
 				setDropdownLabel(dropdown, "");
 				setShelvedState(dropdown, false);
 			}
+		}
+	}
+
+	const searchResultsRoot = document.getElementById("search-results");
+	const progressiveStatus = document.querySelector("[data-search-progressive-status]");
+	const emptySearchState = document.querySelector("[data-empty-search-state]");
+	let externalSearchController = null;
+	let externalSearchRequestId = 0;
+
+	function escapeHtml(value) {
+		return String(value || "")
+			.replaceAll("&", "&amp;")
+			.replaceAll("<", "&lt;")
+			.replaceAll(">", "&gt;")
+			.replaceAll('"', "&quot;")
+			.replaceAll("'", "&#39;");
+	}
+
+	function slugifyAuthorName(value) {
+		return String(value || "")
+			.trim()
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-+|-+$/g, "");
+	}
+
+	function truncateSearchDescription(value, maxLength = 240) {
+		const text = String(value || "")
+			.replace(/<[^>]+>/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+		if (!text) return "";
+		if (text.length <= maxLength) return text;
+		return `${text.slice(0, maxLength).trimEnd()}...`;
+	}
+
+	function publishedYearLabel(value) {
+		return String(value || "").match(/\b(1[0-9]{3}|20[0-9]{2}|2100)\b/)?.[1] || "";
+	}
+
+	function searchResultClientKey(result) {
+		const bookId = Number(result?.bookId || 0) || 0;
+		if (bookId > 0) return `book:${bookId}`;
+		const identifier = String(result?.googleBooksId || result?.isbn13 || result?.isbn10 || result?.sourceWorkId || result?.sourceEditionId || "").trim();
+		if (identifier) return `external:${identifier}`;
+		const author = Array.isArray(result?.authors) ? String(result.authors[0] || "") : "";
+		return `title:${String(result?.title || "").trim().toLowerCase()}|${author.trim().toLowerCase()}`;
+	}
+
+	function renderedResultKeys() {
+		return new Set(Array.from(document.querySelectorAll("[data-search-result-key]"))
+			.map((node) => node instanceof HTMLElement ? String(node.dataset.searchResultKey || "") : "")
+			.filter(Boolean));
+	}
+
+	function renderedBookIds() {
+		return new Set(Array.from(document.querySelectorAll("[data-search-book-id]"))
+			.map((node) => node instanceof HTMLElement ? Math.max(0, Number(node.dataset.searchBookId || 0) || 0) : 0)
+			.filter((id) => id > 0));
+	}
+
+	function hasExactLocalTitle(queryText) {
+		const normalizedQuery = canonicalizeTitle(queryText);
+		if (!normalizedQuery) return false;
+		return Array.from(document.querySelectorAll("[data-search-title]")).some((node) => {
+			if (!(node instanceof HTMLElement)) return false;
+			return canonicalizeTitle(node.dataset.searchTitle || "") === normalizedQuery;
+		});
+	}
+
+	function renderCustomShelfOptions(rawJson) {
+		let shelves = [];
+		try {
+			const parsed = JSON.parse(String(rawJson || "[]"));
+			if (Array.isArray(parsed)) shelves = parsed;
+		} catch {
+			shelves = [];
+		}
+		const items = shelves
+			.map((shelf) => ({
+				id: Math.max(0, Number(shelf?.id || 0) || 0),
+				name: String(shelf?.name || "").trim(),
+				icon: String(shelf?.icon || "bookmarks").trim() || "bookmarks"
+			}))
+			.filter((shelf) => shelf.id > 0 && shelf.name)
+			.slice(0, 24);
+		if (items.length === 0) return "";
+		return `
+			<div class="shelf-option-divider" role="separator" aria-hidden="true"></div>
+			${items.map((shelf) => `
+				<button type="button" class="shelf-option" data-action="assign-custom-shelf" data-shelf-id="${shelf.id}" role="menuitem">
+					<span class="material-icons shelf-option-icon" aria-hidden="true">${escapeHtml(shelf.icon)}</span>
+					<span>${escapeHtml(shelf.name)}</span>
+				</button>
+			`).join("")}
+		`;
+	}
+
+	function renderProgressiveShelfDropdown(result, author, categories) {
+		const bookId = Number(result?.bookId || 0) || 0;
+		const googleBooksId = String(result?.googleBooksId || "").trim();
+		const sourceWorkId = String(result?.sourceWorkId || googleBooksId || "").trim();
+		const sourceEditionId = String(result?.sourceEditionId || "").trim();
+		const sourceUrl = googleBooksId
+			? `https://books.google.com/books?id=${encodeURIComponent(googleBooksId)}`
+			: (sourceWorkId ? `https://openlibrary.org/works/${encodeURIComponent(sourceWorkId)}` : "");
+		const menuId = `shelf-menu-progressive-${Math.random().toString(36).slice(2, 10)}`;
+		const attrs = {
+			"data-book-id": String(bookId || ""),
+			"data-title": String(result?.title || ""),
+			"data-author": author,
+			"data-description": String(result?.description || ""),
+			"data-pages": String(result?.pageCount ?? 0),
+			"data-cover": String(result?.thumbnail || ""),
+			"data-format": String(result?.printType || "Book"),
+			"data-language": String(result?.language || ""),
+			"data-publisher": String(result?.publisher || ""),
+			"data-published-date": String(result?.publishedDate || ""),
+			"data-isbn10": String(result?.isbn10 || ""),
+			"data-isbn13": String(result?.isbn13 || ""),
+			"data-google-books-id": googleBooksId,
+			"data-source": String(result?.source || (googleBooksId ? "google_books" : "open_library")),
+			"data-source-work-id": sourceWorkId,
+			"data-source-edition-id": sourceEditionId,
+			"data-source-url": sourceUrl,
+			"data-categories": JSON.stringify(categories),
+			"data-custom-shelves": String(searchPage?.dataset.customShelves || "[]")
+		};
+		const attrHtml = Object.entries(attrs)
+			.map(([name, value]) => `${name}="${escapeHtml(value)}"`)
+			.join(" ");
+		return `
+			<div class="shelf-dropdown progressive-shelf-dropdown" ${attrHtml}>
+				<div class="shelf-button-wrapper">
+					<button type="button" class="shelf-trigger shelf-fab" data-action="toggle-shelf" data-status="" aria-expanded="false" aria-haspopup="menu" aria-controls="${menuId}" aria-label="Shelf: Not on Shelf. Open shelf options" title="Shelf: Not on Shelf">
+						<span class="material-icons shelf-plus" aria-hidden="true">library_add</span>
+					</button>
+					<div id="${menuId}" class="shelf-menu" role="menu" aria-label="Shelf options" hidden>
+						<button type="button" class="shelf-option" data-action="set-shelf" data-status="want_to_read" role="menuitem"><span class="material-icons shelf-option-icon" aria-hidden="true">add</span><span>Want to Read</span></button>
+						<button type="button" class="shelf-option" data-action="set-shelf" data-status="reading" role="menuitem"><span class="material-icons shelf-option-icon" aria-hidden="true">menu_book</span><span>Currently Reading</span></button>
+						<button type="button" class="shelf-option" data-action="set-shelf" data-status="finished" role="menuitem"><span class="material-icons shelf-option-icon" aria-hidden="true">check</span><span>Read</span></button>
+						<div data-custom-shelf-options>${renderCustomShelfOptions(searchPage?.dataset.customShelves || "[]")}</div>
+						<div class="shelf-option-divider" role="separator" aria-hidden="true"></div>
+						<button type="button" class="shelf-option shelf-option-danger" data-action="remove-from-shelves" role="menuitem"><span class="material-icons shelf-option-icon" aria-hidden="true">remove_circle</span><span>Remove from Shelves</span></button>
+					</div>
+				</div>
+				<p class="shelf-state">Not on Shelf</p>
+				<p class="shelf-feedback" role="status" aria-live="polite" hidden></p>
+			</div>
+		`;
+	}
+
+	function renderProgressiveResult(result) {
+		const title = String(result?.title || "").trim();
+		if (!title) return "";
+		const authors = Array.isArray(result?.authors) ? result.authors : [];
+		const author = String(authors[0] || "Unknown author").trim();
+		const authorSlug = slugifyAuthorName(author);
+		const bookId = Number(result?.bookId || 0) || 0;
+		const titleHref = bookId > 0
+			? `/book?bookId=${encodeURIComponent(String(bookId))}`
+			: `/book?googleBooksId=${encodeURIComponent(String(result?.googleBooksId || ""))}&isbn13=${encodeURIComponent(String(result?.isbn13 || ""))}&isbn10=${encodeURIComponent(String(result?.isbn10 || ""))}&title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}`;
+		const categories = Array.isArray(result?.categories) ? result.categories.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 4) : [];
+		const key = searchResultClientKey(result);
+		const year = publishedYearLabel(result?.publishedDate);
+		const description = truncateSearchDescription(result?.description || "");
+		return `
+			<li class="progressive-book-card" data-search-result-key="${escapeHtml(key)}" data-search-book-id="${bookId || ""}" data-search-title="${escapeHtml(title)}">
+				${renderProgressiveShelfDropdown(result, author, categories)}
+				<div class="progressive-cover-wrap">
+					${result?.thumbnail ? `<a href="${escapeHtml(titleHref)}" aria-label="View ${escapeHtml(title)}"><img class="progressive-cover" src="${escapeHtml(result.thumbnail)}" alt="${escapeHtml(title)} cover" loading="lazy" decoding="async" width="84" height="126" /></a>` : `<div class="progressive-cover progressive-cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>`}
+				</div>
+				<div class="progressive-card-body">
+					<h3><a href="${escapeHtml(titleHref)}">${escapeHtml(title)}</a></h3>
+					<p class="meta">by ${authorSlug ? `<a class="author-link" href="/author/${encodeURIComponent(authorSlug)}">${escapeHtml(author)}</a>` : escapeHtml(author)}</p>
+					${result?.seriesLabel ? `<p class="meta series-meta">${escapeHtml(result.seriesLabel)}</p>` : ""}
+					${bookId > 0 ? `<p class="meta">Already in DogEared</p>` : `<p class="meta">Found through ${result?.source === "open_library" ? "Open Library" : "Google Books"}</p>`}
+					${year ? `<p class="meta">Published: ${escapeHtml(year)}</p>` : ""}
+					${Number(result?.pageCount || 0) > 0 ? `<p class="meta">Pages: ${Number(result.pageCount).toLocaleString()}</p>` : ""}
+					${result?.publisher ? `<p class="meta">Publisher: ${escapeHtml(result.publisher)}</p>` : ""}
+					${categories.length > 0 ? `<div class="progressive-chip-row">${categories.map((category) => `<a class="progressive-chip" href="/related?kind=genre&value=${encodeURIComponent(category)}">${escapeHtml(category)}</a>`).join("")}</div>` : ""}
+					${description ? `<p class="progressive-description">${escapeHtml(description)}</p>` : ""}
+				</div>
+			</li>
+		`;
+	}
+
+	function appendExternalResults(results) {
+		if (!(searchResultsRoot instanceof HTMLElement)) return 0;
+		const keys = renderedResultKeys();
+		const bookIds = renderedBookIds();
+		const html = [];
+		for (const result of Array.isArray(results) ? results : []) {
+			const key = searchResultClientKey(result);
+			const bookId = Number(result?.bookId || 0) || 0;
+			if (!key || keys.has(key) || (bookId > 0 && bookIds.has(bookId))) continue;
+			const rendered = renderProgressiveResult(result);
+			if (!rendered) continue;
+			keys.add(key);
+			if (bookId > 0) bookIds.add(bookId);
+			html.push(rendered);
+		}
+		if (html.length === 0) return 0;
+		searchResultsRoot.insertAdjacentHTML("beforeend", html.join(""));
+		syncExistingState();
+		return html.length;
+	}
+
+	function setProgressiveStatus(message, hidden = false) {
+		if (!(progressiveStatus instanceof HTMLElement)) return;
+		progressiveStatus.textContent = message;
+		progressiveStatus.hidden = hidden;
+	}
+
+	async function loadProgressiveExternalResults() {
+		const queryText = String(searchPage?.dataset.query || "").trim();
+		if (!queryText || !(searchResultsRoot instanceof HTMLElement)) return;
+		if (hasExactLocalTitle(queryText)) {
+			setProgressiveStatus("Showing DogEared catalog matches.", true);
+			return;
+		}
+		externalSearchController?.abort();
+		const requestId = ++externalSearchRequestId;
+		const controller = new AbortController();
+		externalSearchController = controller;
+		const params = new URLSearchParams({ q: queryText, page: "1", pageSize: "20", mode: "external" });
+		const excludeIds = Array.from(renderedBookIds());
+		if (excludeIds.length > 0) params.set("excludeBookIds", excludeIds.join(","));
+		setProgressiveStatus("Checking Google Books and Open Library for more matches.");
+		try {
+			const response = await fetch(`/api/books/search?${params.toString()}`, {
+				headers: { Accept: "application/json" },
+				signal: controller.signal
+			});
+			const payload = await response.json().catch(() => ({}));
+			if (requestId !== externalSearchRequestId) return;
+			if (!response.ok) {
+				setProgressiveStatus("More matches are temporarily unavailable.", false);
+				return;
+			}
+			const appended = appendExternalResults(payload?.results || []);
+			const totalCards = searchResultsRoot.querySelectorAll("[data-search-result-key]").length;
+			if (emptySearchState instanceof HTMLElement) {
+				emptySearchState.hidden = totalCards > 0;
+			}
+			if (appended > 0) {
+				setProgressiveStatus(`Added ${appended.toLocaleString()} more match${appended === 1 ? "" : "es"}.`, false);
+			} else if (totalCards === 0) {
+				setProgressiveStatus("", true);
+			} else {
+				setProgressiveStatus("", true);
+			}
+		} catch (error) {
+			if (error instanceof DOMException && error.name === "AbortError") return;
+			if (requestId === externalSearchRequestId) setProgressiveStatus("More matches are temporarily unavailable.", false);
 		}
 	}
 
@@ -822,7 +1301,7 @@ const completionStatus = query && !errorMessage
 			event.stopPropagation();
 			const dropdown = toggle.closest(".shelf-dropdown");
 			if (dropdown instanceof HTMLElement) {
-				toggleShelfMenu(dropdown, shelfDropdowns);
+				toggleShelfMenu(dropdown, getShelfDropdowns());
 			}
 			return;
 		}
@@ -834,7 +1313,7 @@ const completionStatus = query && !errorMessage
 			if (dropdown instanceof HTMLElement) {
 				const status = option.dataset.status || "want_to_read";
 					void setShelf(dropdown, status);
-				closeShelfMenus(shelfDropdowns);
+				closeShelfMenus(getShelfDropdowns());
 			}
 			return;
 		}
@@ -842,5 +1321,19 @@ const completionStatus = query && !errorMessage
 		closeAllMenus();
 	});
 
+	document.querySelector("[data-search-form]")?.addEventListener("submit", () => {
+		externalSearchController?.abort();
+		externalSearchRequestId += 1;
+	});
+
+	document.getElementById("left-hand-search")?.addEventListener("input", (event) => {
+		const nextQuery = event.target instanceof HTMLInputElement ? event.target.value.trim() : "";
+		if (nextQuery && nextQuery !== String(searchPage?.dataset.query || "").trim()) {
+			externalSearchController?.abort();
+			externalSearchRequestId += 1;
+		}
+	});
+
 	void initAuthState();
+	void loadProgressiveExternalResults();
 </script>

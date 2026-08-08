@@ -359,7 +359,11 @@ Versioning follows DogEared's package/app version where practical, with release 
 
 ### Search
 
-Search queries DogEared catalog records first, then Google Books, then Open Library. Results are scored and deduplicated, and known catalog matches attach local book, author, and series metadata when available. Matching published editorial collections appear as a separate result group.
+Search is local-first. DogEared catalog records and matching published editorial collections are returned before Google Books, Open Library, metadata enrichment, cover enrichment, or external canonicalization work. Local catalog matches reuse existing Work, Edition, author, cover, and series metadata directly; they do not run through external provider lookup just to render a known Work.
+
+External search is progressive. When provider results are needed, Google Books and Open Library run concurrently from normalized query variants, short-lived public caches avoid duplicate provider work for identical public queries, and external results still pass through the shared canonical Work resolver before they are rendered or saved. Provider caches and resolved external-result caches are keyed by normalized query inputs and pagination only; reader-specific shelf state is not cached as shared public data and is applied from the current reader's shelf data when cards render.
+
+The Search page renders DogEared results first, then appends non-duplicate external matches as they arrive. Client-side search requests use abort/request identifiers so older responses cannot replace newer queries, while the existing inline spinner and visible query text remain stable.
 
 Private journal search is separate from public book search. Signed-in readers can search their own journal entries from `/journal`; those results are private and are not exposed through public search.
 

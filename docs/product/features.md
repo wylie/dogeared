@@ -147,7 +147,11 @@ Limitations: Award winners and staff picks are future extension points through e
 
 Status: Complete
 
-Search combines DogEared catalog, Google Books, and Open Library results, then resolves every result through the shared canonical Work resolver before rendering. If an external provider returns a book already in DogEared, Search returns the existing Work with DogEared community context, reader counts, rating context, series metadata, and the standard ShelfButton instead of exposing a duplicate imported record. Users can add search results to shelves, catalog matches show series name/book number when available, and matching editorial collections appear above book results.
+Search returns DogEared catalog and matching editorial collection results first, then progressively adds Google Books and Open Library matches when external providers are needed. Known DogEared catalog matches reuse existing Work, Edition, author, cover, and series metadata immediately instead of waiting for provider lookup or optional enrichment.
+
+External provider calls run concurrently from normalized query variants and use short-lived public caches keyed by normalized query inputs and pagination. External results still resolve through the shared canonical Work resolver before rendering or shelf saves. If a provider returns a book already in DogEared, Search returns the existing Work with DogEared community context, reader counts, rating context, series metadata, and the standard ShelfButton instead of exposing a duplicate imported record. User-specific shelf state is applied separately from current reader data and is not cached as public search data.
+
+The Search page appends external matches without duplicate cards and ignores stale responses when the query changes. Users can add search results to shelves, catalog matches show series name/book number when available, and matching editorial collections appear above book results.
 
 Limitations: External APIs can fail or return incomplete metadata.
 
