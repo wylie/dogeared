@@ -7,7 +7,7 @@ import { inferKnownSeriesMetadata } from "../../../lib/series";
 import { searchCollections } from "../../../lib/collections";
 import { resolveUserBySession } from "../../../lib/auth";
 import { classifySearchAnalyticsSubject, recordProductAnalyticsEventSafe } from "../../../lib/productAnalytics";
-import { recordPerformanceEventSafe } from "../../../lib/performanceTelemetry";
+import { recordPerformanceEventSafe, type PerformanceSpanInput } from "../../../lib/performanceTelemetry";
 import { normalizeSearchResult, type SearchResult } from "../../../lib/searchResults";
 
 export const prerender = false;
@@ -24,6 +24,8 @@ type CollectionSearchResult = {
 };
 
 type SearchPhase = "all" | "local" | "external";
+type ExternalSearchProvider = "all" | "google_books" | "open_library";
+const EXTERNAL_PROVIDER_TIMEOUT_MS = 1_800;
 
 function normalizeText(value: string) {
 	return String(value || "")
@@ -177,6 +179,19 @@ function normalizeSearchPhase(value: unknown): SearchPhase {
 	const phase = String(value || "").trim().toLowerCase();
 	if (phase === "local" || phase === "external") return phase;
 	return "all";
+}
+
+function normalizeExternalSearchProvider(value: unknown): ExternalSearchProvider {
+	const provider = String(value || "").trim().toLowerCase().replace(/[-\s]+/g, "_");
+	if (provider === "google_books" || provider === "open_library") return provider;
+	return "all";
+}
+
+function externalProviderFetchInit(): RequestInit {
+	if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+		return { signal: AbortSignal.timeout(EXTERNAL_PROVIDER_TIMEOUT_MS) };
+	}
+	return {};
 }
 
 function searchCacheKeyPart(value: unknown) {
@@ -364,6 +379,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 	const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
 	const pageSize = Math.min(40, Math.max(10, Number(url.searchParams.get("pageSize") || 20) || 20));
 	const phase = normalizeSearchPhase(url.searchParams.get("mode"));
+	const externalProviderFilter = normalizeExternalSearchProvider(url.searchParams.get("provider"));
 	const excludedBookIds = parseExcludedBookIds(url.searchParams.get("excludeBookIds"));
 	if (!query) {
 		return new Response(JSON.stringify({ results: [], hasMore: false }), {
@@ -376,8 +392,31 @@ export const GET: APIRoute = async ({ request, url }) => {
 	const apiKey = String(import.meta.env.GOOGLE_BOOKS_API_KEY || "").trim();
 	const perfStartedAt = performance.now();
 	const perfStages: Record<string, number> = {};
+	const perfSpanDurations: PerformanceSpanInput[] = [];
 	const markPerfStage = (stage: string) => {
 		perfStages[stage] = Math.round((performance.now() - perfStartedAt) * 10) / 10;
+	};
+	const recordSearchSpan = (name: string, durationMs: number) => {
+		perfSpanDurations.push({
+			name,
+			durationMs: Math.round(Math.max(0, durationMs) * 10) / 10
+		});
+	};
+	const measureSearchSpan = async <T>(name: string, work: () => Promise<T>) => {
+		const startedAt = performance.now();
+		try {
+			return await work();
+		} finally {
+			recordSearchSpan(name, performance.now() - startedAt);
+		}
+	};
+	const measureSearchSpanSync = <T>(name: string, work: () => T) => {
+		const startedAt = performance.now();
+		try {
+			return work();
+		} finally {
+			recordSearchSpan(name, performance.now() - startedAt);
+		}
 	};
 	const logPerf = (outcome: string, extra: Record<string, unknown> = {}) => {
 		if (!import.meta.env.DEV) return;
@@ -385,9 +424,11 @@ export const GET: APIRoute = async ({ request, url }) => {
 			query,
 			page,
 			pageSize,
+			externalProviderFilter,
 			outcome,
 			totalMs: Math.round((performance.now() - perfStartedAt) * 10) / 10,
 			stages: perfStages,
+			spans: perfSpanDurations,
 			...extra
 		});
 	};
@@ -398,11 +439,12 @@ export const GET: APIRoute = async ({ request, url }) => {
 			totalMs: performance.now() - perfStartedAt,
 			success: outcome === "success",
 			httpStatus: outcome === "success" ? 200 : 500,
-			spans: perfStages,
+			spans: perfSpanDurations.length > 0 ? perfSpanDurations : perfStages,
 			metadata: {
 				page,
 				pageSize,
 				phase,
+				provider: externalProviderFilter,
 				...extra
 			}
 		});
@@ -423,7 +465,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 					langRestrict: "en"
 				});
 				try {
-					const response = await fetch(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
+					const response = await fetch(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`, externalProviderFetchInit());
 					if (!response.ok) {
 						recordPerformanceEventSafe(sql, {
 							operationName: "external.google-books",
@@ -475,7 +517,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 					offset: String(startIndex)
 				});
 				try {
-					const response = await fetch(`https://openlibrary.org/search.json?${params.toString()}`);
+					const response = await fetch(`https://openlibrary.org/search.json?${params.toString()}`, externalProviderFetchInit());
 					if (!response.ok) {
 						recordPerformanceEventSafe(sql, {
 							operationName: "external.open-library",
@@ -520,7 +562,11 @@ export const GET: APIRoute = async ({ request, url }) => {
 			};
 
 			const collectionResultsPromise = page === 1 && phase !== "external"
-				? searchCollections(sql, query, 4).then((collections): CollectionSearchResult[] => collections.map((collection) => ({
+				? withRuntimeCache(
+					`search:collections:${searchCacheKeyPart(query)}:${page}:4`,
+					20_000,
+					() => searchCollections(sql, query, 4)
+				).then((collections): CollectionSearchResult[] => collections.map((collection) => ({
 					title: collection.title,
 				slug: collection.slug,
 				subtitle: collection.subtitle,
@@ -645,9 +691,11 @@ export const GET: APIRoute = async ({ request, url }) => {
 				.filter((result): result is SearchResult => !!result);
 
 			const loadLocalResults = async () => {
+				const localStartedAt = performance.now();
 				const [dbdRows, collectionResults] = await Promise.all([dbdRowsPromise, collectionResultsPromise]);
+				recordSearchSpan("local catalog search", performance.now() - localStartedAt);
 				markPerfStage("local_catalog_loaded");
-				const results = normalizeAndDedupe(mapCatalogRows(dbdRows), "api.books.search.local");
+				const results = measureSearchSpanSync("rendering preparation", () => normalizeAndDedupe(mapCatalogRows(dbdRows), "api.books.search.local"));
 				return {
 					results,
 					collectionResults,
@@ -656,30 +704,35 @@ export const GET: APIRoute = async ({ request, url }) => {
 			};
 
 			const loadExternalResults = async () => withRuntimeCache(
-				`search:external-resolved:${searchCacheKeyPart(query)}:${page}:${pageSize}`,
+				`search:external-resolved:${externalProviderFilter}:${searchCacheKeyPart(query)}:${page}:${pageSize}`,
 				30_000,
 				async () => {
-					const googleQueries = providerQueryVariants(query);
-					const googleFetchedSetsPromise = Promise.all(
-						googleQueries.map((q) => withRuntimeCache(
-							`search:google:${searchCacheKeyPart(q)}:${page}:${pageSize}`,
-							45_000,
-							() => fetchGoogleItems(q)
+					const googleQueries = externalProviderFilter === "open_library" ? [] : providerQueryVariants(query);
+					const googleFetchedSetsPromise = googleQueries.length > 0
+						? measureSearchSpan("Google Books", () => Promise.all(
+							googleQueries.map((q) => withRuntimeCache(
+								`search:google:${searchCacheKeyPart(q)}:${page}:${pageSize}`,
+								45_000,
+								() => fetchGoogleItems(q)
+							))
 						))
-					);
-					const openQueries = providerQueryVariants(query);
-					const openFetchedSetsPromise = Promise.all(
-						openQueries.map((q) => withRuntimeCache(
-							`search:openlibrary:${searchCacheKeyPart(q)}:${page}:${pageSize}`,
-							45_000,
-							() => fetchOpenLibraryItems(q)
+						: Promise.resolve([] as any[][]);
+					const openQueries = externalProviderFilter === "google_books" ? [] : providerQueryVariants(query);
+					const openFetchedSetsPromise = openQueries.length > 0
+						? measureSearchSpan("Open Library", () => Promise.all(
+							openQueries.map((q) => withRuntimeCache(
+								`search:openlibrary:${searchCacheKeyPart(q)}:${page}:${pageSize}`,
+								45_000,
+								() => fetchOpenLibraryItems(q)
+							))
 						))
-					);
+						: Promise.resolve([] as any[][]);
 					const [googleFetchedSets, openFetchedSets] = await Promise.all([
 						googleFetchedSetsPromise,
 						openFetchedSetsPromise
 					]);
 					markPerfStage("external_providers_loaded");
+					const metadataStartedAt = performance.now();
 					const byId = new Map<string, any>();
 					for (const set of googleFetchedSets) {
 						for (const item of Array.isArray(set) ? set : []) {
@@ -785,6 +838,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 						.filter((result): result is SearchResult => !!result)
 						.filter((result) => isLikelyMatch(result, query))
 						.filter((result) => passesQualityGate(result));
+					recordSearchSpan("metadata enrichment", performance.now() - metadataStartedAt);
 
 					const resolutionCache = new Map<string, Promise<Awaited<ReturnType<typeof resolveCanonicalCatalogWork>>>>();
 					const resolveSearchResult = async (item: SearchResult) => {
@@ -849,13 +903,13 @@ export const GET: APIRoute = async ({ request, url }) => {
 							seriesLabel: item.seriesLabel || formatSeriesSearchLabel(resolvedSeriesName, resolvedSeriesBookOrder)
 						};
 					};
-					const mappedWithIds = (await Promise.all(mapped.map(resolveSearchResult)))
+					const mappedWithIds = (await measureSearchSpan("canonical Work matching", () => Promise.all(mapped.map(resolveSearchResult))))
 						.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.catalog", index, query }))
 						.filter((result): result is SearchResult => !!result);
 					markPerfStage("canonical_resolution_complete");
-					const results = dedupeVariants(mappedWithIds, query)
+					const results = measureSearchSpanSync("result merge", () => dedupeVariants(mappedWithIds, query)
 						.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.dedupe", index, query }))
-						.filter((result): result is SearchResult => !!result);
+						.filter((result): result is SearchResult => !!result));
 					return {
 						results,
 						hasMore: items.length >= pageSize || openItems.length >= pageSize
@@ -927,11 +981,11 @@ export const GET: APIRoute = async ({ request, url }) => {
 				const bookId = Number(result.bookId || 0) || 0;
 				return !(bookId > 0 && excluded.has(bookId));
 			});
-			const results = phase === "external"
+			const results = measureSearchSpanSync("rendering preparation", () => phase === "external"
 				? externalResults
 				: dedupeVariants([...localPayload.results, ...externalResults], query)
 					.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.final", index, query }))
-					.filter((result): result is SearchResult => !!result);
+					.filter((result): result is SearchResult => !!result));
 			const collectionResults = localPayload.collectionResults;
 			markPerfStage("results_merged");
 			const hasMore = localPayload.hasMore || externalPayload.hasMore;

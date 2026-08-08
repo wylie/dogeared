@@ -124,7 +124,19 @@ export async function ensureCanonicalWorkSchema(sql: Sql) {
 			await sql`create index if not exists idx_book_edition_work on book_edition(work_id)`;
 			await sql`create unique index if not exists idx_book_edition_book on book_edition(book_id) where book_id is not null`;
 			await sql`create index if not exists idx_user_book_edition on user_book(edition_id) where edition_id is not null`;
-			await backfillCanonicalWorks(sql);
+			const backfillRows = await sql<Array<{ needs_backfill: boolean }>>`
+				select exists (
+					select 1
+					from book b
+					left join book_edition be on be.book_id = b.id
+					where b.work_id is null
+						or be.id is null
+					limit 1
+				) as needs_backfill
+			`;
+			if (backfillRows[0]?.needs_backfill) {
+				await backfillCanonicalWorks(sql);
+			}
 		})();
 	}
 	await schemaReady;

@@ -1282,32 +1282,47 @@ recordPerformanceEventSafe({
 		const excludeIds = Array.from(renderedBookIds());
 		if (excludeIds.length > 0) params.set("excludeBookIds", excludeIds.join(","));
 		setProgressiveStatus("Checking Google Books and Open Library for more matches.");
-		try {
-			const response = await fetch(`/api/books/search?${params.toString()}`, {
-				headers: { Accept: "application/json" },
-				signal: controller.signal
-			});
-			const payload = await response.json().catch(() => ({}));
-			if (requestId !== externalSearchRequestId) return;
-			if (!response.ok) {
-				setProgressiveStatus("More matches are temporarily unavailable.", false);
-				return;
+		const providers = [
+			{ id: "google_books", label: "Google Books" },
+			{ id: "open_library", label: "Open Library" }
+		];
+		let appendedTotal = 0;
+		let providerFailures = 0;
+		await Promise.all(providers.map(async (provider) => {
+			const providerParams = new URLSearchParams(params);
+			providerParams.set("provider", provider.id);
+			try {
+				const response = await fetch(`/api/books/search?${providerParams.toString()}`, {
+					headers: { Accept: "application/json" },
+					signal: controller.signal
+				});
+				const payload = await response.json().catch(() => ({}));
+				if (requestId !== externalSearchRequestId) return;
+				if (!response.ok) {
+					providerFailures += 1;
+					return;
+				}
+				const appended = appendExternalResults(payload?.results || []);
+				appendedTotal += appended;
+				if (appended > 0) {
+					setProgressiveStatus(`Added ${appended.toLocaleString()} more match${appended === 1 ? "" : "es"} from ${provider.label}.`, false);
+				}
+			} catch (error) {
+				if (error instanceof DOMException && error.name === "AbortError") return;
+				if (requestId === externalSearchRequestId) providerFailures += 1;
 			}
-			const appended = appendExternalResults(payload?.results || []);
-			const totalCards = searchResultsRoot.querySelectorAll("[data-search-result-key]").length;
-			if (emptySearchState instanceof HTMLElement) {
-				emptySearchState.hidden = totalCards > 0;
-			}
-			if (appended > 0) {
-				setProgressiveStatus(`Added ${appended.toLocaleString()} more match${appended === 1 ? "" : "es"}.`, false);
-			} else if (totalCards === 0) {
-				setProgressiveStatus("", true);
-			} else {
-				setProgressiveStatus("", true);
-			}
-		} catch (error) {
-			if (error instanceof DOMException && error.name === "AbortError") return;
-			if (requestId === externalSearchRequestId) setProgressiveStatus("More matches are temporarily unavailable.", false);
+		}));
+		if (requestId !== externalSearchRequestId) return;
+		const totalCards = searchResultsRoot.querySelectorAll("[data-search-result-key]").length;
+		if (emptySearchState instanceof HTMLElement) {
+			emptySearchState.hidden = totalCards > 0;
+		}
+		if (appendedTotal > 0) {
+			setProgressiveStatus(`Added ${appendedTotal.toLocaleString()} more match${appendedTotal === 1 ? "" : "es"}.`, false);
+		} else if (providerFailures > 0 && totalCards === 0) {
+			setProgressiveStatus("More matches are temporarily unavailable.", false);
+		} else {
+			setProgressiveStatus("", true);
 		}
 	}
 

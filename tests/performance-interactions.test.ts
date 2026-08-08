@@ -6,11 +6,12 @@ const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf
 
 test("search API supports local-first and deferred external results", () => {
 	const source = read("../src/pages/api/books/search.ts");
+	const catalogWorks = read("../src/lib/catalogWorks.ts");
 	const dbPromise = source.indexOf("const dbdRowsPromise = withRuntimeCache");
 	const localMode = source.indexOf('if (phase === "local")');
 	const externalLoader = source.indexOf("const loadExternalResults = async () => withRuntimeCache");
-	const googlePromise = source.indexOf("const googleFetchedSetsPromise = Promise.all");
-	const openPromise = source.indexOf("const openFetchedSetsPromise = Promise.all");
+	const googlePromise = source.indexOf('const googleFetchedSetsPromise = googleQueries.length > 0');
+	const openPromise = source.indexOf('const openFetchedSetsPromise = openQueries.length > 0');
 
 	assert.ok(dbPromise > -1);
 	assert.ok(localMode > dbPromise);
@@ -18,6 +19,9 @@ test("search API supports local-first and deferred external results", () => {
 	assert.ok(googlePromise > externalLoader);
 	assert.ok(openPromise > googlePromise);
 	assert.match(source, /normalizeSearchPhase\(url\.searchParams\.get\("mode"\)\)/);
+	assert.match(source, /normalizeExternalSearchProvider\(url\.searchParams\.get\("provider"\)\)/);
+	assert.match(source, /EXTERNAL_PROVIDER_TIMEOUT_MS = 1_800/);
+	assert.match(source, /externalProviderFetchInit\(\)/);
 	assert.match(source, /const queryTokenPatterns = tokenizeQuery\(query\)/);
 	assert.match(source, /from unnest\(\$\{queryTokenPatterns\}::text\[\]\) token_pattern/);
 	assert.match(source, /if \(phase === "local"\)/);
@@ -25,6 +29,13 @@ test("search API supports local-first and deferred external results", () => {
 	assert.match(source, /markPerfStage\("local_catalog_loaded"\)/);
 	assert.match(source, /markPerfStage\("external_providers_loaded"\)/);
 	assert.match(source, /markPerfStage\("canonical_resolution_complete"\)/);
+	assert.match(source, /recordSearchSpan\("local catalog search"/);
+	assert.match(source, /measureSearchSpan\("Google Books"/);
+	assert.match(source, /measureSearchSpan\("Open Library"/);
+	assert.match(source, /measureSearchSpan\("canonical Work matching"/);
+	assert.match(source, /measureSearchSpanSync\("result merge"/);
+	assert.match(catalogWorks, /needs_backfill/);
+	assert.match(catalogWorks, /if \(backfillRows\[0\]\?\.needs_backfill\)/);
 });
 
 test("search page parallelizes result decoration and preserves duplicate-submit feedback", () => {
@@ -36,6 +47,8 @@ test("search page parallelizes result decoration and preserves duplicate-submit 
 	assert.match(searchPage, /new AbortController\(\)/);
 	assert.match(searchPage, /externalSearchRequestId/);
 	assert.match(searchPage, /mode: "external"/);
+	assert.match(searchPage, /providerParams\.set\("provider", provider\.id\)/);
+	assert.match(searchPage, /Promise\.all\(providers\.map/);
 	assert.match(searchPage, /appendExternalResults/);
 	assert.match(searchPage, /const \[summaryRows, statusRows\] = await Promise\.all\(\[summaryRowsPromise, statusRowsPromise\]\)/);
 	assert.match(leftHand, /leftHandSearchForm\.dataset\.searching === "true"/);
