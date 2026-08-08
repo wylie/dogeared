@@ -1,4 +1,5 @@
 import type { NeonQueryFunction } from "@neondatabase/serverless";
+import { withRuntimeCache } from "./runtimeCache";
 
 export const RELEASE_STATUSES = ["draft", "published", "archived"] as const;
 export type ReleaseStatus = typeof RELEASE_STATUSES[number];
@@ -111,7 +112,33 @@ export async function loadReleases(sql: NeonQueryFunction<false, false>, input: 
 }
 
 export async function loadPublishedReleases(sql: NeonQueryFunction<false, false>, limit = 20) {
-	return loadReleases(sql, { publishedOnly: true, limit });
+	const normalizedLimit = Math.max(1, Math.min(100, Math.round(Number(limit || 20))));
+	return withRuntimeCache(`published-releases:${normalizedLimit}`, 60 * 1000, async () => {
+		const rows = await sql<Array<any>>`
+			select
+				id,
+				version,
+				title,
+				coalesce(nullif(summary, ''), body, '') as summary,
+				release_date::text as release_date,
+				published,
+				status,
+				highlights,
+				bug_fixes,
+				known_issues,
+				migration_notes,
+				published_at::text as published_at,
+				archived_at::text as archived_at,
+				created_at::text as created_at,
+				updated_at::text as updated_at
+			from admin_release_note
+			where published = true
+				and status = 'published'
+			order by coalesce(release_date::timestamptz, published_at, created_at) desc, id desc
+			limit ${normalizedLimit}
+		`;
+		return rows.map(mapRelease);
+	});
 }
 
 export async function loadLatestPublishedRelease(sql: NeonQueryFunction<false, false>) {

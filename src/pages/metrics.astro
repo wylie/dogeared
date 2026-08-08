@@ -1880,8 +1880,6 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 </Layout>
 
 <script>
-	import * as echarts from "echarts";
-
 	const metricsPayloadNode = document.getElementById("metrics-payload");
 	const explorerRoot = document.getElementById("metrics-explorer");
 	const compareRoot = document.getElementById("metrics-compare");
@@ -1893,6 +1891,12 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 	const explorerViewButtons = Array.from(document.querySelectorAll("[data-metrics-view]"));
 	const explorerDimensionButtons = Array.from(document.querySelectorAll("[data-explorer-dimension]"));
 	const compareViewButtons = Array.from(document.querySelectorAll("[data-compare-view]"));
+	let echartsModulePromise = null;
+
+	function loadEcharts() {
+		echartsModulePromise = echartsModulePromise || import("echarts");
+		return echartsModulePromise;
+	}
 
 	if (
 		metricsPayloadNode instanceof HTMLScriptElement &&
@@ -1918,6 +1922,8 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 			let compareView = "bars";
 			let explorerChart = null;
 			let compareChart = null;
+			let explorerChartRequest = 0;
+			let compareChartRequest = 0;
 			let explorerDimension = "genre";
 			let drillDepth = 0;
 			let drillFilters = [];
@@ -2282,7 +2288,7 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 				if (chart && !chart.isDisposed()) chart.dispose();
 			}
 
-			function mountChart(root, rows, view, interactive, onDrill, options = {}) {
+			async function mountChart(root, rows, view, interactive, onDrill, options = {}) {
 				if (!rows.length) {
 					root.innerHTML = `<p class="empty">No rows available for this selection yet.</p>`;
 					return null;
@@ -2305,6 +2311,7 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 				const maxVisibleBars = 20;
 				const useCategoryZoom = view !== "pie" && seriesData.length > maxVisibleBars;
 				const endValue = Math.max(0, Math.min(seriesData.length - 1, maxVisibleBars - 1));
+				const echarts = await loadEcharts();
 				const chart = echarts.init(host, null, { renderer: "canvas" });
 
 				if (view === "pie") {
@@ -2515,10 +2522,12 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 					if (root === explorerRoot) {
 						disposeChart(explorerChart);
 						explorerChart = null;
+						explorerChartRequest += 1;
 					}
 					if (root === compareRoot) {
 						disposeChart(compareChart);
 						compareChart = null;
+						compareChartRequest += 1;
 					}
 					return;
 				}
@@ -2527,22 +2536,41 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 					if (root === explorerRoot) {
 						disposeChart(explorerChart);
 						explorerChart = null;
+						explorerChartRequest += 1;
 					}
 					if (root === compareRoot) {
 						disposeChart(compareChart);
 						compareChart = null;
+						compareChartRequest += 1;
 					}
 					return;
 				}
-				const nextChart = mountChart(root, rows, view, interactive, onDrill, options);
-				if (root === explorerRoot) {
-					disposeChart(explorerChart);
-					explorerChart = nextChart;
-				}
-				if (root === compareRoot) {
-					disposeChart(compareChart);
-					compareChart = nextChart;
-				}
+				const isExplorerRoot = root === explorerRoot;
+				const requestId = isExplorerRoot ? ++explorerChartRequest : ++compareChartRequest;
+				root.innerHTML = `<p class="empty">Loading chart...</p>`;
+				void mountChart(root, rows, view, interactive, onDrill, options)
+					.then((nextChart) => {
+						const isCurrentRequest = isExplorerRoot
+							? requestId === explorerChartRequest
+							: requestId === compareChartRequest;
+						if (!isCurrentRequest) {
+							disposeChart(nextChart);
+							return;
+						}
+						if (isExplorerRoot) {
+							disposeChart(explorerChart);
+							explorerChart = nextChart;
+						} else {
+							disposeChart(compareChart);
+							compareChart = nextChart;
+						}
+					})
+					.catch(() => {
+						const isCurrentRequest = isExplorerRoot
+							? requestId === explorerChartRequest
+							: requestId === compareChartRequest;
+						if (isCurrentRequest) root.innerHTML = `<p class="empty">Chart view is temporarily unavailable.</p>`;
+					});
 			}
 
 		function updateExplorer() {

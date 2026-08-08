@@ -8,11 +8,12 @@ import WhatsNewModal from '../components/WhatsNewModal.astro';
 import { resolveAdminSession } from '../lib/admin';
 import { loadActiveAnnouncement } from '../lib/adminAnnouncements';
 import { resolveUserBySession } from '../lib/auth';
-import { DEFAULT_FOUNDING_READER_CONFIG, loadFoundingReaderConfig } from '../lib/foundingReaders';
+import { DEFAULT_FOUNDING_READER_CONFIG, loadFoundingReaderConfigReadOnly } from '../lib/foundingReaders';
 import { getNeonSql } from '../lib/neon';
 import { DEFAULT_SOCIAL_IMAGE } from '../lib/metadataAssets';
 import { DEFAULT_ROBOTS_DIRECTIVE, DEFAULT_SOCIAL_IMAGE_ALT, buildPageMetadata, type PageMetadataOgType } from '../lib/pageMetadata';
 import { loadLatestPublishedRelease } from '../lib/releases';
+import { withRuntimeCache } from '../lib/runtimeCache';
 import { resolveAppVersion, resolveGitCommit } from '../lib/versionInfo';
 type SectionLink = { id: string; label: string };
 const {
@@ -49,18 +50,26 @@ const iconStylesheetHref = "https://fonts.googleapis.com/icon?family=Material+Ic
 const session = await resolveUserBySession(Astro.request);
 const isAuthenticated = !!session?.userId;
 const allowAuthPrompt = !isAuthenticated && allowsAuthPrompt(currentPath);
-const sql = getNeonSql();
 const [
 	adminSession,
-	activeAnnouncement,
-	foundingReaderConfig,
-	latestRelease
+	layoutGlobalData
 ] = await Promise.all([
 	isAuthenticated ? resolveAdminSession(Astro.request) : Promise.resolve({ isAdmin: false }),
-	loadActiveAnnouncement(),
-	loadFoundingReaderConfig(sql).catch(() => DEFAULT_FOUNDING_READER_CONFIG),
-	loadLatestPublishedRelease(sql).catch(() => null)
+	withRuntimeCache("layout-global-public-data:v2", 30 * 1000, async () => {
+		const sql = getNeonSql();
+		const [activeAnnouncement, foundingReaderConfig, latestRelease] = await Promise.all([
+			loadActiveAnnouncement(),
+			loadFoundingReaderConfigReadOnly(sql).catch(() => DEFAULT_FOUNDING_READER_CONFIG),
+			loadLatestPublishedRelease(sql).catch(() => null)
+		]);
+		return { activeAnnouncement, foundingReaderConfig, latestRelease };
+	}).catch(() => ({
+		activeAnnouncement: null,
+		foundingReaderConfig: DEFAULT_FOUNDING_READER_CONFIG,
+		latestRelease: null
+	}))
 ]);
+const { activeAnnouncement, foundingReaderConfig, latestRelease } = layoutGlobalData;
 const isAdmin = !!adminSession.isAdmin;
 const appVersion = resolveAppVersion();
 const releaseVersion = latestRelease && latestRelease.version ? latestRelease.version : appVersion;

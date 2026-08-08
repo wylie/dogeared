@@ -108,6 +108,10 @@ async function countCurrentReaders(sql: NeonQueryFunction<false, false>) {
 
 export async function loadFoundingReaderConfig(sql: NeonQueryFunction<false, false>): Promise<FoundingReaderConfig> {
 	await ensureFoundingReaderSchema(sql);
+	return loadFoundingReaderConfigReadOnly(sql);
+}
+
+export async function loadFoundingReaderConfigReadOnly(sql: NeonQueryFunction<false, false>): Promise<FoundingReaderConfig> {
 	const [configRows, currentReaders] = await Promise.all([
 		sql<Array<{ mode: string; target_capacity: number; auto_waitlist_at_capacity: boolean }>>`
 			select mode, target_capacity, auto_waitlist_at_capacity
