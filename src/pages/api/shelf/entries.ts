@@ -21,7 +21,7 @@ import { normalizeTopicTagList } from "../../../lib/genres";
 import { ensureCustomShelfSchema } from "../../../lib/customShelves";
 import { monitorEvent } from "../../../lib/monitoring";
 import { ensureReviewSchema, normalizeReviewBody, normalizeReviewTitle } from "../../../lib/bookReviews";
-import { ensureCanonicalWorkSchema, resolveRepresentativeBookId, upsertWorkAndEdition } from "../../../lib/catalogWorks";
+import { ensureCanonicalWorkSchema, upsertWorkAndEdition } from "../../../lib/catalogWorks";
 import { inferKnownSeriesMetadata, upsertKnownSeriesForBook } from "../../../lib/series";
 import { createReadingMilestoneNotifications } from "../../../lib/notifications";
 import { withSqlDebug, type SqlDebugParam } from "../../../lib/sqlDebug";
@@ -62,6 +62,25 @@ type ShelfEntryInput = {
 };
 
 const GOOGLE_BOOKS_API_KEY = normalizeCatalogText(import.meta.env.GOOGLE_BOOKS_API_KEY);
+let shelfSchemaReady: Promise<void> | null = null;
+
+type ExistingShelfCatalogBook = {
+	bookId: number;
+	workId: number;
+	editionId: number;
+	title: string;
+	author: string;
+	authorId: number;
+	synopsis: string;
+	coverUrl: string;
+	language: string;
+	isbn10: string;
+	isbn13: string;
+	googleBooksId: string;
+	publisher: string;
+	pageCount: number;
+	publishedYear: number | null;
+};
 
 function normalizeText(value: unknown) {
 	return String(value || "").trim();
@@ -392,32 +411,156 @@ async function inferMetadataForBook(input: {
 }
 
 async function ensureShelfSchema() {
-	const sql = getNeonSql();
-	await ensureReviewSchema(sql);
-	await sql`alter table book add column if not exists synopsis text not null default ''`;
-	await sql`alter table book add column if not exists page_count int not null default 0`;
-	await sql`alter table book add column if not exists publisher text not null default ''`;
-	await sql`
-		create table if not exists book_tag (
-			book_id bigint not null references book(id) on delete cascade,
-			tag_slug text not null,
-			tag_name text not null,
-			primary key (book_id, tag_slug)
+	if (!shelfSchemaReady) {
+		shelfSchemaReady = (async () => {
+			const sql = getNeonSql();
+			await ensureReviewSchema(sql);
+			await sql`alter table book add column if not exists synopsis text not null default ''`;
+			await sql`alter table book add column if not exists page_count int not null default 0`;
+			await sql`alter table book add column if not exists publisher text not null default ''`;
+			await sql`
+				create table if not exists book_tag (
+					book_id bigint not null references book(id) on delete cascade,
+					tag_slug text not null,
+					tag_name text not null,
+					primary key (book_id, tag_slug)
+				)
+			`;
+			await sql`
+				create table if not exists user_reading_progress_event (
+					id bigserial primary key,
+					user_id uuid not null references app_user(id) on delete cascade,
+					book_id bigint not null references book(id) on delete cascade,
+					from_page int not null default 0,
+					to_page int not null default 0,
+					page_delta int not null default 0,
+					recorded_at timestamptz not null default now()
+				)
+			`;
+			await sql`create index if not exists idx_progress_event_user_recorded_at on user_reading_progress_event(user_id, recorded_at desc)`;
+			await sql`alter table user_book add column if not exists preferred_progress_type text not null default 'page'`;
+		})();
+	}
+	try {
+		await shelfSchemaReady;
+	} catch (error) {
+		shelfSchemaReady = null;
+		throw error;
+	}
+}
+
+async function resolveExistingShelfCatalogBook(
+	sql: ReturnType<typeof getNeonSql>,
+	bookId: number
+): Promise<ExistingShelfCatalogBook | null> {
+	const normalizedBookId = normalizePositiveInt(bookId);
+	if (normalizedBookId <= 0) return null;
+	const rows = await sql<Array<{
+		book_id: number;
+		work_id: number | null;
+		edition_id: number | null;
+		title: string;
+		primary_author: string;
+		author_id: number | null;
+		synopsis: string;
+		cover_url: string;
+		language: string;
+		isbn10: string;
+		isbn13: string;
+		google_books_id: string;
+		publisher: string;
+		page_count: number;
+		published_year: number | null;
+	}>>`
+		with target as (
+			select id, work_id
+			from book
+			where id = ${normalizedBookId}
+			limit 1
+		),
+		representative as (
+			select
+				b.id,
+				b.work_id,
+				b.author_id,
+				coalesce(nullif(trim(b.title), ''), 'Untitled') as title,
+				coalesce(nullif(trim(b.primary_author), ''), '') as primary_author,
+				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
+				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+				coalesce(nullif(trim(b.language), ''), '') as language,
+				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+				coalesce(nullif(trim(b.publisher), ''), '') as publisher,
+				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
+				b.published_year,
+				coalesce(sc.shelf_count, 0)::int as shelf_count,
+				coalesce(sc.rating_count, 0)::int as rating_count
+			from target t
+			join book b on (
+				(t.work_id is not null and b.work_id = t.work_id)
+				or (t.work_id is null and b.id = t.id)
+			)
+			left join lateral (
+				select
+					count(*)::int as shelf_count,
+					count(*) filter (where rating is not null)::int as rating_count
+				from user_book ub
+				where ub.book_id = b.id
+			) sc on true
+			order by
+				coalesce(sc.shelf_count, 0) desc,
+				coalesce(sc.rating_count, 0) desc,
+				(nullif(trim(coalesce(b.cover_url, '')), '') is not null) desc,
+				(nullif(trim(coalesce(b.synopsis, '')), '') is not null) desc,
+				b.id asc
+			limit 1
 		)
+		select
+			r.id as book_id,
+			r.work_id,
+			be.id as edition_id,
+			r.title,
+			r.primary_author,
+			r.author_id,
+			r.synopsis,
+			r.cover_url,
+			r.language,
+			r.isbn10,
+			r.isbn13,
+			r.google_books_id,
+			r.publisher,
+			r.page_count,
+			r.published_year
+		from representative r
+		left join lateral (
+			select id
+			from book_edition
+			where book_id = r.id
+			order by id asc
+			limit 1
+		) be on true
+		limit 1
 	`;
-	await sql`
-		create table if not exists user_reading_progress_event (
-			id bigserial primary key,
-			user_id uuid not null references app_user(id) on delete cascade,
-			book_id bigint not null references book(id) on delete cascade,
-			from_page int not null default 0,
-			to_page int not null default 0,
-			page_delta int not null default 0,
-			recorded_at timestamptz not null default now()
-		)
-	`;
-	await sql`create index if not exists idx_progress_event_user_recorded_at on user_reading_progress_event(user_id, recorded_at desc)`;
-	await sql`alter table user_book add column if not exists preferred_progress_type text not null default 'page'`;
+	const row = rows[0];
+	if (!row) return null;
+	return {
+		bookId: Number(row.book_id || 0) || 0,
+		workId: Number(row.work_id || 0) || 0,
+		editionId: Number(row.edition_id || 0) || 0,
+		title: row.title || "",
+		author: row.primary_author || "",
+		authorId: Number(row.author_id || 0) || 0,
+		synopsis: row.synopsis || "",
+		coverUrl: row.cover_url || "",
+		language: row.language || "",
+		isbn10: row.isbn10 || "",
+		isbn13: row.isbn13 || "",
+		googleBooksId: row.google_books_id || "",
+		publisher: row.publisher || "",
+		pageCount: normalizeCatalogPageCount(row.page_count),
+		publishedYear: row.published_year ? Number(row.published_year) : null
+	};
 }
 
 export const GET: APIRoute = async ({ request, url }) => {
@@ -550,10 +693,10 @@ export const POST: APIRoute = async ({ request }) => {
 		const session = await resolveUserBySession(request);
 		if (!session?.userId) return new Response(JSON.stringify({ error: "You must be logged in to save shelf entries." }), { status: 401, headers: { "Content-Type": "application/json" } });
 		debugStage = "parse_body";
-			const body = await request.json() as { entry?: ShelfEntryInput };
-			const entry = body?.entry || {};
-			markPerfStage("schema_session_body");
-			debugContext.rawEntry = entry;
+		const body = await request.json() as { entry?: ShelfEntryInput };
+		const entry = body?.entry || {};
+		markPerfStage("schema_session_body");
+		debugContext.rawEntry = entry;
 		const directBookId = normalizePositiveInt(entry.bookId);
 		const bookPayload = fromShelfEntryInput(entry);
 		const rawTitle = bookPayload.title;
@@ -564,14 +707,13 @@ export const POST: APIRoute = async ({ request }) => {
 			});
 		}
 
-		const author = bookPayload.author;
+		let author = bookPayload.author;
 		const inferredSeries = inferKnownSeriesMetadata({ title: rawTitle, author });
-		const title = normalizeRedundantSeriesTitle({
+		let title = normalizeRedundantSeriesTitle({
 			title: rawTitle,
 			seriesName: inferredSeries?.seriesName || "",
 			bookOrder: inferredSeries?.bookOrder || 0
 		}).title || rawTitle;
-		const authorId = await ensureAuthorEnriched(author);
 		const status = normalizeStatus(entry.status);
 		const rating = status === "finished" ? normalizeRating(entry.rating) : null;
 		const totalPages = normalizePositiveInt(entry.totalPages);
@@ -603,8 +745,33 @@ export const POST: APIRoute = async ({ request }) => {
 		let googleBooksId = bookPayload.googleBooksId;
 		let pageCount = totalPages;
 		let publisher = normalizeText(bookPayload.publisher);
+		const userId = session.userId;
+		const sql = getNeonSql();
+		debugStage = "resolve_existing_book";
+		const existingCatalogBook = directBookId > 0
+			? await resolveExistingShelfCatalogBook(sql, directBookId)
+			: null;
+		const hasExistingCatalogBook = !!existingCatalogBook?.bookId;
+		if (existingCatalogBook) {
+			title = existingCatalogBook.title || title;
+			author = existingCatalogBook.author || author;
+			coverUrl = existingCatalogBook.coverUrl || coverUrl;
+			language = existingCatalogBook.language || language;
+			synopsis = existingCatalogBook.synopsis || synopsis;
+			isbn10 = existingCatalogBook.isbn10 || isbn10;
+			isbn13 = existingCatalogBook.isbn13 || isbn13;
+			googleBooksId = existingCatalogBook.googleBooksId || googleBooksId;
+			pageCount = Math.max(pageCount, existingCatalogBook.pageCount || 0);
+			publisher = existingCatalogBook.publisher || publisher;
+			publishedYear = existingCatalogBook.publishedYear || publishedYear;
+		}
+		markPerfStage(hasExistingCatalogBook ? "existing_catalog_ready" : "existing_catalog_miss");
+		const authorId = hasExistingCatalogBook
+			? Math.max(0, Number(existingCatalogBook?.authorId || 0) || 0)
+			: await ensureAuthorEnriched(author);
 		debugContext = {
 			directBookId,
+			hasExistingCatalogBook,
 			title,
 			author,
 			status,
@@ -614,9 +781,9 @@ export const POST: APIRoute = async ({ request }) => {
 			isbn13,
 			googleBooksId
 		};
-		const shouldAttemptMetadataEnrichment = directBookId <= 0;
-			if (shouldAttemptMetadataEnrichment && (!synopsis || !coverUrl || !publishedYear || !language || !publisher || (!isbn10 && !isbn13) || !googleBooksId)) {
-				const enriched = await inferMetadataForBook({ title, author, isbn10, isbn13, googleBooksId });
+		const shouldAttemptMetadataEnrichment = !hasExistingCatalogBook && directBookId <= 0;
+		if (shouldAttemptMetadataEnrichment && (!synopsis || !coverUrl || !publishedYear || !language || !publisher || (!isbn10 && !isbn13) || !googleBooksId)) {
+			const enriched = await inferMetadataForBook({ title, author, isbn10, isbn13, googleBooksId });
 			if (!synopsis) synopsis = enriched.synopsis || synopsis;
 			if (!coverUrl) coverUrl = enriched.coverUrl || coverUrl;
 			if (!language) language = enriched.language || language;
@@ -625,9 +792,9 @@ export const POST: APIRoute = async ({ request }) => {
 			if (!isbn10) isbn10 = enriched.isbn10 || isbn10;
 			if (!googleBooksId) googleBooksId = enriched.googleBooksId || googleBooksId;
 			if (!pageCount && enriched.pageCount > 0) pageCount = enriched.pageCount;
-				if (!publisher) publisher = enriched.publisher || publisher;
-			}
-			markPerfStage("metadata_ready");
+			if (!publisher) publisher = enriched.publisher || publisher;
+		}
+		markPerfStage("metadata_ready");
 		const workKey = canonicalCatalogWorkKey({ title, author, isbn10, isbn13 });
 		const source = normalizeCatalogText(entry.source);
 		const sourceWorkId = normalizeCatalogText(entry.sourceWorkId);
@@ -656,33 +823,12 @@ export const POST: APIRoute = async ({ request }) => {
 				sourceUrl
 			});
 		}
-		const userId = session.userId;
-		const sql = getNeonSql();
-		debugStage = "ensure_canonical_schema";
-		await ensureCanonicalWorkSchema(sql);
-		let resolvedBookId = 0;
-		let resolvedWorkId = 0;
-		if (directBookId > 0) {
-			const directRows = await sql<Array<{ id: number; work_id: number | null }>>`
-				select id, work_id
-				from book
-				where id = ${directBookId}
-				limit 1
-			`;
-			resolvedBookId = Number(directRows[0]?.id || 0);
-			if (resolvedBookId > 0) resolvedBookId = await resolveRepresentativeBookId(sql, resolvedBookId);
-			if (resolvedBookId > 0) {
-				const representativeRows = await sql<Array<{ work_id: number | null }>>`
-					select work_id
-					from book
-					where id = ${resolvedBookId}
-					limit 1
-				`;
-				resolvedWorkId = Number(representativeRows[0]?.work_id || directRows[0]?.work_id || 0) || 0;
-			}
-		}
-			if (resolvedBookId <= 0) {
-				const resolution = await resolveCanonicalCatalogWork(sql, {
+		let resolvedBookId = Number(existingCatalogBook?.bookId || 0) || 0;
+		let resolvedWorkId = Number(existingCatalogBook?.workId || 0) || 0;
+		if (resolvedBookId <= 0) {
+			debugStage = "ensure_canonical_schema";
+			await ensureCanonicalWorkSchema(sql);
+			const resolution = await resolveCanonicalCatalogWork(sql, {
 				canonicalWorkKey: workKey,
 				title,
 				author,
@@ -696,17 +842,30 @@ export const POST: APIRoute = async ({ request }) => {
 				publishedYear
 			});
 			resolvedBookId = Number(resolution?.bookId || 0) || 0;
-				resolvedWorkId = Number(resolution?.workId || 0) || 0;
-			}
-			markPerfStage("canonical_resolution_complete");
+			resolvedWorkId = Number(resolution?.workId || 0) || 0;
+		}
+		markPerfStage("canonical_resolution_complete");
 
 		const previousRows = await sql<Array<{
 			status: ShelfStatus;
 			rating: number | null;
 			total_pages: number;
 			current_page: number;
+			first_added_at: string | null;
+			progress_updates: number;
 		}>>`
-			select status, rating, total_pages, current_page
+			select
+				status,
+				rating,
+				total_pages,
+				current_page,
+				first_added_at::text as first_added_at,
+				coalesce((
+					select count(*)::int
+					from user_reading_progress_event pe
+					where pe.user_id = user_book.user_id
+						and pe.book_id = user_book.book_id
+				), 0)::int as progress_updates
 			from user_book
 			where user_id = ${userId}::uuid
 				and book_id = ${resolvedBookId || 0}
@@ -716,10 +875,21 @@ export const POST: APIRoute = async ({ request }) => {
 		const previousRating = normalizeRating(previousRows[0]?.rating);
 		const previousTotalPages = normalizePositiveInt(previousRows[0]?.total_pages);
 		const previousCurrentPage = normalizePositiveInt(previousRows[0]?.current_page);
+		const previousFirstAddedAt = previousRows[0]?.first_added_at || "";
+		const previousProgressUpdates = normalizePositiveInt(previousRows[0]?.progress_updates);
 
 		let bookId = resolvedBookId;
 		let canonicalPageCount = Math.max(0, Number(pageCount || 0) || 0);
-		if (bookId > 0) {
+		let workEdition = {
+			workId: resolvedWorkId,
+			editionId: Math.max(0, Number(existingCatalogBook?.editionId || 0) || 0),
+			representativeBookId: bookId
+		};
+		if (hasExistingCatalogBook && bookId > 0) {
+			debugStage = "reuse_existing_catalog";
+			canonicalPageCount = Math.max(canonicalPageCount, existingCatalogBook?.pageCount || 0);
+			markPerfStage("catalog_reused");
+		} else if (bookId > 0) {
 			debugStage = "update_book";
 			const updatedBookRows = await sql<Array<{ page_count: number }>>`
 				update book
@@ -794,72 +964,74 @@ export const POST: APIRoute = async ({ request }) => {
 					end,
 					published_year = coalesce(excluded.published_year, book.published_year),
 					updated_at = now()
-				returning id, coalesce(nullif(page_count, 0), 0)::int as page_count
-			`;
-			bookId = Number(bookRows[0]?.id || 0);
+					returning id, coalesce(nullif(page_count, 0), 0)::int as page_count
+				`;
+				bookId = Number(bookRows[0]?.id || 0);
 			canonicalPageCount = Math.max(canonicalPageCount, Number(bookRows[0]?.page_count || 0) || 0);
 		}
-			if (!bookId) throw new Error("Book upsert failed.");
-			debugContext.bookId = bookId;
-		debugStage = "upsert_sources";
-		await upsertBookSources(sql, bookId, sources);
-		debugStage = "upsert_work_edition";
-		const workEdition = await upsertWorkAndEdition(sql, {
-			bookId,
-			resolvedWorkId,
-			title,
-			canonicalTitle: title,
-			editionTitle: rawTitle,
-			author,
-			authorId,
-			description: synopsis,
-			genres: genres.map((genre) => genre.name),
-			topics: tags.map((tag) => tag.name),
-			coverUrl,
-			isbn10,
-			isbn13,
-			seriesId: 0,
-			seriesPosition: inferredSeries?.bookOrder || 0,
-			publisher,
-			format: normalizeText(entry.format) || "Book",
-			language,
-			publicationDate: publishedDate,
-			publicationYear: publishedYear,
-			originalPublicationYear: publishedYear,
-			pageCount,
-			googleBooksId,
-			sources
-		});
-		if (workEdition.representativeBookId > 0 && workEdition.representativeBookId !== bookId) {
-			bookId = workEdition.representativeBookId;
-		}
-		debugContext.workEdition = workEdition;
+		if (!bookId) throw new Error("Book upsert failed.");
+		debugContext.bookId = bookId;
+		if (!hasExistingCatalogBook) {
+			debugStage = "upsert_sources";
+			await upsertBookSources(sql, bookId, sources);
+			debugStage = "upsert_work_edition";
+			workEdition = await upsertWorkAndEdition(sql, {
+				bookId,
+				resolvedWorkId,
+				title,
+				canonicalTitle: title,
+				editionTitle: rawTitle,
+				author,
+				authorId,
+				description: synopsis,
+				genres: genres.map((genre) => genre.name),
+				topics: tags.map((tag) => tag.name),
+				coverUrl,
+				isbn10,
+				isbn13,
+				seriesId: 0,
+				seriesPosition: inferredSeries?.bookOrder || 0,
+				publisher,
+				format: normalizeText(entry.format) || "Book",
+				language,
+				publicationDate: publishedDate,
+				publicationYear: publishedYear,
+				originalPublicationYear: publishedYear,
+				pageCount,
+				googleBooksId,
+				sources
+			});
+			if (workEdition.representativeBookId > 0 && workEdition.representativeBookId !== bookId) {
+				bookId = workEdition.representativeBookId;
+			}
+			debugContext.workEdition = workEdition;
 			if (workEdition.editionId > 0) {
-			debugStage = "canonical_page_count";
-			const canonicalPageRows = await sql<Array<{ page_count: number }>>`
-				select
-					coalesce(
-						nullif(be.page_count, 0),
-						nullif(b.page_count, 0),
-						0
-					)::int as page_count
-				from book_edition be
-				left join book b on b.id = ${bookId}
-				where be.id = ${workEdition.editionId}
-				limit 1
-			`;
+				debugStage = "canonical_page_count";
+				const canonicalPageRows = await sql<Array<{ page_count: number }>>`
+					select
+						coalesce(
+							nullif(be.page_count, 0),
+							nullif(b.page_count, 0),
+							0
+						)::int as page_count
+					from book_edition be
+					left join book b on b.id = ${bookId}
+					where be.id = ${workEdition.editionId}
+					limit 1
+				`;
 				canonicalPageCount = Math.max(canonicalPageCount, Number(canonicalPageRows[0]?.page_count || 0) || 0);
 			}
 			markPerfStage("catalog_writes_complete");
-		debugStage = "upsert_series";
-		await upsertKnownSeriesForBook(sql, {
-			bookId,
-			workId: workEdition.workId,
-			title,
-			author,
-			coverUrl,
-			publishedYear
-		});
+			debugStage = "upsert_series";
+			await upsertKnownSeriesForBook(sql, {
+				bookId,
+				workId: workEdition.workId,
+				title,
+				author,
+				coverUrl,
+				publishedYear
+			});
+		}
 
 		const effectiveTotalPages = Math.max(
 			0,
@@ -868,42 +1040,44 @@ export const POST: APIRoute = async ({ request }) => {
 			canonicalPageCount || 0
 		);
 
-		for (const genre of genres) {
-			debugStage = "upsert_genres";
-			await sql`
-				insert into book_genre (book_id, genre_slug, genre_name)
-				values (${bookId}, ${genre.slug}, ${genre.name})
-				on conflict (book_id, genre_slug) do update set
-					genre_name = excluded.genre_name
-			`;
-		}
-		for (const tag of tags) {
-			debugStage = "upsert_tags";
-			await sql`
-				insert into book_tag (book_id, tag_slug, tag_name)
-				values (${bookId}, ${tag.slug}, ${tag.name})
-				on conflict (book_id, tag_slug) do update set
-					tag_name = excluded.tag_name
-			`;
-		}
+		if (!hasExistingCatalogBook) {
+			for (const genre of genres) {
+				debugStage = "upsert_genres";
+				await sql`
+					insert into book_genre (book_id, genre_slug, genre_name)
+					values (${bookId}, ${genre.slug}, ${genre.name})
+					on conflict (book_id, genre_slug) do update set
+						genre_name = excluded.genre_name
+				`;
+			}
+			for (const tag of tags) {
+				debugStage = "upsert_tags";
+				await sql`
+					insert into book_tag (book_id, tag_slug, tag_name)
+					values (${bookId}, ${tag.slug}, ${tag.name})
+					on conflict (book_id, tag_slug) do update set
+						tag_name = excluded.tag_name
+				`;
+			}
 
-		if (genres.length === 0) {
-			debugStage = "infer_genres";
-			const genreCountRows = await sql<Array<{ count: number }>>`
-				select count(*)::int as count
-				from book_genre
-				where book_id = ${bookId}
-			`;
-			const hasAnyGenres = Number(genreCountRows[0]?.count || 0) > 0;
-			if (!hasAnyGenres) {
-				const inferredGenres = await inferGenresForBook({ title, author, isbn10, isbn13, googleBooksId });
-				for (const genre of inferredGenres) {
-					await sql`
-						insert into book_genre (book_id, genre_slug, genre_name)
-						values (${bookId}, ${genre.slug}, ${genre.name})
-						on conflict (book_id, genre_slug) do update set
-							genre_name = excluded.genre_name
-					`;
+			if (genres.length === 0) {
+				debugStage = "infer_genres";
+				const genreCountRows = await sql<Array<{ count: number }>>`
+					select count(*)::int as count
+					from book_genre
+					where book_id = ${bookId}
+				`;
+				const hasAnyGenres = Number(genreCountRows[0]?.count || 0) > 0;
+				if (!hasAnyGenres) {
+					const inferredGenres = await inferGenresForBook({ title, author, isbn10, isbn13, googleBooksId });
+					for (const genre of inferredGenres) {
+						await sql`
+							insert into book_genre (book_id, genre_slug, genre_name)
+							values (${bookId}, ${genre.slug}, ${genre.name})
+							on conflict (book_id, genre_slug) do update set
+								genre_name = excluded.genre_name
+						`;
+					}
 				}
 			}
 		}
@@ -911,8 +1085,8 @@ export const POST: APIRoute = async ({ request }) => {
 		debugStage = "upsert_user_book";
 		const finishedDateParam = finishedDate ? finishedDate : null;
 		const editionIdParam = workEdition.editionId > 0 ? workEdition.editionId : null;
-			await withSqlDebug(
-				"shelfEntries.userBook.upsert",
+		await withSqlDebug(
+			"shelfEntries.userBook.upsert",
 			userBookUpsertDebugParams({
 				userId,
 				bookId,
@@ -927,7 +1101,7 @@ export const POST: APIRoute = async ({ request }) => {
 				reviewSpoiler,
 				editionId: editionIdParam
 			}),
-				() => sql`
+			() => sql`
 			insert into user_book (
 				user_id,
 				book_id,
@@ -986,22 +1160,23 @@ export const POST: APIRoute = async ({ request }) => {
 					then excluded.review_updated_at
 					else user_book.review_updated_at
 				end,
-					updated_at = now()
+				updated_at = now()
 			`);
-			markPerfStage("user_book_upsert_complete");
+		markPerfStage("user_book_upsert_complete");
+		const nextCurrentPage = normalizePositiveInt(currentPage);
+		const deltaPages = Math.max(0, nextCurrentPage - previousCurrentPage);
+		const requiredFollowups: Promise<unknown>[] = [];
 		// Single-shelf mode: putting a book on a default shelf removes it from
 		// all custom shelves for this user.
-		debugStage = "clear_custom_shelves";
-		await sql`
+		debugStage = "authoritative_followups";
+		requiredFollowups.push(sql`
 			delete from user_custom_shelf_book
 			where user_id = ${userId}::uuid
 				and book_id = ${bookId}
-		`;
-
-		const nextCurrentPage = normalizePositiveInt(currentPage);
+		`);
 		if (!previousStatus || previousStatus !== status) {
 			debugStage = "activity_status";
-			await sql`
+			requiredFollowups.push(sql`
 				insert into user_activity (
 					user_id,
 					book_id,
@@ -1012,11 +1187,11 @@ export const POST: APIRoute = async ({ request }) => {
 					${bookId},
 					${status}
 				)
-			`;
+			`);
 		}
 		if (rating !== null && previousRating !== rating) {
 			debugStage = "activity_rating";
-			await sql`
+			requiredFollowups.push(sql`
 				insert into user_activity (
 					user_id,
 					book_id,
@@ -1029,13 +1204,12 @@ export const POST: APIRoute = async ({ request }) => {
 					'rating',
 					${rating}
 				)
-			`;
+			`);
 		}
 
-		const deltaPages = Math.max(0, nextCurrentPage - previousCurrentPage);
 		if (deltaPages > 0 && (status === "reading" || status === "finished")) {
 			debugStage = "insert_progress_event";
-			await sql`
+			requiredFollowups.push(sql`
 				insert into user_reading_progress_event (
 					user_id,
 					book_id,
@@ -1050,123 +1224,59 @@ export const POST: APIRoute = async ({ request }) => {
 					${nextCurrentPage},
 					${deltaPages}
 				)
-			`;
+			`);
 		}
-			if (status === "finished" || deltaPages > 0) {
+		await Promise.all(requiredFollowups);
+		markPerfStage("authoritative_followups_complete");
+		if (status === "finished" || deltaPages > 0) {
 			debugStage = "reading_milestone_notifications";
 			await createReadingMilestoneNotifications(sql, userId, {
 				status,
 				bookId,
 				title
-				});
-			}
-			markPerfStage("followups_complete");
+			});
+		}
+		markPerfStage("notifications_complete");
 
-			debugStage = "load_persisted_entry";
-		const persistedRows = await sql<Array<{
-			book_id: number;
-			title: string;
-			primary_author: string;
-			cover_url: string;
-			language: string;
-			status: ShelfStatus;
-			rating: number | null;
-			total_pages: number;
-			current_page: number;
-			preferred_progress_type: string;
-			finished_date: string | null;
-			first_added_at: string;
-			updated_at: string;
-			genres: string[] | null;
-			isbn10: string;
-			isbn13: string;
-			google_books_id: string;
-			publisher: string | null;
-			synopsis: string;
-			finished_reflection: string;
-			review_title: string;
-			review_spoiler: boolean;
-			review_updated_at: string | null;
-			progress_updates: number;
-		}>>`
-			select
-				b.id as book_id,
-				b.title,
-				b.primary_author,
-				b.cover_url,
-				b.language,
-				ub.status,
-				ub.rating,
-				coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages,
-				ub.current_page,
-				coalesce(nullif(trim(ub.preferred_progress_type), ''), 'page') as preferred_progress_type,
-				ub.finished_date::text as finished_date,
-				ub.first_added_at::text as first_added_at,
-				ub.updated_at::text as updated_at,
-				array_agg(bg.genre_name order by bg.genre_name asc) filter (where bg.genre_name is not null) as genres,
-				b.isbn10,
-				b.isbn13,
-				b.google_books_id,
-				coalesce(b.publisher, '') as publisher,
-				coalesce(b.synopsis, '') as synopsis,
-				coalesce(ub.finished_reflection, '') as finished_reflection,
-				coalesce(ub.review_title, '') as review_title,
-				coalesce(ub.review_spoiler, false) as review_spoiler,
-				ub.review_updated_at::text as review_updated_at,
-				coalesce((
-					select count(*)::int
-					from user_reading_progress_event pe
-					where pe.user_id = ub.user_id
-						and pe.book_id = ub.book_id
-				), 0)::int as progress_updates
-			from user_book ub
-			join book b on b.id = ub.book_id
-			left join book_genre bg on bg.book_id = b.id
-			where ub.user_id = ${userId}::uuid
-				and ub.book_id = ${bookId}
-			group by b.id, ub.user_id, ub.book_id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.preferred_progress_type, ub.finished_date, ub.first_added_at, ub.updated_at, ub.finished_reflection, ub.review_title, ub.review_spoiler, ub.review_updated_at
-			limit 1
-		`;
-			const persisted = persistedRows[0];
-			markPerfStage("persisted_entry_loaded");
-		const persistedEntry = persisted ? {
-			id: `book_${persisted.book_id}`,
-			bookId: Number(persisted.book_id || 0),
-			title: persisted.title || "",
-			author: persisted.primary_author || "",
-			status: persisted.status,
-			rating: normalizeRating(persisted.rating),
-			totalPages: normalizePositiveInt(persisted.total_pages),
-			currentPage: normalizePositiveInt(persisted.current_page),
-			preferredProgressType: normalizeProgressInputMode(persisted.preferred_progress_type),
-			finishedDate: persisted.finished_date || "",
-			addedAt: Date.parse(persisted.first_added_at || "") || Date.now(),
-			coverUrl: persisted.cover_url || "",
+		const nowMs = Date.now();
+		const persistedEntry = {
+			id: `book_${bookId}`,
+			bookId,
+			title,
+			author,
+			status,
+			rating,
+			totalPages: effectiveTotalPages,
+			currentPage,
+			preferredProgressType: normalizeProgressInputMode(preferredProgressType || "page"),
+			finishedDate,
+			addedAt: Date.parse(previousFirstAddedAt || "") || nowMs,
+			coverUrl,
 			format: "",
-			language: persisted.language || "",
-			isbn10: persisted.isbn10 || "",
-			isbn13: persisted.isbn13 || "",
-			googleBooksId: persisted.google_books_id || "",
-			publisher: persisted.publisher || "",
-			description: persisted.synopsis || "",
-			finishedReflection: persisted.finished_reflection || "",
-			reviewTitle: persisted.review_title || "",
-			reviewSpoiler: !!persisted.review_spoiler,
-			reviewUpdatedAt: persisted.review_updated_at || "",
-			categories: Array.isArray(persisted.genres) ? persisted.genres : [],
-			progressUpdates: Math.max(0, Number(persisted.progress_updates || 0) || 0),
-			updatedAt: Date.parse(persisted.updated_at || "") || Date.now()
-		} : null;
+			language,
+			isbn10,
+			isbn13,
+			googleBooksId,
+			publisher,
+			description: synopsis,
+			finishedReflection,
+			reviewTitle,
+			reviewSpoiler,
+			reviewUpdatedAt: reviewTitle || finishedReflection ? new Date(nowMs).toISOString() : "",
+			categories: genres.map((genre) => genre.name),
+			progressUpdates: previousProgressUpdates + (deltaPages > 0 ? 1 : 0),
+			updatedAt: nowMs
+		};
 
-			monitorEvent("shelf.upsert.success", { userId, bookId, status, rating: rating ?? 0, hasProgressDelta: deltaPages > 0 });
-			logPerf("success", { bookId, status });
-			return new Response(JSON.stringify({ ok: true, bookId, entry: persistedEntry }), {
+		monitorEvent("shelf.upsert.success", { userId, bookId, status, rating: rating ?? 0, hasProgressDelta: deltaPages > 0 });
+		logPerf("success", { bookId, status });
+		return new Response(JSON.stringify({ ok: true, bookId, entry: persistedEntry }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" }
 		});
-		} catch (error) {
-			const message = error instanceof Error ? error.message : "Unknown error";
-			logPerf("error", { error: message });
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown error";
+		logPerf("error", { error: message });
 		if (import.meta.env.DEV) {
 			console.error("[shelf.upsert.debug]", {
 				stage: debugStage,
@@ -1198,18 +1308,20 @@ export const DELETE: APIRoute = async ({ request }) => {
 		const userId = session.userId;
 		const sql = getNeonSql();
 		if (directBookId > 0) {
-			const removedDefault = await sql<Array<{ book_id: number }>>`
-				delete from user_book
-				where user_id = ${userId}::uuid
-					and book_id = ${directBookId}
-				returning book_id
-			`;
-			const removedCustom = await sql<Array<{ book_id: number }>>`
-				delete from user_custom_shelf_book
-				where user_id = ${userId}::uuid
-					and book_id = ${directBookId}
-				returning book_id
-			`;
+			const [removedDefault, removedCustom] = await Promise.all([
+				sql<Array<{ book_id: number }>>`
+					delete from user_book
+					where user_id = ${userId}::uuid
+						and book_id = ${directBookId}
+					returning book_id
+				`,
+				sql<Array<{ book_id: number }>>`
+					delete from user_custom_shelf_book
+					where user_id = ${userId}::uuid
+						and book_id = ${directBookId}
+					returning book_id
+				`
+			]);
 			if (removedDefault.length === 0 && removedCustom.length === 0) {
 				monitorEvent("shelf.remove.noop", { userId, bookId: directBookId }, "warn");
 				return new Response(JSON.stringify({ error: "Book is not on your shelves." }), {
@@ -1269,18 +1381,20 @@ export const DELETE: APIRoute = async ({ request }) => {
 				headers: { "Content-Type": "application/json" }
 			});
 		}
-		const removedDefault = await sql<Array<{ book_id: number }>>`
-			delete from user_book ub
-			where ub.user_id = ${userId}::uuid
-				and ub.book_id = ${bookId}
-			returning ub.book_id
-		`;
-		const removedCustom = await sql<Array<{ book_id: number }>>`
-			delete from user_custom_shelf_book
-			where user_id = ${userId}::uuid
-				and book_id = ${bookId}
-			returning book_id
-		`;
+		const [removedDefault, removedCustom] = await Promise.all([
+			sql<Array<{ book_id: number }>>`
+				delete from user_book ub
+				where ub.user_id = ${userId}::uuid
+					and ub.book_id = ${bookId}
+				returning ub.book_id
+			`,
+			sql<Array<{ book_id: number }>>`
+				delete from user_custom_shelf_book
+				where user_id = ${userId}::uuid
+					and book_id = ${bookId}
+				returning book_id
+			`
+		]);
 		if (removedDefault.length === 0 && removedCustom.length === 0) {
 			monitorEvent("shelf.remove.noop", { userId, bookId }, "warn");
 			return new Response(JSON.stringify({ error: "Book is not on your shelves." }), {

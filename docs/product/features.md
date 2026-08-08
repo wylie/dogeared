@@ -231,6 +231,8 @@ Status: Complete
 
 Readers can save Works as Want to Read, Currently Reading, or Read. DogEared may retain the chosen Edition internally, but shelf lists should not show duplicate editions of the same Work.
 
+Shelf mutations for existing DogEared catalog Works use the known representative book, Work, and Edition IDs. The shelf API does not wait for external metadata lookup, author enrichment, cover enrichment, genre inference, series cleanup, or redundant canonical resolution before confirming an existing-Work shelf save. It still performs the authoritative `user_book` write, default/custom shelf reconciliation, activity/progress writes, and required milestone notification checks before returning success.
+
 Limitations: Only these three statuses are persisted in `user_book.status`.
 
 ### Custom Shelves

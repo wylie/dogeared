@@ -77,3 +77,33 @@ test("shelf feedback disables duplicate actions without committing success befor
 	assert.match(shelfClient, /const inFlightShelfMutations = new Map/);
 	assert.match(shelfClient, /notifyReadingDataChanged\(\)/);
 });
+
+test("shelf mutation API reuses existing catalog books before enrichment work", () => {
+	const shelfApi = read("../src/pages/api/shelf/entries.ts");
+	const customShelves = read("../src/lib/customShelves.ts");
+
+	const existingResolver = shelfApi.indexOf("async function resolveExistingShelfCatalogBook");
+	const existingLookup = shelfApi.indexOf("const existingCatalogBook = directBookId > 0");
+	const authorEnrichment = shelfApi.indexOf("await ensureAuthorEnriched(author)");
+	const metadataGate = shelfApi.indexOf("const shouldAttemptMetadataEnrichment = !hasExistingCatalogBook && directBookId <= 0");
+	const canonicalGate = shelfApi.indexOf("if (resolvedBookId <= 0)");
+	const catalogReuse = shelfApi.indexOf('markPerfStage("catalog_reused")');
+	const workEditionUpsert = shelfApi.indexOf("workEdition = await upsertWorkAndEdition");
+	const authoritativeFollowups = shelfApi.indexOf("const requiredFollowups: Promise<unknown>[] = []");
+	const followupParallelism = shelfApi.indexOf("await Promise.all(requiredFollowups)");
+
+	assert.ok(existingResolver > -1);
+	assert.ok(existingLookup > existingResolver);
+	assert.ok(authorEnrichment > existingLookup);
+	assert.ok(metadataGate > authorEnrichment);
+	assert.ok(canonicalGate > metadataGate);
+	assert.ok(catalogReuse > canonicalGate);
+	assert.ok(workEditionUpsert > catalogReuse);
+	assert.ok(authoritativeFollowups > workEditionUpsert);
+	assert.ok(followupParallelism > authoritativeFollowups);
+	assert.match(shelfApi, /hasExistingCatalogBook\s+\?\s+Math\.max\(0, Number\(existingCatalogBook\?\.authorId/);
+	assert.match(shelfApi, /if \(!hasExistingCatalogBook\) \{\s*debugStage = "upsert_sources"/s);
+	assert.doesNotMatch(shelfApi, /debugStage = "load_persisted_entry"/);
+	assert.match(customShelves, /let customShelfSchemaReady: Promise<void> \| null = null/);
+	assert.match(customShelves, /await customShelfSchemaReady/);
+});

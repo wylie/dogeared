@@ -220,6 +220,8 @@ Profiles show who a reader is and what they are reading now. They include reader
 
 The implemented default shelf statuses are Want to Read, Currently Reading, and Read. Readers can also create custom shelves with names, slugs, icons, ordering, renaming, and deletion. Readers shelve Works, while DogEared may remember the selected Edition for precision. Assigning a Work to a default shelf removes it from custom shelves; assigning to a custom shelf stores a separate custom shelf-book relation that resolves to the representative Work row.
 
+For existing DogEared Works, default shelf mutations take the local catalog path: they reuse the representative book, Work, and Edition IDs and skip optional metadata/enrichment/canonicalization work before responding. Import-style saves without a known `bookId` still go through canonical Work resolution so duplicate prevention and Edition relationships are preserved.
+
 DNF is referenced in roadmap and filtered from imported Goodreads genre tags, but it is not currently a persisted default shelf status in the main shelf schema or shelf API.
 
 ### Reading Progress
