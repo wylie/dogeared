@@ -4,6 +4,30 @@ Date: 2026-08-08
 
 Scope: Shared layout, internal navigation, and representative SSR routes. Search, shelf mutations, and reading-progress saves are covered by their own reports.
 
+## 2026-08-08 Telemetry-Guided Page Render Pass
+
+Admin Performance showed recent page telemetry near the 900 ms range before this pass, with `page.book-detail` at 910 ms and `page.profile` at 780 ms in the sampled last-24-hour data. The dominant spans were Book Detail catalog related/related-content loads and Profile section loading.
+
+Changes in this pass:
+
+- Profile reuses `resolvePublicProfileBundle` profile data instead of querying `app_user.profile_data` again during the same request.
+- Profile now memoizes render-path index readiness for `user_book(user_id, status, updated_at desc)`, finished-book ordering, activity ordering, and custom shelf ordering.
+- Profile Want to Read loads a bounded render window for the requested page while retaining authoritative shelf counts from `resolvePublicShelfSummary`.
+- Book Detail batches optional catalog reads for editions, genres, topics, activity, and reviews with `Promise.all()` after the authoritative catalog lookup.
+- Author Detail runs schema setup, viewer status/counts, Open Library bio, collection lookup, and external book lookup concurrently where independent.
+
+Measured after changes against the local dev server on 2026-08-08. First-hit dev-server/index warmups are excluded from the steady-state numbers.
+
+| Route | Before signal | After median | After p95-ish sample | Target | Status |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Profile, shelf-heavy (`/profile/wylie`) | ~780 ms sampled telemetry | 1.09 s | 1.26 s | <500 ms | Still slow |
+| Profile, sparse (`/profile/randnumreads`) | ~780 ms sampled telemetry | 989 ms | 1.02 s | <500 ms | Still slow |
+| Book Detail (`/book?bookId=536`) | 910 ms sampled telemetry | 329 ms | 342 ms | <600 ms | Met |
+| Author Detail (`/author/samantha-harvey`) | ~900 ms route class | 301 ms | 320 ms | <600 ms | Met |
+| Discover (`/discover`) | ~900 ms route class | 123 ms | 213 ms | <500 ms | Met |
+
+Remaining profile bottleneck: even after avoiding the duplicate profile lookup, bounding Want to Read payloads, and installing the missing compound indexes, Profile section loading remains roughly 800-950 ms in local telemetry. The remaining likely cost is correctness-sensitive shelf/profile aggregation, especially finished-book canonicalization, reviews, reading goal counts, and reading summary work. That should be optimized with dedicated paginated/counted profile shelf loaders so canonical Work dedupe, review ordering, and reading-goal counts stay authoritative.
+
 ## Changes Made
 
 - Added Astro `ClientRouter` in the shared layout so same-origin internal links and GET forms can use progressive client-side navigation while direct URL loads remain server-rendered.

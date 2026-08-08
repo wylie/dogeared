@@ -60,6 +60,7 @@ export type PublicProfileBundle = {
 	isViewerFollowing: boolean;
 	allowFollowRequests: boolean;
 	targetUserId: string;
+	profileData: Record<string, unknown>;
 };
 
 export async function resolvePublicProfileBundle(input: {
@@ -76,7 +77,8 @@ export async function resolvePublicProfileBundle(input: {
 			followingCount: 0,
 			isViewerFollowing: false,
 			allowFollowRequests: true,
-			targetUserId: ""
+			targetUserId: "",
+			profileData: {}
 		};
 	}
 
@@ -97,7 +99,8 @@ export async function resolvePublicProfileBundle(input: {
 			followingCount: 0,
 			isViewerFollowing: false,
 			allowFollowRequests: true,
-			targetUserId: ""
+			targetUserId: "",
+			profileData: {}
 		};
 	}
 	if (!isEligiblePublicReaderAccount({
@@ -113,7 +116,8 @@ export async function resolvePublicProfileBundle(input: {
 			followingCount: 0,
 			isViewerFollowing: false,
 			allowFollowRequests: true,
-			targetUserId: ""
+			targetUserId: "",
+			profileData: {}
 		};
 	}
 
@@ -170,7 +174,10 @@ export async function resolvePublicProfileBundle(input: {
 			followingCount,
 			isViewerFollowing,
 			allowFollowRequests: privacy.allowFollowRequests,
-			targetUserId: user.id
+			targetUserId: user.id,
+			profileData: user.profile_data && typeof user.profile_data === "object"
+				? user.profile_data as Record<string, unknown>
+				: {}
 		};
 	}
 
@@ -183,6 +190,9 @@ export async function resolvePublicProfileBundle(input: {
 		followingCount,
 		isViewerFollowing,
 		allowFollowRequests: privacy.allowFollowRequests,
+		profileData: user.profile_data && typeof user.profile_data === "object"
+			? user.profile_data as Record<string, unknown>
+			: {},
 		profile: {
 			...normalized,
 			location: access.canViewLocation ? normalized.location : "",

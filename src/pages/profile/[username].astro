@@ -28,6 +28,7 @@ import {
 } from "../../lib/readingSummary";
 import type { ProgressInputMode } from "../../lib/readingProgress";
 import { recordPerformanceEventSafe } from "../../lib/performanceTelemetry";
+import { ensureProfileRenderIndexes } from "../../lib/profileRenderIndexes";
 
 export const prerender = false;
 
@@ -365,6 +366,8 @@ const recentPage = Math.max(1, Number(Astro.url.searchParams.get("ra_page") || "
 const readingPage = Math.max(1, Number(Astro.url.searchParams.get("cr_page") || "1") || 1);
 const wantToReadPage = Math.max(1, Number(Astro.url.searchParams.get("wr_page") || "1") || 1);
 const finishedPage = Math.max(1, Number(Astro.url.searchParams.get("rd_page") || "1") || 1);
+const WANT_TO_READ_RENDER_WINDOW = PAGE_SIZE * 3;
+const wantToReadOffset = (wantToReadPage - 1) * PAGE_SIZE;
 const reviewSort = String(Astro.url.searchParams.get("review_sort") || "newest").trim();
 const reviewFilter = String(Astro.url.searchParams.get("review_filter") || "all").trim();
 
@@ -377,24 +380,8 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 	profile = bundle.profile;
 	canViewActivity = bundle.canViewActivity;
 	isOwnerViewer = !!viewerUserId && viewerUserId === bundle.targetUserId;
-	const targetProfileRows = await sql<Array<{ profile_data: unknown }>>`
-		select profile_data
-		from app_user
-		where id = ${bundle.targetUserId}::uuid
-		limit 1
-	`;
-	targetProfileData = (targetProfileRows[0]?.profile_data && typeof targetProfileRows[0].profile_data === "object")
-		? targetProfileRows[0].profile_data as Record<string, unknown>
-		: {};
-	if (isOwnerViewer) ownerProfileData = targetProfileData;
-	showAchievementsPublic = resolveAchievementVisibilitySetting(targetProfileData);
-	followState = {
-		followersCount: bundle.followersCount,
-		followingCount: bundle.followingCount,
-		isViewerFollowing: bundle.isViewerFollowing,
-		canFollow: !!viewerUserId && viewerUserId !== bundle.targetUserId && bundle.allowFollowRequests
-	};
-	if (profile.favoriteBook) {
+	const favoriteBookHrefPromise = (async () => {
+		if (!profile.favoriteBook) return "";
 		const favoriteRaw = String(profile.favoriteBook || "").trim();
 		let favoriteTitle = favoriteRaw;
 		let favoriteAuthor = "";
@@ -415,12 +402,13 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			limit 1
 		`;
 		const bookId = Number(favoriteMatch[0]?.id || 0);
-		if (bookId > 0) favoriteBookHref = `/book?bookId=${encodeURIComponent(String(bookId))}`;
-		else if (favoriteTitle) {
-			favoriteBookHref = `/book?title=${encodeURIComponent(favoriteTitle)}${favoriteAuthor ? `&author=${encodeURIComponent(favoriteAuthor)}` : ""}`;
-		}
-	}
-	if (profile.favoriteAuthor) {
+		if (bookId > 0) return `/book?bookId=${encodeURIComponent(String(bookId))}`;
+		return favoriteTitle
+			? `/book?title=${encodeURIComponent(favoriteTitle)}${favoriteAuthor ? `&author=${encodeURIComponent(favoriteAuthor)}` : ""}`
+			: "";
+	})().catch(() => "");
+	const favoriteAuthorHrefPromise = (async () => {
+		if (!profile.favoriteAuthor) return "";
 		const favoriteAuthorMatch = await sql<Array<{ id: number }>>`
 			select a.id
 			from author a
@@ -429,10 +417,32 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			limit 1
 		`;
 		const favoriteAuthorId = Number(favoriteAuthorMatch[0]?.id || 0);
-		favoriteAuthorHref = authorHref(profile.favoriteAuthor, favoriteAuthorId);
-	}
-	await ensureReviewSchema(sql);
+		return authorHref(profile.favoriteAuthor, favoriteAuthorId);
+	})().catch(() => "");
+	const [
+		loadedFavoriteBookHref,
+		loadedFavoriteAuthorHref
+	] = await Promise.all([
+		favoriteBookHrefPromise,
+		favoriteAuthorHrefPromise,
+		ensureReviewSchema(sql).catch(() => undefined)
+	]);
+	favoriteBookHref = loadedFavoriteBookHref;
+	favoriteAuthorHref = loadedFavoriteAuthorHref;
+	targetProfileData = bundle.profileData;
+	if (isOwnerViewer) ownerProfileData = targetProfileData;
+	showAchievementsPublic = resolveAchievementVisibilitySetting(targetProfileData);
+	followState = {
+		followersCount: bundle.followersCount,
+		followingCount: bundle.followingCount,
+		isViewerFollowing: bundle.isViewerFollowing,
+		canFollow: !!viewerUserId && viewerUserId !== bundle.targetUserId && bundle.allowFollowRequests
+	};
 	const emptyReadingSummary = buildReaderReadingSummary({ currentlyReading: [], progressDateKeys: [] });
+	const customShelfSchemaReady = isOwnerViewer
+		? ensureCustomShelfSchema(sql).catch(() => null)
+		: Promise.resolve(null);
+	await ensureProfileRenderIndexes(sql).catch(() => undefined);
 	const [summary, updates, readerReadingSummary, achievementRows, wantToReadRows, finishedRows, customShelfRows, customShelfBookRows] = await Promise.all([
 		resolvePublicShelfSummary(bundle.targetUserId),
 		bundle.canViewActivity ? resolvePublicRecentActivity(bundle.targetUserId, 500, viewerUserId) : Promise.resolve([]),
@@ -472,7 +482,8 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 				where ub.user_id = ${bundle.targetUserId}::uuid
 					and ub.status = 'want_to_read'
 				order by ub.updated_at desc
-				limit 500
+				limit ${WANT_TO_READ_RENDER_WINDOW}
+				offset ${wantToReadOffset}
 			`
 			: Promise.resolve([]),
 		bundle.canViewActivity
@@ -481,7 +492,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		isOwnerViewer
 			? (async () => {
 				try {
-					await ensureCustomShelfSchema(sql);
+					await customShelfSchemaReady;
 					return sql<Array<{ id: number; name: string; slug: string; icon: string; position: number; book_count: number }>>`
 						select
 							s.id,
@@ -506,7 +517,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		isOwnerViewer
 			? (async () => {
 				try {
-					await ensureCustomShelfSchema(sql);
+					await customShelfSchemaReady;
 					return sql<Array<{
 						shelf_id: number;
 						book_id: number;
@@ -775,6 +786,16 @@ function paginate<T>(items: T[], page: number, pageSize: number) {
 	};
 }
 
+function paginateWindow<T>(items: T[], page: number, pageSize: number, totalCount: number) {
+	const totalPages = Math.max(1, Math.ceil(Math.max(0, Number(totalCount) || 0) / pageSize));
+	const currentPage = Math.min(Math.max(1, page), totalPages);
+	return {
+		items: items.slice(0, pageSize),
+		totalPages,
+		currentPage
+	};
+}
+
 function paginationHref(param: string, value: number, anchor: string) {
 	const params = new URLSearchParams(Astro.url.searchParams);
 	if (value <= 1) params.delete(param);
@@ -873,7 +894,7 @@ const customShelfOptionsJson = JSON.stringify(customShelves.map((shelf) => ({
 
 const pagedRecent = paginate(recentActivity, recentPage, PAGE_SIZE);
 const pagedReading = paginate(currentlyReading, readingPage, PAGE_SIZE);
-const pagedWantToRead = paginate(wantToReadBooks, wantToReadPage, PAGE_SIZE);
+const pagedWantToRead = paginateWindow(wantToReadBooks, wantToReadPage, PAGE_SIZE, shelfStats.wantToRead);
 const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 const profileAchievementPreview = achievements.slice(0, PROFILE_ACHIEVEMENT_PREVIEW_COUNT);
 const profileAchievementMore = achievements.slice(PROFILE_ACHIEVEMENT_PREVIEW_COUNT);

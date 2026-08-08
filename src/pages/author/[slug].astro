@@ -247,8 +247,10 @@ async function fetchOpenLibraryBio(name: string) {
 
 try {
 	const sql = getNeonSql();
-	await ensureCanonicalWorkSchema(sql);
-	await ensureSeriesSchema(sql);
+	await Promise.all([
+		ensureCanonicalWorkSchema(sql),
+		ensureSeriesSchema(sql)
+	]);
 	markPagePerfStage("schema_ready");
 	const canonicalAuthorRows = await sql<Array<{
 		id: number;
@@ -378,44 +380,54 @@ try {
 			}
 		}
 		books = Array.from(byCanonicalSlot.values());
-		const authorCounts = await sql<Array<{ shelves: number; readers: number }>>`
+	}
+
+	const bookIds = Array.from(new Set(books.map((book) => Number(book.id || 0)).filter((id) => id > 0)));
+	const authorCountsPromise = books.length > 0
+		? sql<Array<{ shelves: number; readers: number }>>`
 			select
 				count(distinct concat(ub.user_id::text, ':', coalesce(ub.status, '')))::int as shelves,
 				count(distinct ub.user_id)::int as readers
 			from user_book ub
 			join book b on b.id = ub.book_id
 			where lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
-		`;
-		shelvesCount = Number(authorCounts[0]?.shelves || 0);
-		readersCount = Number(authorCounts[0]?.readers || 0);
-	}
-
-	if (viewerUserId && books.length > 0) {
-		const bookIds = Array.from(new Set(books.map((book) => Number(book.id || 0)).filter((id) => id > 0)));
-		if (bookIds.length > 0) {
-			const statuses = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
+		`
+		: Promise.resolve([] as Array<{ shelves: number; readers: number }>);
+	const viewerStatusPromise = viewerUserId && bookIds.length > 0
+		? sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
 				select book_id, status, rating
 				from user_book
 				where user_id = ${viewerUserId}::uuid
 					and book_id = any(${bookIds}::bigint[])
-			`;
-			viewerStatusByBookId = new Map(statuses.map((row) => [Number(row.book_id || 0), row.status]));
-			viewerRatingByBookId = new Map(
-				statuses
-					.map((status) => [Number(status.book_id || 0), Number(status.rating || 0) || 0] as const)
-					.filter(([, rating]) => rating > 0)
-			);
-		}
-	}
-	markPagePerfStage("viewer_status_loaded");
-
+			`
+		: Promise.resolve([] as Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>);
 	const openLibraryBioPromise = authorName && (!bio || !authorPhotoUrl)
 		? withRuntimeCache(`author-open-library-bio:v1:${canonicalizeCatalogAuthor(authorName)}`, 6 * 60 * 60 * 1000, () => fetchOpenLibraryBio(authorName)).catch(() => null)
 		: Promise.resolve(null);
-	const [openLibrary, collections] = await Promise.all([
+	const localBookKey = bookIds.sort((a, b) => a - b).join("-");
+	const externalBooksPromise = authorName
+		? withRuntimeCache(
+			`author-external-books:v1:${canonicalizeCatalogAuthor(authorName)}:${localBookKey}`,
+			60 * 60 * 1000,
+			() => fetchExternalAuthorBooks(authorName, books)
+		).catch(() => [])
+		: Promise.resolve([] as ExternalAuthorBook[]);
+	const [authorCounts, statuses, openLibrary, collections, loadedExternalBooks] = await Promise.all([
+		authorCountsPromise,
+		viewerStatusPromise,
 		openLibraryBioPromise,
-		loadCollectionsForAuthor(sql, { authorId, authorName }, 4)
+		loadCollectionsForAuthor(sql, { authorId, authorName }, 4).catch(() => []),
+		externalBooksPromise
 	]);
+	shelvesCount = Number(authorCounts[0]?.shelves || 0);
+	readersCount = Number(authorCounts[0]?.readers || 0);
+	viewerStatusByBookId = new Map(statuses.map((row) => [Number(row.book_id || 0), row.status]));
+	viewerRatingByBookId = new Map(
+		statuses
+			.map((status) => [Number(status.book_id || 0), Number(status.rating || 0) || 0] as const)
+			.filter(([, rating]) => rating > 0)
+	);
+	markPagePerfStage("viewer_status_loaded");
 	if (openLibrary) {
 		if (openLibrary.bio && !bio) {
 			bio = openLibrary.bio;
@@ -427,20 +439,13 @@ try {
 		}
 	}
 	featuredInCollections = collections;
+	externalBooks = loadedExternalBooks;
 	markPagePerfStage("author_metadata_loaded");
 } catch (error) {
 	errorMessage = error instanceof Error ? error.message : "Failed to load author page.";
 	markPagePerfStage("load_failed");
 }
-if (authorName) {
-	const localBookKey = books.map((book) => Number(book.id || 0)).filter((id) => id > 0).sort((a, b) => a - b).join("-");
-	externalBooks = await withRuntimeCache(
-		`author-external-books:v1:${canonicalizeCatalogAuthor(authorName)}:${localBookKey}`,
-		60 * 60 * 1000,
-		() => fetchExternalAuthorBooks(authorName, books)
-	).catch(() => []);
-	markPagePerfStage("external_books_loaded");
-}
+markPagePerfStage("external_books_loaded");
 const bibliographySections = buildAuthorBibliographySections(books, externalBooks);
 const knownBookCount = bibliographySections.reduce((total, section) => total + section.books.length, 0);
 

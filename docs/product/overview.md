@@ -216,6 +216,8 @@ Readers can show or hide all achievements on their public profile from Settings.
 
 Profiles show who a reader is and what they are reading now. They include reader identity, bio, favorite book and author, shelf counts, followers/following counts, a concise reading goal summary, custom shelves, compact achievement badges inside the profile header card, current reads, recent activity, profile Reviews, default shelf sections, and settings/profile edit access. Owners can edit profile information directly from their profile page and reorder Reviews alongside shelf sections.
 
+Profile rendering reuses the public profile bundle's already-loaded profile data rather than re-querying the same user row. Profile shelf rendering uses compound indexes for user/status/order lookups and only loads a bounded Want to Read display window for the requested page while shelf counts continue to come from the authoritative aggregate summary.
+
 ### Shelves
 
 The implemented default shelf statuses are Want to Read, Currently Reading, and Read. Readers can also create custom shelves with names, slugs, icons, ordering, renaming, and deletion. Readers shelve Works, while DogEared may remember the selected Edition for precision. Assigning a Work to a default shelf removes it from custom shelves; assigning to a custom shelf stores a separate custom shelf-book relation that resolves to the representative Work row.

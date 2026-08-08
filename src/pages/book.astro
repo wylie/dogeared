@@ -495,8 +495,8 @@ try {
 			shelves: Number(row.shelves || 0),
 			readers: Number((row as { readers?: number }).readers || 0),
 			averageRating: Number(row.average_rating || 0),
-			ratingCount: Number(row.rating_count || 0)
-			,pageCount: normalizeCatalogPageCount(row.page_count)
+			ratingCount: Number(row.rating_count || 0),
+			pageCount: normalizeCatalogPageCount(row.page_count)
 		};
 		try {
 			void upsertKnownSeriesForBook(sql, {
@@ -512,8 +512,12 @@ try {
 		} catch (error) {
 			logBookDetailLoadError("series-upsert", error);
 		}
-		if (book.workId > 0) {
-			try {
+		const reviewSchemaReady = ensureReviewSchema(sql).catch((error) => {
+			logBookDetailLoadError("review-schema", error);
+		});
+		const encryptionKey = getEncryptionKey();
+		const availableEditionsPromise = book.workId > 0
+			? (async () => {
 				const editionRows = await sql<Array<{
 					id: number;
 					book_id: number | null;
@@ -555,7 +559,7 @@ try {
 					limit 12
 				`;
 				const seenEditions = new Set<string>();
-				availableEditions = editionRows
+				return editionRows
 					.map((edition) => ({
 						id: Number(edition.id || 0),
 						bookId: Number(edition.book_id || 0),
@@ -573,66 +577,33 @@ try {
 						seenEditions.add(key);
 						return true;
 					});
-			} catch (error) {
+			})().catch((error) => {
 				logBookDetailLoadError("editions", error);
-				availableEditions = [];
-			}
-		}
-		try {
-			const genreRows = await sql<Array<{ genre_name: string }>>`
+				return [] as AvailableEdition[];
+			})
+			: Promise.resolve([] as AvailableEdition[]);
+		const genreRowsPromise = sql<Array<{ genre_name: string }>>`
 				select distinct coalesce(nullif(trim(genre_name), ''), '') as genre_name
 				from book_genre
 				where book_id = ${book.id}
 				order by genre_name asc
 				limit 6
-			`;
-			const genreDedupe = new Set<string>();
-			bookGenres = genreRows
-				.map((row) => normalizeText(row.genre_name))
-				.filter((value) => value && !isDisplayNoise(value))
-				.flatMap((value) => normalizeGenreEntry(value))
-				.map((item) => item.name)
-				.filter((label) => {
-					const key = canonicalTagKey(label);
-					if (!key || genreDedupe.has(key)) return false;
-					genreDedupe.add(key);
-					return true;
-				})
-				.slice(0, 8);
-		} catch (error) {
-			logBookDetailLoadError("genres", error);
-			bookGenres = [];
-		}
-		try {
-			const topicRows = await sql<Array<{ tag_name: string }>>`
+			`.catch((error) => {
+				logBookDetailLoadError("genres", error);
+				return [] as Array<{ genre_name: string }>;
+			});
+		const topicRowsPromise = sql<Array<{ tag_name: string }>>`
 				select distinct coalesce(nullif(trim(tag_name), ''), '') as tag_name
 				from book_tag
 				where book_id = ${book.id}
 				order by tag_name asc
 				limit 8
-			`;
-			const genreKeySet = new Set(bookGenres.map((value) => canonicalTagKey(value)).filter(Boolean));
-			const topicDedupe = new Set<string>();
-			bookTopics = topicRows
-				.map((row) => normalizeText(row.tag_name))
-				.filter((value) => value && !isDisplayNoise(value))
-				.map((value) => formatTopicLabel(value))
-				.filter((label) => {
-					const key = canonicalTagKey(label);
-					if (!key || genreKeySet.has(key) || topicDedupe.has(key)) return false;
-					topicDedupe.add(key);
-					return true;
-				})
-				.filter(Boolean)
-				.slice(0, 8);
-		} catch (error) {
-			logBookDetailLoadError("topics", error);
-			bookTopics = [];
-		}
-
-		const encryptionKey = getEncryptionKey();
-		try {
-			await ensureReviewSchema(sql);
+			`.catch((error) => {
+				logBookDetailLoadError("topics", error);
+				return [] as Array<{ tag_name: string }>;
+			});
+		const activityPromise = (async () => {
+			await reviewSchemaReady;
 			let activityRows: Array<{
 				id: number;
 				event_type: string;
@@ -681,36 +652,36 @@ try {
 			} catch (error) {
 				logBookDetailLoadError("activity-likes", error);
 				activityRows = await sql<Array<{
-				id: number;
-				actor_user_id: string;
-				event_type: string;
-				created_at: string;
-				username: string | null;
-				email_local: string | null;
-				rating: number | null;
-				like_count: number;
-				viewer_liked: boolean;
-			}>>`
-				select
-					ua.id,
-					ua.user_id::text as actor_user_id,
-					ua.event_type,
-					ua.created_at::text as created_at,
-					au.username,
-					nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local,
-					coalesce(ub.rating, ua.rating) as rating,
-					0::int as like_count,
-					false as viewer_liked
-				from user_activity ua
-				join app_user au on au.id = ua.user_id
-				left join user_book ub on ub.user_id = ua.user_id and ub.book_id = ua.book_id
-				where ua.book_id = ${book.id}
-					${publicReaderAccountFilterSql(sql, { requireActivitySharing: true })}
-				order by ua.created_at desc, ua.id desc
-				limit 40
-			`;
+					id: number;
+					actor_user_id: string;
+					event_type: string;
+					created_at: string;
+					username: string | null;
+					email_local: string | null;
+					rating: number | null;
+					like_count: number;
+					viewer_liked: boolean;
+				}>>`
+					select
+						ua.id,
+						ua.user_id::text as actor_user_id,
+						ua.event_type,
+						ua.created_at::text as created_at,
+						au.username,
+						nullif(split_part(coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), ''), '@', 1), '') as email_local,
+						coalesce(ub.rating, ua.rating) as rating,
+						0::int as like_count,
+						false as viewer_liked
+					from user_activity ua
+					join app_user au on au.id = ua.user_id
+					left join user_book ub on ub.user_id = ua.user_id and ub.book_id = ua.book_id
+					where ua.book_id = ${book.id}
+						${publicReaderAccountFilterSql(sql, { requireActivitySharing: true })}
+					order by ua.created_at desc, ua.id desc
+					limit 40
+				`;
 			}
-			activity = activityRows.map((item) => ({
+			return activityRows.map((item) => ({
 				id: Math.max(0, Number(item.id || 0)),
 				eventType: normalizeText(item.event_type),
 				timestamp: item.created_at,
@@ -720,12 +691,12 @@ try {
 				likeCount: Math.max(0, Number(item.like_count || 0)),
 				viewerLiked: !!item.viewer_liked
 			}));
-		} catch (error) {
+		})().catch((error) => {
 			logBookDetailLoadError("activity", error);
-			activity = [];
-		}
-		try {
-			await ensureReviewSchema(sql);
+			return [];
+		});
+		const reviewsPromise = (async () => {
+			await reviewSchemaReady;
 			const reviewRows = await sql<Array<{
 				user_id: string;
 				username: string | null;
@@ -756,11 +727,48 @@ try {
 					)
 				order by ub.updated_at desc, ub.user_id asc
 			`;
-			reviews = buildBookReviewList(reviewRows);
-		} catch (error) {
+			return buildBookReviewList(reviewRows);
+		})().catch((error) => {
 			logBookDetailLoadError("reviews", error);
-			reviews = [];
-		}
+			return [] as BookReview[];
+		});
+		const [loadedEditions, genreRows, topicRows, loadedActivity, loadedReviews] = await Promise.all([
+			availableEditionsPromise,
+			genreRowsPromise,
+			topicRowsPromise,
+			activityPromise,
+			reviewsPromise
+		]);
+		availableEditions = loadedEditions;
+		const genreDedupe = new Set<string>();
+		bookGenres = genreRows
+			.map((row) => normalizeText(row.genre_name))
+			.filter((value) => value && !isDisplayNoise(value))
+			.flatMap((value) => normalizeGenreEntry(value))
+			.map((item) => item.name)
+			.filter((label) => {
+				const key = canonicalTagKey(label);
+				if (!key || genreDedupe.has(key)) return false;
+				genreDedupe.add(key);
+				return true;
+			})
+			.slice(0, 8);
+		const genreKeySet = new Set(bookGenres.map((value) => canonicalTagKey(value)).filter(Boolean));
+		const topicDedupe = new Set<string>();
+		bookTopics = topicRows
+			.map((row) => normalizeText(row.tag_name))
+			.filter((value) => value && !isDisplayNoise(value))
+			.map((value) => formatTopicLabel(value))
+			.filter((label) => {
+				const key = canonicalTagKey(label);
+				if (!key || genreKeySet.has(key) || topicDedupe.has(key)) return false;
+				topicDedupe.add(key);
+				return true;
+			})
+			.filter(Boolean)
+			.slice(0, 8);
+		activity = loadedActivity;
+		reviews = loadedReviews;
 		markPagePerfStage("catalog_related_loaded");
 	} else {
 		const google = await fetchGoogleBook();
@@ -789,8 +797,8 @@ try {
 				shelves: 0,
 				readers: 0,
 				averageRating: Number(info.averageRating || 0),
-				ratingCount: Number(info.ratingsCount || 0)
-				,pageCount: normalizeCatalogPageCount(info.pageCount)
+				ratingCount: Number(info.ratingsCount || 0),
+				pageCount: normalizeCatalogPageCount(info.pageCount)
 			};
 		} else {
 			const open = await fetchOpenLibraryBook();
@@ -817,8 +825,8 @@ try {
 					shelves: 0,
 					readers: 0,
 					averageRating: 0,
-					ratingCount: 0
-					,pageCount: 0
+					ratingCount: 0,
+					pageCount: 0
 				};
 			}
 		}
