@@ -208,8 +208,10 @@ test("profile progress saves refresh all derived reading UI without reload", () 
 	assert.equal(source.includes("buildReaderReadingSummary({"), true);
 	assert.equal(apiSource.includes("previousStatus === status && status === \"reading\""), false);
 	assert.equal(apiSource.includes("coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages"), true);
-	assert.equal(apiSource.includes("const effectiveTotalPages = Math.max("), true);
-	assert.equal(apiSource.includes("${effectiveTotalPages}"), true);
+	assert.equal(apiSource.includes("const requestedTotalPages = Math.max("), true);
+	assert.equal(apiSource.includes("${requestedTotalPages}::int"), true);
+	assert.equal(apiSource.includes("greatest(excluded.total_pages, user_book.total_pages)"), true);
+	assert.equal(apiSource.includes("const effectiveTotalPages = normalizePositiveInt(mutationRow?.total_pages)"), true);
 	assert.equal(apiSource.includes('detail: import.meta.env.DEV && debugStage'), true);
 	assert.equal(apiSource.includes('console.error("[shelf.upsert.debug]"'), true);
 	assert.equal(summarySource.includes("coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages"), true);

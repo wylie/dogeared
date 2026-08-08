@@ -81,7 +81,7 @@ test("progress type is persisted through the shared shelf entry lifecycle", () =
 	assert.match(api, /preferredProgressType\?: unknown/);
 	assert.match(api, /preferred_progress_type,\s+finished_date/);
 	assert.match(api, /when \$\{preferredProgressType\}::text <> '' then \$\{preferredProgressType\}::text\s+else user_book\.preferred_progress_type/);
-	assert.match(api, /preferredProgressType: normalizeProgressInputMode\((persisted\.preferred_progress_type|preferredProgressType \|\| "page")\)/);
+	assert.match(api, /preferredProgressType: (normalizeProgressInputMode\((persisted\.preferred_progress_type|preferredProgressType \|\| "page")\)|persistedPreferredProgressType)/);
 	assert.match(api, /preferredProgressType: normalizeProgressInputMode\(row\.preferred_progress_type\)/);
 
 	assert.match(summary, /ub\.preferred_progress_type/);

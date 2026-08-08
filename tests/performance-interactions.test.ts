@@ -150,6 +150,7 @@ test("shelf feedback disables duplicate actions without committing success befor
 test("shelf mutation API reuses existing catalog books before enrichment work", () => {
 	const shelfApi = read("../src/pages/api/shelf/entries.ts");
 	const customShelves = read("../src/lib/customShelves.ts");
+	const notifications = read("../src/lib/notifications.ts");
 
 	const existingResolver = shelfApi.indexOf("async function resolveExistingShelfCatalogBook");
 	const existingLookup = shelfApi.indexOf("const existingCatalogBook = directBookId > 0");
@@ -158,8 +159,8 @@ test("shelf mutation API reuses existing catalog books before enrichment work", 
 	const canonicalGate = shelfApi.indexOf("if (resolvedBookId <= 0)");
 	const catalogReuse = shelfApi.indexOf('markPerfStage("catalog_reused")');
 	const workEditionUpsert = shelfApi.indexOf("workEdition = await upsertWorkAndEdition");
-	const authoritativeFollowups = shelfApi.indexOf("const requiredFollowups: Promise<unknown>[] = []");
-	const followupParallelism = shelfApi.indexOf("await Promise.all(requiredFollowups)");
+	const combinedMutation = shelfApi.indexOf("with previous as materialized");
+	const authoritativeFollowups = shelfApi.indexOf("with custom_shelf_cleanup as");
 
 	assert.ok(existingResolver > -1);
 	assert.ok(existingLookup > existingResolver);
@@ -168,10 +169,17 @@ test("shelf mutation API reuses existing catalog books before enrichment work", 
 	assert.ok(canonicalGate > metadataGate);
 	assert.ok(catalogReuse > canonicalGate);
 	assert.ok(workEditionUpsert > catalogReuse);
-	assert.ok(authoritativeFollowups > workEditionUpsert);
-	assert.ok(followupParallelism > authoritativeFollowups);
+	assert.ok(combinedMutation > workEditionUpsert);
+	assert.ok(authoritativeFollowups > combinedMutation);
 	assert.match(shelfApi, /hasExistingCatalogBook\s+\?\s+Math\.max\(0, Number\(existingCatalogBook\?\.authorId/);
 	assert.match(shelfApi, /if \(!hasExistingCatalogBook\) \{\s*debugStage = "upsert_sources"/s);
+	assert.match(shelfApi, /previous as materialized/);
+	assert.match(shelfApi, /greatest\(excluded\.total_pages, user_book\.total_pages\)/);
+	assert.match(shelfApi, /status_activity as \(/);
+	assert.match(shelfApi, /rating_activity as \(/);
+	assert.match(shelfApi, /progress_event as \(/);
+	assert.match(shelfApi, /checkStreak: deltaPages > 0/);
+	assert.match(notifications, /input\.checkStreak !== false/);
 	assert.doesNotMatch(shelfApi, /debugStage = "load_persisted_entry"/);
 	assert.match(customShelves, /let customShelfSchemaReady: Promise<void> \| null = null/);
 	assert.match(customShelves, /await customShelfSchemaReady/);

@@ -583,7 +583,7 @@ export async function loadAdminNotificationStats(sql: NeonQueryFunction<false, f
 export async function createReadingMilestoneNotifications(
 	sql: NeonQueryFunction<false, false>,
 	userId: string,
-	input: { status?: string; bookId?: number; title?: string }
+	input: { status?: string; bookId?: number; title?: string; checkStreak?: boolean }
 ) {
 	const currentYear = new Date().getFullYear();
 	let profilePathPromise: Promise<string> | null = null;
@@ -700,49 +700,51 @@ export async function createReadingMilestoneNotifications(
 			}
 		}
 	}
-	const streakRows = await sql<Array<{ streak_days: number }>>`
-		with days as (
-			select distinct recorded_at::date as day
-			from user_reading_progress_event
-			where user_id = ${userId}::uuid
-				and recorded_at >= now() - interval '400 days'
-		),
-		numbered as (
-			select day, day - (row_number() over (order by day))::int as grp
-			from days
-		)
-		select count(*)::int as streak_days
-		from numbered
-		where grp = (
-			select grp
+	if (input.checkStreak !== false) {
+		const streakRows = await sql<Array<{ streak_days: number }>>`
+			with days as (
+				select distinct recorded_at::date as day
+				from user_reading_progress_event
+				where user_id = ${userId}::uuid
+					and recorded_at >= now() - interval '400 days'
+			),
+			numbered as (
+				select day, day - (row_number() over (order by day))::int as grp
+				from days
+			)
+			select count(*)::int as streak_days
 			from numbered
-			order by day desc
-			limit 1
-		)
-	`;
-	const streak = normalizePositiveInt(streakRows[0]?.streak_days);
-	const streakDefinition = getReadingStreakAchievementDefinition(streak);
-	if (streakDefinition) {
-		const award = await awardAchievement(sql, {
-			userId,
-			definitionKey: streakDefinition.key,
-			metadata: { streakDays: streak }
-		});
-		if (award?.inserted) {
-			const profilePath = await resolveProfilePath();
-			await createNotification(sql, {
+			where grp = (
+				select grp
+				from numbered
+				order by day desc
+				limit 1
+			)
+		`;
+		const streak = normalizePositiveInt(streakRows[0]?.streak_days);
+		const streakDefinition = getReadingStreakAchievementDefinition(streak);
+		if (streakDefinition) {
+			const award = await awardAchievement(sql, {
 				userId,
-				type: "reading_streak_milestone",
-				groupKey: `reading_streak_milestone:${streak}`,
-				actionUrl: `${profilePath}#${achievementAnchor(award.id)}`,
-				value: streak,
-				metadata: {
-					achievementId: award.id,
-					achievementDefinitionKey: award.definition.key,
-					streakDays: streak
-				},
-				groupWindowHours: 24 * 365
+				definitionKey: streakDefinition.key,
+				metadata: { streakDays: streak }
 			});
+			if (award?.inserted) {
+				const profilePath = await resolveProfilePath();
+				await createNotification(sql, {
+					userId,
+					type: "reading_streak_milestone",
+					groupKey: `reading_streak_milestone:${streak}`,
+					actionUrl: `${profilePath}#${achievementAnchor(award.id)}`,
+					value: streak,
+					metadata: {
+						achievementId: award.id,
+						achievementDefinitionKey: award.definition.key,
+						streakDays: streak
+					},
+					groupWindowHours: 24 * 365
+				});
+			}
 		}
 	}
 }

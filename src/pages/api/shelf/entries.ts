@@ -869,38 +869,6 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 		markPerfStage("canonical_resolution_complete");
 
-		const previousRows = await sql<Array<{
-			status: ShelfStatus;
-			rating: number | null;
-			total_pages: number;
-			current_page: number;
-			first_added_at: string | null;
-			progress_updates: number;
-		}>>`
-			select
-				status,
-				rating,
-				total_pages,
-				current_page,
-				first_added_at::text as first_added_at,
-				coalesce((
-					select count(*)::int
-					from user_reading_progress_event pe
-					where pe.user_id = user_book.user_id
-						and pe.book_id = user_book.book_id
-				), 0)::int as progress_updates
-			from user_book
-			where user_id = ${userId}::uuid
-				and book_id = ${resolvedBookId || 0}
-			limit 1
-		`;
-		const previousStatus = String(previousRows[0]?.status || "").trim() as ShelfStatus | "";
-		const previousRating = normalizeRating(previousRows[0]?.rating);
-		const previousTotalPages = normalizePositiveInt(previousRows[0]?.total_pages);
-		const previousCurrentPage = normalizePositiveInt(previousRows[0]?.current_page);
-		const previousFirstAddedAt = previousRows[0]?.first_added_at || "";
-		const previousProgressUpdates = normalizePositiveInt(previousRows[0]?.progress_updates);
-
 		let bookId = resolvedBookId;
 		let canonicalPageCount = Math.max(0, Number(pageCount || 0) || 0);
 		let workEdition = {
@@ -1056,10 +1024,9 @@ export const POST: APIRoute = async ({ request }) => {
 			});
 		}
 
-		const effectiveTotalPages = Math.max(
+		const requestedTotalPages = Math.max(
 			0,
 			totalPages || 0,
-			previousTotalPages || 0,
 			canonicalPageCount || 0
 		);
 
@@ -1108,14 +1075,14 @@ export const POST: APIRoute = async ({ request }) => {
 		debugStage = "upsert_user_book";
 		const finishedDateParam = finishedDate ? finishedDate : null;
 		const editionIdParam = workEdition.editionId > 0 ? workEdition.editionId : null;
-		await withSqlDebug(
+		const mutationRows = await withSqlDebug(
 			"shelfEntries.userBook.upsert",
 			userBookUpsertDebugParams({
 				userId,
 				bookId,
 				status,
 				rating,
-				effectiveTotalPages,
+				effectiveTotalPages: requestedTotalPages,
 				currentPage,
 				preferredProgressType,
 				finishedDate: finishedDateParam,
@@ -1124,7 +1091,39 @@ export const POST: APIRoute = async ({ request }) => {
 				reviewSpoiler,
 				editionId: editionIdParam
 			}),
-			() => sql`
+			() => sql<Array<{
+				previous_status: ShelfStatus | null;
+				previous_rating: number | null;
+				previous_current_page: number | null;
+				previous_progress_updates: number | null;
+				book_id: number;
+				status: ShelfStatus;
+				rating: number | null;
+				total_pages: number;
+				current_page: number;
+				preferred_progress_type: string;
+				finished_date: string | null;
+				first_added_at: string | null;
+				review_updated_at: string | null;
+				updated_at: string | null;
+			}>>`
+			with previous as materialized (
+				select
+					status as previous_status,
+					rating as previous_rating,
+					current_page as previous_current_page,
+					coalesce((
+						select count(*)::int
+						from user_reading_progress_event pe
+						where pe.user_id = user_book.user_id
+							and pe.book_id = user_book.book_id
+					), 0)::int as previous_progress_updates
+				from user_book
+				where user_id = ${userId}::uuid
+					and book_id = ${bookId}
+				limit 1
+			),
+			upserted as (
 			insert into user_book (
 				user_id,
 				book_id,
@@ -1147,7 +1146,7 @@ export const POST: APIRoute = async ({ request }) => {
 				${bookId}::bigint,
 				${status}::text,
 				${rating}::int,
-				${effectiveTotalPages}::int,
+				${requestedTotalPages}::int,
 				${currentPage}::int,
 				${(preferredProgressType || "page")}::text,
 				${finishedDateParam}::date,
@@ -1163,7 +1162,7 @@ export const POST: APIRoute = async ({ request }) => {
 				status = excluded.status,
 				rating = excluded.rating,
 				total_pages = case
-					when excluded.total_pages > 0 then excluded.total_pages
+					when excluded.total_pages > 0 then greatest(excluded.total_pages, user_book.total_pages)
 					else user_book.total_pages
 				end,
 				current_page = excluded.current_page,
@@ -1184,55 +1183,92 @@ export const POST: APIRoute = async ({ request }) => {
 					else user_book.review_updated_at
 				end,
 				updated_at = now()
-			`);
+			returning
+				book_id,
+				status,
+				rating,
+				total_pages,
+				current_page,
+				coalesce(nullif(trim(preferred_progress_type), ''), 'page') as preferred_progress_type,
+				finished_date::text as finished_date,
+				first_added_at::text as first_added_at,
+				review_updated_at::text as review_updated_at,
+				updated_at::text as updated_at
+			)
+			select
+				previous.previous_status,
+				previous.previous_rating,
+				previous.previous_current_page,
+				previous.previous_progress_updates,
+				upserted.book_id,
+				upserted.status,
+				upserted.rating,
+				upserted.total_pages,
+				upserted.current_page,
+				upserted.preferred_progress_type,
+				upserted.finished_date,
+				upserted.first_added_at,
+				upserted.review_updated_at,
+				upserted.updated_at
+			from upserted
+			left join previous on true
+		`
+		);
 		markPerfStage("user_book_upsert_complete");
-		const nextCurrentPage = normalizePositiveInt(currentPage);
+		const mutationRow = mutationRows[0];
+		if (!mutationRow?.book_id) throw new Error("Shelf entry upsert failed.");
+		const previousStatus = String(mutationRow?.previous_status || "").trim() as ShelfStatus | "";
+		const previousRating = normalizeRating(mutationRow?.previous_rating);
+		const previousCurrentPage = normalizePositiveInt(mutationRow?.previous_current_page);
+		const previousProgressUpdates = normalizePositiveInt(mutationRow?.previous_progress_updates);
+		const effectiveTotalPages = normalizePositiveInt(mutationRow?.total_pages);
+		const nextCurrentPage = normalizePositiveInt(mutationRow?.current_page);
+		const persistedPreferredProgressType = normalizeProgressInputMode(mutationRow?.preferred_progress_type || preferredProgressType || "page");
+		const persistedFinishedDate = normalizeText(mutationRow?.finished_date) || finishedDate;
+		const persistedReviewUpdatedAt = normalizeText(mutationRow?.review_updated_at);
+		const persistedFirstAddedAt = normalizeText(mutationRow?.first_added_at);
+		const persistedUpdatedAt = normalizeText(mutationRow?.updated_at);
 		const deltaPages = Math.max(0, nextCurrentPage - previousCurrentPage);
-		const requiredFollowups: Promise<unknown>[] = [];
-		// Single-shelf mode: putting a book on a default shelf removes it from
-		// all custom shelves for this user.
 		debugStage = "authoritative_followups";
-		requiredFollowups.push(sql`
-			delete from user_custom_shelf_book
-			where user_id = ${userId}::uuid
-				and book_id = ${bookId}
-		`);
-		if (!previousStatus || previousStatus !== status) {
-			debugStage = "activity_status";
-			requiredFollowups.push(sql`
+		const shouldRecordStatusActivity = !previousStatus || previousStatus !== status;
+		const shouldRecordRatingActivity = rating !== null && previousRating !== rating;
+		const shouldRecordProgressEvent = deltaPages > 0 && (status === "reading" || status === "finished");
+		await sql`
+			with custom_shelf_cleanup as (
+				delete from user_custom_shelf_book
+				where user_id = ${userId}::uuid
+					and book_id = ${bookId}
+				returning book_id
+			),
+			status_activity as (
 				insert into user_activity (
 					user_id,
 					book_id,
 					event_type
 				)
-				values (
+				select
 					${userId}::uuid,
 					${bookId},
 					${status}
-				)
-			`);
-		}
-		if (rating !== null && previousRating !== rating) {
-			debugStage = "activity_rating";
-			requiredFollowups.push(sql`
+				where ${shouldRecordStatusActivity}::boolean
+				returning id
+			),
+			rating_activity as (
 				insert into user_activity (
 					user_id,
 					book_id,
 					event_type,
 					rating
 				)
-				values (
+				select
 					${userId}::uuid,
 					${bookId},
 					'rating',
-					${rating}
-				)
-			`);
-		}
-
-		if (deltaPages > 0 && (status === "reading" || status === "finished")) {
-			debugStage = "insert_progress_event";
-			requiredFollowups.push(sql`
+					${rating}::int
+				where ${shouldRecordRatingActivity}::boolean
+				returning id
+			),
+			progress_event as (
 				insert into user_reading_progress_event (
 					user_id,
 					book_id,
@@ -1240,23 +1276,29 @@ export const POST: APIRoute = async ({ request }) => {
 					to_page,
 					page_delta
 				)
-				values (
+				select
 					${userId}::uuid,
 					${bookId},
 					${previousCurrentPage},
 					${nextCurrentPage},
 					${deltaPages}
-				)
-			`);
-		}
-		await Promise.all(requiredFollowups);
+				where ${shouldRecordProgressEvent}::boolean
+				returning id
+			)
+			select
+				(select count(*)::int from custom_shelf_cleanup) as custom_shelves_removed,
+				(select count(*)::int from status_activity) as status_activity_created,
+				(select count(*)::int from rating_activity) as rating_activity_created,
+				(select count(*)::int from progress_event) as progress_events_created
+		`;
 		markPerfStage("authoritative_followups_complete");
 		if (status === "finished" || deltaPages > 0) {
 			debugStage = "reading_milestone_notifications";
 			await createReadingMilestoneNotifications(sql, userId, {
 				status,
 				bookId,
-				title
+				title,
+				checkStreak: deltaPages > 0
 			});
 		}
 		markPerfStage("notifications_complete");
@@ -1270,10 +1312,10 @@ export const POST: APIRoute = async ({ request }) => {
 			status,
 			rating,
 			totalPages: effectiveTotalPages,
-			currentPage,
-			preferredProgressType: normalizeProgressInputMode(preferredProgressType || "page"),
-			finishedDate,
-			addedAt: Date.parse(previousFirstAddedAt || "") || nowMs,
+			currentPage: nextCurrentPage,
+			preferredProgressType: persistedPreferredProgressType,
+			finishedDate: persistedFinishedDate,
+			addedAt: Date.parse(persistedFirstAddedAt || "") || nowMs,
 			coverUrl,
 			format: "",
 			language,
@@ -1285,10 +1327,10 @@ export const POST: APIRoute = async ({ request }) => {
 			finishedReflection,
 			reviewTitle,
 			reviewSpoiler,
-			reviewUpdatedAt: reviewTitle || finishedReflection ? new Date(nowMs).toISOString() : "",
+			reviewUpdatedAt: persistedReviewUpdatedAt,
 			categories: genres.map((genre) => genre.name),
 			progressUpdates: previousProgressUpdates + (deltaPages > 0 ? 1 : 0),
-			updatedAt: nowMs
+			updatedAt: Date.parse(persistedUpdatedAt || "") || nowMs
 		};
 
 		monitorEvent("shelf.upsert.success", { userId, bookId, status, rating: rating ?? 0, hasProgressDelta: deltaPages > 0 });
