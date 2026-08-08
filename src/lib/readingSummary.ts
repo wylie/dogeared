@@ -73,6 +73,8 @@ type ProgressDateRow = {
 	activity_day: string;
 };
 
+let readingProgressSchemaReady: Promise<void> | null = null;
+
 function toPositiveInt(value: unknown) {
 	return Math.max(0, Number(value || 0) || 0);
 }
@@ -173,19 +175,30 @@ export function buildReaderReadingSummary(input: {
 }
 
 export async function ensureReadingProgressEventSchema(sql: ReturnType<typeof import("./neon.ts").getNeonSql>) {
-	await sql`
-		create table if not exists user_reading_progress_event (
-			id bigserial primary key,
-			user_id uuid not null references app_user(id) on delete cascade,
-			book_id bigint not null references book(id) on delete cascade,
-			from_page int not null default 0,
-			to_page int not null default 0,
-			page_delta int not null default 0,
-			recorded_at timestamptz not null default now()
-		)
-	`;
-	await sql`create index if not exists idx_progress_event_user_recorded_at on user_reading_progress_event(user_id, recorded_at desc)`;
-	await sql`alter table user_book add column if not exists preferred_progress_type text not null default 'page'`;
+	if (!readingProgressSchemaReady) {
+		readingProgressSchemaReady = (async () => {
+			await sql`
+				create table if not exists user_reading_progress_event (
+					id bigserial primary key,
+					user_id uuid not null references app_user(id) on delete cascade,
+					book_id bigint not null references book(id) on delete cascade,
+					from_page int not null default 0,
+					to_page int not null default 0,
+					page_delta int not null default 0,
+					recorded_at timestamptz not null default now()
+				)
+			`;
+			await sql`create index if not exists idx_progress_event_user_recorded_at on user_reading_progress_event(user_id, recorded_at desc)`;
+			await sql`create index if not exists idx_progress_event_user_book on user_reading_progress_event(user_id, book_id, recorded_at desc)`;
+			await sql`alter table user_book add column if not exists preferred_progress_type text not null default 'page'`;
+		})();
+	}
+	try {
+		await readingProgressSchemaReady;
+	} catch (error) {
+		readingProgressSchemaReady = null;
+		throw error;
+	}
 }
 
 export async function loadReaderReadingSummary(

@@ -98,3 +98,54 @@ test("progress type is persisted through the shared shelf entry lifecycle", () =
 	assert.match(shelfClient, /preferredProgressType: String\(options\.preferredProgressType/);
 	assert.match(workNormalization, /preferred_progress_type/);
 });
+
+test("reading progress saves use the dedicated narrow API path", () => {
+	const api = readFileSync("src/pages/api/reading/progress.ts", "utf8");
+	const profile = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const shelfClient = readFileSync("src/lib/shelfClient.ts", "utf8");
+
+	assert.match(api, /where ub\.user_id = \$\{session\.userId\}::uuid\s+and ub\.book_id = \$\{bookId\}\s+and ub\.status = 'reading'/);
+	assert.match(api, /update user_book\s+set\s+current_page = \$\{nextCurrentPage\}/);
+	assert.match(api, /insert into user_reading_progress_event/);
+	assert.match(api, /if \(progressEventRecorded\) \{\s+await createReadingMilestoneNotifications/);
+	assert.match(api, /const summary = await loadReaderReadingSummary\(sql, session\.userId\)/);
+	assert.match(api, /progress:\s+\{\s+bookId/);
+	assert.match(api, /momentumScore: summary\.momentumScore/);
+	assert.match(api, /readingStreakDays: summary\.readingStreakDays/);
+
+	assert.match(profile, /fetch\("\/api\/reading\/progress"/);
+	assert.match(profile, /const appliedSummary = applyAuthoritativeReadingSummary\(result\?\.data\?\.summary\)/);
+	assert.match(profile, /notifyReadingDataChanged\(\)/);
+	assert.match(shelfClient, /export function notifyReadingDataChanged\(\)/);
+});
+
+test("progress save avoids the broad post-shelf refresh after direct save success", () => {
+	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const directSaveIndex = source.indexOf("const result = await saveReadingProgressUpdate({");
+	assert.notEqual(directSaveIndex, -1);
+	const directSaveBlock = source.slice(directSaveIndex, source.indexOf("} catch (error) {", directSaveIndex));
+
+	assert.equal(directSaveBlock.includes("saveShelfEntryWithRetry"), false);
+	assert.equal(directSaveBlock.includes("refreshProfileReadingUiAfterMutation"), false);
+	assert.equal(directSaveBlock.includes("applyAuthoritativeReadingSummary"), true);
+});
+
+test("reading progress schema setup is memoized and indexed for user/book progress lookups", () => {
+	const source = readFileSync("src/lib/readingSummary.ts", "utf8");
+
+	assert.match(source, /let readingProgressSchemaReady: Promise<void> \| null = null/);
+	assert.match(source, /if \(!readingProgressSchemaReady\) \{/);
+	assert.match(source, /idx_progress_event_user_book on user_reading_progress_event\(user_id, book_id, recorded_at desc\)/);
+	assert.match(source, /readingProgressSchemaReady = null/);
+});
+
+test("reading milestone notifications defer notification schema work until a milestone is awarded", () => {
+	const source = readFileSync("src/lib/notifications.ts", "utf8");
+	const milestoneStart = source.indexOf("export async function createReadingMilestoneNotifications");
+	assert.notEqual(milestoneStart, -1);
+	const milestoneBody = source.slice(milestoneStart);
+
+	assert.equal(milestoneBody.includes("await ensureNotificationSchema(sql);"), false);
+	assert.match(milestoneBody, /const resolveProfilePath = \(\) => \{/);
+	assert.match(milestoneBody, /const profilePath = await resolveProfilePath\(\)/);
+});

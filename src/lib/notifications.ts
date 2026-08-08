@@ -573,17 +573,24 @@ export async function createReadingMilestoneNotifications(
 	userId: string,
 	input: { status?: string; bookId?: number; title?: string }
 ) {
-	await ensureNotificationSchema(sql);
 	const currentYear = new Date().getFullYear();
-	const usernameRows = await sql<Array<{ username: string | null }>>`
-		select username
-		from app_user
-		where id = ${userId}::uuid
-		limit 1
-	`;
-	const profilePath = usernameRows[0]?.username
-		? `/profile/${encodeURIComponent(String(usernameRows[0].username))}`
-		: "/profile";
+	let profilePathPromise: Promise<string> | null = null;
+	const resolveProfilePath = () => {
+		if (!profilePathPromise) {
+			profilePathPromise = (async () => {
+				const usernameRows = await sql<Array<{ username: string | null }>>`
+					select username
+					from app_user
+					where id = ${userId}::uuid
+					limit 1
+				`;
+				return usernameRows[0]?.username
+					? `/profile/${encodeURIComponent(String(usernameRows[0].username))}`
+					: "/profile";
+			})();
+		}
+		return profilePathPromise;
+	};
 	if (input.status === "finished") {
 		const goalRows = await sql<Array<{ goal: number; finished_count: number }>>`
 			select
@@ -613,6 +620,7 @@ export async function createReadingMilestoneNotifications(
 				}
 			});
 			if (award?.inserted) {
+				const profilePath = await resolveProfilePath();
 				await createNotification(sql, {
 					userId,
 					type: "reading_goal_completed",
@@ -661,6 +669,7 @@ export async function createReadingMilestoneNotifications(
 				}
 			});
 			if (award?.inserted) {
+				const profilePath = await resolveProfilePath();
 				await createNotification(sql, {
 					userId,
 					type: "series_finished",
@@ -708,6 +717,7 @@ export async function createReadingMilestoneNotifications(
 			metadata: { streakDays: streak }
 		});
 		if (award?.inserted) {
+			const profilePath = await resolveProfilePath();
 			await createNotification(sql, {
 				userId,
 				type: "reading_streak_milestone",

@@ -142,7 +142,7 @@ export function normalizeRatingValue(value: unknown) {
 	return rounded >= 1 && rounded <= 5 ? rounded : null;
 }
 
-function notifyReadingDataChanged() {
+export function notifyReadingDataChanged() {
 	if (typeof window === "undefined" || typeof window.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
 	const detail = { timestamp: Date.now() };
 	window.dispatchEvent(new CustomEvent("dogeared:reading-data-changed", { detail }));

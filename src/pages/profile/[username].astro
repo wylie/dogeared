@@ -3774,6 +3774,7 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		showShelfFeedback,
 		statusLabel,
 		saveShelfEntryWithRetry,
+		notifyReadingDataChanged,
 		toggleShelfMenu,
 		initRatingControls
 	} from "../../lib/shelfClient.ts";
@@ -4248,6 +4249,30 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 		if (shouldNotify && typeof window.dispatchEvent === "function" && typeof CustomEvent === "function") {
 			window.dispatchEvent(new CustomEvent("dogeared:reading-data-changed"));
 		}
+	}
+
+	async function saveReadingProgressUpdate(input) {
+		const response = await fetch("/api/reading/progress", {
+			method: "POST",
+			credentials: "same-origin",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(input)
+		});
+		if (response.status === 401) {
+			window.location.href = "/settings#account-settings";
+			return { ok: false, unauthorized: true, response, data: null, message: "Please log in to save progress." };
+		}
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok) {
+			return {
+				ok: false,
+				unauthorized: false,
+				response,
+				data,
+				message: String(data?.detail || data?.error || "Failed to save progress.").trim()
+			};
+		}
+		return { ok: true, unauthorized: false, response, data, message: "" };
 	}
 
 
@@ -5300,27 +5325,11 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 				return;
 			}
 
-			const entry = buildShelfEntryFromRecord({
-				title: String(progressSave.dataset.title || "").trim(),
-				author: String(progressSave.dataset.author || "").trim(),
-				description: String(progressSave.dataset.description || "").trim(),
-				pageCount: totalPages,
-				coverUrl: String(progressSave.dataset.cover || "").trim(),
-				format: "Book",
-				language: String(progressSave.dataset.language || "").trim(),
-				isbn10: String(progressSave.dataset.isbn10 || "").trim(),
-				isbn13: String(progressSave.dataset.isbn13 || "").trim(),
-				googleBooksId: String(progressSave.dataset.googleBooksId || "").trim()
-			}, {
-				status: "reading",
-				totalPages,
-				currentPage,
-				preferredProgressType: progressType,
-				finishedDate: ""
-			});
 			const directBookId = Math.max(0, Number(progressSave.dataset.bookId || 0) || 0);
-			if (directBookId > 0) entry.bookId = directBookId;
-			if (!entry.title) return;
+			if (directBookId <= 0) {
+				surfaceProgressSaveError(input, "Missing book id. Reload and try again.");
+				return;
+			}
 
 			const originalLabel = progressSave.textContent || "Save";
 			const dropdown = card?.querySelector(".shelf-dropdown");
@@ -5329,22 +5338,28 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 			if (card instanceof HTMLElement) card.setAttribute("aria-busy", "true");
 			let persisted = false;
 			try {
-				const result = await saveShelfEntryWithRetry(entry);
+				const result = await saveReadingProgressUpdate({
+					bookId: directBookId,
+					currentPage,
+					totalPages,
+					preferredProgressType: progressType
+				});
 				if (!result.ok) throw new Error(result.message || "Failed to save progress.");
 				persisted = true;
 				try {
-					const persistedEntry = result?.data && typeof result.data === "object"
-						? (result.data.entry || null)
+					const persistedProgress = result?.data && typeof result.data === "object"
+						? (result.data.progress || null)
 						: null;
-					const nextTotalPages = Math.max(0, Number((persistedEntry && persistedEntry.totalPages) || totalPages || 0) || 0);
-					const nextCurrentPage = Math.max(0, Number((persistedEntry && persistedEntry.currentPage) || currentPage || 0) || 0);
-					const nextPreferredProgressType = String((persistedEntry && persistedEntry.preferredProgressType) || progressType || "page").trim() || "page";
+					const nextTotalPages = Math.max(0, Number((persistedProgress && persistedProgress.totalPages) || totalPages || 0) || 0);
+					const nextCurrentPage = Math.max(0, Number((persistedProgress && persistedProgress.currentPage) || currentPage || 0) || 0);
+					const nextPreferredProgressType = String((persistedProgress && persistedProgress.preferredProgressType) || progressType || "page").trim() || "page";
 					const previousCurrentPage = card instanceof HTMLElement
 						? Math.max(0, Number(card.dataset.momentumCurrentPage || 0) || 0)
 						: 0;
-					const hasForwardProgress = nextCurrentPage > previousCurrentPage;
-					const updatedAtValue = normalizePersistedDateValue(persistedEntry && persistedEntry.updatedAt) || new Date().toISOString();
-					const persistedProgressUpdates = Math.max(0, Number(persistedEntry && persistedEntry.progressUpdates) || 0);
+					const hasForwardProgress = Boolean(persistedProgress && persistedProgress.progressEventRecorded)
+						|| nextCurrentPage > previousCurrentPage;
+					const updatedAtValue = normalizePersistedDateValue(persistedProgress && persistedProgress.updatedAt) || new Date().toISOString();
+					const persistedProgressUpdates = Math.max(0, Number(persistedProgress && persistedProgress.progressUpdates) || 0);
 					ensureProgressDisplay(card, nextCurrentPage, nextTotalPages);
 					const quickFinish = card?.querySelector('[data-action="mark-finished-quick"]');
 					if (quickFinish instanceof HTMLButtonElement) {
@@ -5365,8 +5380,10 @@ const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]
 						progressTypeInput.value = nextPreferredProgressType;
 						updateProgressInputPlaceholder(progressTypeInput);
 					}
+					const appliedSummary = applyAuthoritativeReadingSummary(result?.data?.summary);
+					if (appliedSummary) lastAuthoritativeReadingSummaryAt = Date.now();
 					if (hasForwardProgress) rememberReadingActivityToday();
-					await refreshProfileReadingUiAfterMutation();
+					notifyReadingDataChanged();
 					const updatedLabel = safeFormatActivityDate(updatedAtValue);
 					if (card instanceof HTMLElement) {
 						card.dataset.updatedAt = updatedAtValue;
