@@ -104,17 +104,71 @@ export function formatActivityDate(value: string) {
 	});
 }
 
+let followSchemaReady: Promise<void> | null = null;
+let feedInteractionSchemaReady: Promise<void> | null = null;
+
+async function ensureFollowSchema(sql = getNeonSql()) {
+	if (!followSchemaReady) {
+		followSchemaReady = sql`
+			create table if not exists user_follow (
+				follower_user_id uuid not null references app_user(id) on delete cascade,
+				followed_user_id uuid not null references app_user(id) on delete cascade,
+				created_at timestamptz not null default now(),
+				primary key (follower_user_id, followed_user_id),
+				check (follower_user_id <> followed_user_id)
+			)
+		`.then(() => undefined);
+	}
+	try {
+		await followSchemaReady;
+	} catch (error) {
+		followSchemaReady = null;
+		throw error;
+	}
+}
+
+async function ensureFeedInteractionSchema(sql = getNeonSql()) {
+	if (!feedInteractionSchemaReady) {
+		feedInteractionSchemaReady = (async () => {
+			await sql`
+				create table if not exists user_activity_like (
+					activity_id bigint not null references user_activity(id) on delete cascade,
+					user_id uuid not null references app_user(id) on delete cascade,
+					created_at timestamptz not null default now(),
+					primary key (activity_id, user_id)
+				)
+			`;
+			await Promise.all([
+				sql`create index if not exists idx_user_activity_like_activity on user_activity_like(activity_id)`,
+				sql`create index if not exists idx_user_activity_like_user on user_activity_like(user_id, created_at desc)`,
+				sql`
+					create table if not exists user_activity_comment (
+						id bigserial primary key,
+						activity_id bigint not null references user_activity(id) on delete cascade,
+						user_id uuid not null references app_user(id) on delete cascade,
+						body text not null default '',
+						created_at timestamptz not null default now(),
+						check (char_length(trim(body)) between 1 and 500)
+					)
+				`
+			]);
+			await Promise.all([
+				sql`create index if not exists idx_user_activity_comment_activity on user_activity_comment(activity_id, created_at asc, id asc)`,
+				sql`create index if not exists idx_user_activity_comment_user on user_activity_comment(user_id, created_at desc)`
+			]);
+		})();
+	}
+	try {
+		await feedInteractionSchemaReady;
+	} catch (error) {
+		feedInteractionSchemaReady = null;
+		throw error;
+	}
+}
+
 export async function resolveFollowingCount(viewerUserId: string) {
 	const sql = getNeonSql();
-	await sql`
-		create table if not exists user_follow (
-			follower_user_id uuid not null references app_user(id) on delete cascade,
-			followed_user_id uuid not null references app_user(id) on delete cascade,
-			created_at timestamptz not null default now(),
-			primary key (follower_user_id, followed_user_id),
-			check (follower_user_id <> followed_user_id)
-		)
-	`;
+	await ensureFollowSchema(sql);
 	const rows = await sql<Array<{ count: number }>>`
 		select count(*)::int as count
 		from user_follow uf
@@ -127,28 +181,10 @@ export async function resolveFollowingCount(viewerUserId: string) {
 
 export async function resolveFollowingFeedActivity(viewerUserId: string, limit = 50) {
 	const sql = getNeonSql();
-	await sql`
-		create table if not exists user_activity_like (
-			activity_id bigint not null references user_activity(id) on delete cascade,
-			user_id uuid not null references app_user(id) on delete cascade,
-			created_at timestamptz not null default now(),
-			primary key (activity_id, user_id)
-		)
-	`;
-	await sql`create index if not exists idx_user_activity_like_activity on user_activity_like(activity_id)`;
-	await sql`create index if not exists idx_user_activity_like_user on user_activity_like(user_id, created_at desc)`;
-	await sql`
-		create table if not exists user_activity_comment (
-			id bigserial primary key,
-			activity_id bigint not null references user_activity(id) on delete cascade,
-			user_id uuid not null references app_user(id) on delete cascade,
-			body text not null default '',
-			created_at timestamptz not null default now(),
-			check (char_length(trim(body)) between 1 and 500)
-		)
-	`;
-	await sql`create index if not exists idx_user_activity_comment_activity on user_activity_comment(activity_id, created_at asc, id asc)`;
-	await sql`create index if not exists idx_user_activity_comment_user on user_activity_comment(user_id, created_at desc)`;
+	await Promise.all([
+		ensureFollowSchema(sql),
+		ensureFeedInteractionSchema(sql)
+	]);
 	const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
 	const rows = await sql<Array<{
 		id: number;

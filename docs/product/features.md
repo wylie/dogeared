@@ -153,6 +153,8 @@ External provider calls run concurrently from normalized query variants and use 
 
 The Search page appends external matches without duplicate cards and ignores stale responses when the query changes. Users can add search results to shelves, catalog matches show series name/book number when available, and matching editorial collections appear above book results.
 
+Internal page navigation is progressively enhanced rather than converted into a single-page app. Astro's client router runs from the shared layout so same-origin links and GET forms can avoid full document reloads, preserve browser history, and keep direct SSR URL loads intact. Slow route swaps show a small delayed top progress bar instead of a global spinner. User-specific navigation data, including unread notification counts and shelf state rendered in cards, remains current-reader data and is not stored in shared public caches.
+
 Limitations: External APIs can fail or return incomplete metadata.
 
 ### Book Detail Page

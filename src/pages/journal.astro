@@ -31,14 +31,8 @@ let currentPage = requestedPage;
 if (viewerUserId) {
 	try {
 		const sql = getNeonSql();
-		totalJournalEntries = await countJournalEntries(sql, viewerUserId, query, filterBookId, { date: filterDate });
-		totalPages = Math.max(1, Math.ceil(totalJournalEntries / pageSize));
-		currentPage = Math.min(requestedPage, totalPages);
-		entries = await searchJournalEntries(sql, viewerUserId, query, pageSize, filterBookId, {
-			date: filterDate,
-			offset: (currentPage - 1) * pageSize
-		});
-		const rows = await sql<Array<{ id: number; title: string | null; primary_author: string | null }>>`
+		const countPromise = countJournalEntries(sql, viewerUserId, query, filterBookId, { date: filterDate });
+		const ownedBookOptionsPromise = sql<Array<{ id: number; title: string | null; primary_author: string | null }>>`
 			select
 				b.id,
 				b.title,
@@ -49,6 +43,17 @@ if (viewerUserId) {
 			order by lower(coalesce(b.title, '')) asc, b.id asc
 			limit 500
 		`;
+		totalJournalEntries = await countPromise;
+		totalPages = Math.max(1, Math.ceil(totalJournalEntries / pageSize));
+		currentPage = Math.min(requestedPage, totalPages);
+		const [entryRows, rows] = await Promise.all([
+			searchJournalEntries(sql, viewerUserId, query, pageSize, filterBookId, {
+				date: filterDate,
+				offset: (currentPage - 1) * pageSize
+			}),
+			ownedBookOptionsPromise
+		]);
+		entries = entryRows;
 		ownedBookOptions = rows.map((row) => ({
 			id: Math.max(0, Number(row.id || 0) || 0),
 			title: String(row.title || "").trim() || "Untitled book",

@@ -24,6 +24,8 @@ function normalizeText(value: unknown) {
 	return String(value || "").trim();
 }
 
+let reviewSchemaReady: Promise<void> | null = null;
+
 export function normalizeReviewTitle(value: unknown) {
 	return normalizeText(value).slice(0, 160);
 }
@@ -40,11 +42,21 @@ export function normalizeReviewRating(value: unknown) {
 }
 
 export async function ensureReviewSchema(sql: any) {
-	await sql`alter table user_book add column if not exists rating int`;
-	await sql`alter table user_book add column if not exists finished_reflection text not null default ''`;
-	await sql`alter table user_book add column if not exists review_title text not null default ''`;
-	await sql`alter table user_book add column if not exists review_spoiler boolean not null default false`;
-	await sql`alter table user_book add column if not exists review_updated_at timestamptz`;
+	if (!reviewSchemaReady) {
+		reviewSchemaReady = Promise.all([
+			sql`alter table user_book add column if not exists rating int`,
+			sql`alter table user_book add column if not exists finished_reflection text not null default ''`,
+			sql`alter table user_book add column if not exists review_title text not null default ''`,
+			sql`alter table user_book add column if not exists review_spoiler boolean not null default false`,
+			sql`alter table user_book add column if not exists review_updated_at timestamptz`
+		]).then(() => undefined);
+	}
+	try {
+		await reviewSchemaReady;
+	} catch (error) {
+		reviewSchemaReady = null;
+		throw error;
+	}
 }
 
 export function buildBookReviewList(rows: RawReviewRow[]) {

@@ -76,6 +76,8 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 Global UI should have explicit rendering rules so release-blocker fixes do not depend on incidental route behavior.
 
 - `LeftHand` owns the sidebar navigation and login dialog markup.
+- The shared `Layout` includes Astro's `ClientRouter` for progressive same-origin navigation. Direct URLs still render through SSR, while internal links and GET forms can preserve browser history without forcing a full document reload. A delayed top progress bar provides subtle feedback only when a route swap is noticeable.
+- Shared layout data follows cache boundaries: request-scoped auth/session data can be reused within a request, short-lived public layout data can be runtime-cached, and user-specific navigation state such as notification counts remains per-reader and is loaded from authenticated endpoints.
 - `Layout` decides whether the global login prompt is allowed on the current route and passes `allowAuthPrompt` to `LeftHand`.
 - `ReaderGuidance` uses the same route gate through `allowGuidance`, so logged-out visitor guidance does not appear on informational pages.
 - The login prompt is limited to reader/product surfaces where sign-in or account creation is an expected next step, such as Home, Discover, Search, Books, Authors, Book Detail, Collections, Related, and public Profiles.
@@ -115,6 +117,8 @@ My Reading Life lives at `/reading-life` and uses `src/lib/readingLife` for pure
 ## Reading Journal
 
 Reading Journal lives at `/journal` and uses `src/lib/readingJournal` for schema readiness, input normalization, permission checks, entry creation/update, deletion, book-level recent entries, and private search/filtering. The main journal page renders a newest-first paginated timeline, prominent new-entry form, searchable saved-book picker, date filters, inline entry detail, edit/delete controls, and local draft recovery. Journal entries store one optional reading position as a type/value pair. Book detail pages show recent entries for owned books and offer quick creation when the book is Currently Reading. Profile progress updates can offer an optional journal prompt that deep-links to a prefilled private draft. Journal content remains private notebook data and is not rendered on profiles, public search, activity feeds, comments, or statistics surfaces.
+
+High-traffic SSR routes avoid repeated idempotent setup on every request. Reading Journal, Notifications, My Reading Life, Book Detail reviews, Following feed tables, and feed interaction tables memoize schema readiness per server process and reset the memoized promise if setup fails. Page loaders parallelize independent data reads where correctness permits, and optional public metadata work such as known-series maintenance or Open Library author metadata is kept out of the authoritative local DogEared render path.
 
 ## Discovery Providers
 

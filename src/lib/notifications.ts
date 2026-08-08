@@ -82,6 +82,8 @@ const typeIcon: Partial<Record<NotificationType, string>> = {
 	goodreads_import_completed: "check_circle"
 };
 
+let notificationSchemaReady: Promise<void> | null = null;
+
 function normalizeText(value: unknown, max = 240) {
 	return String(value || "").trim().slice(0, max);
 }
@@ -134,43 +136,53 @@ export function normalizeNotificationPreferences(source: unknown) {
 }
 
 export async function ensureNotificationSchema(sql: NeonQueryFunction<false, false>) {
-	await sql`
-		create table if not exists user_notification (
-			id bigserial primary key,
-			user_id uuid not null references app_user(id) on delete cascade,
-			actor_user_id uuid references app_user(id) on delete set null,
-			activity_id bigint references user_activity(id) on delete cascade,
-			type text not null default 'activity_comment',
-			category text not null default 'community',
-			title text not null default '',
-			body text not null default '',
-			icon text not null default '',
-			action_url text not null default '',
-			group_key text not null default '',
-			actor_count int not null default 1,
-			metadata jsonb not null default '{}'::jsonb,
-			created_at timestamptz not null default now(),
-			read_at timestamptz null,
-			deleted_at timestamptz null
-		)
-	`;
-	await sql`alter table user_notification alter column actor_user_id drop not null`;
-	await sql`alter table user_notification alter column activity_id drop not null`;
-	await sql`alter table user_notification alter column type set default 'activity_comment'`;
-	await sql`alter table user_notification add column if not exists category text not null default 'community'`;
-	await sql`alter table user_notification add column if not exists title text not null default ''`;
-	await sql`alter table user_notification add column if not exists body text not null default ''`;
-	await sql`alter table user_notification add column if not exists icon text not null default ''`;
-	await sql`alter table user_notification add column if not exists action_url text not null default ''`;
-	await sql`alter table user_notification add column if not exists group_key text not null default ''`;
-	await sql`alter table user_notification add column if not exists actor_count int not null default 1`;
-	await sql`alter table user_notification add column if not exists metadata jsonb not null default '{}'::jsonb`;
-	await sql`alter table user_notification add column if not exists deleted_at timestamptz null`;
-	await sql`alter table user_notification drop constraint if exists user_notification_type_check`;
-	await sql`create index if not exists idx_user_notification_user_read on user_notification(user_id, read_at, created_at desc)`;
-	await sql`create index if not exists idx_user_notification_user_created on user_notification(user_id, created_at desc)`;
-	await sql`create index if not exists idx_user_notification_group on user_notification(user_id, group_key, created_at desc)`;
-	await sql`create index if not exists idx_user_notification_type_created on user_notification(type, created_at desc)`;
+	if (!notificationSchemaReady) {
+		notificationSchemaReady = (async () => {
+			await sql`
+				create table if not exists user_notification (
+					id bigserial primary key,
+					user_id uuid not null references app_user(id) on delete cascade,
+					actor_user_id uuid references app_user(id) on delete set null,
+					activity_id bigint references user_activity(id) on delete cascade,
+					type text not null default 'activity_comment',
+					category text not null default 'community',
+					title text not null default '',
+					body text not null default '',
+					icon text not null default '',
+					action_url text not null default '',
+					group_key text not null default '',
+					actor_count int not null default 1,
+					metadata jsonb not null default '{}'::jsonb,
+					created_at timestamptz not null default now(),
+					read_at timestamptz null,
+					deleted_at timestamptz null
+				)
+			`;
+			await sql`alter table user_notification alter column actor_user_id drop not null`;
+			await sql`alter table user_notification alter column activity_id drop not null`;
+			await sql`alter table user_notification alter column type set default 'activity_comment'`;
+			await sql`alter table user_notification add column if not exists category text not null default 'community'`;
+			await sql`alter table user_notification add column if not exists title text not null default ''`;
+			await sql`alter table user_notification add column if not exists body text not null default ''`;
+			await sql`alter table user_notification add column if not exists icon text not null default ''`;
+			await sql`alter table user_notification add column if not exists action_url text not null default ''`;
+			await sql`alter table user_notification add column if not exists group_key text not null default ''`;
+			await sql`alter table user_notification add column if not exists actor_count int not null default 1`;
+			await sql`alter table user_notification add column if not exists metadata jsonb not null default '{}'::jsonb`;
+			await sql`alter table user_notification add column if not exists deleted_at timestamptz null`;
+			await sql`alter table user_notification drop constraint if exists user_notification_type_check`;
+			await sql`create index if not exists idx_user_notification_user_read on user_notification(user_id, read_at, created_at desc)`;
+			await sql`create index if not exists idx_user_notification_user_created on user_notification(user_id, created_at desc)`;
+			await sql`create index if not exists idx_user_notification_group on user_notification(user_id, group_key, created_at desc)`;
+			await sql`create index if not exists idx_user_notification_type_created on user_notification(type, created_at desc)`;
+		})();
+	}
+	try {
+		await notificationSchemaReady;
+	} catch (error) {
+		notificationSchemaReady = null;
+		throw error;
+	}
 }
 
 async function isCategoryEnabled(sql: NeonQueryFunction<false, false>, userId: string, category: NotificationCategory) {

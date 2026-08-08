@@ -301,6 +301,7 @@ try {
 	await ensureCanonicalWorkSchema(sql);
 	let rows: Array<{
 		id: number;
+		work_id: number | null;
 		title: string;
 		author: string;
 		author_id: number | null;
@@ -322,6 +323,7 @@ try {
 		rows = await sql`
 			select
 				b.id,
+				b.work_id,
 				b.title,
 				coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
 				b.author_id,
@@ -349,14 +351,14 @@ try {
 				where ub3.book_id = b.id
 			) rt on true
 			where b.id = ${queryBookId}
-			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
+			group by b.id, b.work_id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
 
 	if (!rows[0] && queryIsbn13) {
 		rows = await sql`
-			select b.id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+			select b.id, b.work_id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
 				b.author_id,
 				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
@@ -374,14 +376,14 @@ try {
 			left join lateral (select count(*)::int as shelves, count(distinct ub.user_id)::int as readers from user_book ub where ub.book_id = b.id) sc on true
 			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
 			where b.isbn13 = ${queryIsbn13}
-			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
+			group by b.id, b.work_id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
 
 	if (!rows[0] && queryIsbn10) {
 		rows = await sql`
-			select b.id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+			select b.id, b.work_id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
 				b.author_id,
 				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
@@ -399,14 +401,14 @@ try {
 			left join lateral (select count(*)::int as shelves, count(distinct ub.user_id)::int as readers from user_book ub where ub.book_id = b.id) sc on true
 			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
 			where b.isbn10 = ${queryIsbn10}
-			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
+			group by b.id, b.work_id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
 
 	if (!rows[0] && queryGoogleBooksId) {
 		rows = await sql`
-			select b.id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+			select b.id, b.work_id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
 				b.author_id,
 				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
@@ -424,7 +426,7 @@ try {
 			left join lateral (select count(*)::int as shelves, count(distinct ub.user_id)::int as readers from user_book ub where ub.book_id = b.id) sc on true
 			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
 			where b.google_books_id = ${queryGoogleBooksId}
-			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
+			group by b.id, b.work_id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
@@ -433,7 +435,7 @@ try {
 		const ct = canonicalizeTitle(queryTitle);
 		const ca = canonicalizeAuthor(queryAuthor);
 		rows = await sql`
-			select b.id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+			select b.id, b.work_id, b.title, coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
 				b.author_id,
 				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
@@ -452,7 +454,7 @@ try {
 			left join lateral (select round(avg(ub.rating)::numeric, 1) as average_rating, count(*) filter (where ub.rating is not null)::int as rating_count from user_book ub where ub.book_id = b.id) rt on true
 			where lower(regexp_replace(coalesce(b.title, ''), '[^[:alnum:]]+', '', 'g')) = ${ct.replace(/[^a-z0-9]+/g, "")}
 				and (${ca} = '' or lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${ca.replace(/[^a-z0-9]+/g, "")})
-			group by b.id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
+			group by b.id, b.work_id, b.title, b.primary_author, b.author_id, b.synopsis, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.published_year, b.page_count, sc.shelves, sc.readers, rt.average_rating, rt.rating_count
 			limit 1
 		`;
 	}
@@ -467,15 +469,9 @@ try {
 		if (resolvedBookId > 0 && queryBookId !== resolvedBookId) {
 			return Astro.redirect(`/book?bookId=${encodeURIComponent(String(resolvedBookId))}`, 302);
 		}
-		const workRows = await sql<Array<{ work_id: number | null }>>`
-			select work_id
-			from book
-			where id = ${resolvedBookId}
-			limit 1
-		`;
 		book = {
 			id: resolvedBookId,
-			workId: Number(workRows[0]?.work_id || 0),
+			workId: Number(row.work_id || 0),
 			title: normalizeText(row.title),
 			author: normalizeText(row.author),
 			authorId: Number(row.author_id || 0),
@@ -493,13 +489,15 @@ try {
 			,pageCount: normalizeCatalogPageCount(row.page_count)
 		};
 		try {
-			await upsertKnownSeriesForBook(sql, {
+			void upsertKnownSeriesForBook(sql, {
 				bookId: book.id,
 				workId: book.workId,
 				title: book.title,
 				author: book.author,
 				coverUrl: book.coverUrl,
 				publishedYear: row.published_year || 0
+			}).catch((error) => {
+				logBookDetailLoadError("series-upsert", error);
 			});
 		} catch (error) {
 			logBookDetailLoadError("series-upsert", error);
@@ -892,22 +890,22 @@ if (book && session?.userId) {
 	}
 }
 if (book?.id) {
-	try {
-		seriesContext = await loadBookSeriesContext(sql, book.id, session?.userId || "");
-		if (seriesContext?.books.length) {
-			void enrichMissingSeriesBookCovers(sql, seriesContext.books).catch((error) => {
-				logBookDetailLoadError("series-cover-enrichment", error);
-			});
-		}
-	} catch (error) {
-		logBookDetailLoadError("series", error);
-		seriesContext = null;
-	}
-	try {
-		readersAlsoEnjoyed = await loadReadersAlsoEnjoyed(sql, book.id, session?.userId || "", 6);
-	} catch (error) {
-		logBookDetailLoadError("recommendations", error);
-		readersAlsoEnjoyed = null;
+	const [loadedSeriesContext, loadedReadersAlsoEnjoyed] = await Promise.all([
+		loadBookSeriesContext(sql, book.id, session?.userId || "").catch((error) => {
+			logBookDetailLoadError("series", error);
+			return null;
+		}),
+		loadReadersAlsoEnjoyed(sql, book.id, session?.userId || "", 6).catch((error) => {
+			logBookDetailLoadError("recommendations", error);
+			return null;
+		})
+	]);
+	seriesContext = loadedSeriesContext;
+	readersAlsoEnjoyed = loadedReadersAlsoEnjoyed;
+	if (seriesContext?.books.length) {
+		void enrichMissingSeriesBookCovers(sql, seriesContext.books).catch((error) => {
+			logBookDetailLoadError("series-cover-enrichment", error);
+		});
 	}
 } else if (book) {
 	try {

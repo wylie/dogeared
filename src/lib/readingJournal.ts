@@ -96,6 +96,8 @@ type RawJournalRow = {
 	status?: string | null;
 };
 
+let readingJournalSchemaReady: Promise<void> | null = null;
+
 export function normalizeJournalVisibility(value: unknown): JournalVisibility {
 	const visibility = String(value || "").trim().toLowerCase();
 	if (visibility === "friends" || visibility === "public" || visibility === "shared") return visibility;
@@ -306,107 +308,117 @@ function mapSearchRow(row: RawJournalRow): JournalSearchResult {
 }
 
 export async function ensureReadingJournalSchema(sql: Sql) {
-	await sql`
-		create table if not exists reading_journal_note (
-			id bigserial primary key,
-			user_id uuid not null references app_user(id) on delete cascade,
-			book_id bigint references book(id) on delete set null,
-			entry_title text not null default '',
-			body text not null default '',
-			entry_at timestamptz not null default now(),
-			progress_snapshot int,
-			page_number int,
-			chapter_location text not null default '',
-			reading_position_type text not null default '' check (reading_position_type in ('', 'page', 'percent', 'chapter', 'location')),
-			reading_position_value text not null default '',
-			mood text not null default '',
-			personal_tags text[] not null default '{}',
-			visibility text not null default 'private' check (visibility in ('private', 'friends', 'public', 'shared')),
-			metadata jsonb not null default '{}'::jsonb,
-			created_at timestamptz not null default now(),
-			updated_at timestamptz not null default now()
-		)
-	`;
-	await Promise.all([
-		sql`alter table reading_journal_note add column if not exists reading_position_type text not null default ''`,
-		sql`alter table reading_journal_note add column if not exists reading_position_value text not null default ''`
-	]);
-	await Promise.all([
-		sql`create index if not exists idx_reading_journal_note_user_entry on reading_journal_note(user_id, entry_at desc, updated_at desc)`,
-		sql`create index if not exists idx_reading_journal_note_book on reading_journal_note(user_id, book_id, entry_at desc)`,
-		sql`create index if not exists idx_reading_journal_note_visibility on reading_journal_note(visibility)`
-	]);
-	await sql`
-		create table if not exists reading_journal_entry (
-			user_id uuid not null references app_user(id) on delete cascade,
-			book_id bigint not null references book(id) on delete cascade,
-			started_thoughts text not null default '',
-			mid_book_notes text not null default '',
-			finished_thoughts text not null default '',
-			favorite_quote text not null default '',
-			would_reread boolean,
-			recommended_to text not null default '',
-			personal_tags text[] not null default '{}',
-			visibility text not null default 'private' check (visibility in ('private', 'friends', 'public', 'shared')),
-			metadata jsonb not null default '{}'::jsonb,
-			created_at timestamptz not null default now(),
-			updated_at timestamptz not null default now(),
-			primary key (user_id, book_id)
-		)
-	`;
-	await Promise.all([
-		sql`create index if not exists idx_reading_journal_user_updated on reading_journal_entry(user_id, updated_at desc)`,
-		sql`create index if not exists idx_reading_journal_book on reading_journal_entry(book_id)`,
-		sql`create index if not exists idx_reading_journal_visibility on reading_journal_entry(visibility)`
-	]);
-	await sql`
-		insert into reading_journal_note (
-			user_id,
-			book_id,
-			entry_title,
-			body,
-			entry_at,
-			personal_tags,
-			visibility,
-			created_at,
-			updated_at,
-			metadata
-		)
-		select
-			j.user_id,
-			j.book_id,
-			'',
-			trim(concat_ws(E'\n\n',
-				nullif(concat('Started thoughts', E'\n', nullif(j.started_thoughts, '')), concat('Started thoughts', E'\n')),
-				nullif(concat('Mid-book notes', E'\n', nullif(j.mid_book_notes, '')), concat('Mid-book notes', E'\n')),
-				nullif(concat('Finished thoughts', E'\n', nullif(j.finished_thoughts, '')), concat('Finished thoughts', E'\n')),
-				nullif(concat('Favorite quote', E'\n', nullif(j.favorite_quote, '')), concat('Favorite quote', E'\n')),
-				nullif(concat('Recommended to', E'\n', nullif(j.recommended_to, '')), concat('Recommended to', E'\n'))
-			)),
-			j.updated_at,
-			j.personal_tags,
-			j.visibility,
-			j.created_at,
-			j.updated_at,
-			jsonb_build_object('legacyReadingJournalEntry', true)
-		from reading_journal_entry j
-		where not exists (
-			select 1
-			from reading_journal_note n
-			where n.user_id = j.user_id
-				and n.book_id = j.book_id
-				and n.metadata->>'legacyReadingJournalEntry' = 'true'
-		)
-			and (
-				j.started_thoughts <> ''
-				or j.mid_book_notes <> ''
-				or j.finished_thoughts <> ''
-				or j.favorite_quote <> ''
-				or j.recommended_to <> ''
-				or cardinality(j.personal_tags) > 0
-				or j.would_reread is not null
-			)
-	`;
+	if (!readingJournalSchemaReady) {
+		readingJournalSchemaReady = (async () => {
+			await sql`
+				create table if not exists reading_journal_note (
+					id bigserial primary key,
+					user_id uuid not null references app_user(id) on delete cascade,
+					book_id bigint references book(id) on delete set null,
+					entry_title text not null default '',
+					body text not null default '',
+					entry_at timestamptz not null default now(),
+					progress_snapshot int,
+					page_number int,
+					chapter_location text not null default '',
+					reading_position_type text not null default '' check (reading_position_type in ('', 'page', 'percent', 'chapter', 'location')),
+					reading_position_value text not null default '',
+					mood text not null default '',
+					personal_tags text[] not null default '{}',
+					visibility text not null default 'private' check (visibility in ('private', 'friends', 'public', 'shared')),
+					metadata jsonb not null default '{}'::jsonb,
+					created_at timestamptz not null default now(),
+					updated_at timestamptz not null default now()
+				)
+			`;
+			await Promise.all([
+				sql`alter table reading_journal_note add column if not exists reading_position_type text not null default ''`,
+				sql`alter table reading_journal_note add column if not exists reading_position_value text not null default ''`
+			]);
+			await Promise.all([
+				sql`create index if not exists idx_reading_journal_note_user_entry on reading_journal_note(user_id, entry_at desc, updated_at desc)`,
+				sql`create index if not exists idx_reading_journal_note_book on reading_journal_note(user_id, book_id, entry_at desc)`,
+				sql`create index if not exists idx_reading_journal_note_visibility on reading_journal_note(visibility)`
+			]);
+			await sql`
+				create table if not exists reading_journal_entry (
+					user_id uuid not null references app_user(id) on delete cascade,
+					book_id bigint not null references book(id) on delete cascade,
+					started_thoughts text not null default '',
+					mid_book_notes text not null default '',
+					finished_thoughts text not null default '',
+					favorite_quote text not null default '',
+					would_reread boolean,
+					recommended_to text not null default '',
+					personal_tags text[] not null default '{}',
+					visibility text not null default 'private' check (visibility in ('private', 'friends', 'public', 'shared')),
+					metadata jsonb not null default '{}'::jsonb,
+					created_at timestamptz not null default now(),
+					updated_at timestamptz not null default now(),
+					primary key (user_id, book_id)
+				)
+			`;
+			await Promise.all([
+				sql`create index if not exists idx_reading_journal_user_updated on reading_journal_entry(user_id, updated_at desc)`,
+				sql`create index if not exists idx_reading_journal_book on reading_journal_entry(book_id)`,
+				sql`create index if not exists idx_reading_journal_visibility on reading_journal_entry(visibility)`
+			]);
+			await sql`
+				insert into reading_journal_note (
+					user_id,
+					book_id,
+					entry_title,
+					body,
+					entry_at,
+					personal_tags,
+					visibility,
+					created_at,
+					updated_at,
+					metadata
+				)
+				select
+					j.user_id,
+					j.book_id,
+					'',
+					trim(concat_ws(E'\n\n',
+						nullif(concat('Started thoughts', E'\n', nullif(j.started_thoughts, '')), concat('Started thoughts', E'\n')),
+						nullif(concat('Mid-book notes', E'\n', nullif(j.mid_book_notes, '')), concat('Mid-book notes', E'\n')),
+						nullif(concat('Finished thoughts', E'\n', nullif(j.finished_thoughts, '')), concat('Finished thoughts', E'\n')),
+						nullif(concat('Favorite quote', E'\n', nullif(j.favorite_quote, '')), concat('Favorite quote', E'\n')),
+						nullif(concat('Recommended to', E'\n', nullif(j.recommended_to, '')), concat('Recommended to', E'\n'))
+					)),
+					j.updated_at,
+					j.personal_tags,
+					j.visibility,
+					j.created_at,
+					j.updated_at,
+					jsonb_build_object('legacyReadingJournalEntry', true)
+				from reading_journal_entry j
+				where not exists (
+					select 1
+					from reading_journal_note n
+					where n.user_id = j.user_id
+						and n.book_id = j.book_id
+						and n.metadata->>'legacyReadingJournalEntry' = 'true'
+				)
+					and (
+						j.started_thoughts <> ''
+						or j.mid_book_notes <> ''
+						or j.finished_thoughts <> ''
+						or j.favorite_quote <> ''
+						or j.recommended_to <> ''
+						or cardinality(j.personal_tags) > 0
+						or j.would_reread is not null
+					)
+			`;
+		})();
+	}
+	try {
+		await readingJournalSchemaReady;
+	} catch (error) {
+		readingJournalSchemaReady = null;
+		throw error;
+	}
 }
 
 export async function userOwnsBook(sql: Sql, userId: string, bookId: number) {

@@ -103,7 +103,7 @@ export async function fetchExternalAuthorBooks(authorName: string, localBooks: L
 			limit: "40"
 		});
 		const response = await fetch(`https://openlibrary.org/search.json?${params.toString()}`, {
-			signal: AbortSignal.timeout(3500)
+			signal: AbortSignal.timeout(1200)
 		});
 		if (!response.ok) return [];
 		const data = await response.json();

@@ -55,6 +55,33 @@ test("request-scoped auth and layout loads avoid repeated sequential work", () =
 	assert.match(layout, /loadActiveAnnouncement\(\)/);
 });
 
+test("page navigation and route rendering avoid avoidable blocking work", () => {
+	const layout = read("../src/layouts/Layout.astro");
+	const authors = read("../src/pages/authors.astro");
+	const authorDetail = read("../src/pages/author/[slug].astro");
+	const journal = read("../src/lib/readingJournal.ts");
+	const notifications = read("../src/lib/notifications.ts");
+	const feed = read("../src/lib/feed.ts");
+	const reviews = read("../src/lib/bookReviews.ts");
+
+	assert.match(layout, /import \{ ClientRouter \} from 'astro:transitions'/);
+	assert.match(layout, /<ClientRouter \/>/);
+	assert.match(layout, /astro:before-preparation/);
+	assert.match(layout, /class="navigation-progress"/);
+	assert.match(authors, /select count\(\*\)::int as total/);
+	assert.match(authors, /limit \$\{pageSize\}/);
+	assert.match(authors, /offset \$\{offset\}/);
+	assert.doesNotMatch(authors, /filtered = rows\.filter/);
+	assert.match(authorDetail, /withRuntimeCache\(`author-open-library-bio:v1:/);
+	assert.match(authorDetail, /withRuntimeCache\(\s*`author-external-books:v1:/);
+	assert.match(authorDetail, /AbortSignal\.timeout\(900\)/);
+	assert.match(journal, /let readingJournalSchemaReady: Promise<void> \| null = null/);
+	assert.match(notifications, /let notificationSchemaReady: Promise<void> \| null = null/);
+	assert.match(feed, /let followSchemaReady: Promise<void> \| null = null/);
+	assert.match(feed, /let feedInteractionSchemaReady: Promise<void> \| null = null/);
+	assert.match(reviews, /let reviewSchemaReady: Promise<void> \| null = null/);
+});
+
 test("shelf feedback disables duplicate actions without committing success before acceptance", () => {
 	const searchPage = read("../src/pages/search.astro");
 	const bookPage = read("../src/pages/book.astro");

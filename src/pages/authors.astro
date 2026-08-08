@@ -18,8 +18,13 @@ const sort = normalizeText(params.get("sort")) || "name";
 const dir = normalizeText(params.get("dir")) === "desc" ? "desc" : "asc";
 const page = Math.max(1, Number(params.get("page") || 1) || 1);
 const pageSize = 50;
+const sortKey = ["name", "books", "readers", "shelves", "activity"].includes(sort) ? sort : "readers";
 
 const sql = getNeonSql();
+let total = 0;
+let totalPages = 1;
+let currentPage = page;
+let offset = (currentPage - 1) * pageSize;
 const rows = await sql<Array<{
 	id: number;
 	name: string;
@@ -28,45 +33,119 @@ const rows = await sql<Array<{
 	readers: number;
 	shelves: number;
 	last_activity: string | null;
+	total_count: number;
 }>>`
+	with author_stats as (
+		select
+			a.id,
+			a.name,
+			coalesce(a.photo_url, '') as photo_url,
+			count(distinct b.id)::int as books,
+			count(distinct ub.user_id)::int as readers,
+			count(distinct concat(ub.user_id::text, ':', coalesce(ub.status, '')))::int as shelves,
+			max(coalesce(ub.updated_at, b.updated_at, a.updated_at))::text as last_activity
+		from author a
+		join book b on b.author_id = a.id
+		left join user_book ub on ub.book_id = b.id
+		where trim(coalesce(a.name, '')) <> ''
+			and (${q} = '' or lower(a.name) like ${`%${q.toLowerCase()}%`})
+			and (${letter} = '' or upper(left(trim(a.name), 1)) = ${letter})
+		group by a.id, a.name, a.photo_url
+		having count(distinct b.id) > 0
+	)
 	select
-		a.id,
-		a.name,
-		coalesce(a.photo_url, '') as photo_url,
-		count(distinct b.id)::int as books,
-		count(distinct ub.user_id)::int as readers,
-		count(distinct concat(ub.user_id::text, ':', coalesce(ub.status, '')))::int as shelves,
-		max(coalesce(ub.updated_at, b.updated_at, a.updated_at))::text as last_activity
-	from author a
-	join book b on b.author_id = a.id
-	left join user_book ub on ub.book_id = b.id
-	group by a.id, a.name, a.photo_url
-	having count(distinct b.id) > 0
+		id,
+		name,
+		photo_url,
+		books,
+		readers,
+		shelves,
+		last_activity,
+		count(*) over()::int as total_count
+	from author_stats
+	order by
+		case when ${sortKey} = 'name' and ${dir} = 'asc' then lower(name) end asc nulls last,
+		case when ${sortKey} = 'name' and ${dir} = 'desc' then lower(name) end desc nulls last,
+		case when ${sortKey} = 'books' and ${dir} = 'asc' then books end asc nulls last,
+		case when ${sortKey} = 'books' and ${dir} = 'desc' then books end desc nulls last,
+		case when ${sortKey} = 'readers' and ${dir} = 'asc' then readers end asc nulls last,
+		case when ${sortKey} = 'readers' and ${dir} = 'desc' then readers end desc nulls last,
+		case when ${sortKey} = 'shelves' and ${dir} = 'asc' then shelves end asc nulls last,
+		case when ${sortKey} = 'shelves' and ${dir} = 'desc' then shelves end desc nulls last,
+		case when ${sortKey} = 'activity' and ${dir} = 'asc' then last_activity end asc nulls last,
+		case when ${sortKey} = 'activity' and ${dir} = 'desc' then last_activity end desc nulls last,
+		id asc
+	limit ${pageSize}
+	offset ${offset}
 `;
 
-let filtered = rows.filter((row) => {
-	const name = normalizeText(row.name);
-	if (!name) return false;
-	if (q && !name.toLowerCase().includes(q.toLowerCase())) return false;
-	if (letter && name[0]?.toUpperCase() !== letter) return false;
-	return true;
-});
-
-const sorters: Record<string, (a: typeof filtered[number], b: typeof filtered[number]) => number> = {
-	name: (a, b) => a.name.localeCompare(b.name),
-	books: (a, b) => a.books - b.books,
-	readers: (a, b) => a.readers - b.readers,
-	shelves: (a, b) => a.shelves - b.shelves,
-	activity: (a, b) => new Date(a.last_activity || 0).getTime() - new Date(b.last_activity || 0).getTime()
-};
-const sorter = sorters[sort] || sorters.readers;
-filtered = filtered.sort((a, b) => (dir === "asc" ? sorter(a, b) : sorter(b, a)));
-
-const total = filtered.length;
-const totalPages = Math.max(1, Math.ceil(total / pageSize));
-const currentPage = Math.min(page, totalPages);
-const start = (currentPage - 1) * pageSize;
-const pageRows = filtered.slice(start, start + pageSize);
+total = Number(rows[0]?.total_count || 0);
+if (rows.length === 0 && page > 1) {
+	const countRows = await sql<Array<{ total: number }>>`
+		select count(*)::int as total
+		from (
+			select a.id
+			from author a
+			join book b on b.author_id = a.id
+			where trim(coalesce(a.name, '')) <> ''
+				and (${q} = '' or lower(a.name) like ${`%${q.toLowerCase()}%`})
+				and (${letter} = '' or upper(left(trim(a.name), 1)) = ${letter})
+			group by a.id
+			having count(distinct b.id) > 0
+		) counted_authors
+	`;
+	total = Number(countRows[0]?.total || 0);
+}
+totalPages = Math.max(1, Math.ceil(total / pageSize));
+currentPage = Math.min(page, totalPages);
+let pageRows = rows;
+if (currentPage !== page) {
+	offset = (currentPage - 1) * pageSize;
+	pageRows = await sql<typeof rows>`
+		with author_stats as (
+			select
+				a.id,
+				a.name,
+				coalesce(a.photo_url, '') as photo_url,
+				count(distinct b.id)::int as books,
+				count(distinct ub.user_id)::int as readers,
+				count(distinct concat(ub.user_id::text, ':', coalesce(ub.status, '')))::int as shelves,
+				max(coalesce(ub.updated_at, b.updated_at, a.updated_at))::text as last_activity
+			from author a
+			join book b on b.author_id = a.id
+			left join user_book ub on ub.book_id = b.id
+			where trim(coalesce(a.name, '')) <> ''
+				and (${q} = '' or lower(a.name) like ${`%${q.toLowerCase()}%`})
+				and (${letter} = '' or upper(left(trim(a.name), 1)) = ${letter})
+			group by a.id, a.name, a.photo_url
+			having count(distinct b.id) > 0
+		)
+		select
+			id,
+			name,
+			photo_url,
+			books,
+			readers,
+			shelves,
+			last_activity,
+			count(*) over()::int as total_count
+		from author_stats
+		order by
+			case when ${sortKey} = 'name' and ${dir} = 'asc' then lower(name) end asc nulls last,
+			case when ${sortKey} = 'name' and ${dir} = 'desc' then lower(name) end desc nulls last,
+			case when ${sortKey} = 'books' and ${dir} = 'asc' then books end asc nulls last,
+			case when ${sortKey} = 'books' and ${dir} = 'desc' then books end desc nulls last,
+			case when ${sortKey} = 'readers' and ${dir} = 'asc' then readers end asc nulls last,
+			case when ${sortKey} = 'readers' and ${dir} = 'desc' then readers end desc nulls last,
+			case when ${sortKey} = 'shelves' and ${dir} = 'asc' then shelves end asc nulls last,
+			case when ${sortKey} = 'shelves' and ${dir} = 'desc' then shelves end desc nulls last,
+			case when ${sortKey} = 'activity' and ${dir} = 'asc' then last_activity end asc nulls last,
+			case when ${sortKey} = 'activity' and ${dir} = 'desc' then last_activity end desc nulls last,
+			id asc
+		limit ${pageSize}
+		offset ${offset}
+	`;
+}
 
 const baseParams = new URLSearchParams();
 if (q) baseParams.set("q", q);

@@ -108,22 +108,32 @@ function bookMeta(book: ReadingLifeFinishedBook | null, suffix = "") {
 	return parts.filter(Boolean).join(" · ");
 }
 
+let readingLifeSchemaReady: Promise<void> | null = null;
+
 async function ensureReadingLifeSchema(sql: ReturnType<typeof getNeonSql>) {
-	await Promise.all([
-		sql`alter table user_book add column if not exists rating int`,
-		sql`alter table user_book add column if not exists finished_reflection text not null default ''`,
-		sql`
-			create table if not exists user_reading_progress_event (
-				id bigserial primary key,
-				user_id uuid not null references app_user(id) on delete cascade,
-				book_id bigint not null references book(id) on delete cascade,
-				from_page int not null default 0,
-				to_page int not null default 0,
-				page_delta int not null default 0,
-				recorded_at timestamptz not null default now()
-			)
-		`
-	]);
+	if (!readingLifeSchemaReady) {
+		readingLifeSchemaReady = Promise.all([
+			sql`alter table user_book add column if not exists rating int`,
+			sql`alter table user_book add column if not exists finished_reflection text not null default ''`,
+			sql`
+				create table if not exists user_reading_progress_event (
+					id bigserial primary key,
+					user_id uuid not null references app_user(id) on delete cascade,
+					book_id bigint not null references book(id) on delete cascade,
+					from_page int not null default 0,
+					to_page int not null default 0,
+					page_delta int not null default 0,
+					recorded_at timestamptz not null default now()
+				)
+			`
+		]).then(() => undefined);
+	}
+	try {
+		await readingLifeSchemaReady;
+	} catch (error) {
+		readingLifeSchemaReady = null;
+		throw error;
+	}
 }
 
 const session = await resolveUserBySession(Astro.request);

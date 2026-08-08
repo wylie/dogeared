@@ -16,6 +16,7 @@ import { ensureSeriesSchema, inferKnownSeriesMetadata } from "../../lib/series";
 import { loadCollectionsForAuthor, type CollectionRecord } from "../../lib/collections";
 import { ensureCanonicalWorkSchema } from "../../lib/catalogWorks";
 import { canonicalizeCatalogAuthor, canonicalizeCatalogTitle } from "../../lib/catalogKeys";
+import { withRuntimeCache } from "../../lib/runtimeCache";
 
 export const prerender = false;
 
@@ -210,7 +211,7 @@ async function fetchOpenLibraryBio(name: string) {
 	if (!name) return null;
 	try {
 		const searchUrl = `https://openlibrary.org/search/authors.json?q=${encodeURIComponent(name)}`;
-		const searchRes = await fetch(searchUrl);
+		const searchRes = await fetch(searchUrl, { signal: AbortSignal.timeout(900) });
 		if (!searchRes.ok) return null;
 		const searchJson = await searchRes.json();
 		const docs = Array.isArray(searchJson?.docs) ? searchJson.docs : [];
@@ -219,7 +220,9 @@ async function fetchOpenLibraryBio(name: string) {
 		const candidate = docs.find((row: any) => String(row?.name || "").trim().toLowerCase() === targetLower) || docs[0];
 		const key = String(candidate?.key || "").trim();
 		if (!key) return null;
-		const detailsRes = await fetch(`https://openlibrary.org${encodeURIComponent(key).replace(/%2F/g, "/")}.json`);
+		const detailsRes = await fetch(`https://openlibrary.org${encodeURIComponent(key).replace(/%2F/g, "/")}.json`, {
+			signal: AbortSignal.timeout(900)
+		});
 		if (!detailsRes.ok) return null;
 		const details = await detailsRes.json();
 		const bioRaw = typeof details?.bio === "string" ? details.bio : String(details?.bio?.value || "");
@@ -395,22 +398,35 @@ try {
 		}
 	}
 
-	if (authorName && (!bio || !authorPhotoUrl)) {
-		const openLibrary = await fetchOpenLibraryBio(authorName);
-		if (openLibrary?.bio && !bio) {
+	const openLibraryBioPromise = authorName && (!bio || !authorPhotoUrl)
+		? withRuntimeCache(`author-open-library-bio:v1:${canonicalizeCatalogAuthor(authorName)}`, 6 * 60 * 60 * 1000, () => fetchOpenLibraryBio(authorName)).catch(() => null)
+		: Promise.resolve(null);
+	const [openLibrary, collections] = await Promise.all([
+		openLibraryBioPromise,
+		loadCollectionsForAuthor(sql, { authorId, authorName }, 4)
+	]);
+	if (openLibrary) {
+		if (openLibrary.bio && !bio) {
 			bio = openLibrary.bio;
 			bioSource = "Open Library";
 			bioSourceUrl = openLibrary.sourceUrl;
 		}
-		if (openLibrary?.photoUrl && !authorPhotoUrl) {
+		if (openLibrary.photoUrl && !authorPhotoUrl) {
 			authorPhotoUrl = openLibrary.photoUrl;
 		}
 	}
-	featuredInCollections = await loadCollectionsForAuthor(sql, { authorId, authorName }, 4);
+	featuredInCollections = collections;
 } catch (error) {
 	errorMessage = error instanceof Error ? error.message : "Failed to load author page.";
 }
-if (authorName) externalBooks = await fetchExternalAuthorBooks(authorName, books);
+if (authorName) {
+	const localBookKey = books.map((book) => Number(book.id || 0)).filter((id) => id > 0).sort((a, b) => a - b).join("-");
+	externalBooks = await withRuntimeCache(
+		`author-external-books:v1:${canonicalizeCatalogAuthor(authorName)}:${localBookKey}`,
+		60 * 60 * 1000,
+		() => fetchExternalAuthorBooks(authorName, books)
+	).catch(() => []);
+}
 const bibliographySections = buildAuthorBibliographySections(books, externalBooks);
 const knownBookCount = bibliographySections.reduce((total, section) => total + section.books.length, 0);
 

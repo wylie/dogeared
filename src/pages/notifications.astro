@@ -47,8 +47,10 @@ if (Astro.request.method === "POST") {
 	return Astro.redirect("/notifications");
 }
 
-const notifications = await loadNotifications(sql, session.userId, { limit: 60 });
-const unreadCount = await loadUnreadNotificationCount(sql, session.userId);
+const [notifications, unreadCount] = await Promise.all([
+	loadNotifications(sql, session.userId, { limit: 60 }),
+	loadUnreadNotificationCount(sql, session.userId)
+]);
 const sectionLinks = [
 	{ id: "today", label: "Today" },
 	{ id: "this-week", label: "This Week" },

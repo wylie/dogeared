@@ -5,6 +5,7 @@ import GuidedTip from '../components/GuidedTip.astro';
 import OnboardingMilestones from '../components/OnboardingMilestones.astro';
 import ReaderGuidance from '../components/ReaderGuidance.astro';
 import WhatsNewModal from '../components/WhatsNewModal.astro';
+import { ClientRouter } from 'astro:transitions';
 import { resolveAdminSession } from '../lib/admin';
 import { loadActiveAnnouncement } from '../lib/adminAnnouncements';
 import { resolveUserBySession } from '../lib/auth';
@@ -124,8 +125,10 @@ import '../assets/global.css';
 			<link href={fontStylesheetHref} rel="stylesheet">
 			<link href={iconStylesheetHref} rel="stylesheet">
 		</noscript>
+		<ClientRouter />
 	</head>
 		<body data-app-version={appVersion} data-release-version={releaseVersion} data-git-commit={gitCommit}>
+			<div class="navigation-progress" aria-hidden="true"></div>
 			<a class="skip-link" href="#main-content">Skip to main content</a>
 			<div class="container">
 				<div class="column" style="padding-bottom: 0;">
@@ -166,6 +169,26 @@ import '../assets/global.css';
 			<OnboardingMilestones isAuthenticated={isAuthenticated} />
 			<FloatingActions isAuthenticated={isAuthenticated} />
 			<WhatsNewModal release={latestRelease} />
+			<script is:inline>
+				(() => {
+					let navigationTimer = 0;
+					const root = document.documentElement;
+					const start = () => {
+						window.clearTimeout(navigationTimer);
+						navigationTimer = window.setTimeout(() => {
+							root.classList.add("is-navigating");
+						}, 90);
+					};
+					const stop = () => {
+						window.clearTimeout(navigationTimer);
+						root.classList.remove("is-navigating");
+					};
+					document.addEventListener("astro:before-preparation", start);
+					document.addEventListener("astro:after-swap", stop);
+					document.addEventListener("astro:page-load", stop);
+					window.addEventListener("pageshow", stop);
+				})();
+			</script>
 			<script define:vars={{ currentPath }}>
 				(() => {
 					const endpoint = "/api/analytics/event";
@@ -280,6 +303,34 @@ import '../assets/global.css';
 		width: 100%;
 		height: 100%;
 
+	}
+	.navigation-progress {
+		position: fixed;
+		top: 0;
+		left: 0;
+		z-index: 16000;
+		width: 100%;
+		height: 2px;
+		background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+		opacity: 0;
+		transform: scaleX(0);
+		transform-origin: left;
+		pointer-events: none;
+	}
+	html.is-navigating .navigation-progress {
+		opacity: 1;
+		animation: dogeared-navigation-progress 1.4s ease-out infinite;
+	}
+	@keyframes dogeared-navigation-progress {
+		0% { transform: scaleX(0.08); opacity: 0.75; }
+		55% { transform: scaleX(0.72); opacity: 1; }
+		100% { transform: scaleX(0.92); opacity: 0.82; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		html.is-navigating .navigation-progress {
+			animation: none;
+			transform: scaleX(0.72);
+		}
 	}
 	.container {
 		max-width: 1280px;

@@ -369,6 +369,12 @@ The Search page renders DogEared results first, then appends non-duplicate exter
 
 Private journal search is separate from public book search. Signed-in readers can search their own journal entries from `/journal`; those results are private and are not exposed through public search.
 
+### Page Rendering And Navigation
+
+Internal navigation remains server-rendered by default and is progressively enhanced through Astro's client router on the shared layout. Same-origin links and GET forms can swap without a full document reload while direct URLs, deep links, browser history, and accessibility semantics continue to work as ordinary SSR pages. The shared layout may reuse request-scoped session data and short-lived public layout data, but user-specific navigation state such as unread notification counts stays per reader and is refreshed from authenticated endpoints rather than globally cached.
+
+Representative page routes avoid blocking render on repeated setup or optional public metadata work. Reading Journal, Notifications, My Reading Life, Following, Book Detail, and Author Detail memoize idempotent schema-readiness checks per server process and reset on failure. Independent page reads are parallelized where correctness allows. Book Detail preserves canonical Work resolution and duplicate prevention while avoiding redundant Work lookups and moving optional known-series maintenance off the response critical path. Author Detail renders local DogEared author and book data first; optional Open Library biography and missing-book lookups use bounded public caches keyed by normalized author inputs and never include reader shelf state.
+
 ### Genre And Related Pages
 
 Related pages support landing exploration plus specific `kind=genre`, `kind=topic`, `kind=author`, and `kind=book` views. Genre pages show books, reader counts, shelf counts, and related authors when available.

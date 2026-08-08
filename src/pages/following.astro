@@ -14,7 +14,6 @@ import {
 	resolveFollowingFeedActivity,
 	resolveFollowingReaders,
 	resolvePublicReaderSuggestions,
-	resolveViewerStatusByBookId,
 	READER_SUGGESTIONS_EMPTY_MESSAGE
 } from "../lib/feed";
 
@@ -26,31 +25,32 @@ if (!session?.userId) {
 }
 
 const viewerUserId = session.userId;
-const followingCount = await resolveFollowingCount(viewerUserId);
+const [followingCount, suggestionRows] = await Promise.all([
+	resolveFollowingCount(viewerUserId),
+	resolvePublicReaderSuggestions(viewerUserId, 60)
+]);
 const [activity, suggestions, followingReaders] = await Promise.all([
 	followingCount > 0 ? resolveFollowingFeedActivity(viewerUserId, 60) : Promise.resolve([]),
-	resolvePublicReaderSuggestions(viewerUserId, 60),
+	Promise.resolve(suggestionRows),
 	followingCount > 0 ? resolveFollowingReaders(viewerUserId, 60) : Promise.resolve([])
 ]);
-const viewerStatusByBookId = await resolveViewerStatusByBookId(
-	viewerUserId,
-	activity.map((item) => item.bookId)
-);
+const viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 const viewerRatingByBookId = new Map<number, number>();
 if (activity.length > 0) {
 	const sql = getNeonSql();
 	const bookIds = Array.from(new Set(activity.map((item) => Number(item.bookId || 0)).filter((id) => id > 0)));
 	if (bookIds.length > 0) {
-		const ratings = await sql<Array<{ book_id: number; rating: number | null }>>`
-			select book_id, rating
+		const shelfRows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
+			select book_id, status, rating
 			from user_book
 			where user_id = ${viewerUserId}::uuid
 				and book_id = any(${bookIds}::bigint[])
-				and rating is not null
 		`;
-		for (const row of ratings) {
+		for (const row of shelfRows) {
+			const bookId = Number(row.book_id || 0);
+			if (bookId > 0) viewerStatusByBookId.set(bookId, row.status);
 			const rating = Math.max(0, Math.min(5, Number(row.rating || 0)));
-			if (rating > 0) viewerRatingByBookId.set(Number(row.book_id || 0), rating);
+			if (bookId > 0 && rating > 0) viewerRatingByBookId.set(bookId, rating);
 		}
 	}
 }
