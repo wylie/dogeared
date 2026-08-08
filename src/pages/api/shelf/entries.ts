@@ -26,6 +26,7 @@ import { inferKnownSeriesMetadata, upsertKnownSeriesForBook } from "../../../lib
 import { createReadingMilestoneNotifications } from "../../../lib/notifications";
 import { withSqlDebug, type SqlDebugParam } from "../../../lib/sqlDebug";
 import { normalizeProgressInputMode, type ProgressInputMode } from "../../../lib/readingProgress";
+import { recordPerformanceEventSafe } from "../../../lib/performanceTelemetry";
 
 export const prerender = false;
 
@@ -674,7 +675,6 @@ export const POST: APIRoute = async ({ request }) => {
 	const perfStartedAt = performance.now();
 	const perfStages: Record<string, number> = {};
 	const markPerfStage = (stage: string) => {
-		if (!import.meta.env.DEV) return;
 		perfStages[stage] = Math.round((performance.now() - perfStartedAt) * 10) / 10;
 	};
 	const logPerf = (outcome: string, extra: Record<string, unknown> = {}) => {
@@ -687,11 +687,33 @@ export const POST: APIRoute = async ({ request }) => {
 			...extra
 		});
 	};
+	const recordShelfPerformance = (
+		success: boolean,
+		httpStatus: number,
+		metadata: Record<string, unknown> = {}
+	) => {
+		recordPerformanceEventSafe({
+			operationName: "shelf.mutate",
+			route: "/api/shelf/entries",
+			totalMs: performance.now() - perfStartedAt,
+			success,
+			httpStatus,
+			spans: perfStages,
+			metadata: {
+				action: "upsert",
+				stage: debugStage,
+				...metadata
+			}
+		});
+	};
 	try {
 		await ensureShelfSchema();
 		debugStage = "session";
 		const session = await resolveUserBySession(request);
-		if (!session?.userId) return new Response(JSON.stringify({ error: "You must be logged in to save shelf entries." }), { status: 401, headers: { "Content-Type": "application/json" } });
+		if (!session?.userId) {
+			recordShelfPerformance(false, 401);
+			return new Response(JSON.stringify({ error: "You must be logged in to save shelf entries." }), { status: 401, headers: { "Content-Type": "application/json" } });
+		}
 		debugStage = "parse_body";
 		const body = await request.json() as { entry?: ShelfEntryInput };
 		const entry = body?.entry || {};
@@ -701,6 +723,7 @@ export const POST: APIRoute = async ({ request }) => {
 		const bookPayload = fromShelfEntryInput(entry);
 		const rawTitle = bookPayload.title;
 		if (!rawTitle) {
+			recordShelfPerformance(false, 400);
 			return new Response(JSON.stringify({ error: "Missing title." }), {
 				status: 400,
 				headers: { "Content-Type": "application/json" }
@@ -1270,6 +1293,12 @@ export const POST: APIRoute = async ({ request }) => {
 
 		monitorEvent("shelf.upsert.success", { userId, bookId, status, rating: rating ?? 0, hasProgressDelta: deltaPages > 0 });
 		logPerf("success", { bookId, status });
+		recordShelfPerformance(true, 200, {
+			status,
+			hasExistingCatalogBook,
+			hasDirectBookId: directBookId > 0,
+			hasProgressDelta: deltaPages > 0
+		});
 		return new Response(JSON.stringify({ ok: true, bookId, entry: persistedEntry }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" }
@@ -1285,6 +1314,7 @@ export const POST: APIRoute = async ({ request }) => {
 			});
 		}
 		monitorEvent("shelf.upsert.error", { message: error instanceof Error ? error.message : "Unknown error" }, "error");
+		recordShelfPerformance(false, 500);
 		return new Response(JSON.stringify({
 			error: "Failed to save shelf entry.",
 			detail: import.meta.env.DEV && debugStage
@@ -1298,12 +1328,44 @@ export const POST: APIRoute = async ({ request }) => {
 };
 
 export const DELETE: APIRoute = async ({ request }) => {
+	const perfStartedAt = performance.now();
+	const perfStages: Record<string, number> = {};
+	let debugStage = "start";
+	const markPerfStage = (stage: string) => {
+		perfStages[stage] = Math.round((performance.now() - perfStartedAt) * 10) / 10;
+		return stage;
+	};
+	const recordShelfRemovePerformance = (
+		success: boolean,
+		httpStatus: number,
+		metadata: Record<string, unknown> = {}
+	) => {
+		recordPerformanceEventSafe({
+			operationName: "shelf.mutate",
+			route: "/api/shelf/entries",
+			totalMs: performance.now() - perfStartedAt,
+			success,
+			httpStatus,
+			spans: perfStages,
+			metadata: {
+				action: "remove",
+				stage: debugStage,
+				...metadata
+			}
+		});
+	};
 	try {
 		await ensureShelfSchema();
+		debugStage = markPerfStage("schema_ready");
 		const session = await resolveUserBySession(request);
-		if (!session?.userId) return new Response(JSON.stringify({ error: "You must be logged in to delete shelf entries." }), { status: 401, headers: { "Content-Type": "application/json" } });
+		debugStage = markPerfStage("session_loaded");
+		if (!session?.userId) {
+			recordShelfRemovePerformance(false, 401);
+			return new Response(JSON.stringify({ error: "You must be logged in to delete shelf entries." }), { status: 401, headers: { "Content-Type": "application/json" } });
+		}
 		await ensureCustomShelfSchema(getNeonSql());
 		const body = await request.json().catch(() => ({})) as { entry?: ShelfEntryInput; bookId?: unknown };
+		debugStage = markPerfStage("body_loaded");
 		const directBookId = Math.max(0, Number(body.bookId || 0) || 0);
 		const userId = session.userId;
 		const sql = getNeonSql();
@@ -1324,12 +1386,20 @@ export const DELETE: APIRoute = async ({ request }) => {
 			]);
 			if (removedDefault.length === 0 && removedCustom.length === 0) {
 				monitorEvent("shelf.remove.noop", { userId, bookId: directBookId }, "warn");
+				debugStage = markPerfStage("remove_noop");
+				recordShelfRemovePerformance(false, 404, { directBookId: true });
 				return new Response(JSON.stringify({ error: "Book is not on your shelves." }), {
 					status: 404,
 					headers: { "Content-Type": "application/json" }
 				});
 			}
 			monitorEvent("shelf.remove.success", { userId, bookId: directBookId, removedDefault: removedDefault.length, removedCustom: removedCustom.length });
+			debugStage = markPerfStage("removed_direct");
+			recordShelfRemovePerformance(true, 200, {
+				directBookId: true,
+				removedDefault: removedDefault.length,
+				removedCustom: removedCustom.length
+			});
 			return new Response(JSON.stringify({ ok: true }), {
 				status: 200,
 				headers: { "Content-Type": "application/json" }
@@ -1345,6 +1415,8 @@ export const DELETE: APIRoute = async ({ request }) => {
 		const googleBooksId = normalizeCatalogText(entry.googleBooksId);
 		if (!workKey && !googleBooksId) {
 			monitorEvent("shelf.remove.invalid_identity", { userId }, "warn");
+			debugStage = markPerfStage("invalid_identity");
+			recordShelfRemovePerformance(false, 400, { directBookId: false });
 			return new Response(JSON.stringify({ error: "Book identity is required to remove shelf entries." }), {
 				status: 400,
 				headers: { "Content-Type": "application/json" }
@@ -1358,6 +1430,7 @@ export const DELETE: APIRoute = async ({ request }) => {
 			isbn13,
 			googleBooksId
 		});
+		debugStage = markPerfStage("catalog_identity_resolved");
 		if (!(bookId > 0) && title) {
 			const fallbackRows = await sql<Array<{ book_id: number }>>`
 				select ub.book_id
@@ -1376,6 +1449,8 @@ export const DELETE: APIRoute = async ({ request }) => {
 		}
 		if (!(bookId > 0)) {
 			monitorEvent("shelf.remove.invalid_identity", { userId, title, author }, "warn");
+			debugStage = markPerfStage("book_not_found");
+			recordShelfRemovePerformance(false, 404, { directBookId: false });
 			return new Response(JSON.stringify({ error: "Could not find this book on your shelves." }), {
 				status: 404,
 				headers: { "Content-Type": "application/json" }
@@ -1397,12 +1472,20 @@ export const DELETE: APIRoute = async ({ request }) => {
 		]);
 		if (removedDefault.length === 0 && removedCustom.length === 0) {
 			monitorEvent("shelf.remove.noop", { userId, bookId }, "warn");
+			debugStage = markPerfStage("remove_noop");
+			recordShelfRemovePerformance(false, 404, { directBookId: false });
 			return new Response(JSON.stringify({ error: "Book is not on your shelves." }), {
 				status: 404,
 				headers: { "Content-Type": "application/json" }
 			});
 		}
 		monitorEvent("shelf.remove.success", { userId, bookId, removedDefault: removedDefault.length, removedCustom: removedCustom.length });
+		debugStage = markPerfStage("removed_resolved");
+		recordShelfRemovePerformance(true, 200, {
+			directBookId: false,
+			removedDefault: removedDefault.length,
+			removedCustom: removedCustom.length
+		});
 
 		return new Response(JSON.stringify({ ok: true }), {
 			status: 200,
@@ -1410,6 +1493,7 @@ export const DELETE: APIRoute = async ({ request }) => {
 		});
 	} catch (error) {
 		monitorEvent("shelf.remove.error", { message: error instanceof Error ? error.message : "Unknown error" }, "error");
+		recordShelfRemovePerformance(false, 500);
 		return new Response(JSON.stringify({
 			error: "Failed to delete shelf entry.",
 			detail: error instanceof Error ? error.message : "Unknown error"

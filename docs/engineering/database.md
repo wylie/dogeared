@@ -27,6 +27,42 @@ Schema expectation:
 - Runtime queries must not assume beta-era columns exist unless a migration or local `ensure*Schema` helper creates them first.
 - `app_user.updated_at` is required for release analytics and is added by the release-blocker schema safety migration.
 
+## Performance Events
+
+Entity: `performance_event`
+
+Stores operational timing telemetry for meaningful workflows and external dependencies:
+
+- Operation/workflow name.
+- Route or API pattern.
+- Total duration in milliseconds.
+- Success/failure and optional HTTP status.
+- Release version and environment.
+- Optional external provider identifier.
+- Sanitized timing spans as JSON.
+- Sanitized metadata flags/counts as JSON.
+- Creation timestamp.
+
+Relationships:
+
+- Deliberately does not reference `app_user`, `book`, `author`, `journal`, `activity`, or request payload tables. Performance telemetry is operational and aggregate-oriented, not reader behavior analytics.
+
+Indexes:
+
+- Created-at for period filters and recent slow operations.
+- Operation plus created-at for workflow summaries.
+- Route plus created-at for route/API summaries.
+- Release plus created-at for release comparison.
+- Provider plus created-at for external service summaries.
+- Created-at plus total duration for slow-operation review.
+
+Policy:
+
+- Raw events are retained for 45 days.
+- Normal successful operations may be sampled through `PERFORMANCE_TELEMETRY_SAMPLE_RATE`.
+- Errors, server failures, and unusually slow operations are always retained.
+- Events must not store search query text, book titles, journal content, email addresses, usernames, profile content, authorization data, raw SQL, database credentials, or sensitive request payloads.
+
 ## Authentication
 
 Entities: `auth_magic_link`, `auth_session`

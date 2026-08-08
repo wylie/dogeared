@@ -7,10 +7,17 @@ import { resolveUserBySession } from '../lib/auth';
 import { authorHref } from '../lib/author';
 import { getNeonSql } from '../lib/neon';
 import { resolveCustomShelfOptions } from '../lib/customShelves';
+import { recordPerformanceEventSafe } from '../lib/performanceTelemetry';
 import { normalizeSearchResult, summarizeSearchResultForLog, type SearchResult } from '../lib/searchResults';
 
 export const prerender = false;
+const pagePerfStartedAt = performance.now();
+const pagePerfStages: Record<string, number> = {};
+const markPagePerfStage = (stage: string) => {
+	pagePerfStages[stage] = Math.round((performance.now() - pagePerfStartedAt) * 10) / 10;
+};
 const session = await resolveUserBySession(Astro.request);
+markPagePerfStage("session_loaded");
 const isAuthenticated = !!session?.userId;
 
 type CollectionSearchResult = {
@@ -95,6 +102,7 @@ if (query) {
 		endpoint.searchParams.set("pageSize", "20");
 		endpoint.searchParams.set("mode", "local");
 		const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
+		markPagePerfStage("local_search_loaded");
 		if (!response.ok) {
 			errorMessage = "Unable to search right now. Please try again in a moment.";
 		} else {
@@ -145,6 +153,7 @@ if (query) {
 						`
 						: Promise.resolve([] as Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>);
 					const [summaryRows, statusRows] = await Promise.all([summaryRowsPromise, statusRowsPromise]);
+					markPagePerfStage("result_summaries_loaded");
 					readerCountByBookId = new Map(summaryRows.map((row) => [Number(row.book_id || 0), Number(row.reader_count || 0)]));
 					shelfEntryCountByBookId = new Map(summaryRows.map((row) => [Number(row.book_id || 0), Number(row.shelf_entry_count || 0)]));
 					averageRatingByBookId = new Map(
@@ -165,15 +174,32 @@ if (query) {
 		}
 	} catch (error) {
 		errorMessage = error instanceof Error ? error.message : "Unable to search right now. Please try again in a moment.";
+		markPagePerfStage("load_failed");
 	}
 }
 
 customShelfOptionsJson = await customShelfOptionsPromise;
+markPagePerfStage("custom_shelves_loaded");
 
 const completedResultCount = results.length + collectionResults.length;
 const completionStatus = query && !errorMessage
 	? `${completedResultCount.toLocaleString()} result${completedResultCount === 1 ? "" : "s"} found for ${query}.`
 	: "";
+
+recordPerformanceEventSafe({
+	operationName: "page.search",
+	route: "/search",
+	totalMs: performance.now() - pagePerfStartedAt,
+	success: !errorMessage,
+	httpStatus: errorMessage ? 500 : 200,
+	spans: pagePerfStages,
+	metadata: {
+		authenticated: isAuthenticated,
+		hasQuery: !!query,
+		resultCount: results.length,
+		collectionCount: collectionResults.length
+	}
+});
 ---
 
 <Layout

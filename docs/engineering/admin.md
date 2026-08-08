@@ -18,6 +18,7 @@ Admin routes:
 
 - `/admin`: overview.
 - `/admin/analytics`: aggregate product analytics.
+- `/admin/performance`: operational performance analytics.
 - `/admin/founding-readers`: Founding Reader access, capacity, waitlist, and active reader control surface.
 - `/admin/beta-users`: compatibility redirect to `/admin/founding-readers`.
 - `/admin/releases`: release creation, editing, publishing, archiving, and previews.
@@ -202,6 +203,31 @@ Shows books and authors updated in the last 24 hours and 7 days.
 Current limitation:
 
 - The page reports backfill movement but does not run backfill jobs. Backfills are exposed as scripts in `package.json`.
+
+## Performance Analytics
+
+Route: `/admin/performance`
+
+Admins can:
+
+- Review measured operation volume, p50, p95, p99, error rate, and slow-operation count for the selected period.
+- Compare Search, Save Progress, Shelf Mutations, Page Rendering, and External Book API workflow latency against workflow-specific targets.
+- Sort route/API performance by slowest p95, highest traffic, or highest error rate.
+- Inspect timing-span breakdowns for workflows such as Search, progress saves, shelf mutations, and page rendering.
+- See Google Books and Open Library call counts, p50/p95 latency, failure rate, and timeout count.
+- Review recent slow or failed operations with release version and dominant span.
+- Compare p95 latency by release to spot regressions or verify optimization work.
+
+Data comes from `src/lib/performanceTelemetry.ts` and the `performance_event` table.
+
+Privacy and reliability rules:
+
+- Performance telemetry is operational, not product analytics.
+- Recording must be fire-and-forget and must not materially slow the measured request.
+- Normal successful requests may be sampled; errors and unusually slow operations are always retained.
+- Raw events are retained for 45 days.
+- Events must not store search queries, book titles, journal content, emails, usernames, profile content, authorization data, raw SQL, database credentials, or sensitive payloads.
+- Empty periods should explain that telemetry will populate with traffic instead of rendering zero values as measured health.
 
 ## User Management
 

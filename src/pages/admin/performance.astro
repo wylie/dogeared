@@ -1,0 +1,622 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import { resolveAdminSession } from "../../lib/admin";
+import { getNeonSql } from "../../lib/neon";
+import {
+	PERFORMANCE_PERIODS,
+	emptyAdminPerformanceAnalytics,
+	loadAdminPerformanceAnalytics,
+	normalizePerformancePeriod
+} from "../../lib/performanceTelemetry";
+import { formatDate, formatNumber, safeAdminLoad, safeArray, safePercent, safeText } from "../../lib/adminFormatting";
+import {
+	formatPerformanceMs,
+	formatPerformanceTrend,
+	performanceProviderLabel,
+	performanceStatusClass,
+	performanceTrendClass
+} from "../../lib/performanceFormatting";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const period = normalizePerformancePeriod(Astro.url.searchParams.get("period"));
+const sort = String(Astro.url.searchParams.get("sort") || "p95").trim();
+const slowPage = Math.max(1, Number(Astro.url.searchParams.get("slowPage") || 1) || 1);
+const sql = getNeonSql();
+const analyticsResult = await safeAdminLoad(
+	"Performance analytics",
+	() => loadAdminPerformanceAnalytics(sql, { period, sort, slowPage }),
+	emptyAdminPerformanceAnalytics(period)
+);
+const analytics = analyticsResult.data;
+const hasTelemetry = Number(analytics.summary.count || 0) > 0;
+
+const sectionLinks = [
+	{ id: "overview", label: "Overview" },
+	{ id: "workflows", label: "Workflows" },
+	{ id: "routes", label: "Routes" },
+	{ id: "breakdown", label: "Breakdown" },
+	{ id: "external", label: "External" },
+	{ id: "slow", label: "Slow Ops" },
+	{ id: "releases", label: "Releases" },
+	{ id: "targets", label: "Targets" }
+];
+
+const periodEntries = Object.entries(PERFORMANCE_PERIODS);
+const summaryMetrics = [
+	{ label: "Operations measured", value: formatNumber(analytics.summary.count) },
+	{ label: "Median latency", value: formatPerformanceMs(analytics.summary.p50) },
+	{ label: "p95 latency", value: formatPerformanceMs(analytics.summary.p95) },
+	{ label: "p99 latency", value: formatPerformanceMs(analytics.summary.p99) },
+	{ label: "Error rate", value: safePercent(analytics.summary.errorRate) },
+	{ label: "Slow operations", value: formatNumber(analytics.summary.slowCount) }
+];
+---
+
+<Layout title="Admin Performance" sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="performance-page">
+		<header class="hero">
+			<nav class="breadcrumbs" aria-label="Breadcrumb">
+				<a href="/admin">Admin</a><span aria-hidden="true">/</span><span>Performance</span>
+			</nav>
+			<div class="hero-row">
+				<div>
+					<h1>Performance</h1>
+					<p>Operational timing telemetry for important DogEared workflows. Data is aggregated by operation, route, release, status, provider, and safe timing spans.</p>
+				</div>
+				<nav class="period-filter" aria-label="Performance time period">
+					{periodEntries.map(([key, option]) => (
+						<a href={`/admin/performance?period=${key}&sort=${encodeURIComponent(sort)}`} class={period === key ? "active" : ""} aria-current={period === key ? "page" : undefined}>{option.label}</a>
+					))}
+				</nav>
+			</div>
+			<p class="timestamp">Generated {formatDate(analytics.generatedAt)} for {analytics.periodLabel}</p>
+			{analyticsResult.warning && <p class="warning" role="status">{analyticsResult.warning}</p>}
+			{!hasTelemetry && (
+				<p class="empty-state">Performance data will populate as DogEared receives measured traffic. Empty values are withheld until telemetry exists.</p>
+			)}
+		</header>
+
+		<section id="overview" class="panel">
+			<div class="panel-head">
+				<h2>Overview</h2>
+				<p>Percentiles show the real shape of request latency; averages are intentionally not emphasized.</p>
+			</div>
+			{hasTelemetry ? (
+				<div class="metric-grid metric-grid-six">
+					{summaryMetrics.map((metric) => (
+						<article class="metric-card">
+							<p>{metric.label}</p>
+							<strong>{metric.value}</strong>
+						</article>
+					))}
+				</div>
+			) : (
+				<p class="empty">No measured operations are available for this period.</p>
+			)}
+		</section>
+
+		<section id="workflows" class="panel">
+			<div class="panel-head">
+				<h2>Core Workflows</h2>
+				<p>Latency summaries for user-facing workflows and external book services.</p>
+			</div>
+			<div class="workflow-grid">
+				{safeArray(analytics.workflows).map((workflow) => (
+					<article class="workflow-card">
+						<div class="workflow-card-head">
+							<h3>{workflow.label}</h3>
+							<span class={`status-pill ${performanceStatusClass(workflow.status)}`}>{workflow.status}</span>
+						</div>
+						<dl class="latency-list">
+							<div><dt>p50</dt><dd>{formatPerformanceMs(workflow.p50)}</dd></div>
+							<div><dt>p75</dt><dd>{formatPerformanceMs(workflow.p75)}</dd></div>
+							<div><dt>p95</dt><dd>{formatPerformanceMs(workflow.p95)}</dd></div>
+							<div><dt>p99</dt><dd>{formatPerformanceMs(workflow.p99)}</dd></div>
+						</dl>
+						<div class="workflow-foot">
+							<span>{safePercent(workflow.errorRate)} errors</span>
+							<span>{formatNumber(workflow.count)} samples</span>
+							<span class={performanceTrendClass(workflow.trendPercent)}>{formatPerformanceTrend(workflow.trendPercent)}</span>
+						</div>
+					</article>
+				))}
+			</div>
+		</section>
+
+		<section id="routes" class="panel">
+			<div class="panel-head split">
+				<div>
+					<h2>Route Performance</h2>
+					<p>Page and API operations sorted by the selected operational risk.</p>
+				</div>
+				<nav class="sort-filter" aria-label="Route sort">
+					<a href={`/admin/performance?period=${period}&sort=p95`} class={sort === "p95" || !sort ? "active" : ""}>Slowest p95</a>
+					<a href={`/admin/performance?period=${period}&sort=traffic`} class={sort === "traffic" ? "active" : ""}>Traffic</a>
+					<a href={`/admin/performance?period=${period}&sort=errors`} class={sort === "errors" ? "active" : ""}>Errors</a>
+				</nav>
+			</div>
+			{safeArray(analytics.routes).length > 0 ? (
+				<div class="data-table route-table" role="table">
+					<div class="data-row data-row-head" role="row">
+						<span role="columnheader">Route / operation</span>
+						<span role="columnheader">Requests</span>
+						<span role="columnheader">p50</span>
+						<span role="columnheader">p95</span>
+						<span role="columnheader">p99</span>
+						<span role="columnheader">Errors</span>
+						<span role="columnheader">Trend</span>
+					</div>
+					{safeArray(analytics.routes).map((row) => (
+						<div class="data-row" role="row">
+							<span role="cell"><strong>{row.route}</strong><em>{row.operationName}</em></span>
+							<span role="cell">{formatNumber(row.count)}</span>
+							<span role="cell">{formatPerformanceMs(row.p50)}</span>
+							<span role="cell">{formatPerformanceMs(row.p95)}</span>
+							<span role="cell">{formatPerformanceMs(row.p99)}</span>
+							<span role="cell">{safePercent(row.errorRate)}</span>
+							<span role="cell" class={performanceTrendClass(row.trendPercent)}>{formatPerformanceTrend(row.trendPercent)}</span>
+						</div>
+					))}
+				</div>
+			) : (
+				<p class="empty">Route timing data will appear after measured page and API traffic is recorded.</p>
+			)}
+		</section>
+
+		<section id="breakdown" class="panel">
+			<div class="panel-head">
+				<h2>Workflow Breakdown</h2>
+				<p>Timing spans identify the work contributing most to each operation’s latency.</p>
+			</div>
+			{safeArray(analytics.breakdowns).length > 0 ? (
+				<div class="data-table breakdown-table" role="table">
+					<div class="data-row data-row-head" role="row">
+						<span role="columnheader">Workflow</span>
+						<span role="columnheader">Span</span>
+						<span role="columnheader">Samples</span>
+						<span role="columnheader">Avg</span>
+						<span role="columnheader">p95</span>
+						<span role="columnheader">Share</span>
+					</div>
+					{safeArray(analytics.breakdowns).map((row) => (
+						<div class="data-row" role="row">
+							<span role="cell">{row.workflowLabel}</span>
+							<span role="cell">{row.spanName}</span>
+							<span role="cell">{formatNumber(row.count)}</span>
+							<span role="cell">{formatPerformanceMs(row.avg)}</span>
+							<span role="cell">{formatPerformanceMs(row.p95)}</span>
+							<span role="cell">{safePercent(row.shareOfTotalP95)}</span>
+						</div>
+					))}
+				</div>
+			) : (
+				<p class="empty">Span breakdowns will appear after workflows record structured timing stages.</p>
+			)}
+		</section>
+
+		<section id="external" class="panel">
+			<div class="panel-head">
+				<h2>External Services</h2>
+				<p>Provider timing and failures make it clear when latency comes from book APIs rather than DogEared itself.</p>
+			</div>
+			{safeArray(analytics.externalServices).length > 0 ? (
+				<div class="service-grid">
+					{safeArray(analytics.externalServices).map((service) => (
+						<article class="service-card">
+							<h3>{performanceProviderLabel(service.provider)}</h3>
+							<dl class="latency-list compact">
+								<div><dt>Calls</dt><dd>{formatNumber(service.callCount)}</dd></div>
+								<div><dt>p50</dt><dd>{formatPerformanceMs(service.p50)}</dd></div>
+								<div><dt>p95</dt><dd>{formatPerformanceMs(service.p95)}</dd></div>
+								<div><dt>Failures</dt><dd>{safePercent(service.failureRate)}</dd></div>
+								<div><dt>Timeouts</dt><dd>{formatNumber(service.timeoutCount)}</dd></div>
+							</dl>
+						</article>
+					))}
+				</div>
+			) : (
+				<p class="empty">External provider telemetry will appear after search calls Google Books or Open Library.</p>
+			)}
+		</section>
+
+		<section id="slow" class="panel">
+			<div class="panel-head split">
+				<div>
+					<h2>Recent Slow Operations</h2>
+					<p>Requests above the slow threshold, failed operations, and server errors. Reader-identifying values are not stored.</p>
+				</div>
+				<div class="pager">
+					<a href={`/admin/performance?period=${period}&sort=${encodeURIComponent(sort)}&slowPage=${Math.max(1, slowPage - 1)}`} aria-disabled={slowPage <= 1}>Previous</a>
+					<span>Page {slowPage}</span>
+					<a href={`/admin/performance?period=${period}&sort=${encodeURIComponent(sort)}&slowPage=${slowPage + 1}`}>Next</a>
+				</div>
+			</div>
+			{safeArray(analytics.slowOperations).length > 0 ? (
+				<div class="data-table slow-table" role="table">
+					<div class="data-row data-row-head" role="row">
+						<span role="columnheader">Time</span>
+						<span role="columnheader">Operation</span>
+						<span role="columnheader">Duration</span>
+						<span role="columnheader">Release</span>
+						<span role="columnheader">Dominant span</span>
+						<span role="columnheader">Status</span>
+					</div>
+					{safeArray(analytics.slowOperations).map((row) => (
+						<div class="data-row" role="row">
+							<span role="cell">{formatDate(row.createdAt)}</span>
+							<span role="cell"><strong>{row.operationName}</strong><em>{row.route}</em></span>
+							<span role="cell">{formatPerformanceMs(row.totalMs)}</span>
+							<span role="cell">{safeText(row.releaseVersion, "unknown")}</span>
+							<span role="cell">{row.dominantSpan ? `${row.dominantSpan}: ${formatPerformanceMs(row.dominantSpanMs)}` : "—"}</span>
+							<span role="cell"><span class={`status-pill ${row.success ? "healthy" : "slow"}`}>{row.success ? `HTTP ${row.httpStatus || 200}` : "Failed"}</span></span>
+						</div>
+					))}
+				</div>
+			) : (
+				<p class="empty">No slow operations or failures are recorded for this period.</p>
+			)}
+		</section>
+
+		<section id="releases" class="panel">
+			<div class="panel-head">
+				<h2>Release Comparison</h2>
+				<p>p95 changes by release help spot regressions and verify optimization work.</p>
+			</div>
+			{safeArray(analytics.releases).length > 0 ? (
+				<div class="data-table release-table" role="table">
+					<div class="data-row data-row-head" role="row">
+						<span role="columnheader">Release</span>
+						<span role="columnheader">Operation</span>
+						<span role="columnheader">Samples</span>
+						<span role="columnheader">p95</span>
+						<span role="columnheader">Previous p95</span>
+						<span role="columnheader">Change</span>
+					</div>
+					{safeArray(analytics.releases).map((row) => (
+						<div class="data-row" role="row">
+							<span role="cell">{safeText(row.releaseVersion, "unknown")}</span>
+							<span role="cell">{row.operationName}</span>
+							<span role="cell">{formatNumber(row.count)}</span>
+							<span role="cell">{formatPerformanceMs(row.p95)}</span>
+							<span role="cell">{formatPerformanceMs(row.previousReleaseP95)}</span>
+							<span role="cell" class={performanceTrendClass(row.changePercent)}>{formatPerformanceTrend(row.changePercent)}</span>
+						</div>
+					))}
+				</div>
+			) : (
+				<p class="empty">Release comparison data needs telemetry from at least one release.</p>
+			)}
+		</section>
+
+		<section id="targets" class="panel">
+			<div class="panel-head">
+				<h2>Performance Targets</h2>
+				<p>Initial p95 targets are workflow-specific and can be adjusted as beta traffic grows.</p>
+			</div>
+			<div class="target-grid">
+				{safeArray(analytics.targets).map((target) => (
+					<article class="target-card">
+						<h3>{target.label}</h3>
+						<p>Healthy at p95 under <strong>{formatPerformanceMs(target.p95TargetMs)}</strong></p>
+						<p>Slow operation threshold <strong>{formatPerformanceMs(target.slowMs)}</strong></p>
+					</article>
+				))}
+			</div>
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.performance-page {
+		max-width: 1120px;
+		display: grid;
+		gap: 1rem;
+	}
+	.breadcrumbs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		color: var(--color-text-subtle);
+		font-size: 0.88rem;
+	}
+	.breadcrumbs a,
+	.period-filter a,
+	.sort-filter a,
+	.pager a {
+		color: var(--color-nav);
+		text-decoration: none;
+	}
+	.hero {
+		display: grid;
+		gap: 0.45rem;
+	}
+	.hero-row {
+		display: flex;
+		align-items: start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.hero h1,
+	.hero p,
+	.panel-head h2,
+	.panel-head p,
+	.workflow-card h3,
+	.service-card h3,
+	.target-card h3,
+	.target-card p,
+	.empty,
+	.empty-state {
+		margin: 0;
+	}
+	.hero p,
+	.timestamp,
+	.panel-head p,
+	.empty,
+	.empty-state,
+	.data-row em,
+	.workflow-foot,
+	.target-card p {
+		color: var(--color-text-muted);
+	}
+	.timestamp {
+		font-size: 0.86rem;
+	}
+	.empty-state {
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.62);
+		padding: 0.7rem;
+	}
+	.period-filter,
+	.sort-filter,
+	.pager {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		align-items: center;
+	}
+	.period-filter a,
+	.sort-filter a,
+	.pager a,
+	.pager span,
+	.status-pill {
+		display: inline-flex;
+		min-height: 28px;
+		align-items: center;
+		border: var(--border-subtle);
+		border-radius: var(--radius-pill);
+		background: rgba(255, 255, 255, 0.68);
+		padding: 0 0.65rem;
+		font-size: 0.82rem;
+		font-weight: 800;
+	}
+	.period-filter a.active,
+	.sort-filter a.active {
+		background: var(--color-primary);
+		border-color: transparent;
+		color: #fff;
+	}
+	.pager a[aria-disabled="true"] {
+		opacity: 0.45;
+		pointer-events: none;
+	}
+	.panel {
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		padding: 1rem;
+	}
+	.panel-head {
+		display: grid;
+		gap: 0.25rem;
+		margin-bottom: 0.75rem;
+	}
+	.panel-head.split {
+		display: flex;
+		align-items: start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.metric-grid,
+	.workflow-grid,
+	.service-grid,
+	.target-grid {
+		display: grid;
+		gap: 0.65rem;
+	}
+	.metric-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	.metric-grid-six {
+		grid-template-columns: repeat(6, minmax(0, 1fr));
+	}
+	.workflow-grid,
+	.service-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.target-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+	.metric-card,
+	.workflow-card,
+	.service-card,
+	.target-card,
+	.data-row {
+		border: var(--border-subtle);
+		background: rgba(255, 255, 255, 0.62);
+	}
+	.metric-card,
+	.workflow-card,
+	.service-card,
+	.target-card {
+		border-radius: var(--radius-md);
+		padding: 0.75rem;
+	}
+	.metric-card p {
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: 0.84rem;
+	}
+	.metric-card strong {
+		display: block;
+		margin-top: 0.2rem;
+		font-size: 1.3rem;
+		line-height: 1.1;
+	}
+	.workflow-card,
+	.service-card,
+	.target-card {
+		display: grid;
+		gap: 0.65rem;
+	}
+	.workflow-card-head {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.75rem;
+		align-items: start;
+	}
+	.status-pill.healthy {
+		background: rgba(59, 124, 90, 0.12);
+		color: #24573d;
+	}
+	.status-pill.needs-attention {
+		background: rgba(183, 122, 34, 0.13);
+		color: #7a4b10;
+	}
+	.status-pill.slow {
+		background: rgba(138, 29, 29, 0.12);
+		color: #8a1d1d;
+	}
+	.latency-list {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 0.35rem;
+		margin: 0;
+	}
+	.latency-list.compact {
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+	}
+	.latency-list div {
+		border-radius: var(--radius-md);
+		background: rgba(247, 250, 252, 0.8);
+		padding: 0.45rem;
+	}
+	.latency-list dt,
+	.latency-list dd {
+		margin: 0;
+	}
+	.latency-list dt {
+		color: var(--color-text-muted);
+		font-size: 0.76rem;
+	}
+	.latency-list dd {
+		font-weight: 900;
+	}
+	.workflow-foot {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		font-size: 0.84rem;
+	}
+	.trend-good {
+		color: #24573d;
+		font-weight: 900;
+	}
+	.trend-bad {
+		color: #8a1d1d;
+		font-weight: 900;
+	}
+	.trend-flat {
+		color: var(--color-text-muted);
+	}
+	.data-table {
+		display: grid;
+		gap: 0.32rem;
+	}
+	.data-row {
+		display: grid;
+		align-items: center;
+		gap: 0.55rem;
+		border-radius: var(--radius-md);
+		padding: 0.5rem 0.55rem;
+		font-size: 0.86rem;
+	}
+	.route-table .data-row {
+		grid-template-columns: minmax(180px, 1.4fr) 82px 82px 82px 82px 82px minmax(110px, 0.8fr);
+	}
+	.breakdown-table .data-row {
+		grid-template-columns: minmax(120px, 1fr) minmax(130px, 1.3fr) 72px 82px 82px 72px;
+	}
+	.slow-table .data-row {
+		grid-template-columns: minmax(130px, 1fr) minmax(145px, 1fr) 84px minmax(100px, 0.8fr) minmax(150px, 1.2fr) 92px;
+	}
+	.release-table .data-row {
+		grid-template-columns: minmax(100px, 1fr) minmax(120px, 1fr) 78px 82px 92px minmax(100px, 0.9fr);
+	}
+	.data-row-head {
+		background: transparent;
+		border-color: transparent;
+		color: var(--color-text-muted);
+		font-size: 0.76rem;
+		font-weight: 900;
+		text-transform: uppercase;
+	}
+	.data-row strong,
+	.data-row em {
+		display: block;
+	}
+	.data-row em {
+		margin-top: 0.12rem;
+		font-size: 0.78rem;
+		font-style: normal;
+	}
+	.target-card p {
+		font-size: 0.88rem;
+	}
+	.target-card strong {
+		color: var(--color-nav);
+	}
+	.warning {
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: #fff7ed;
+		padding: 0.6rem;
+	}
+
+	@media (max-width: 980px) {
+		.hero-row,
+		.panel-head.split {
+			display: grid;
+		}
+		.metric-grid,
+		.metric-grid-six,
+		.workflow-grid,
+		.service-grid,
+		.target-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+		.data-row,
+		.route-table .data-row,
+		.breakdown-table .data-row,
+		.slow-table .data-row,
+		.release-table .data-row {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.metric-grid,
+		.metric-grid-six,
+		.workflow-grid,
+		.service-grid,
+		.target-grid,
+		.latency-list,
+		.latency-list.compact {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

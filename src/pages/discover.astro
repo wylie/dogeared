@@ -7,10 +7,17 @@ import { getNeonSql } from "../lib/neon";
 import { formatPublishedLabel, resolvePublicHomeSections, type BrowseBook, type BrowseSection } from "../lib/homeSections";
 import { loadRecommendedForUser, loadPopularFallbackRecommendations, type RecommendationSection } from "../lib/recommendations";
 import { resolveViewerStatusByBookId } from "../lib/feed";
+import { recordPerformanceEventSafe } from "../lib/performanceTelemetry";
 
 export const prerender = false;
 
+const pagePerfStartedAt = performance.now();
+const pagePerfStages: Record<string, number> = {};
+const markPagePerfStage = (stage: string) => {
+	pagePerfStages[stage] = Math.round((performance.now() - pagePerfStartedAt) * 10) / 10;
+};
 const session = await resolveUserBySession(Astro.request);
+markPagePerfStage("session_loaded");
 const viewerUserId = String(session?.userId || "");
 const sql = getNeonSql();
 let recommendationSection: RecommendationSection | null = null;
@@ -23,6 +30,7 @@ try {
 		viewerUserId ? loadRecommendedForUser(sql, viewerUserId, 10) : loadPopularFallbackRecommendations(sql, 10),
 		resolvePublicHomeSections()
 	]);
+	markPagePerfStage("sections_loaded");
 	const bookIds = Array.from(new Set([
 		...(recommendationSection?.books || []),
 		...communitySections.flatMap((section) => section.books)
@@ -30,9 +38,11 @@ try {
 	viewerStatusByBookId = viewerUserId && bookIds.length > 0
 		? await resolveViewerStatusByBookId(viewerUserId, bookIds)
 		: new Map();
+	markPagePerfStage("viewer_status_loaded");
 } catch (error) {
 	console.error("Discover page failed to load.", error);
 	errorMessage = "Discover is temporarily unavailable.";
+	markPagePerfStage("load_failed");
 }
 
 const sectionLinks = [
@@ -46,6 +56,19 @@ function numericBookId(book: BrowseBook) {
 	return Number(String(book.id || "").replace(/^book_/, ""));
 }
 
+recordPerformanceEventSafe({
+	operationName: "page.discover",
+	route: "/discover",
+	totalMs: performance.now() - pagePerfStartedAt,
+	success: !errorMessage,
+	httpStatus: errorMessage ? 500 : 200,
+	spans: pagePerfStages,
+	metadata: {
+		authenticated: !!viewerUserId,
+		recommendationCount: recommendationSection?.books.length || 0,
+		sectionCount: communitySections.length
+	}
+});
 ---
 
 <Layout title="Discover" sectionLinks={sectionLinks} metaDescription="Discover explainable book recommendations and community-powered reading sections on DogEared." canonicalUrl="/discover">

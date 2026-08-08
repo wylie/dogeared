@@ -114,6 +114,10 @@ An admin-managed access request with email, optional display name, requested tim
 
 First-party aggregate usage signals used by DogEared admins to improve the reader experience. Product analytics covers growth, reading actions, search quality, discovery performance, first-run funnel steps, and feature adoption without exposing private journal content or reader-level behavior reports.
 
+## Performance Analytics
+
+Operational timing telemetry used by DogEared admins to understand production speed and regressions. Performance analytics covers workflow duration, timing spans, route/API percentiles, external provider latency, error rate, slow operations, and release comparisons without storing reader-identifying content or sensitive request payloads.
+
 ## Guided Tip
 
 A reusable callout with a title, explanation, optional icon, primary action, and dismiss control. Completion and dismissal are stored per user.

@@ -8,6 +8,7 @@ import {
 	loadReaderReadingSummary
 } from "../../../lib/readingSummary";
 import { normalizeProgressInputMode, type ProgressInputMode } from "../../../lib/readingProgress";
+import { recordPerformanceEventSafe } from "../../../lib/performanceTelemetry";
 
 export const prerender = false;
 
@@ -60,6 +61,25 @@ export const POST: APIRoute = async ({ request }) => {
 	const stages: Record<string, number> = {};
 	let debugStage = "start";
 	let bookId = 0;
+	const recordProgressPerformance = (
+		success: boolean,
+		httpStatus: number,
+		metadata: Record<string, unknown> = {}
+	) => {
+		recordPerformanceEventSafe({
+			operationName: "progress.save",
+			route: "/api/reading/progress",
+			totalMs: performance.now() - startedAt,
+			success,
+			httpStatus,
+			spans: stages,
+			metadata: {
+				stage: debugStage,
+				hasBookId: bookId > 0,
+				...metadata
+			}
+		});
+	};
 	try {
 		const sql = getNeonSql();
 		await ensureReadingProgressEventSchema(sql);
@@ -67,9 +87,11 @@ export const POST: APIRoute = async ({ request }) => {
 		const body = await request.json().catch(() => ({}));
 		debugStage = markPerf(startedAt, stages, "schema_session_body");
 		if (!session?.userId) {
+			recordProgressPerformance(false, 401);
 			return jsonResponse({ error: "You must be logged in to save reading progress." }, 401);
 		}
 		if (!body || typeof body !== "object") {
+			recordProgressPerformance(false, 400);
 			return jsonResponse({ error: "Invalid progress payload." }, 400);
 		}
 		const input = body as Record<string, unknown>;
@@ -80,6 +102,7 @@ export const POST: APIRoute = async ({ request }) => {
 			input.preferredProgressType || input.progressType
 		);
 		if (bookId <= 0) {
+			recordProgressPerformance(false, 400);
 			return jsonResponse({ error: "Missing book id." }, 400);
 		}
 
@@ -109,6 +132,7 @@ export const POST: APIRoute = async ({ request }) => {
 		debugStage = markPerf(startedAt, stages, "existing_progress_loaded");
 		const existing = existingRows[0];
 		if (!existing?.book_id) {
+			recordProgressPerformance(false, 404);
 			return jsonResponse({ error: "This book is not currently being tracked for reading progress." }, 404);
 		}
 
@@ -190,6 +214,7 @@ export const POST: APIRoute = async ({ request }) => {
 		debugStage = markPerf(startedAt, stages, "progress_saved");
 		const updated = updatedRows[0];
 		if (!updated?.book_id) {
+			recordProgressPerformance(false, 409, { pageDelta, progressEventRecorded });
 			return jsonResponse({ error: "Unable to save reading progress." }, 409);
 		}
 
@@ -215,14 +240,17 @@ export const POST: APIRoute = async ({ request }) => {
 			pageDelta,
 			progressEventRecorded
 		});
-		console.info("[perf.reading.progress]", {
-			outcome: "success",
-			stage: debugStage,
-			totalMs: Math.round((performance.now() - startedAt) * 10) / 10,
-			stages,
-			bookId,
-			pageDelta
-		});
+		if (import.meta.env.DEV) {
+			console.info("[perf.reading.progress]", {
+				outcome: "success",
+				stage: debugStage,
+				totalMs: Math.round((performance.now() - startedAt) * 10) / 10,
+				stages,
+				bookId,
+				pageDelta
+			});
+		}
+		recordProgressPerformance(true, 200, { pageDelta, progressEventRecorded });
 		return jsonResponse({
 			ok: true,
 			progress: {
@@ -245,14 +273,17 @@ export const POST: APIRoute = async ({ request }) => {
 			summary
 		});
 	} catch (error) {
-		console.error("[perf.reading.progress]", {
-			outcome: "error",
-			stage: debugStage,
-			totalMs: Math.round((performance.now() - startedAt) * 10) / 10,
-			stages,
-			bookId,
-			error: error instanceof Error ? error.message : "Unknown error"
-		});
+		if (import.meta.env.DEV) {
+			console.error("[perf.reading.progress]", {
+				outcome: "error",
+				stage: debugStage,
+				totalMs: Math.round((performance.now() - startedAt) * 10) / 10,
+				stages,
+				bookId,
+				error: error instanceof Error ? error.message : "Unknown error"
+			});
+		}
+		recordProgressPerformance(false, 500);
 		return jsonResponse({
 			error: "Failed to save reading progress.",
 			detail: error instanceof Error ? error.message : "Unknown error"

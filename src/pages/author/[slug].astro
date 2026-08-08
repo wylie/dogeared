@@ -17,8 +17,15 @@ import { loadCollectionsForAuthor, type CollectionRecord } from "../../lib/colle
 import { ensureCanonicalWorkSchema } from "../../lib/catalogWorks";
 import { canonicalizeCatalogAuthor, canonicalizeCatalogTitle } from "../../lib/catalogKeys";
 import { withRuntimeCache } from "../../lib/runtimeCache";
+import { recordPerformanceEventSafe } from "../../lib/performanceTelemetry";
 
 export const prerender = false;
+
+const pagePerfStartedAt = performance.now();
+const pagePerfStages: Record<string, number> = {};
+const markPagePerfStage = (stage: string) => {
+	pagePerfStages[stage] = Math.round((performance.now() - pagePerfStartedAt) * 10) / 10;
+};
 
 type BookRow = {
 	id: number;
@@ -76,6 +83,7 @@ const canonicalFromSlug = slug.replace(/[^a-z0-9]+/g, "");
 const canonical = canonicalizeAuthor(requestedName) || canonicalFromSlug;
 
 const session = await resolveUserBySession(Astro.request);
+markPagePerfStage("session_loaded");
 const viewerUserId = String(session?.userId || "");
 
 let authorName = requestedName;
@@ -241,6 +249,7 @@ try {
 	const sql = getNeonSql();
 	await ensureCanonicalWorkSchema(sql);
 	await ensureSeriesSchema(sql);
+	markPagePerfStage("schema_ready");
 	const canonicalAuthorRows = await sql<Array<{
 		id: number;
 		name: string;
@@ -352,6 +361,7 @@ try {
 		group by b.id, b.work_id, bw.canonical_title, bw.title, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis, b.published_year, b.page_count, rt.average_rating, rt.rating_count, series_info.series_id, series_info.series_name, series_info.book_order, series_info.publication_order, series_info.chronological_order
 		order by coalesce(series_info.series_name, '') asc, coalesce(series_info.book_order, 999999) asc, shelves desc, readers desc, b.title asc
 	`;
+	markPagePerfStage("local_books_loaded");
 
 	if (rows.length > 0) {
 		authorName = normalizeAuthorName(rows[0].author);
@@ -397,6 +407,7 @@ try {
 			);
 		}
 	}
+	markPagePerfStage("viewer_status_loaded");
 
 	const openLibraryBioPromise = authorName && (!bio || !authorPhotoUrl)
 		? withRuntimeCache(`author-open-library-bio:v1:${canonicalizeCatalogAuthor(authorName)}`, 6 * 60 * 60 * 1000, () => fetchOpenLibraryBio(authorName)).catch(() => null)
@@ -416,8 +427,10 @@ try {
 		}
 	}
 	featuredInCollections = collections;
+	markPagePerfStage("author_metadata_loaded");
 } catch (error) {
 	errorMessage = error instanceof Error ? error.message : "Failed to load author page.";
+	markPagePerfStage("load_failed");
 }
 if (authorName) {
 	const localBookKey = books.map((book) => Number(book.id || 0)).filter((id) => id > 0).sort((a, b) => a - b).join("-");
@@ -426,6 +439,7 @@ if (authorName) {
 		60 * 60 * 1000,
 		() => fetchExternalAuthorBooks(authorName, books)
 	).catch(() => []);
+	markPagePerfStage("external_books_loaded");
 }
 const bibliographySections = buildAuthorBibliographySections(books, externalBooks);
 const knownBookCount = bibliographySections.reduce((total, section) => total + section.books.length, 0);
@@ -435,6 +449,21 @@ const cleanAuthorPath = displayName ? authorCanonicalPath(displayName) : "/autho
 if (displayName) {
 	const expectedSlug = slugifyAuthor(displayName);
 	if (slug !== expectedSlug || Astro.url.search) {
+		recordPerformanceEventSafe({
+			operationName: "page.author-detail",
+			route: "/author/[slug]",
+			totalMs: performance.now() - pagePerfStartedAt,
+			success: true,
+			httpStatus: 301,
+			spans: pagePerfStages,
+			metadata: {
+				authenticated: !!viewerUserId,
+				redirect: true,
+				localBookCount: books.length,
+				externalBookCount: externalBooks.length,
+				collectionCount: featuredInCollections.length
+			}
+		});
 		return Astro.redirect(cleanAuthorPath, 301);
 	}
 }
@@ -459,6 +488,22 @@ const authorStructuredData = displayName
 		], { site: Astro.site ?? Astro.url, logErrors: import.meta.env.DEV })
 	])
 	: "";
+
+recordPerformanceEventSafe({
+	operationName: "page.author-detail",
+	route: "/author/[slug]",
+	totalMs: performance.now() - pagePerfStartedAt,
+	success: !errorMessage,
+	httpStatus: errorMessage ? 500 : 200,
+	spans: pagePerfStages,
+	metadata: {
+		authenticated: !!viewerUserId,
+		redirect: false,
+		localBookCount: books.length,
+		externalBookCount: externalBooks.length,
+		collectionCount: featuredInCollections.length
+	}
+});
 ---
 
 <Layout

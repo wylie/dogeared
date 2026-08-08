@@ -7,6 +7,7 @@ import { inferKnownSeriesMetadata } from "../../../lib/series";
 import { searchCollections } from "../../../lib/collections";
 import { resolveUserBySession } from "../../../lib/auth";
 import { classifySearchAnalyticsSubject, recordProductAnalyticsEventSafe } from "../../../lib/productAnalytics";
+import { recordPerformanceEventSafe } from "../../../lib/performanceTelemetry";
 import { normalizeSearchResult, type SearchResult } from "../../../lib/searchResults";
 
 export const prerender = false;
@@ -376,7 +377,6 @@ export const GET: APIRoute = async ({ request, url }) => {
 	const perfStartedAt = performance.now();
 	const perfStages: Record<string, number> = {};
 	const markPerfStage = (stage: string) => {
-		if (!import.meta.env.DEV) return;
 		perfStages[stage] = Math.round((performance.now() - perfStartedAt) * 10) / 10;
 	};
 	const logPerf = (outcome: string, extra: Record<string, unknown> = {}) => {
@@ -391,11 +391,28 @@ export const GET: APIRoute = async ({ request, url }) => {
 			...extra
 		});
 	};
+	const recordSearchPerformance = (outcome: "success" | "error", extra: Record<string, unknown> = {}) => {
+		recordPerformanceEventSafe(getNeonSql(), {
+			operationName: "search.books",
+			route: "/api/books/search",
+			totalMs: performance.now() - perfStartedAt,
+			success: outcome === "success",
+			httpStatus: outcome === "success" ? 200 : 500,
+			spans: perfStages,
+			metadata: {
+				page,
+				pageSize,
+				phase,
+				...extra
+			}
+		});
+	};
 
 	try {
 			const sql = getNeonSql();
 			const fetchGoogleItems = async (q: string) => {
 				if (!apiKey) return [] as any[];
+				const providerStartedAt = performance.now();
 				const params = new URLSearchParams({
 					q,
 					key: apiKey,
@@ -405,22 +422,101 @@ export const GET: APIRoute = async ({ request, url }) => {
 					orderBy: "relevance",
 					langRestrict: "en"
 				});
-				const response = await fetch(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
-				if (!response.ok) return [];
-				const data = await response.json();
-				return Array.isArray(data.items) ? data.items : [];
+				try {
+					const response = await fetch(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`);
+					if (!response.ok) {
+						recordPerformanceEventSafe(sql, {
+							operationName: "external.google-books",
+							route: "/api/books/search",
+							totalMs: performance.now() - providerStartedAt,
+							success: false,
+							httpStatus: response.status,
+							externalProvider: "google-books",
+							metadata: { page, pageSize, resultCount: 0 }
+						});
+						return [];
+					}
+					const data = await response.json();
+					const items = Array.isArray(data.items) ? data.items : [];
+					recordPerformanceEventSafe(sql, {
+						operationName: "external.google-books",
+						route: "/api/books/search",
+						totalMs: performance.now() - providerStartedAt,
+						success: true,
+						httpStatus: response.status,
+						externalProvider: "google-books",
+						metadata: { page, pageSize, resultCount: items.length }
+					});
+					return items;
+				} catch (error) {
+					recordPerformanceEventSafe(sql, {
+						operationName: "external.google-books",
+						route: "/api/books/search",
+						totalMs: performance.now() - providerStartedAt,
+						success: false,
+						httpStatus: 0,
+						externalProvider: "google-books",
+						metadata: {
+							page,
+							pageSize,
+							resultCount: 0,
+							timeout: error instanceof Error && /abort|timeout/i.test(error.name)
+						}
+					});
+					return [];
+				}
 			};
 
 			const fetchOpenLibraryItems = async (q: string) => {
+				const providerStartedAt = performance.now();
 				const params = new URLSearchParams({
 					q,
 					limit: String(pageSize),
 					offset: String(startIndex)
 				});
-				const response = await fetch(`https://openlibrary.org/search.json?${params.toString()}`);
-				if (!response.ok) return [] as any[];
-				const payload = await response.json().catch(() => null) as { docs?: any[] } | null;
-				return Array.isArray(payload?.docs) ? payload.docs : [];
+				try {
+					const response = await fetch(`https://openlibrary.org/search.json?${params.toString()}`);
+					if (!response.ok) {
+						recordPerformanceEventSafe(sql, {
+							operationName: "external.open-library",
+							route: "/api/books/search",
+							totalMs: performance.now() - providerStartedAt,
+							success: false,
+							httpStatus: response.status,
+							externalProvider: "open-library",
+							metadata: { page, pageSize, resultCount: 0 }
+						});
+						return [] as any[];
+					}
+					const payload = await response.json().catch(() => null) as { docs?: any[] } | null;
+					const docs = Array.isArray(payload?.docs) ? payload.docs : [];
+					recordPerformanceEventSafe(sql, {
+						operationName: "external.open-library",
+						route: "/api/books/search",
+						totalMs: performance.now() - providerStartedAt,
+						success: true,
+						httpStatus: response.status,
+						externalProvider: "open-library",
+						metadata: { page, pageSize, resultCount: docs.length }
+					});
+					return docs;
+				} catch (error) {
+					recordPerformanceEventSafe(sql, {
+						operationName: "external.open-library",
+						route: "/api/books/search",
+						totalMs: performance.now() - providerStartedAt,
+						success: false,
+						httpStatus: 0,
+						externalProvider: "open-library",
+						metadata: {
+							page,
+							pageSize,
+							resultCount: 0,
+							timeout: error instanceof Error && /abort|timeout/i.test(error.name)
+						}
+					});
+					return [] as any[];
+				}
 			};
 
 			const collectionResultsPromise = page === 1 && phase !== "external"
@@ -800,6 +896,12 @@ export const GET: APIRoute = async ({ request, url }) => {
 					collectionCount: localPayload.collectionResults.length,
 					hasMore: localPayload.hasMore
 				});
+				recordSearchPerformance("success", {
+					resultCount: localPayload.results.length,
+					collectionCount: localPayload.collectionResults.length,
+					hasMore: localPayload.hasMore,
+					partial: true
+				});
 				return new Response(JSON.stringify({
 					results: localPayload.results,
 					collectionResults: localPayload.collectionResults,
@@ -861,6 +963,12 @@ export const GET: APIRoute = async ({ request, url }) => {
 				collectionCount: collectionResults.length,
 				hasMore
 			});
+			recordSearchPerformance("success", {
+				resultCount: results.length,
+				collectionCount: collectionResults.length,
+				hasMore,
+				partial: false
+			});
 			return new Response(JSON.stringify({ results, collectionResults, hasMore, page, phase, partial: false }), {
 				status: 200,
 				headers: {
@@ -870,6 +978,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			});
 		} catch (error) {
 			logPerf("error", { error: error instanceof Error ? error.message : "Unknown error" });
+			recordSearchPerformance("error", { resultCount: 0, collectionCount: 0 });
 			return new Response(JSON.stringify({ results: [], hasMore: false }), {
 				status: 200,
 				headers: { "Content-Type": "application/json" }

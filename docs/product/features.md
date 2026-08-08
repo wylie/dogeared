@@ -701,6 +701,20 @@ Privacy decisions: analytics dashboards show aggregate counts and top terms only
 
 Limitations: Discovery impressions and recommendation add-to-shelf are client-side best-effort signals. Admin analytics uses cached aggregate queries and may lag briefly.
 
+### Admin Performance Analytics
+
+Status: Beta
+
+Admins can review operational performance telemetry at `/admin/performance`: request volume, p50/p75/p95/p99 latency, error rate, slow-operation count, core workflow cards, route/API performance, timing-span breakdowns, external provider latency, recent slow operations, release comparisons, and workflow-specific performance targets.
+
+Recorded operations use stable names such as `search.books`, `progress.save`, `shelf.mutate`, `page.profile`, `page.reading-life`, `page.search`, `page.book-detail`, `page.author-detail`, `page.discover`, `external.google-books`, and `external.open-library`. Timing spans use the same terminology as local development diagnostics, such as local catalog, external providers, canonical resolution, progress mutation, milestone work, page bundle loading, and viewer-state loading.
+
+The telemetry path is fire-and-forget from measured workflows, samples normal successes through `PERFORMANCE_TELEMETRY_SAMPLE_RATE` when configured, and always keeps errors and unusually slow operations. Raw events are retained for 45 days; longer-term performance review should rely on aggregates and release comparisons rather than permanent raw request logs.
+
+Privacy decisions: performance analytics measures operations, not readers. Events must not store search query text, book titles, journal content, emails, usernames, profile content, authorization data, database credentials, raw SQL, or sensitive request payloads. Shelf state remains current-user render data and is not cached as shared public telemetry.
+
+Limitations: The dashboard depends on measured production traffic. Empty periods show explanatory empty states instead of misleading zero-valued health claims.
+
 ### Admin Collection Management
 
 Status: Complete

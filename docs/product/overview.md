@@ -12,7 +12,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Readers who care about ratings, short reflections, and reading history.
 - Readers who want discovery through books and people, not engagement algorithms.
 - Readers who want privacy controls around profiles, activity, and location.
-- Administrators maintaining catalog quality, user health, and import reliability.
+- Administrators maintaining catalog quality, user health, import reliability, and production performance.
 
 ## Core Goals
 
@@ -47,7 +47,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
 - Notifications: dedicated low-noise notification center grouped by Today, This Week, and Earlier for meaningful community, reading, discovery, milestone, and system updates.
 - Settings: profile/account entry points, magic-link auth, email changes, Goodreads import dashboard, preferences, privacy, notifications, Learning controls for helpful tips, data export, shelf clearing, API endpoint references, and sessions.
-- Admin: operational overview, privacy-friendly product analytics, notification operations, Founding Reader access controls, release workflow, feedback dashboard, data health, user search, user detail, and admin delete-user tools.
+- Admin: operational overview, privacy-friendly product analytics, performance analytics, notification operations, Founding Reader access controls, release workflow, feedback dashboard, data health, user search, user detail, and admin delete-user tools.
 - Mission, Roadmap, Release Notes, Privacy, Support: public product context, shipped changes, and project direction.
 
 ## Current Information Architecture
@@ -75,7 +75,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Profile management: update name, avatar, location, birth year, goal text, favorite book, favorite author, blurb, and genres.
 - Privacy management: set public/private profile visibility and control location, activity, discovery, and follow availability.
 - Import/export: import Goodreads CSV data with dashboard status, preview, duplicate explanations, merge/replace controls, reports, resumable failed syncs, export account data as JSON, and clear shelf entries.
-- Admin operations: inspect site statistics, aggregate product analytics, Founding Reader access, releases, feedback and bug reports, metadata coverage, import health, duplicate risk, backfill movement, and user accounts.
+- Admin operations: inspect site statistics, aggregate product analytics, production performance, Founding Reader access, releases, feedback and bug reports, metadata coverage, import health, duplicate risk, backfill movement, and user accounts.
 
 ## Current Capabilities
 
@@ -304,11 +304,13 @@ Smart grouping uses a notification `group_key` and configurable window so bursts
 
 ### Admin
 
-Admins are recognized by username through `ADMIN_USERNAMES`. Admin pages include an overview, product analytics dashboard, notification operations dashboard, Founding Reader access controls, release management, feedback dashboard, data-health view, user search, user detail, and delete-user controls. Admin pages redirect non-admins to home.
+Admins are recognized by username through `ADMIN_USERNAMES`. Admin pages include an overview, product analytics dashboard, performance analytics dashboard, notification operations dashboard, Founding Reader access controls, release management, feedback dashboard, data-health view, user search, user detail, and delete-user controls. Admin pages redirect non-admins to home.
 
 The Founding Readers dashboard manages Open, Waitlist, and Invite Only access modes, target capacity, automatic Open-to-Waitlist behavior, waitlist approvals, invitations, declines, removals, and current reader review. The public experience should use Founding Reader language instead of "beta tester" language, because these readers are early collaborators rather than instability testers.
 
 The Product Analytics dashboard is first-party and product-focused rather than marketing-focused. It records small aggregate events such as page views, feature views, search queries with result counts, recommendation impressions, recommendation clicks, recommendation feedback, and recommendation add-to-shelf intent. Admins see aggregate growth, reading, community, search, discovery, first-run funnel, and feature-adoption metrics. The dashboard does not show private journal content, passwords, reader-level behavioral reports, or unnecessary personal information.
+
+The Performance Analytics dashboard is operational telemetry rather than product analytics. It records workflow names, route/API identifiers, total duration, success/failure, HTTP status, release version, environment, external provider identifiers, and sanitized timing spans for operations such as `search.books`, `progress.save`, `shelf.mutate`, `page.profile`, `page.book-detail`, `page.author-detail`, `page.discover`, `external.google-books`, and `external.open-library`. Admins use `/admin/performance` to inspect p50/p75/p95/p99 latency, error rate, route performance, workflow span breakdowns, external provider latency, slow operations, release comparisons, and workflow-specific targets. It must not store search query text, book titles, journal content, email addresses, usernames, profile content, authorization data, or sensitive request payloads.
 
 The Feedback dashboard is the Founding Reader bug-reporting workflow. It stores user-submitted reports with tracking numbers, type, optional severity, subject, description, bug details, screenshots, diagnostic context, status, private internal notes, follow-up flags, duplicate markers, resolved version, and resolution dates. Diagnostic context is limited to page and environment details useful for debugging; private journal content, passwords, and sensitive personal information are intentionally excluded.
 
@@ -385,7 +387,7 @@ Derived from the current repository structure and implementation:
 
 - Major non-API page routes: 35 application/content routes plus `robots.txt` and `sitemap.xml`.
 - API routes: 36 endpoint files.
-- Admin pages: 5 routes.
+- Admin pages: 12 routes.
 - Redirect-only compatibility routes: `/feed`, `/myreads`, `/profile`, `/author`, `/reading-timeline`, and `/u/[username]`.
 - Feature entries in `docs/product/features.md`: 72.
 - Default persisted shelf statuses: 3 (`want_to_read`, `reading`, `finished`).

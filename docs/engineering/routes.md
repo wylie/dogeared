@@ -44,12 +44,14 @@ Authentication requirements:
 | `/support` | Public | Support project context. | Static Astro page. |
 | `/admin` | Admin | Admin overview and site statistics. | `resolveAdminSession`, `loadAdminOverviewStats`. |
 | `/admin/analytics` | Admin | Aggregate product analytics, search trends, discovery performance, first-run funnel, and feature adoption. | `resolveAdminSession`, `loadAdminProductAnalytics`, `product_analytics_event`. |
+| `/admin/performance` | Admin | Operational performance telemetry for workflow latency, route/API percentiles, external services, slow operations, release comparisons, and targets. | `resolveAdminSession`, `loadAdminPerformanceAnalytics`, `performance_event`. |
 | `/admin/collections` | Admin | Create, edit, reorder, publish, archive, and feature editorial collections. | `collections` helper, collection form, collection list. |
 | `/admin/feedback` | Admin | Search, filter, triage, annotate, and resolve Founding Reader feedback and bug reports. | `feedback` helper, `feedback_submission`, admin workflow form. |
 | `/admin/notifications` | Admin | Notification operations dashboard for sent today, unread count, common types, future failed jobs, and volume over time. | `notifications` helper, `user_notification`. |
 | `/admin/founding-readers` | Admin | Manage Founding Reader access mode, capacity, waitlist approvals, invitations, declines, removals, and active reader review. | `foundingReaders` helper, `founding_reader_config`, `founding_reader_waitlist`, active reader table. |
 | `/admin/beta-users` | Admin redirect | Compatibility redirect to `/admin/founding-readers`. | Redirect only. |
 | `/admin/releases` | Admin | Create, edit, preview, publish, and archive releases. | `releases` helper, `admin_release_note`. |
+| `/admin/operations` | Admin | Early-access operations control center for feedback workflow, recommendation/import/system health, feature flags, and announcements. | `adminData`, `feedback`, founding reader and announcement helpers. |
 | `/admin/data-health` | Admin | Metadata, import, metadata review queue, duplicate, backfill, page count, and publisher health. | Neon diagnostic queries. |
 | `/admin/users` | Admin | Search users and delete users from list. | `searchAdminUsers`, `deleteAdminUser`. |
 | `/admin/users/[username]` | Admin | User detail counts and delete-user flow. | `loadAdminUserDetail`, `deleteAdminUser`. |

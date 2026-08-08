@@ -27,11 +27,18 @@ import {
 	type ReadingSummaryMomentumBook
 } from "../../lib/readingSummary";
 import type { ProgressInputMode } from "../../lib/readingProgress";
+import { recordPerformanceEventSafe } from "../../lib/performanceTelemetry";
 
 export const prerender = false;
 
+const pagePerfStartedAt = performance.now();
+const pagePerfStages: Record<string, number> = {};
+const markPagePerfStage = (stage: string) => {
+	pagePerfStages[stage] = Math.round((performance.now() - pagePerfStartedAt) * 10) / 10;
+};
 const requestedUsername = String(Astro.params.username || "").trim().toLowerCase();
 const session = await resolveUserBySession(Astro.request);
+markPagePerfStage("session_loaded");
 const viewerUserId = String(session?.userId || "");
 const isAuthenticated = !!viewerUserId;
 const editMode = String(Astro.url.searchParams.get("edit") || "").trim() === "1";
@@ -362,6 +369,7 @@ const reviewSort = String(Astro.url.searchParams.get("review_sort") || "newest")
 const reviewFilter = String(Astro.url.searchParams.get("review_filter") || "all").trim();
 
 const bundle = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
+markPagePerfStage("profile_bundle_loaded");
 if (bundle.status === "not_found") notFound = true;
 if (bundle.status === "private") privateProfile = true;
 if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
@@ -694,6 +702,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		}
 	}
 }
+markPagePerfStage("profile_sections_loaded");
 
 function activityHeading(eventType: string) {
 	const type = String(eventType || "").trim().toLowerCase();
@@ -918,6 +927,27 @@ momentumScore = profileReadingSummary.momentumScore;
 momentumStreakDays = profileReadingSummary.readingStreakDays;
 momentumNextAction = profileReadingSummary.momentumNextAction;
 const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]));
+
+recordPerformanceEventSafe({
+	operationName: "page.profile",
+	route: "/profile/[username]",
+	totalMs: performance.now() - pagePerfStartedAt,
+	success: !notFound && !privateProfile,
+	httpStatus: notFound ? 404 : privateProfile ? 403 : 200,
+	spans: pagePerfStages,
+	metadata: {
+		authenticated: isAuthenticated,
+		isOwnerViewer,
+		status: notFound ? "not_found" : privateProfile ? "private" : "ok",
+		shelfTotal: shelfStats.total,
+		activityCount: recentActivity.length,
+		currentlyReadingCount: currentlyReading.length,
+		wantToReadCount: wantToReadBooks.length,
+		finishedCount: finishedBooks.length,
+		customShelfCount: customShelves.length,
+		achievementCount: achievements.length
+	}
+});
 ---
 
 <Layout

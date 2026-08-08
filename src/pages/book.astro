@@ -21,8 +21,15 @@ import { ensureCanonicalWorkSchema, resolveRepresentativeBookId } from "../lib/c
 import { publicReaderAccountFilterSql } from "../lib/publicReaderPolicy";
 import { enrichMissingSeriesBookCovers } from "../lib/bookCoverEnrichment";
 import { normalizeRedundantSeriesTitle } from "../lib/catalog";
+import { recordPerformanceEventSafe } from "../lib/performanceTelemetry";
 
 export const prerender = false;
+
+const pagePerfStartedAt = performance.now();
+const pagePerfStages: Record<string, number> = {};
+const markPagePerfStage = (stage: string) => {
+	pagePerfStages[stage] = Math.round((performance.now() - pagePerfStartedAt) * 10) / 10;
+};
 
 function normalizeText(value: unknown) {
 	return String(value || "").trim();
@@ -210,6 +217,7 @@ let activity: Array<{
 let reviews: BookReview[] = [];
 let errorMessage = "";
 const session = await resolveUserBySession(Astro.request);
+markPagePerfStage("session_loaded");
 const isAuthenticated = !!session?.userId;
 let viewerShelfStatus: "want_to_read" | "reading" | "finished" | "" = "";
 let viewerRating = 0;
@@ -299,6 +307,7 @@ async function fetchOpenLibraryBook() {
 try {
 	const sql = getNeonSql();
 	await ensureCanonicalWorkSchema(sql);
+	markPagePerfStage("schema_ready");
 	let rows: Array<{
 		id: number;
 		work_id: number | null;
@@ -460,6 +469,7 @@ try {
 	}
 
 	const row = rows[0];
+	markPagePerfStage("catalog_lookup_complete");
 	if (row?.id) {
 		const resolvedBookId = Number(row.id || 0);
 		const representativeBookId = resolvedBookId > 0 ? await resolveRepresentativeBookId(sql, resolvedBookId) : 0;
@@ -751,6 +761,7 @@ try {
 			logBookDetailLoadError("reviews", error);
 			reviews = [];
 		}
+		markPagePerfStage("catalog_related_loaded");
 	} else {
 		const google = await fetchGoogleBook();
 		if (google) {
@@ -811,6 +822,7 @@ try {
 				};
 			}
 		}
+		markPagePerfStage("external_fallback_loaded");
 	}
 
 if (book && session?.userId) {
@@ -888,6 +900,7 @@ if (book && session?.userId) {
 		logBookDetailLoadError("viewer-state", error);
 		customShelfOptionsJson = "[]";
 	}
+	markPagePerfStage("viewer_state_loaded");
 }
 if (book?.id) {
 	const [loadedSeriesContext, loadedReadersAlsoEnjoyed] = await Promise.all([
@@ -928,9 +941,11 @@ if (book?.id) {
 		seriesContext = null;
 	}
 }
+markPagePerfStage("related_content_loaded");
 } catch (error) {
 	logBookDetailLoadError("page", error);
 	errorMessage = book ? "" : "We couldn't load this book right now.";
+	markPagePerfStage("load_failed");
 }
 
 const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
@@ -997,6 +1012,22 @@ function seriesBookDomId(seriesBook: { bookId?: number; bookOrder?: number; titl
 	if (order > 0) return `series-book-${order}`;
 	return `series-book-${normalizeText(seriesBook.title).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 }
+
+recordPerformanceEventSafe({
+	operationName: "page.book-detail",
+	route: "/book",
+	totalMs: performance.now() - pagePerfStartedAt,
+	success: !errorMessage,
+	httpStatus: errorMessage ? 500 : 200,
+	spans: pagePerfStages,
+	metadata: {
+		authenticated: isAuthenticated,
+		hasCatalogBook: Number(book?.id || 0) > 0,
+		reviewCount: reviews.length,
+		activityCount: activity.length,
+		editionCount: availableEditions.length
+	}
+});
 ---
 
 <Layout

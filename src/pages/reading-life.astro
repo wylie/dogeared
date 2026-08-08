@@ -12,8 +12,15 @@ import {
 	type ReadingLifeFinishedBook,
 	type ReadingLifeProgressEvent
 } from "../lib/readingLife.ts";
+import { recordPerformanceEventSafe } from "../lib/performanceTelemetry";
 
 export const prerender = false;
+
+const pagePerfStartedAt = performance.now();
+const pagePerfStages: Record<string, number> = {};
+const markPagePerfStage = (stage: string) => {
+	pagePerfStages[stage] = Math.round((performance.now() - pagePerfStartedAt) * 10) / 10;
+};
 
 type RawCurrentBookRow = {
 	id: number;
@@ -137,6 +144,7 @@ async function ensureReadingLifeSchema(sql: ReturnType<typeof getNeonSql>) {
 }
 
 const session = await resolveUserBySession(Astro.request);
+markPagePerfStage("session_loaded");
 const viewerUserId = session?.userId || "";
 const now = new Date();
 const currentYear = now.getUTCFullYear();
@@ -160,6 +168,7 @@ if (viewerUserId) {
 	try {
 		const sql = getNeonSql();
 		await ensureReadingLifeSchema(sql);
+		markPagePerfStage("schema_ready");
 		const [profileRows, finishedRows, currentRows, progressRows] = await Promise.all([
 			sql<Array<{ profile_data: unknown }>>`
 				select profile_data
@@ -214,8 +223,10 @@ if (viewerUserId) {
 			date: String(row.date || ""),
 			pageDelta: Number(row.page_delta || 0)
 		}));
+		markPagePerfStage("reading_life_loaded");
 	} catch (error) {
 		loadError = error instanceof Error ? error.message : "Unable to load your reading life.";
+		markPagePerfStage("load_failed");
 	}
 }
 
@@ -240,6 +251,21 @@ const calendarSummary = {
 const hasReadingLifeData = finishedBooks.length > 0 || currentBooks.length > 0 || progressEvents.length > 0;
 const yearOptions = readingLife.availableYears.length > 0 ? readingLife.availableYears : [currentYear];
 const months = Array.from({ length: 12 }, (_, index) => index + 1);
+
+recordPerformanceEventSafe({
+	operationName: "page.reading-life",
+	route: "/reading-life",
+	totalMs: performance.now() - pagePerfStartedAt,
+	success: !loadError,
+	httpStatus: loadError ? 500 : 200,
+	spans: pagePerfStages,
+	metadata: {
+		authenticated: !!viewerUserId,
+		finishedCount: finishedBooks.length,
+		currentCount: currentBooks.length,
+		progressEventCount: progressEvents.length
+	}
+});
 ---
 
 <Layout
