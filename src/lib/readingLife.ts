@@ -37,6 +37,9 @@ export type ReadingLifeCurrentBook = {
 
 export type ReadingLifeProgressEvent = {
 	bookId?: number;
+	workId?: number | null;
+	title?: string;
+	author?: string;
 	date: string;
 	pageDelta: number;
 };
@@ -55,12 +58,32 @@ export type ReadingLifeTimelineItem = ReadingLifeFinishedBook & {
 
 export type ReadingLifeCalendarDay = {
 	date: string;
+	active: boolean;
 	pages: number;
+	pageEquivalents: number;
 	sessions: number;
+	progressUpdates: number;
 	booksRead: number;
 	completions: number;
+	finishes: number;
 	finishedTitles: string[];
+	workBreakdown: ReadingLifeDailyWorkBreakdown[];
+	incompleteUpdates: number;
+	normalizationState: "none" | "exact" | "derived" | "incomplete" | "mixed";
 	level: number;
+};
+
+export type ReadingLifeDailyWorkBreakdown = {
+	key: string;
+	bookId?: number;
+	workId?: number | null;
+	title: string;
+	author?: string;
+	pageEquivalents: number;
+	progressUpdates: number;
+	finishes: number;
+	incompleteUpdates: number;
+	normalizationState: "exact" | "derived" | "incomplete" | "mixed";
 };
 
 export type ReadingLifeRankedItem = {
@@ -114,6 +137,7 @@ export type ReadingLifeSummary = {
 	overview: ReadingLifeOverview;
 	timeline: ReadingLifeTimelineItem[];
 	calendarDays: ReadingLifeCalendarDay[];
+	dailyActivityDays: ReadingLifeCalendarDay[];
 	genreInsights: ReadingLifeRankedItem[];
 	genreTrend: Array<{ year: number; label: string; books: number }>;
 	authorInsights: {
@@ -171,6 +195,21 @@ function daysInYear(year: number) {
 	const start = Date.UTC(year, 0, 1);
 	const end = Date.UTC(year + 1, 0, 1);
 	return Math.round((end - start) / MS_PER_DAY);
+}
+
+function dateKeyFromTime(time: number) {
+	return new Date(time).toISOString().slice(0, 10);
+}
+
+function dayRange(startKey: string, endKey: string) {
+	const start = dateFromKey(startKey);
+	const end = dateFromKey(endKey);
+	if (!start || !end || start.getTime() > end.getTime()) return [];
+	const days: string[] = [];
+	for (let time = start.getTime(); time <= end.getTime(); time += MS_PER_DAY) {
+		days.push(dateKeyFromTime(time));
+	}
+	return days;
 }
 
 function average(values: number[]) {
@@ -248,44 +287,210 @@ export function buildReadingCalendar(input: {
 	progressEvents: ReadingLifeProgressEvent[];
 	year: number;
 }) {
-	const start = Date.UTC(input.year, 0, 1);
-	const end = Date.UTC(input.year + 1, 0, 1);
+	return buildDailyReadingActivity({
+		finishedBooks: input.finishedBooks,
+		progressEvents: input.progressEvents,
+		startDate: dateKeyFromTime(Date.UTC(input.year, 0, 1)),
+		endDate: dateKeyFromTime(Date.UTC(input.year, 11, 31))
+	});
+}
+
+function emptyDailyActivityDay(date: string): ReadingLifeCalendarDay {
+	return {
+		date,
+		active: false,
+		pages: 0,
+		pageEquivalents: 0,
+		sessions: 0,
+		progressUpdates: 0,
+		booksRead: 0,
+		completions: 0,
+		finishes: 0,
+		finishedTitles: [],
+		workBreakdown: [],
+		incompleteUpdates: 0,
+		normalizationState: "none",
+		level: 0
+	};
+}
+
+function workKey(input: { id?: unknown; bookId?: unknown; workId?: unknown; title?: unknown }) {
+	const workId = Math.max(0, Math.round(toNumber(input.workId)));
+	if (workId > 0) return `work:${workId}`;
+	const bookId = Math.max(0, Math.round(toNumber(input.bookId || input.id)));
+	if (bookId > 0) return `book:${bookId}`;
+	return `title:${cleanText(input.title, "Unknown").toLowerCase()}`;
+}
+
+function mergeNormalizationState(
+	current: ReadingLifeDailyWorkBreakdown["normalizationState"],
+	next: ReadingLifeDailyWorkBreakdown["normalizationState"]
+) {
+	if (current === next) return current;
+	if (current === "incomplete" && next === "incomplete") return "incomplete";
+	return "mixed";
+}
+
+function addWorkVolume(
+	map: Map<string, ReadingLifeDailyWorkBreakdown>,
+	input: {
+		key: string;
+		bookId?: number;
+		workId?: number | null;
+		title: string;
+		author?: string;
+		pageEquivalents?: number;
+		progressUpdates?: number;
+		finishes?: number;
+		incompleteUpdates?: number;
+		normalizationState: ReadingLifeDailyWorkBreakdown["normalizationState"];
+	}
+) {
+	const existing = map.get(input.key) || {
+		key: input.key,
+		bookId: input.bookId,
+		workId: input.workId,
+		title: cleanText(input.title, "Untitled"),
+		author: cleanText(input.author),
+		pageEquivalents: 0,
+		progressUpdates: 0,
+		finishes: 0,
+		incompleteUpdates: 0,
+		normalizationState: input.normalizationState
+	};
+	existing.bookId = existing.bookId || input.bookId;
+	existing.workId = existing.workId || input.workId;
+	if (!existing.title || existing.title === "Untitled") existing.title = cleanText(input.title, "Untitled");
+	if (!existing.author) existing.author = cleanText(input.author);
+	existing.pageEquivalents += Math.max(0, Math.round(toNumber(input.pageEquivalents)));
+	existing.progressUpdates += Math.max(0, Math.round(toNumber(input.progressUpdates)));
+	existing.finishes += Math.max(0, Math.round(toNumber(input.finishes)));
+	existing.incompleteUpdates += Math.max(0, Math.round(toNumber(input.incompleteUpdates)));
+	existing.normalizationState = mergeNormalizationState(existing.normalizationState, input.normalizationState);
+	map.set(input.key, existing);
+	return existing;
+}
+
+export function buildDailyReadingActivity(input: {
+	finishedBooks: ReadingLifeFinishedBook[];
+	progressEvents: ReadingLifeProgressEvent[];
+	startDate: string;
+	endDate: string;
+}) {
 	const map = new Map<string, ReadingLifeCalendarDay>();
 	const bookIdsByDay = new Map<string, Set<number>>();
-	for (let time = start; time < end; time += MS_PER_DAY) {
-		const key = new Date(time).toISOString().slice(0, 10);
-		map.set(key, { date: key, pages: 0, sessions: 0, booksRead: 0, completions: 0, finishedTitles: [], level: 0 });
+	const workRowsByDay = new Map<string, Map<string, ReadingLifeDailyWorkBreakdown>>();
+	for (const key of dayRange(dateKey(input.startDate), dateKey(input.endDate))) {
+		map.set(key, emptyDailyActivityDay(key));
 		bookIdsByDay.set(key, new Set<number>());
+		workRowsByDay.set(key, new Map<string, ReadingLifeDailyWorkBreakdown>());
 	}
 	for (const event of input.progressEvents) {
 		const key = dateKey(event.date);
 		const day = map.get(key);
 		if (!day) continue;
-		day.pages += Math.max(0, Math.round(toNumber(event.pageDelta)));
+		const pageEquivalents = Math.max(0, Math.round(toNumber(event.pageDelta)));
+		day.pageEquivalents += pageEquivalents;
+		day.pages = day.pageEquivalents;
 		day.sessions += 1;
+		day.progressUpdates += 1;
+		if (pageEquivalents <= 0) day.incompleteUpdates += 1;
 		const bookId = Math.max(0, Math.round(toNumber(event.bookId)));
 		if (bookId > 0) bookIdsByDay.get(key)?.add(bookId);
+		const keyForWork = workKey(event);
+		addWorkVolume(workRowsByDay.get(key) || new Map(), {
+			key: keyForWork,
+			bookId: bookId || undefined,
+			workId: event.workId,
+			title: cleanText(event.title, "Untitled"),
+			author: event.author,
+			pageEquivalents,
+			progressUpdates: 1,
+			incompleteUpdates: pageEquivalents <= 0 ? 1 : 0,
+			normalizationState: pageEquivalents > 0 ? "exact" : "incomplete"
+		});
 	}
 	for (const book of input.finishedBooks) {
 		const key = getFinishedDate(book);
 		const day = map.get(key);
 		if (!day) continue;
 		day.completions += 1;
+		day.finishes += 1;
 		day.finishedTitles.push(cleanText(book.title, "Untitled"));
 		const bookId = Math.max(0, Math.round(toNumber(book.bookId || book.id)));
 		if (bookId > 0) bookIdsByDay.get(key)?.add(bookId);
-		if (day.pages === 0) day.pages += Math.max(0, Math.round(toNumber(book.pageCount)));
+		const keyForWork = workKey(book);
+		const workRows = workRowsByDay.get(key) || new Map<string, ReadingLifeDailyWorkBreakdown>();
+		const existing = workRows.get(keyForWork);
+		if (!existing || (existing.pageEquivalents <= 0 && existing.progressUpdates <= 0)) {
+			const derivedPages = Math.max(0, Math.round(toNumber(book.pageCount)));
+			if (derivedPages > 0) {
+				day.pageEquivalents += derivedPages;
+				day.pages = day.pageEquivalents;
+				addWorkVolume(workRows, {
+					key: keyForWork,
+					bookId: bookId || undefined,
+					workId: book.workId,
+					title: book.title,
+					author: book.author,
+					pageEquivalents: derivedPages,
+					finishes: 1,
+					normalizationState: "derived"
+				});
+			} else {
+				day.incompleteUpdates += 1;
+				addWorkVolume(workRows, {
+					key: keyForWork,
+					bookId: bookId || undefined,
+					workId: book.workId,
+					title: book.title,
+					author: book.author,
+					finishes: 1,
+					incompleteUpdates: 1,
+					normalizationState: "incomplete"
+				});
+			}
+		} else {
+			existing.finishes += 1;
+			existing.normalizationState = mergeNormalizationState(existing.normalizationState, "exact");
+		}
 	}
 	const days = Array.from(map.values());
-	const maxPages = Math.max(0, ...days.map((day) => day.pages));
+	const maxPages = Math.max(0, ...days.map((day) => day.pageEquivalents));
 	return days.map((day) => {
-		const activity = day.pages + (day.completions * 80);
-		const level = activity <= 0 ? 0 : Math.max(1, Math.min(4, Math.ceil((activity / Math.max(1, maxPages + 80)) * 4)));
+		const workBreakdown = Array.from(workRowsByDay.get(day.date)?.values() || [])
+			.map((row) => ({
+				...row,
+				pageEquivalents: Math.max(0, Math.round(row.pageEquivalents))
+			}))
+			.sort((a, b) => b.pageEquivalents - a.pageEquivalents || b.progressUpdates - a.progressUpdates || a.title.localeCompare(b.title));
+		const hasExact = workBreakdown.some((row) => row.normalizationState === "exact" || row.normalizationState === "mixed");
+		const hasDerived = workBreakdown.some((row) => row.normalizationState === "derived" || row.normalizationState === "mixed");
+		const hasIncomplete = day.incompleteUpdates > 0 || workBreakdown.some((row) => row.normalizationState === "incomplete");
+		const normalizationState = hasIncomplete && day.pageEquivalents <= 0
+			? "incomplete"
+			: [hasExact, hasDerived, hasIncomplete].filter(Boolean).length > 1
+				? "mixed"
+				: hasExact
+					? "exact"
+					: hasDerived
+						? "derived"
+						: hasIncomplete
+							? "incomplete"
+							: "none";
+		const active = day.pageEquivalents > 0 || day.sessions > 0 || day.completions > 0 || day.incompleteUpdates > 0;
+		const level = day.pageEquivalents <= 0
+			? (active ? 1 : 0)
+			: Math.max(1, Math.min(4, Math.ceil((day.pageEquivalents / Math.max(1, maxPages)) * 4)));
 		const bookCount = bookIdsByDay.get(day.date)?.size || 0;
 		return {
 			...day,
+			active,
+			pages: day.pageEquivalents,
 			booksRead: bookCount,
 			finishedTitles: [...day.finishedTitles].sort((a, b) => a.localeCompare(b)),
+			workBreakdown,
+			normalizationState,
 			level
 		};
 	});
@@ -464,6 +669,8 @@ export function buildReadingLifeSummary(input: {
 }): ReadingLifeSummary {
 	const now = input.now && Number.isFinite(input.now.getTime()) ? input.now : new Date();
 	const year = now.getUTCFullYear();
+	const todayKey = dateKey(now);
+	const rollingStart = dateKeyFromTime((dateFromKey(todayKey)?.getTime() || now.getTime()) - (364 * MS_PER_DAY));
 	const finishedBooks = canonicalizeFinishedBooks(input.finishedBooks);
 	const timeline = buildReadingTimeline(finishedBooks);
 	const thisYearBooks = filterCanonicalFinishedBooksForYear(timeline, year);
@@ -495,6 +702,7 @@ export function buildReadingLifeSummary(input: {
 		overview,
 		timeline,
 		calendarDays: buildReadingCalendar({ finishedBooks, progressEvents: input.progressEvents, year }),
+		dailyActivityDays: buildDailyReadingActivity({ finishedBooks, progressEvents: input.progressEvents, startDate: rollingStart, endDate: todayKey }),
 		genreInsights,
 		genreTrend: buildGenreTrend(timeline),
 		authorInsights,

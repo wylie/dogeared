@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { authorHref } from "../src/lib/author.ts";
 import {
+	buildDailyReadingActivity,
 	buildGenreInsights,
 	buildReadingCalendar,
 	buildReadingLifeSummary,
@@ -182,21 +183,74 @@ test("calendar groups progress and completion activity by date", () => {
 	const completionDay = days.find((day) => day.date === "2026-01-12");
 	const progressDay = days.find((day) => day.date === "2026-01-13");
 	const emptyDay = days.find((day) => day.date === "2026-01-14");
-	assert.equal(completionDay?.pages, 40);
+	assert.equal(completionDay?.pages, 130);
+	assert.equal(completionDay?.pageEquivalents, 130);
 	assert.equal(completionDay?.sessions, 2);
+	assert.equal(completionDay?.progressUpdates, 2);
 	assert.equal(completionDay?.booksRead, 3);
 	assert.equal(completionDay?.completions, 2);
+	assert.equal(completionDay?.finishes, 2);
 	assert.deepEqual(completionDay?.finishedTitles, ["Second Finish", "Winter Pages"]);
 	assert.equal(progressDay?.pages, 20);
+	assert.equal(progressDay?.pageEquivalents, 20);
 	assert.equal(progressDay?.sessions, 1);
 	assert.equal(progressDay?.booksRead, 1);
 	assert.equal(progressDay?.completions, 0);
+	assert.equal(progressDay?.normalizationState, "exact");
 	assert.equal(progressDay?.level > 0, true);
 	assert.equal(emptyDay?.pages, 0);
+	assert.equal(emptyDay?.active, false);
 	assert.equal(emptyDay?.sessions, 0);
 	assert.equal(emptyDay?.booksRead, 0);
 	assert.equal(emptyDay?.completions, 0);
 	assert.deepEqual(emptyDay?.finishedTitles, []);
+});
+
+test("daily reading activity shares one canonical volume model for calendar and volume views", () => {
+	const days = buildDailyReadingActivity({
+		finishedBooks: [
+			{
+				id: 10,
+				bookId: 10,
+				workId: 100,
+				title: "Shared Work",
+				author: "Avery Stone",
+				pageCount: 300,
+				finishedDate: "2026-08-08"
+			},
+			{
+				id: 11,
+				bookId: 11,
+				workId: 101,
+				title: "No Page Count",
+				author: "Mira Chen",
+				finishedDate: "2026-08-08"
+			}
+		],
+		progressEvents: [
+			{ bookId: 10, workId: 100, title: "Shared Work", author: "Avery Stone", date: "2026-08-08", pageDelta: 22 },
+			{ bookId: 10, workId: 100, title: "Shared Work", author: "Avery Stone", date: "2026-08-08", pageDelta: 31 },
+			{ bookId: 12, workId: 102, title: "Converted Percent", author: "Jordan Bell", date: "2026-08-08", pageDelta: 11 },
+			{ bookId: 13, workId: 103, title: "Missing Metadata", author: "Jordan Bell", date: "2026-08-08", pageDelta: 0 }
+		],
+		startDate: "2026-08-08",
+		endDate: "2026-08-08"
+	});
+
+	const day = days[0];
+	assert.equal(day.date, "2026-08-08");
+	assert.equal(day.active, true);
+	assert.equal(day.pageEquivalents, 64);
+	assert.equal(day.progressUpdates, 4);
+	assert.equal(day.booksRead, 4);
+	assert.equal(day.finishes, 2);
+	assert.equal(day.incompleteUpdates, 2);
+	assert.equal(day.normalizationState, "mixed");
+	const sharedWork = day.workBreakdown.find((work) => work.workId === 100);
+	assert.equal(sharedWork?.pageEquivalents, 53);
+	assert.equal(sharedWork?.progressUpdates, 2);
+	assert.equal(sharedWork?.finishes, 1);
+	assert.equal(day.workBreakdown.find((work) => work.title === "No Page Count")?.normalizationState, "incomplete");
 });
 
 test("genre insights calculate books, pages, and average ratings", () => {
@@ -215,7 +269,7 @@ test("My Reading Life refreshes visible annual summary and timeline after readin
 	assert.match(refreshScript, /dogeared:reading-data-changed/);
 	assert.match(refreshScript, /fetch\(window\.location\.href/);
 	assert.match(refreshScript, /"X-Dogeared-Partial": "reading-life-summary"/);
-	assert.match(refreshScript, /\["overview", "timeline", "calendar"\]/);
+	assert.match(refreshScript, /\["overview", "timeline", "reading-activity"\]/);
 	assert.match(refreshScript, /current\.replaceWith\(next\)/);
 	assert.match(refreshScript, /dogeared:reading-data-changed-at/);
 	assert.match(refreshScript, /BroadcastChannel\("dogeared:reading-data"\)/);
@@ -228,12 +282,19 @@ test("Reading Calendar days expose accessible summaries and anchored tooltip beh
 	assert.match(source, /type ReadingLifeCalendarDay/);
 	assert.match(source, /function calendarDayAriaLabel/);
 	assert.match(source, /No reading recorded\./);
+	assert.match(source, /id="reading-activity"/);
+	assert.match(source, /data-reading-activity-view="calendar"/);
+	assert.match(source, /data-reading-activity-view="volume"/);
+	assert.match(source, /data-volume-range-button=\{range\.id\}/);
 	assert.match(source, /class="calendar-grid" role="group"/);
 	assert.match(source, /data-calendar-day/);
+	assert.match(source, /data-activity-day/);
 	assert.match(source, /data-date-label=\{formatFullDate\(day\.date\)\}/);
 	assert.match(source, /data-primary-line=\{calendarDayPrimaryLine\(day\)\}/);
 	assert.match(source, /data-sessions=\{String\(day\.sessions\)\}/);
+	assert.match(source, /data-progress-updates=\{String\(day\.progressUpdates\)\}/);
 	assert.match(source, /data-books-read=\{String\(day\.booksRead\)\}/);
+	assert.match(source, /data-work-breakdown=\{activityDayWorkBreakdownJson\(day\)\}/);
 	assert.match(source, /data-finished-titles=\{JSON\.stringify\(day\.finishedTitles\)\}/);
 	assert.match(source, /aria-label=\{calendarDayAriaLabel\(day\)\}/);
 	assert.match(source, /id="calendar-day-tooltip"/);

@@ -34,6 +34,9 @@ type RawCurrentBookRow = {
 
 type RawProgressRow = {
 	book_id: number;
+	work_id: number | null;
+	title: string;
+	primary_author: string;
 	date: string;
 	page_delta: number;
 };
@@ -60,16 +63,20 @@ function pluralize(count: number, singular: string, plural = `${singular}s`) {
 	return `${count.toLocaleString()} ${count === 1 ? singular : plural}`;
 }
 
+function formatPageEquivalents(value: number) {
+	return pluralize(Math.max(0, Math.round(Number(value || 0))), "page equivalent");
+}
+
 function calendarDayHasReading(day: ReadingLifeCalendarDay) {
-	return day.pages > 0 || day.sessions > 0 || day.booksRead > 0 || day.completions > 0;
+	return day.active || day.pageEquivalents > 0 || day.sessions > 0 || day.booksRead > 0 || day.completions > 0;
 }
 
 function calendarDayPrimaryLine(day: ReadingLifeCalendarDay) {
 	if (!calendarDayHasReading(day)) return "No reading recorded.";
-	if (day.pages > 0 && day.booksRead > 0) {
-		return `${pluralize(day.pages, "page")} across ${pluralize(day.booksRead, "book")}`;
+	if (day.pageEquivalents > 0 && day.booksRead > 0) {
+		return `${formatPageEquivalents(day.pageEquivalents)} across ${pluralize(day.booksRead, "book")}`;
 	}
-	if (day.pages > 0) return `${pluralize(day.pages, "page")} recorded`;
+	if (day.pageEquivalents > 0) return `${formatPageEquivalents(day.pageEquivalents)} recorded`;
 	return `${pluralize(day.booksRead, "book")} read`;
 }
 
@@ -77,11 +84,30 @@ function calendarDayAriaLabel(day: ReadingLifeCalendarDay) {
 	const date = formatFullDate(day.date);
 	if (!calendarDayHasReading(day)) return `${date}: No reading recorded.`;
 	return [
-		`${date}: ${pluralize(day.pages, "page")}`,
-		pluralize(day.sessions, "reading session"),
+		`${date}: ${formatPageEquivalents(day.pageEquivalents)}`,
+		pluralize(day.progressUpdates, "progress update"),
 		`${pluralize(day.booksRead, "book")} read`,
 		`${pluralize(day.completions, "book")} finished`
 	].join(", ") + ".";
+}
+
+function activityDayWorkBreakdownJson(day: ReadingLifeCalendarDay) {
+	return JSON.stringify(day.workBreakdown.map((work) => ({
+		title: work.title,
+		author: work.author || "",
+		pageEquivalents: work.pageEquivalents,
+		progressUpdates: work.progressUpdates,
+		finishes: work.finishes,
+		incompleteUpdates: work.incompleteUpdates,
+		normalizationState: work.normalizationState
+	})));
+}
+
+function dayDistanceFromToday(day: ReadingLifeCalendarDay, todayKey: string) {
+	const current = new Date(`${day.date}T00:00:00Z`).getTime();
+	const today = new Date(`${todayKey}T00:00:00Z`).getTime();
+	if (!Number.isFinite(current) || !Number.isFinite(today)) return Number.MAX_SAFE_INTEGER;
+	return Math.round((today - current) / 86400000);
 }
 
 function formatRating(value: number | null | undefined) {
@@ -195,12 +221,17 @@ if (viewerUserId) {
 			`,
 			sql<RawProgressRow[]>`
 				select
-					book_id,
-					recorded_at::date::text as date,
-					page_delta
-				from user_reading_progress_event
-				where user_id = ${viewerUserId}::uuid
-				order by recorded_at desc
+					pe.book_id,
+					bw.id as work_id,
+					b.title,
+					b.primary_author,
+					pe.recorded_at::date::text as date,
+					pe.page_delta
+				from user_reading_progress_event pe
+				join book b on b.id = pe.book_id
+				left join book_work bw on bw.id = b.work_id
+				where pe.user_id = ${viewerUserId}::uuid
+				order by pe.recorded_at desc
 			`
 		]);
 
@@ -220,6 +251,9 @@ if (viewerUserId) {
 		}));
 		progressEvents = progressRows.map((row) => ({
 			bookId: Number(row.book_id || 0),
+			workId: Number(row.work_id || 0) || null,
+			title: String(row.title || "Untitled"),
+			author: String(row.primary_author || "Unknown Author"),
 			date: String(row.date || ""),
 			pageDelta: Number(row.page_delta || 0)
 		}));
@@ -230,6 +264,7 @@ if (viewerUserId) {
 	}
 }
 
+const readingLifeBuildStartedAt = performance.now();
 const readingLife = buildReadingLifeSummary({
 	finishedBooks,
 	currentBooks,
@@ -237,17 +272,47 @@ const readingLife = buildReadingLifeSummary({
 	annualGoal,
 	now
 });
+pagePerfStages.daily_reading_activity = Math.round((performance.now() - readingLifeBuildStartedAt) * 10) / 10;
 const timelineItems = filterReadingTimeline(readingLife.timeline, {
 	year: selectedYear,
 	month: selectedMonth,
 	query: timelineQuery
 });
 const calendarDays = readingLife.calendarDays;
+const todayKey = now.toISOString().slice(0, 10);
 const calendarSummary = {
-	activeDays: calendarDays.filter((day) => day.level > 0).length,
-	pages: calendarDays.reduce((sum, day) => sum + day.pages, 0),
-	completions: calendarDays.reduce((sum, day) => sum + day.completions, 0)
+	activeDays: calendarDays.filter((day) => day.active).length,
+	pageEquivalents: calendarDays.reduce((sum, day) => sum + day.pageEquivalents, 0),
+	completions: calendarDays.reduce((sum, day) => sum + day.completions, 0),
+	incompleteUpdates: calendarDays.reduce((sum, day) => sum + day.incompleteUpdates, 0)
 };
+const volumeRangeOptions = [
+	{ id: "today", label: "Today", days: 1 },
+	{ id: "7d", label: "7 Days", days: 7 },
+	{ id: "30d", label: "30 Days", days: 30 },
+	{ id: "6m", label: "6 Months", days: 183 },
+	{ id: "365d", label: "365 Days", days: 365 }
+];
+const volumeRanges = volumeRangeOptions.map((range) => {
+	const days = readingLife.dailyActivityDays.filter((day) => {
+		const distance = dayDistanceFromToday(day, todayKey);
+		return distance >= 0 && distance < range.days;
+	});
+	const maxVolume = Math.max(0, ...days.map((day) => day.pageEquivalents));
+	return {
+		...range,
+		days,
+		maxVolume,
+		summary: {
+			pageEquivalents: days.reduce((sum, day) => sum + day.pageEquivalents, 0),
+			activeDays: days.filter((day) => day.active).length,
+			booksRead: new Set(days.flatMap((day) => day.workBreakdown.map((work) => work.key))).size,
+			progressUpdates: days.reduce((sum, day) => sum + day.progressUpdates, 0),
+			finishes: days.reduce((sum, day) => sum + day.finishes, 0),
+			incompleteUpdates: days.reduce((sum, day) => sum + day.incompleteUpdates, 0)
+		}
+	};
+});
 const hasReadingLifeData = finishedBooks.length > 0 || currentBooks.length > 0 || progressEvents.length > 0;
 const yearOptions = readingLife.availableYears.length > 0 ? readingLife.availableYears : [currentYear];
 const months = Array.from({ length: 12 }, (_, index) => index + 1);
@@ -453,42 +518,117 @@ recordPerformanceEventSafe({
 					)}
 				</section>
 
-				<section id="calendar" class="panel" aria-labelledby="calendar-title">
+				<section id="reading-activity" class="panel reading-activity-panel" aria-labelledby="reading-activity-title" data-reading-activity>
 					<div class="section-head">
 						<div>
-							<p class="eyebrow">{currentYear}</p>
-							<h2 id="calendar-title">Reading calendar</h2>
+							<p class="eyebrow">Daily reading</p>
+							<h2 id="reading-activity-title">Reading activity</h2>
 						</div>
 						<p>{calendarSummary.activeDays.toLocaleString()} active days · {calendarSummary.completions.toLocaleString()} finishes</p>
 					</div>
-					<p class="text-alt">Calendar summary: {calendarSummary.pages.toLocaleString()} pages recorded across {calendarSummary.activeDays.toLocaleString()} active days in {currentYear}.</p>
-					<div class="calendar-grid" role="group" aria-label={`Reading activity heatmap for ${currentYear}. ${calendarSummary.activeDays} active days, ${calendarSummary.pages} pages recorded, ${calendarSummary.completions} finished books.`}>
-						{calendarDays.map((day) => (
-							<button
-								type="button"
-								class={`calendar-day level-${day.level}`}
-								data-calendar-day
-								data-date-label={formatFullDate(day.date)}
-								data-primary-line={calendarDayPrimaryLine(day)}
-								data-pages={String(day.pages)}
-								data-sessions={String(day.sessions)}
-								data-books-read={String(day.booksRead)}
-								data-completions={String(day.completions)}
-								data-finished-titles={JSON.stringify(day.finishedTitles)}
-								aria-label={calendarDayAriaLabel(day)}
-							></button>
+					<p class="text-alt">{calendarSummary.pageEquivalents.toLocaleString()} page equivalents across {calendarSummary.activeDays.toLocaleString()} active days in {currentYear}. Calendar shows consistency; Volume shows how much was recorded each day.</p>
+					<div class="reading-activity-switcher" role="tablist" aria-label="Reading activity view">
+						<button type="button" role="tab" aria-selected="true" aria-controls="calendar" id="reading-activity-calendar-tab" data-reading-activity-view="calendar">Calendar</button>
+						<button type="button" role="tab" aria-selected="false" aria-controls="volume" id="reading-activity-volume-tab" data-reading-activity-view="volume">Volume</button>
+					</div>
+
+					<div id="calendar" class="reading-activity-view" role="tabpanel" aria-labelledby="reading-activity-calendar-tab" data-reading-activity-panel="calendar">
+						<div class="activity-view-head">
+							<div>
+								<h3>Calendar</h3>
+								<p>When reading happened, and how consistently.</p>
+							</div>
+							<p>{formatPageEquivalents(calendarSummary.pageEquivalents)}</p>
+						</div>
+						<p class="text-alt">Calendar summary: {calendarSummary.pageEquivalents.toLocaleString()} page equivalents across {calendarSummary.activeDays.toLocaleString()} active days in {currentYear}.{calendarSummary.incompleteUpdates > 0 ? ` ${calendarSummary.incompleteUpdates.toLocaleString()} updates could not be converted.` : ""}</p>
+						<div class="calendar-grid" role="group" aria-label={`Reading activity heatmap for ${currentYear}. ${calendarSummary.activeDays} active days, ${calendarSummary.pageEquivalents} page equivalents recorded, ${calendarSummary.completions} finished books.`}>
+							{calendarDays.map((day) => (
+								<button
+									type="button"
+									class={`calendar-day level-${day.level}`}
+									data-activity-day
+									data-calendar-day
+									data-date-label={formatFullDate(day.date)}
+									data-primary-line={calendarDayPrimaryLine(day)}
+									data-pages={String(day.pages)}
+									data-page-equivalents={String(day.pageEquivalents)}
+									data-sessions={String(day.sessions)}
+									data-progress-updates={String(day.progressUpdates)}
+									data-books-read={String(day.booksRead)}
+									data-completions={String(day.completions)}
+									data-incomplete-updates={String(day.incompleteUpdates)}
+									data-normalization-state={day.normalizationState}
+									data-work-breakdown={activityDayWorkBreakdownJson(day)}
+									data-finished-titles={JSON.stringify(day.finishedTitles)}
+									aria-label={calendarDayAriaLabel(day)}
+								></button>
+							))}
+						</div>
+						<div class="calendar-legend" aria-label="Calendar intensity legend: less to more page-equivalent reading volume.">
+							<span>Less</span>
+							<i class="level-0"></i>
+							<i class="level-1"></i>
+							<i class="level-2"></i>
+							<i class="level-3"></i>
+							<i class="level-4"></i>
+							<span>More</span>
+						</div>
+					</div>
+
+					<div id="volume" class="reading-activity-view" role="tabpanel" aria-labelledby="reading-activity-volume-tab" data-reading-activity-panel="volume" hidden>
+						<div class="activity-view-head">
+							<div>
+								<h3>Volume</h3>
+								<p>How much reading was recorded on each day.</p>
+							</div>
+						</div>
+						<div class="volume-range-switcher" role="tablist" aria-label="Reading volume range">
+							{volumeRangeOptions.map((range) => (
+								<button type="button" role="tab" aria-selected={range.id === "30d" ? "true" : "false"} data-volume-range-button={range.id}>{range.label}</button>
+							))}
+						</div>
+						{volumeRanges.map((range) => (
+							<div class="volume-range" data-volume-range={range.id} hidden={range.id !== "30d"}>
+								<div class="volume-summary">
+									<strong>{range.id === "today" ? "Today" : range.label}</strong>
+									<span>{formatPageEquivalents(range.summary.pageEquivalents)} · {pluralize(range.summary.activeDays, "active day")} · {pluralize(range.summary.progressUpdates, "progress update")}</span>
+								</div>
+								<div class="volume-chart" role="group" aria-label={`Daily reading volume for ${range.label}. ${range.summary.pageEquivalents} page equivalents across ${range.days.length} days.`}>
+									{range.days.map((day) => {
+										const height = day.pageEquivalents > 0 && range.maxVolume > 0
+											? Math.max(6, Math.round((day.pageEquivalents / range.maxVolume) * 100))
+											: (day.active ? 6 : 0);
+										return (
+											<button
+												type="button"
+												class={`volume-day level-${day.level}`}
+												style={`--bar-height: ${height}%`}
+												data-activity-day
+												data-volume-bar
+												data-date-label={formatFullDate(day.date)}
+												data-primary-line={calendarDayPrimaryLine(day)}
+												data-pages={String(day.pages)}
+												data-page-equivalents={String(day.pageEquivalents)}
+												data-sessions={String(day.sessions)}
+												data-progress-updates={String(day.progressUpdates)}
+												data-books-read={String(day.booksRead)}
+												data-completions={String(day.completions)}
+												data-incomplete-updates={String(day.incompleteUpdates)}
+												data-normalization-state={day.normalizationState}
+												data-work-breakdown={activityDayWorkBreakdownJson(day)}
+												data-finished-titles={JSON.stringify(day.finishedTitles)}
+												aria-label={calendarDayAriaLabel(day)}
+											><span></span></button>
+										);
+									})}
+								</div>
+								{range.summary.incompleteUpdates > 0 && (
+									<p class="text-alt">{range.summary.incompleteUpdates.toLocaleString()} updates in this range could not be converted to page equivalents.</p>
+								)}
+							</div>
 						))}
 					</div>
 					<div id="calendar-day-tooltip" class="calendar-day-tooltip" role="tooltip" hidden></div>
-					<div class="calendar-legend" aria-hidden="true">
-						<span>Less</span>
-						<i class="level-0"></i>
-						<i class="level-1"></i>
-						<i class="level-2"></i>
-						<i class="level-3"></i>
-						<i class="level-4"></i>
-						<span>More</span>
-					</div>
 				</section>
 
 				<section id="genres" class="panel" aria-labelledby="genres-title">
@@ -899,6 +1039,65 @@ recordPerformanceEventSafe({
 		color: var(--color-rating);
 		font-weight: 700;
 	}
+	.reading-activity-panel {
+		display: grid;
+		gap: 0.8rem;
+	}
+	.reading-activity-switcher,
+	.volume-range-switcher {
+		display: inline-flex;
+		width: fit-content;
+		max-width: 100%;
+		gap: 0.18rem;
+		align-items: center;
+		border: var(--border-subtle);
+		border-radius: var(--radius-pill);
+		background: rgba(255, 255, 255, 0.72);
+		padding: 0.18rem;
+		overflow-x: auto;
+	}
+	.reading-activity-switcher button,
+	.volume-range-switcher button {
+		appearance: none;
+		border: 0;
+		border-radius: var(--radius-pill);
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		font: inherit;
+		font-size: 0.86rem;
+		font-weight: 750;
+		min-height: 32px;
+		padding: 0.3rem 0.72rem;
+		white-space: nowrap;
+	}
+	.reading-activity-switcher button[aria-selected="true"],
+	.volume-range-switcher button[aria-selected="true"] {
+		background: var(--color-primary);
+		color: #ffffff;
+	}
+	.reading-activity-view[hidden],
+	.volume-range[hidden] {
+		display: none;
+	}
+	.activity-view-head,
+	.volume-summary {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.75rem;
+		align-items: end;
+	}
+	.activity-view-head h3,
+	.activity-view-head p,
+	.volume-summary strong,
+	.volume-summary span {
+		margin: 0;
+	}
+	.activity-view-head p,
+	.volume-summary span {
+		color: var(--color-text-muted);
+		font-size: 0.86rem;
+	}
 	.calendar-grid {
 		display: grid;
 		grid-template-rows: repeat(7, 1fr);
@@ -1025,6 +1224,52 @@ recordPerformanceEventSafe({
 		height: 0.72rem;
 		border-radius: 3px;
 	}
+	.volume-range {
+		display: grid;
+		gap: 0.65rem;
+	}
+	.volume-chart {
+		display: grid;
+		grid-auto-flow: column;
+		grid-auto-columns: minmax(10px, 1fr);
+		align-items: end;
+		gap: 3px;
+		height: 168px;
+		max-width: 100%;
+		overflow-x: auto;
+		padding: 0.25rem 0 0.35rem;
+	}
+	.volume-day {
+		appearance: none;
+		display: flex;
+		align-items: end;
+		justify-content: stretch;
+		width: 100%;
+		min-width: 10px;
+		height: 100%;
+		border: 0;
+		background: transparent;
+		cursor: pointer;
+		padding: 0;
+	}
+	.volume-day span {
+		display: block;
+		width: 100%;
+		height: var(--bar-height, 0%);
+		min-height: var(--bar-min-height, 0);
+		border-radius: 4px 4px 2px 2px;
+		background: rgba(87, 117, 144, 0.14);
+	}
+	.volume-day.level-1 span { background: #d9ead2; }
+	.volume-day.level-2 span { background: #bfd9ab; }
+	.volume-day.level-3 span { background: #75bd9f; }
+	.volume-day.level-4 span { background: #277da1; }
+	.volume-day:hover span,
+	.volume-day:focus-visible span {
+		box-shadow: 0 0 0 2px rgba(31, 122, 69, 0.5);
+		outline: 2px solid rgba(31, 122, 69, 0.68);
+		outline-offset: 1px;
+	}
 	.insight-columns {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1097,6 +1342,15 @@ recordPerformanceEventSafe({
 		.timeline-filters button {
 			width: 100%;
 		}
+		.activity-view-head,
+		.volume-summary {
+			display: grid;
+			align-items: start;
+		}
+		.reading-activity-switcher,
+		.volume-range-switcher {
+			width: 100%;
+		}
 		.year-list li {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
@@ -1120,6 +1374,10 @@ recordPerformanceEventSafe({
 		return document.getElementById("calendar-day-tooltip");
 	}
 
+	function getActivityDayTarget(event) {
+		return event.target instanceof Element ? event.target.closest("[data-activity-day]") : null;
+	}
+
 	function parseFinishedTitles(button) {
 		try {
 			const parsed = JSON.parse(String(button?.dataset?.finishedTitles || "[]"));
@@ -1129,15 +1387,34 @@ recordPerformanceEventSafe({
 		}
 	}
 
+	function parseWorkBreakdown(button) {
+		try {
+			const parsed = JSON.parse(String(button?.dataset?.workBreakdown || "[]"));
+			return Array.isArray(parsed) ? parsed.map((work) => ({
+				title: String(work?.title || "Untitled").trim(),
+				author: String(work?.author || "").trim(),
+				pageEquivalents: Math.max(0, Number(work?.pageEquivalents || 0) || 0),
+				progressUpdates: Math.max(0, Number(work?.progressUpdates || 0) || 0),
+				finishes: Math.max(0, Number(work?.finishes || 0) || 0),
+				incompleteUpdates: Math.max(0, Number(work?.incompleteUpdates || 0) || 0),
+				normalizationState: String(work?.normalizationState || "")
+			})).filter((work) => work.title) : [];
+		} catch {
+			return [];
+		}
+	}
+
 	function renderCalendarTooltip(button) {
 		const tooltip = getCalendarTooltip();
 		if (!(tooltip instanceof HTMLElement)) return null;
-		const pages = Math.max(0, Number(button.dataset.pages || 0) || 0);
-		const sessions = Math.max(0, Number(button.dataset.sessions || 0) || 0);
+		const pageEquivalents = Math.max(0, Number(button.dataset.pageEquivalents || button.dataset.pages || 0) || 0);
+		const progressUpdates = Math.max(0, Number(button.dataset.progressUpdates || button.dataset.sessions || 0) || 0);
 		const booksRead = Math.max(0, Number(button.dataset.booksRead || 0) || 0);
 		const completions = Math.max(0, Number(button.dataset.completions || 0) || 0);
+		const incompleteUpdates = Math.max(0, Number(button.dataset.incompleteUpdates || 0) || 0);
 		const finishedTitles = parseFinishedTitles(button);
-		const hasReading = pages > 0 || sessions > 0 || booksRead > 0 || completions > 0;
+		const workBreakdown = parseWorkBreakdown(button);
+		const hasReading = pageEquivalents > 0 || progressUpdates > 0 || booksRead > 0 || completions > 0 || incompleteUpdates > 0;
 		const fragment = document.createDocumentFragment();
 		const heading = document.createElement("p");
 		heading.className = "calendar-tooltip-date";
@@ -1145,13 +1422,38 @@ recordPerformanceEventSafe({
 		fragment.append(heading);
 		const primary = document.createElement("p");
 		primary.className = "calendar-tooltip-line";
-		primary.textContent = String(button.dataset.primaryLine || (hasReading ? `${pluralizeCalendarCount(pages, "page")} recorded` : "No reading recorded."));
+		primary.textContent = String(button.dataset.primaryLine || (hasReading ? `${pluralizeCalendarCount(pageEquivalents, "page equivalent")} recorded` : "No reading recorded."));
 		fragment.append(primary);
 		if (hasReading) {
 			const sessionsLine = document.createElement("p");
 			sessionsLine.className = "calendar-tooltip-line";
-			sessionsLine.textContent = pluralizeCalendarCount(sessions, "reading session");
+			sessionsLine.textContent = `${pluralizeCalendarCount(progressUpdates, "progress update")} · ${pluralizeCalendarCount(booksRead, "book")} · ${pluralizeCalendarCount(completions, "finish", "finishes")}`;
 			fragment.append(sessionsLine);
+		}
+		if (workBreakdown.length > 0) {
+			const label = document.createElement("p");
+			label.className = "calendar-tooltip-finished-label";
+			label.textContent = "Books:";
+			fragment.append(label);
+			const list = document.createElement("ul");
+			list.className = "calendar-tooltip-finished-list";
+			for (const work of workBreakdown.slice(0, 6)) {
+				const item = document.createElement("li");
+				const suffix = work.pageEquivalents > 0
+					? `${pluralizeCalendarCount(work.pageEquivalents, "page equivalent")}${work.normalizationState === "derived" ? " derived from finish" : ""}`
+					: work.incompleteUpdates > 0
+						? "not converted"
+						: "";
+				item.textContent = [work.title, suffix].filter(Boolean).join(" — ");
+				list.append(item);
+			}
+			fragment.append(list);
+		}
+		if (incompleteUpdates > 0) {
+			const incomplete = document.createElement("p");
+			incomplete.className = "calendar-tooltip-line";
+			incomplete.textContent = `${pluralizeCalendarCount(incompleteUpdates, "additional update")} could not be converted.`;
+			fragment.append(incomplete);
 		}
 		if (finishedTitles.length > 0) {
 			const label = document.createElement("p");
@@ -1274,12 +1576,13 @@ recordPerformanceEventSafe({
 			if (!response.ok) return;
 			const html = await response.text();
 			const doc = new DOMParser().parseFromString(html, "text/html");
-			for (const id of ["overview", "timeline", "calendar"]) {
+			for (const id of ["overview", "timeline", "reading-activity"]) {
 				const current = document.getElementById(id);
 				const next = doc.getElementById(id);
 				if (current instanceof HTMLElement && next instanceof HTMLElement) current.replaceWith(next);
 			}
 			hideCalendarTooltip();
+			restoreReadingActivityControls();
 		} catch {
 			// Keep the current view if the targeted refresh is unavailable.
 		}
@@ -1306,42 +1609,100 @@ recordPerformanceEventSafe({
 		// Storage and same-page events cover browsers without BroadcastChannel.
 	}
 
-	document.addEventListener("pointerover", (event) => {
-		const target = event.target instanceof Element ? event.target.closest("[data-calendar-day]") : null;
-		if (!(target instanceof HTMLElement)) return;
-		hoveredCalendarDay = target;
-		showCalendarTooltip(target);
-	});
-	document.addEventListener("pointerout", (event) => {
-		const target = event.target instanceof Element ? event.target.closest("[data-calendar-day]") : null;
-		if (!(target instanceof HTMLElement)) return;
-		const related = event.relatedTarget instanceof Element ? event.relatedTarget.closest("[data-calendar-day]") : null;
-		if (related === target) return;
-		if (hoveredCalendarDay === target) hoveredCalendarDay = null;
-		if (document.activeElement !== target) hideCalendarTooltip();
-	});
-	document.addEventListener("focusin", (event) => {
-		const target = event.target instanceof Element ? event.target.closest("[data-calendar-day]") : null;
-		if (target instanceof HTMLElement) showCalendarTooltip(target);
-	});
-	document.addEventListener("focusout", (event) => {
-		const target = event.target instanceof Element ? event.target.closest("[data-calendar-day]") : null;
-		if (!(target instanceof HTMLElement)) return;
-		window.setTimeout(() => {
-			if (hoveredCalendarDay !== target && document.activeElement !== target) hideCalendarTooltip();
-		}, 0);
-	});
+	function applyReadingActivityView(view) {
+		const normalized = view === "volume" ? "volume" : "calendar";
+		for (const button of document.querySelectorAll("[data-reading-activity-view]")) {
+			const selected = button.getAttribute("data-reading-activity-view") === normalized;
+			button.setAttribute("aria-selected", selected ? "true" : "false");
+		}
+		for (const panel of document.querySelectorAll("[data-reading-activity-panel]")) {
+			if (!(panel instanceof HTMLElement)) continue;
+			panel.hidden = panel.getAttribute("data-reading-activity-panel") !== normalized;
+		}
+		try {
+			sessionStorage.setItem("dogeared:reading-activity-view", normalized);
+		} catch {
+			// Session persistence is a convenience, not required.
+		}
+		hideCalendarTooltip();
+	}
+
+	function applyVolumeRange(range) {
+		const normalized = range || "30d";
+		for (const button of document.querySelectorAll("[data-volume-range-button]")) {
+			const selected = button.getAttribute("data-volume-range-button") === normalized;
+			button.setAttribute("aria-selected", selected ? "true" : "false");
+		}
+		for (const panel of document.querySelectorAll("[data-volume-range]")) {
+			if (!(panel instanceof HTMLElement)) continue;
+			panel.hidden = panel.getAttribute("data-volume-range") !== normalized;
+		}
+		try {
+			sessionStorage.setItem("dogeared:reading-volume-range", normalized);
+		} catch {
+			// Session persistence is a convenience, not required.
+		}
+		hideCalendarTooltip();
+	}
+
+	function restoreReadingActivityControls() {
+		try {
+			applyReadingActivityView(sessionStorage.getItem("dogeared:reading-activity-view") || "calendar");
+			applyVolumeRange(sessionStorage.getItem("dogeared:reading-volume-range") || "30d");
+		} catch {
+			applyReadingActivityView("calendar");
+			applyVolumeRange("30d");
+		}
+	}
+
 	document.addEventListener("click", (event) => {
-		const target = event.target instanceof Element ? event.target.closest("[data-calendar-day]") : null;
+		const viewButton = event.target instanceof Element ? event.target.closest("[data-reading-activity-view]") : null;
+		if (viewButton instanceof HTMLElement) {
+			applyReadingActivityView(viewButton.getAttribute("data-reading-activity-view"));
+			return;
+		}
+		const rangeButton = event.target instanceof Element ? event.target.closest("[data-volume-range-button]") : null;
+		if (rangeButton instanceof HTMLElement) {
+			applyVolumeRange(rangeButton.getAttribute("data-volume-range-button"));
+			return;
+		}
+		const target = getActivityDayTarget(event);
 		if (target instanceof HTMLElement) {
 			showCalendarTooltip(target);
 			return;
 		}
 		hideCalendarTooltip();
 	});
+
+	document.addEventListener("pointerover", (event) => {
+		const target = getActivityDayTarget(event);
+		if (!(target instanceof HTMLElement)) return;
+		hoveredCalendarDay = target;
+		showCalendarTooltip(target);
+	});
+	document.addEventListener("pointerout", (event) => {
+		const target = getActivityDayTarget(event);
+		if (!(target instanceof HTMLElement)) return;
+		const related = event.relatedTarget instanceof Element ? event.relatedTarget.closest("[data-activity-day]") : null;
+		if (related === target) return;
+		if (hoveredCalendarDay === target) hoveredCalendarDay = null;
+		if (document.activeElement !== target) hideCalendarTooltip();
+	});
+	document.addEventListener("focusin", (event) => {
+		const target = getActivityDayTarget(event);
+		if (target instanceof HTMLElement) showCalendarTooltip(target);
+	});
+	document.addEventListener("focusout", (event) => {
+		const target = getActivityDayTarget(event);
+		if (!(target instanceof HTMLElement)) return;
+		window.setTimeout(() => {
+			if (hoveredCalendarDay !== target && document.activeElement !== target) hideCalendarTooltip();
+		}, 0);
+	});
 	document.addEventListener("keydown", (event) => {
 		if (event.key === "Escape") hideCalendarTooltip();
 	});
 	window.addEventListener("scroll", syncCalendarTooltipPosition, { passive: true });
 	window.addEventListener("resize", syncCalendarTooltipPosition);
+	restoreReadingActivityControls();
 </script>

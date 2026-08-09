@@ -148,7 +148,11 @@ A profile signal for Currently Reading books based on page progress, recency, el
 
 ## My Reading Life
 
-A private reader-facing page that reflects a signed-in reader's finished books, pages, streaks, goal progress, timeline, reading calendar, genres, authors, fun statistics, and yearly summaries.
+A private reader-facing page that reflects a signed-in reader's finished books, pages, streaks, goal progress, timeline, Reading Activity, genres, authors, fun statistics, and yearly summaries.
+
+## Reading Activity
+
+The shared My Reading Life section for daily reading behavior. Calendar shows consistency and yearly patterns; Volume shows daily page-equivalent amount. Both views use the same daily-reading dataset and tooltips so a date never reports different numbers in different views.
 
 ## Notification
 

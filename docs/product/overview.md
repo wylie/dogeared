@@ -41,7 +41,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 - Author detail: author profile, editorial collections featuring the author, and a bibliography grouped by series first, with standalone books only when no series relationship is known.
 - Editorial Collections: curated book lists with editorial introductions, book ordering, notes, quotes, and shelf controls. Collection routes remain available, but Collections is hidden from primary navigation until there is useful published content to browse.
 - Profiles: public reader identity and current reading state, including profile card, bio, favorite book/author, concise reading goal summary, shelf summary, public achievement badges, current reads, recent activity, and settings access.
-- My Reading Life: private historical reflection across finished books, pages, streaks, goals, ratings, timeline, reading calendar, genre and author history, milestones, fun statistics, and yearly summaries.
+- My Reading Life: private historical reflection across finished books, pages, streaks, goals, ratings, timeline, Reading Activity, genre and author history, milestones, fun statistics, and yearly summaries.
 - Reading Journal: private searchable notebook for what a reader was thinking while reading, including dated entries, optional book context, one optional reading position, moods, and personal tags.
 - Following: reader suggestions, current follows, and activity from followed readers.
 - Metrics: personal and community reading analytics, taste graph, charts, drill-down exploration, and comparison views.
@@ -55,7 +55,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 DogEared separates the signed-in reader experience into three personal destinations with distinct jobs:
 
 - Profile answers "Who am I as a reader?" It is identity plus current reading state, not a historical analytics page or a private notebook.
-- My Reading Life answers "How has my reading changed over time?" It consolidates yearly progress, timeline, calendar, genre/author history, milestones, journey summaries, and fun statistics into one richer reflective area.
+- My Reading Life answers "How has my reading changed over time?" It consolidates yearly progress, timeline, Reading Activity, genre/author history, milestones, journey summaries, and fun statistics into one richer reflective area.
 - Reading Journal answers "What was I thinking while reading?" It is private notebook space only, with no shelves, reading goal, profile information, or statistics.
 
 The signed-in navigation under You is intentionally short: Profile, My Reading Life, Reading Journal, Notifications, Settings, and Log Out. Following remains available as a community/discovery destination rather than part of the core personal IA.
@@ -68,7 +68,7 @@ The signed-in navigation under You is intentionally short: Profile, My Reading L
 - Founding Reader first-time path: new readers move from access request or account creation to username setup, import or manual book search, first shelf save, progress update, recommendation feedback, first review, and return visits through Profile, Home, and Discover.
 - Shelfing: add a book to Want to Read, Currently Reading, Read, or a custom shelf; remove it from shelves when needed.
 - Reading progress: update pages read for Currently Reading books, mark a book Read, and record private progress events for metrics without noisy feed posts.
-- Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, calendar patterns, favorite genres/authors, timeline history, milestones, and yearly summaries.
+- Reading reflection: review My Reading Life to understand completed books, pages, streaks, goal progress, daily Reading Activity patterns and volume, favorite genres/authors, timeline history, milestones, and yearly summaries.
 - Private journaling: create, autosave, search, date-filter, book-filter, view, edit, and delete private journal entries from the Reading Journal page; create book-linked entries from a Currently Reading book page or after saving reading progress.
 - Reviews and ratings: finish a book through a rating plus optional public review flow, then edit or delete that review later.
 - Social reading: follow readers, view following activity, like activity, comment on activity, and receive low-noise notifications.
@@ -248,7 +248,9 @@ Profiles support an annual reading goal stored in profile data. Profile and My R
 
 My Reading Life is a private, authenticated page for reflecting on a reader's own history. It is intentionally personal rather than competitive. The page derives its view from existing shelf entries, finished dates, page counts, ratings, reading progress events, genres, authors, series metadata, and the reader's annual goal.
 
-The area is organized as a richer reflective destination rather than many sparse pages. Overview covers yearly progress, goal progress, books finished, pages read, favorite genre, favorite author, and current pace. History covers the finished-book timeline, calendar, and milestones. Insights covers genres, authors, statistics, and fun facts. Journey covers yearly summaries prepared for future Year in Books experiences.
+The area is organized as a richer reflective destination rather than many sparse pages. Overview covers yearly progress, goal progress, books finished, pages read, favorite genre, favorite author, and current pace. History covers the finished-book timeline, Reading Activity, and milestones. Insights covers genres, authors, statistics, and fun facts. Journey covers yearly summaries prepared for future Year in Books experiences.
+
+Reading Activity unifies the historical Reading Calendar and daily reading-volume chart into one section. Calendar answers "When did I read, and how consistently?" with a year-style heatmap. Volume answers "How much did I read on each day?" with one bar per calendar day and range controls for Today, 7 Days, 30 Days, 6 Months, and 365 Days. Both views share the same canonical daily-reading dataset, using recorded progress deltas and page-equivalent normalization rather than separate visual calculations.
 
 The Reading Timeline is part of My Reading Life's History area. It shows finished books chronologically with small covers, title, author, finish date, rating, and links back to books. The active timeline section supports year, month, and search filters.
 
@@ -396,7 +398,7 @@ Derived from the current repository structure and implementation:
 - Feature entries in `docs/product/features.md`: 72.
 - Default persisted shelf statuses: 3 (`want_to_read`, `reading`, `finished`).
 - Custom shelf icon options: 16.
-- Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, My Reading Life overview, timeline history, timeline milestones, monthly timeline summaries, reading calendar, genre/author insights, fun statistics, yearly summaries, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.
+- Current reading metrics: Momentum Score, Reading Streak, annual Reading Goal, My Reading Life overview, timeline history, timeline milestones, monthly timeline summaries, Reading Activity calendar/volume, genre/author insights, fun statistics, yearly summaries, pages read windows, average pages per day, median finish days, top genre/topic, rating averages, percent rated, finish/completion rates.
 - Community discovery providers: 7.
 - Editorial collection publication states: 3 (`draft`, `published`, `archived`).
 - Series ordering modes: book order, publication order, chronological order.
