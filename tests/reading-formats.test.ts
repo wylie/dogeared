@@ -37,15 +37,17 @@ test("reader-initiated Currently Reading saves prompt for a one-click default Ph
 	assert.match(profilePage, /prepareReadingFormatForShelfStatus\(entry, status\)/);
 });
 
-test("BookCard renders subtle accessible known-format badges and omits Unknown icons", () => {
+test("BookCard accepts reading format data without rendering title-area format icons", () => {
 	const bookCard = readFileSync("src/components/BookCard.astro", "utf8");
+	const profile = readFileSync("src/pages/profile/[username].astro", "utf8");
 
 	assert.match(bookCard, /readingFormat\?: string/);
-	assert.match(bookCard, /normalizedReadingFormat !== "unknown" && !!readingFormatBadgeIcon/);
-	assert.match(bookCard, /class=\{`reading-format-badge reading-format-\$\{normalizedReadingFormat\}`\}/);
-	assert.match(bookCard, /aria-label=\{readingFormatBadgeLabel\}/);
-	assert.match(bookCard, /<span class="material-icons" aria-hidden="true">\{readingFormatBadgeIcon\}<\/span>/);
-	assert.match(bookCard, /width: 26px/);
+	assert.doesNotMatch(bookCard, /readingFormatIcon/);
+	assert.doesNotMatch(bookCard, /reading-format-badge/);
+	assert.doesNotMatch(bookCard, /readingFormatBadgeIcon/);
+	assert.match(bookCard, /<div class="book-card-title-row">\s*<h3>/);
+	assert.doesNotMatch(profile, /readingFormatBadgeData/);
+	assert.doesNotMatch(profile, /querySelector\("\\.reading-format-badge"\)/);
 });
 
 test("Profile progress controls edit reading format without changing progress behavior", () => {

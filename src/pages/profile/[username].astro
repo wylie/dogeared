@@ -4713,48 +4713,16 @@ const profilePerformanceTelemetry = {
 		);
 	}
 
-	function readingFormatBadgeData(value) {
-		const format = normalizeReadingFormat(value);
-		if (format === "physical") return { format, icon: "menu_book", label: "Physical book" };
-		if (format === "ebook") return { format, icon: "tablet_mac", label: "Ebook" };
-		if (format === "audio") return { format, icon: "headphones", label: "Audiobook" };
-		return { format: "unknown", icon: "", label: "Unknown" };
-	}
-
 	function updateReadingFormatUi(card, value) {
 		if (!(card instanceof HTMLElement)) return "unknown";
-		const data = readingFormatBadgeData(value);
-		card.dataset.readingFormat = data.format;
+		const format = normalizeReadingFormat(value);
+		card.dataset.readingFormat = format;
 		const formatSelect = card.querySelector(".progress-inline-format");
-		if (formatSelect instanceof HTMLSelectElement) formatSelect.value = data.format;
+		if (formatSelect instanceof HTMLSelectElement) formatSelect.value = format;
 		for (const button of Array.from(card.querySelectorAll("[data-reading-format]"))) {
-			if (button instanceof HTMLElement) button.dataset.readingFormat = data.format;
+			if (button instanceof HTMLElement) button.dataset.readingFormat = format;
 		}
-		let badge = card.querySelector(".reading-format-badge");
-		if (data.format === "unknown") {
-			if (badge instanceof HTMLElement) badge.remove();
-			return data.format;
-		}
-		const titleRow = card.querySelector(".book-card-title-row");
-		if (!(titleRow instanceof HTMLElement)) return data.format;
-		if (!(badge instanceof HTMLElement)) {
-			badge = document.createElement("span");
-			const iconNode = document.createElement("span");
-			iconNode.className = "material-icons";
-			iconNode.setAttribute("aria-hidden", "true");
-			const srLabel = document.createElement("span");
-			srLabel.className = "sr-only";
-			badge.append(iconNode, srLabel);
-			titleRow.insertBefore(badge, titleRow.firstChild);
-		}
-		badge.className = `reading-format-badge reading-format-${data.format}`;
-		badge.setAttribute("aria-label", data.label);
-		badge.setAttribute("title", data.label);
-		const iconNode = badge.querySelector(".material-icons");
-		if (iconNode instanceof HTMLElement) iconNode.textContent = data.icon;
-		const srLabel = badge.querySelector(".sr-only");
-		if (srLabel instanceof HTMLElement) srLabel.textContent = data.label;
-		return data.format;
+		return format;
 	}
 
 	function ensureProgressDisplay(card, currentPage, totalPages) {

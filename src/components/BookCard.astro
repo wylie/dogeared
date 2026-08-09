@@ -1,7 +1,6 @@
 ---
 import Chip from "./Chip.astro";
 import { displayBookCoverUrl, normalizeBookCoverUrl } from "../lib/bookCovers";
-import { normalizeReadingFormat, readingFormatIcon, readingFormatLabel } from "../lib/readingFormats";
 type Props = {
 	title: string;
 	titleHref?: string;
@@ -40,7 +39,6 @@ const {
 	pageCount = 0,
 	averageRating = 0,
 	seriesLabel = "",
-	readingFormat = "",
 	genres = [],
 	topics = [],
 	showCommunityStats = true,
@@ -61,10 +59,6 @@ const normalizedShelves = Number(shelfEntries);
 const normalizedPages = Number(pageCount);
 const normalizedRating = Math.max(0, Math.min(5, Number(averageRating) || 0));
 const normalizedSeriesLabel = String(seriesLabel || "").trim();
-const normalizedReadingFormat = normalizeReadingFormat(readingFormat);
-const readingFormatBadgeIcon = readingFormatIcon(normalizedReadingFormat);
-const readingFormatBadgeLabel = readingFormatLabel(normalizedReadingFormat);
-const canRenderReadingFormat = normalizedReadingFormat !== "unknown" && !!readingFormatBadgeIcon;
 const normalizedThumbnail = normalizeBookCoverUrl(thumbnail);
 const displayThumbnail = displayBookCoverUrl(normalizedThumbnail);
 const normalizedGenres = Array.from(new Set((Array.isArray(genres) ? genres : []).map((genre) => String(genre || "").trim()).filter(Boolean))).slice(0, 4);
@@ -151,12 +145,6 @@ function renderAverageStars(value: number) {
 	<div class="card-body">
 		<slot name="preTitle" />
 		<div class="book-card-title-row">
-			{canRenderReadingFormat && (
-				<span class={`reading-format-badge reading-format-${normalizedReadingFormat}`} aria-label={readingFormatBadgeLabel} title={readingFormatBadgeLabel}>
-					<span class="material-icons" aria-hidden="true">{readingFormatBadgeIcon}</span>
-					<span class="sr-only">{readingFormatBadgeLabel}</span>
-				</span>
-			)}
 			<h3>{titleHref ? <a href={titleHref}>{title}</a> : title}</h3>
 		</div>
 		{author && (
@@ -378,26 +366,9 @@ function renderAverageStars(value: number) {
 		min-width: 0;
 	}
 	.book-card-title-row {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.38rem;
+		display: block;
 		min-width: 0;
 		padding-right: 1.7rem;
-	}
-	.reading-format-badge {
-		flex: 0 0 26px;
-		width: 26px;
-		height: 26px;
-		border-radius: 999px;
-		display: inline-grid;
-		place-items: center;
-		background: rgba(87, 117, 144, 0.12);
-		color: var(--color-nav);
-		margin-top: -0.02rem;
-	}
-	.reading-format-badge .material-icons {
-		font-size: 1.02rem;
-		line-height: 1;
 	}
 	.sr-only {
 		position: absolute;
