@@ -17,6 +17,10 @@ Scope: `/api/books/search` and `/search` book search only.
 - Admin Performance receives named Search spans for local catalog search, Google Books, Open Library, metadata enrichment, canonical Work matching, result merge, and rendering preparation.
 - Canonical resolver setup now checks whether any catalog rows actually need Work/Edition backfill before running the expensive idempotent backfill, preserving canonical matching while avoiding a cold-search backfill on already-normalized catalogs.
 - External provider calls are bounded with a short timeout so one slow dependency cannot keep progressive search open indefinitely.
+- Search no longer runs canonical Work backfill on the request path. External results still attempt canonical matching against existing Work/Edition data, but catalog maintenance/backfill is reserved for import, shelf, and maintenance paths.
+- Search caps canonical matching candidates and applies a per-candidate timeout. If canonical matching times out, DogEared returns the external result as an unresolved partial result instead of waiting tens of seconds.
+- Search propagates the incoming request abort signal into provider fetches so client-abandoned stale searches stop external work early where the runtime supports request cancellation.
+- Search telemetry records local, provider, dedupe, canonical, merge, and rendering spans plus timeout counts, retry count, canonical candidate count, and resolved-canonical count so Admin Performance can explain slow outliers.
 
 ## Telemetry Optimization Timings
 
@@ -36,6 +40,38 @@ Measured against the local Astro dev server on `127.0.0.1:4321` after Admin Perf
 | Rapid query change | `Project Hail Mary` -> `Wool` | Older combined external response could still be pending | stale request aborted; newer local result 219.4 ms | Older response prevented from replacing newer results |
 
 Post-fix Admin Performance telemetry sampled after the canonical setup guard showed `search.books` p50 688.8 ms and p95 1,515.3 ms across fresh local/external measurements. External provider telemetry showed Open Library p95 858.7 ms and Google Books p95 763.8 ms. The pre-fix diagnostic spans captured the root cause: first external searches spent about 46-47 s in canonical Work matching because cold resolver setup reran canonical backfill; after the guard, fresh canonical Work matching measured 129.6 ms for Open Library and 976.8 ms for Google Books in the tested queries.
+
+## Outlier Investigation
+
+Production telemetry on 2026-08-08 showed Search p50 around 569 ms but p95/p99 around 45-48 s. The slow rows were not provider-bound: Google Books measured 689.3 ms and Open Library measured 1,054.7 ms. Both catastrophic search rows were dominated by `canonical Work matching`, at 46,818.2 ms and 46,487.7 ms respectively.
+
+Root cause: external Search called the shared canonical resolver, and the resolver's schema guard was still allowed to run canonical Work/Edition backfill before resolving. When any catalog row needed backfill, Search inherited the full catalog maintenance cost.
+
+Fix:
+
+- `ensureCanonicalWorkSchema` now separates schema readiness from backfill readiness.
+- Search calls `resolveCanonicalCatalogWork` with `skipSchemaBackfill: true`.
+- Search limits canonical matching to the best 24 pre-deduped external candidates.
+- Each candidate has a 900 ms canonical matching budget.
+- Local catalog and collection search have hard fallbacks at 2,500 ms and 900 ms.
+- Provider fetches combine the provider timeout with the incoming request abort signal, and telemetry distinguishes provider timeout from client-aborted stale searches.
+- Provider and canonical timeouts are recorded in `search.books` metadata; external provider timeout events use HTTP 408 in telemetry.
+
+Post-fix local measurements against `127.0.0.1:4321`:
+
+| Scenario | Result |
+| --- | ---: |
+| Existing DogEared local result, cold | 823.2 ms |
+| Existing DogEared local result, repeated cache | 11.7 ms |
+| No-results local phase | 305.7 ms |
+| External Google Books phase | 1,388.3 ms |
+| External Open Library phase | 709.0 ms |
+| External Google Books repeated cache | 5.7 ms |
+| External no-results phase | 387.6 ms |
+| Rapid stale client abort | 57.3 ms client-side abort |
+| Newer local query after abort | 167.0 ms |
+
+Persisted telemetry from the same pass showed Google Books 635.2 ms, canonical Work matching 733.8 ms for 9 candidates, and total external Search 1,381.6 ms. Open Library measured 612.4 ms, canonical Work matching 87.4 ms for 1 candidate, and total external Search 702.6 ms. A subsequent aborted client request still completed on the Astro dev server in 1,160.0 ms because the local runtime did not surface the request signal as aborted; the server code now propagates that signal to provider fetches for runtimes that support disconnect cancellation.
 
 ## Timings
 

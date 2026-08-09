@@ -33,6 +33,7 @@ export type CatalogEditionInput = {
 };
 
 let schemaReady: Promise<void> | null = null;
+let backfillReady: Promise<void> | null = null;
 
 type CanonicalWorkBackfillRow = {
 	id: number;
@@ -68,7 +69,7 @@ export type CanonicalWorkBackfillPlan = {
 	books: CanonicalWorkBackfillBook[];
 };
 
-export async function ensureCanonicalWorkSchema(sql: Sql) {
+export async function ensureCanonicalWorkSchema(sql: Sql, options: { backfill?: boolean } = {}) {
 	if (!schemaReady) {
 		schemaReady = (async () => {
 			await sql`
@@ -124,6 +125,17 @@ export async function ensureCanonicalWorkSchema(sql: Sql) {
 			await sql`create index if not exists idx_book_edition_work on book_edition(work_id)`;
 			await sql`create unique index if not exists idx_book_edition_book on book_edition(book_id) where book_id is not null`;
 			await sql`create index if not exists idx_user_book_edition on user_book(edition_id) where edition_id is not null`;
+		})();
+	}
+	try {
+		await schemaReady;
+	} catch (error) {
+		schemaReady = null;
+		throw error;
+	}
+	if (options.backfill === false) return;
+	if (!backfillReady) {
+		backfillReady = (async () => {
 			const backfillRows = await sql<Array<{ needs_backfill: boolean }>>`
 				select exists (
 					select 1
@@ -139,7 +151,12 @@ export async function ensureCanonicalWorkSchema(sql: Sql) {
 			}
 		})();
 	}
-	await schemaReady;
+	try {
+		await backfillReady;
+	} catch (error) {
+		backfillReady = null;
+		throw error;
+	}
 }
 
 function numeric(value: unknown) {
@@ -439,10 +456,10 @@ async function backfillCanonicalWorks(sql: Sql) {
 	`;
 }
 
-export async function resolveRepresentativeBookId(sql: Sql, bookId: number) {
+export async function resolveRepresentativeBookId(sql: Sql, bookId: number, options: { skipSchemaBackfill?: boolean } = {}) {
 	const normalizedBookId = Math.max(0, Number(bookId || 0) || 0);
 	if (!normalizedBookId) return 0;
-	await ensureCanonicalWorkSchema(sql);
+	await ensureCanonicalWorkSchema(sql, { backfill: options.skipSchemaBackfill !== true });
 	const rows = await sql<Array<{ representative_book_id: number }>>`
 		with target as (
 			select work_id

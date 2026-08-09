@@ -91,6 +91,9 @@ test("search API resolves external results through canonical catalog engine", ()
 	const source = readFileSync(new URL("../src/pages/api/books/search.ts", import.meta.url), "utf8");
 
 	assert.match(source, /resolveCanonicalCatalogWork/);
+	assert.match(source, /skipSchemaBackfill: true/);
+	assert.match(source, /CANONICAL_MATCH_TIMEOUT_MS/);
+	assert.match(source, /canonicalTimeoutCount/);
 	assert.match(source, /catalogSourcesForResult/);
 	assert.match(source, /const sourceWorkId = openLibraryId/);
 	assert.match(source, /`catalog:\$\{catalogBookId\}`/);

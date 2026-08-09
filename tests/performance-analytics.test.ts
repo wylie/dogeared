@@ -44,6 +44,8 @@ test("admin performance page is admin-only and exposes percentile-first operatio
 	assert.match(page, /p99/);
 	assert.match(page, /External Services/);
 	assert.match(page, /Recent Slow Operations/);
+	assert.match(page, /timeoutDetail/);
+	assert.match(page, /Retries:/);
 	assert.match(page, /Release Comparison/);
 	assert.match(page, /Performance Targets/);
 	assert.match(page, /Performance data will populate/);
@@ -66,6 +68,9 @@ test("admin performance loader computes workflow, route, provider, slow-operatio
 	assert.match(telemetry, /cross join lateral jsonb_array_elements\(pe\.spans\)/);
 	assert.match(telemetry, /external_provider/);
 	assert.match(telemetry, /total_ms >= \$\{slowThreshold\}/);
+	assert.match(telemetry, /Provider timeout:/);
+	assert.match(telemetry, /Canonical timeout:/);
+	assert.match(telemetry, /retryCount/);
 	assert.match(telemetry, /release_version/);
 	assert.match(telemetry, /withRuntimeCache\(/);
 });

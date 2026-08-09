@@ -79,6 +79,8 @@ export type SlowOperationRow = {
 	releaseVersion: string;
 	dominantSpan: string;
 	dominantSpanMs: number;
+	timeoutDetail: string;
+	retryCount: number;
 };
 
 export type ReleaseComparisonRow = {
@@ -664,6 +666,7 @@ async function loadAdminPerformanceAnalyticsUncached(
 		http_status: number;
 		release_version: string;
 		spans: unknown;
+		metadata: unknown;
 	}>>`
 		select
 			id,
@@ -674,7 +677,8 @@ async function loadAdminPerformanceAnalyticsUncached(
 			success,
 			http_status,
 			release_version,
-			spans
+			spans,
+			metadata
 		from performance_event
 		where created_at >= now() - (${hours} * interval '1 hour')
 			and (total_ms >= ${slowThreshold} or not success or http_status >= 500)
@@ -684,6 +688,20 @@ async function loadAdminPerformanceAnalyticsUncached(
 	`;
 	const slowOperations = slowRows.map((row) => {
 		const span = dominantSpan(row.spans);
+		const metadata = row.metadata && typeof row.metadata === "object"
+			? row.metadata as Record<string, unknown>
+			: {};
+		const providerTimeouts = normalizeText(metadata.providerTimeouts, 80);
+		const providerTimeoutCount = toNumber(metadata.providerTimeoutCount);
+		const localTimeoutCount = toNumber(metadata.localTimeoutCount);
+		const canonicalTimeoutCount = toNumber(metadata.canonicalTimeoutCount);
+		const timeoutDetail = providerTimeouts
+			? `Provider timeout: ${providerTimeouts}`
+			: (canonicalTimeoutCount > 0
+				? `Canonical timeout: ${canonicalTimeoutCount}`
+				: (localTimeoutCount > 0
+					? `Local timeout: ${localTimeoutCount}`
+					: (providerTimeoutCount > 0 ? `Provider timeout: ${providerTimeoutCount}` : "")));
 		return {
 			id: Number(row.id || 0),
 			createdAt: row.created_at,
@@ -694,7 +712,9 @@ async function loadAdminPerformanceAnalyticsUncached(
 			httpStatus: normalizeHttpStatus(row.http_status),
 			releaseVersion: normalizeText(row.release_version, 80),
 			dominantSpan: span.name,
-			dominantSpanMs: span.durationMs
+			dominantSpanMs: span.durationMs,
+			timeoutDetail,
+			retryCount: toNumber(metadata.retryCount)
 		};
 	});
 

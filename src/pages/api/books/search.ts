@@ -26,6 +26,17 @@ type CollectionSearchResult = {
 type SearchPhase = "all" | "local" | "external";
 type ExternalSearchProvider = "all" | "google_books" | "open_library";
 const EXTERNAL_PROVIDER_TIMEOUT_MS = 1_800;
+const LOCAL_SEARCH_TIMEOUT_MS = 2_500;
+const COLLECTION_SEARCH_TIMEOUT_MS = 900;
+const CANONICAL_MATCH_TIMEOUT_MS = 900;
+const MAX_CANONICAL_MATCH_CANDIDATES = 24;
+
+class SearchTimeoutError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "SearchTimeoutError";
+	}
+}
 
 function normalizeText(value: string) {
 	return String(value || "")
@@ -187,11 +198,39 @@ function normalizeExternalSearchProvider(value: unknown): ExternalSearchProvider
 	return "all";
 }
 
-function externalProviderFetchInit(): RequestInit {
+function externalProviderFetchInit(requestSignal?: AbortSignal): RequestInit {
 	if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
-		return { signal: AbortSignal.timeout(EXTERNAL_PROVIDER_TIMEOUT_MS) };
+		const timeoutSignal = AbortSignal.timeout(EXTERNAL_PROVIDER_TIMEOUT_MS);
+		if (requestSignal && typeof AbortSignal.any === "function") {
+			return { signal: AbortSignal.any([requestSignal, timeoutSignal]) };
+		}
+		return { signal: timeoutSignal };
 	}
+	if (requestSignal) return { signal: requestSignal };
 	return {};
+}
+
+function isRequestAborted(signal: AbortSignal | undefined) {
+	return signal?.aborted === true;
+}
+
+function isTimeoutLikeError(error: unknown) {
+	if (!(error instanceof Error)) return false;
+	return /abort|timeout/i.test(error.name) || /abort|timeout/i.test(error.message);
+}
+
+async function withSearchTimeout<T>(label: string, timeoutMs: number, work: () => Promise<T>): Promise<T> {
+	let timeoutId: ReturnType<typeof setTimeout> | undefined;
+	const timeoutPromise = new Promise<never>((_, reject) => {
+		timeoutId = setTimeout(() => {
+			reject(new SearchTimeoutError(`${label} timed out after ${timeoutMs}ms`));
+		}, Math.max(1, timeoutMs));
+	});
+	try {
+		return await Promise.race([work(), timeoutPromise]);
+	} finally {
+		if (timeoutId) clearTimeout(timeoutId);
+	}
 }
 
 function searchCacheKeyPart(value: unknown) {
@@ -381,6 +420,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 	const phase = normalizeSearchPhase(url.searchParams.get("mode"));
 	const externalProviderFilter = normalizeExternalSearchProvider(url.searchParams.get("provider"));
 	const excludedBookIds = parseExcludedBookIds(url.searchParams.get("excludeBookIds"));
+	const requestSignal = request.signal;
 	if (!query) {
 		return new Response(JSON.stringify({ results: [], hasMore: false }), {
 			status: 200,
@@ -393,6 +433,12 @@ export const GET: APIRoute = async ({ request, url }) => {
 	const perfStartedAt = performance.now();
 	const perfStages: Record<string, number> = {};
 	const perfSpanDurations: PerformanceSpanInput[] = [];
+	let providerTimeoutCount = 0;
+	let localTimeoutCount = 0;
+	let canonicalTimeoutCount = 0;
+	let canonicalCandidateCount = 0;
+	let canonicalResolvedCount = 0;
+	const providerTimeouts = new Set<string>();
 	const markPerfStage = (stage: string) => {
 		perfStages[stage] = Math.round((performance.now() - perfStartedAt) * 10) / 10;
 	};
@@ -445,6 +491,15 @@ export const GET: APIRoute = async ({ request, url }) => {
 				pageSize,
 				phase,
 				provider: externalProviderFilter,
+				providerTimeoutCount,
+				providerTimeouts: Array.from(providerTimeouts).join(","),
+				localTimeoutCount,
+				canonicalCandidateCount,
+				canonicalResolvedCount,
+				canonicalTimeoutCount,
+				timeout: providerTimeoutCount > 0 || localTimeoutCount > 0 || canonicalTimeoutCount > 0,
+				clientAborted: isRequestAborted(requestSignal),
+				retryCount: 0,
 				...extra
 			}
 		});
@@ -465,7 +520,8 @@ export const GET: APIRoute = async ({ request, url }) => {
 					langRestrict: "en"
 				});
 				try {
-					const response = await fetch(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`, externalProviderFetchInit());
+					if (isRequestAborted(requestSignal)) return [];
+					const response = await fetch(`https://www.googleapis.com/books/v1/volumes?${params.toString()}`, externalProviderFetchInit(requestSignal));
 					if (!response.ok) {
 						recordPerformanceEventSafe(sql, {
 							operationName: "external.google-books",
@@ -491,18 +547,27 @@ export const GET: APIRoute = async ({ request, url }) => {
 					});
 					return items;
 				} catch (error) {
+					const requestAborted = isRequestAborted(requestSignal);
+					const timedOut = isTimeoutLikeError(error) && !requestAborted;
+					if (timedOut) {
+						providerTimeoutCount += 1;
+						providerTimeouts.add("google-books");
+					}
 					recordPerformanceEventSafe(sql, {
 						operationName: "external.google-books",
 						route: "/api/books/search",
 						totalMs: performance.now() - providerStartedAt,
 						success: false,
-						httpStatus: 0,
+						httpStatus: requestAborted ? 499 : (timedOut ? 408 : 0),
 						externalProvider: "google-books",
 						metadata: {
 							page,
 							pageSize,
 							resultCount: 0,
-							timeout: error instanceof Error && /abort|timeout/i.test(error.name)
+							timeout: timedOut,
+							clientAborted: requestAborted,
+							errorType: requestAborted ? "client_abort" : (timedOut ? "timeout" : "provider_error"),
+							retryCount: 0
 						}
 					});
 					return [];
@@ -517,7 +582,8 @@ export const GET: APIRoute = async ({ request, url }) => {
 					offset: String(startIndex)
 				});
 				try {
-					const response = await fetch(`https://openlibrary.org/search.json?${params.toString()}`, externalProviderFetchInit());
+					if (isRequestAborted(requestSignal)) return [] as any[];
+					const response = await fetch(`https://openlibrary.org/search.json?${params.toString()}`, externalProviderFetchInit(requestSignal));
 					if (!response.ok) {
 						recordPerformanceEventSafe(sql, {
 							operationName: "external.open-library",
@@ -543,18 +609,27 @@ export const GET: APIRoute = async ({ request, url }) => {
 					});
 					return docs;
 				} catch (error) {
+					const requestAborted = isRequestAborted(requestSignal);
+					const timedOut = isTimeoutLikeError(error) && !requestAborted;
+					if (timedOut) {
+						providerTimeoutCount += 1;
+						providerTimeouts.add("open-library");
+					}
 					recordPerformanceEventSafe(sql, {
 						operationName: "external.open-library",
 						route: "/api/books/search",
 						totalMs: performance.now() - providerStartedAt,
 						success: false,
-						httpStatus: 0,
+						httpStatus: requestAborted ? 499 : (timedOut ? 408 : 0),
 						externalProvider: "open-library",
 						metadata: {
 							page,
 							pageSize,
 							resultCount: 0,
-							timeout: error instanceof Error && /abort|timeout/i.test(error.name)
+							timeout: timedOut,
+							clientAborted: requestAborted,
+							errorType: requestAborted ? "client_abort" : (timedOut ? "timeout" : "provider_error"),
+							retryCount: 0
 						}
 					});
 					return [] as any[];
@@ -692,7 +767,24 @@ export const GET: APIRoute = async ({ request, url }) => {
 
 			const loadLocalResults = async () => {
 				const localStartedAt = performance.now();
-				const [dbdRows, collectionResults] = await Promise.all([dbdRowsPromise, collectionResultsPromise]);
+				const [dbdRows, collectionResults] = await Promise.all([
+					withSearchTimeout("local catalog search", LOCAL_SEARCH_TIMEOUT_MS, () => dbdRowsPromise)
+						.catch((error) => {
+							if (error instanceof SearchTimeoutError) {
+								localTimeoutCount += 1;
+								return [] as Awaited<typeof dbdRowsPromise>;
+							}
+							throw error;
+						}),
+					withSearchTimeout("collection search", COLLECTION_SEARCH_TIMEOUT_MS, () => collectionResultsPromise)
+						.catch((error) => {
+							if (error instanceof SearchTimeoutError) {
+								localTimeoutCount += 1;
+								return [] as CollectionSearchResult[];
+							}
+							throw error;
+						})
+				]);
 				recordSearchSpan("local catalog search", performance.now() - localStartedAt);
 				markPerfStage("local_catalog_loaded");
 				const results = measureSearchSpanSync("rendering preparation", () => normalizeAndDedupe(mapCatalogRows(dbdRows), "api.books.search.local"));
@@ -731,6 +823,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 						googleFetchedSetsPromise,
 						openFetchedSetsPromise
 					]);
+					if (isRequestAborted(requestSignal)) return { results: [] as SearchResult[], hasMore: false };
 					markPerfStage("external_providers_loaded");
 					const metadataStartedAt = performance.now();
 					const byId = new Map<string, any>();
@@ -839,6 +932,12 @@ export const GET: APIRoute = async ({ request, url }) => {
 						.filter((result) => isLikelyMatch(result, query))
 						.filter((result) => passesQualityGate(result));
 					recordSearchSpan("metadata enrichment", performance.now() - metadataStartedAt);
+					if (isRequestAborted(requestSignal)) return { results: [] as SearchResult[], hasMore: false };
+					const canonicalCandidates = measureSearchSpanSync("dedupe", () => dedupeVariants(mapped, query)
+						.slice(0, Math.max(pageSize, MAX_CANONICAL_MATCH_CANDIDATES))
+						.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.precatalog", index, query }))
+						.filter((result): result is SearchResult => !!result));
+					canonicalCandidateCount = canonicalCandidates.length;
 
 					const resolutionCache = new Map<string, Promise<Awaited<ReturnType<typeof resolveCanonicalCatalogWork>>>>();
 					const resolveSearchResult = async (item: SearchResult) => {
@@ -878,10 +977,22 @@ export const GET: APIRoute = async ({ request, url }) => {
 								seriesBookOrder,
 								pageCount: item.pageCount,
 								publishedYear: publishedYear(item.publishedDate)
+							}, {
+								skipSchemaBackfill: true
 							});
 							resolutionCache.set(cacheKey, resolutionPromise);
 						}
-						const resolution = await resolutionPromise;
+						let resolution: Awaited<ReturnType<typeof resolveCanonicalCatalogWork>> | null = null;
+						try {
+							resolution = await withSearchTimeout("canonical Work matching", CANONICAL_MATCH_TIMEOUT_MS, () => resolutionPromise);
+							if (resolution?.bookId) canonicalResolvedCount += 1;
+						} catch (error) {
+							if (error instanceof SearchTimeoutError) {
+								canonicalTimeoutCount += 1;
+							} else {
+								throw error;
+							}
+						}
 						const resolvedSeriesName = resolution?.seriesName || seriesName;
 						const resolvedSeriesBookOrder = Number(resolution?.seriesBookOrder || 0) || seriesBookOrder;
 						const resolvedAuthor = resolution?.author || authors[0] || "";
@@ -903,7 +1014,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 							seriesLabel: item.seriesLabel || formatSeriesSearchLabel(resolvedSeriesName, resolvedSeriesBookOrder)
 						};
 					};
-					const mappedWithIds = (await measureSearchSpan("canonical Work matching", () => Promise.all(mapped.map(resolveSearchResult))))
+					const mappedWithIds = (await measureSearchSpan("canonical Work matching", () => Promise.all(canonicalCandidates.map(resolveSearchResult))))
 						.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.catalog", index, query }))
 						.filter((result): result is SearchResult => !!result);
 					markPerfStage("canonical_resolution_complete");

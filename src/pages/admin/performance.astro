@@ -252,7 +252,11 @@ const summaryMetrics = [
 							<span role="cell">{formatPerformanceMs(row.totalMs)}</span>
 							<span role="cell">{safeText(row.releaseVersion, "unknown")}</span>
 							<span role="cell">{row.dominantSpan ? `${row.dominantSpan}: ${formatPerformanceMs(row.dominantSpanMs)}` : "—"}</span>
-							<span role="cell"><span class={`status-pill ${row.success ? "healthy" : "slow"}`}>{row.success ? `HTTP ${row.httpStatus || 200}` : "Failed"}</span></span>
+							<span role="cell">
+								<span class={`status-pill ${row.success ? "healthy" : "slow"}`}>{row.success ? `HTTP ${row.httpStatus || 200}` : "Failed"}</span>
+								{row.timeoutDetail ? <em>{row.timeoutDetail}</em> : null}
+								{row.retryCount > 0 ? <em>{`Retries: ${formatNumber(row.retryCount)}`}</em> : null}
+							</span>
 						</div>
 					))}
 				</div>

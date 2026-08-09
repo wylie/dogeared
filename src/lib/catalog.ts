@@ -325,9 +325,9 @@ export function scoreCanonicalCatalogCandidate(
 export async function resolveCanonicalCatalogWork(
 	sql: ReturnType<typeof getNeonSql>,
 	input: CatalogBookLookupInput,
-	options: { minConfidence?: number } = {}
+	options: { minConfidence?: number; skipSchemaBackfill?: boolean } = {}
 ): Promise<CanonicalCatalogResolution | null> {
-	await ensureCanonicalWorkSchema(sql);
+	await ensureCanonicalWorkSchema(sql, { backfill: options.skipSchemaBackfill !== true });
 	const identity = inputIdentity(input);
 	const titleLike = identity.titleKey ? `%${identity.titleKey.split(" ").filter(Boolean).slice(0, 5).join("%")}%` : "";
 	const authorLike = identity.authorKey ? `%${identity.authorKey.split(" ").filter(Boolean).slice(0, 4).join("%")}%` : "";
@@ -441,7 +441,9 @@ export async function resolveCanonicalCatalogWork(
 		));
 	const best = scored[0];
 	if (!best) return null;
-	const representativeBookId = await resolveRepresentativeBookId(sql, best.candidate.bookId);
+	const representativeBookId = await resolveRepresentativeBookId(sql, best.candidate.bookId, {
+		skipSchemaBackfill: options.skipSchemaBackfill === true
+	});
 	return {
 		...best.candidate,
 		confidenceScore: best.score,
