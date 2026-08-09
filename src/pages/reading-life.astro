@@ -59,6 +59,13 @@ function formatMonthName(month: number) {
 	return new Intl.DateTimeFormat("en", { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2026, month - 1, 1)));
 }
 
+function formatShortMonth(value: string) {
+	if (!value) return "";
+	const date = new Date(`${value}T00:00:00Z`);
+	if (!Number.isFinite(date.getTime())) return "";
+	return new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" }).format(date);
+}
+
 function pluralize(count: number, singular: string, plural = `${singular}s`) {
 	return `${count.toLocaleString()} ${count === 1 ? singular : plural}`;
 }
@@ -108,6 +115,20 @@ function dayDistanceFromToday(day: ReadingLifeCalendarDay, todayKey: string) {
 	const today = new Date(`${todayKey}T00:00:00Z`).getTime();
 	if (!Number.isFinite(current) || !Number.isFinite(today)) return Number.MAX_SAFE_INTEGER;
 	return Math.round((today - current) / 86400000);
+}
+
+function volumeChartWidth(days: number) {
+	const dayWidth = 14;
+	const gap = 3;
+	return Math.max(320, (days * dayWidth) + (Math.max(0, days - 1) * gap));
+}
+
+function isVolumeMonthMarker(day: ReadingLifeCalendarDay, index: number, rangeDays: ReadingLifeCalendarDay[]) {
+	if (index === 0) return true;
+	if (rangeDays.length <= 7) return false;
+	const current = new Date(`${day.date}T00:00:00Z`);
+	if (!Number.isFinite(current.getTime())) return false;
+	return current.getUTCDate() === 1;
 }
 
 function formatRating(value: number | null | undefined) {
@@ -593,34 +614,56 @@ recordPerformanceEventSafe({
 									<strong>{range.id === "today" ? "Today" : range.label}</strong>
 									<span>{formatPageEquivalents(range.summary.pageEquivalents)} · {pluralize(range.summary.activeDays, "active day")} · {pluralize(range.summary.progressUpdates, "progress update")}</span>
 								</div>
-								<div class="volume-chart" role="group" aria-label={`Daily reading volume for ${range.label}. ${range.summary.pageEquivalents} page equivalents across ${range.days.length} days.`}>
-									{range.days.map((day) => {
-										const height = day.pageEquivalents > 0 && range.maxVolume > 0
-											? Math.max(6, Math.round((day.pageEquivalents / range.maxVolume) * 100))
-											: (day.active ? 6 : 0);
-										return (
-											<button
-												type="button"
-												class={`volume-day level-${day.level}`}
-												style={`--bar-height: ${height}%`}
-												data-activity-day
-												data-volume-bar
-												data-date-label={formatFullDate(day.date)}
-												data-primary-line={calendarDayPrimaryLine(day)}
-												data-pages={String(day.pages)}
-												data-page-equivalents={String(day.pageEquivalents)}
-												data-sessions={String(day.sessions)}
-												data-progress-updates={String(day.progressUpdates)}
-												data-books-read={String(day.booksRead)}
-												data-completions={String(day.completions)}
-												data-incomplete-updates={String(day.incompleteUpdates)}
-												data-normalization-state={day.normalizationState}
-												data-work-breakdown={activityDayWorkBreakdownJson(day)}
-												data-finished-titles={JSON.stringify(day.finishedTitles)}
-												aria-label={calendarDayAriaLabel(day)}
-											><span></span></button>
-										);
-									})}
+								<p class="volume-scroll-hint" id={`volume-scroll-hint-${range.id}`}>{range.days.length > 30 ? "Newest days are shown first. Scroll left for earlier activity." : "Each bar is one calendar day."}</p>
+								<div
+									class="volume-scroll-shell"
+									role="group"
+									tabindex="0"
+									aria-describedby={`volume-scroll-hint-${range.id}`}
+									aria-label={`Daily reading volume for ${range.label}. ${range.summary.pageEquivalents} page equivalents across ${range.days.length} days. Each bar is one calendar day.`}
+									data-volume-scroll-shell
+									data-volume-scroll-pane
+									data-scroll-newest={range.days.length > 30 ? "true" : "false"}
+									data-range-days={String(range.days.length)}
+								>
+									<div
+										class="volume-chart"
+										role="group"
+										aria-label={`${range.label} daily bars`}
+										style={`--volume-chart-width: ${volumeChartWidth(range.days.length)}px`}
+									>
+										{range.days.map((day, index) => {
+											const height = day.pageEquivalents > 0 && range.maxVolume > 0
+												? Math.max(6, Math.round((day.pageEquivalents / range.maxVolume) * 100))
+												: (day.active ? 6 : 0);
+											const monthMarker = isVolumeMonthMarker(day, index, range.days);
+											return (
+												<button
+													type="button"
+													class={`volume-day level-${day.level}`}
+													style={`--bar-height: ${height}%`}
+													data-activity-day
+													data-volume-bar
+													data-volume-day-index={String(index)}
+													data-month-marker={monthMarker ? "true" : "false"}
+													data-month-label={monthMarker ? formatShortMonth(day.date) : ""}
+													data-date-label={formatFullDate(day.date)}
+													data-primary-line={calendarDayPrimaryLine(day)}
+													data-pages={String(day.pages)}
+													data-page-equivalents={String(day.pageEquivalents)}
+													data-sessions={String(day.sessions)}
+													data-progress-updates={String(day.progressUpdates)}
+													data-books-read={String(day.booksRead)}
+													data-completions={String(day.completions)}
+													data-incomplete-updates={String(day.incompleteUpdates)}
+													data-normalization-state={day.normalizationState}
+													data-work-breakdown={activityDayWorkBreakdownJson(day)}
+													data-finished-titles={JSON.stringify(day.finishedTitles)}
+													aria-label={calendarDayAriaLabel(day)}
+												><span></span></button>
+											);
+										})}
+									</div>
 								</div>
 								{range.summary.incompleteUpdates > 0 && (
 									<p class="text-alt">{range.summary.incompleteUpdates.toLocaleString()} updates in this range could not be converted to page equivalents.</p>
@@ -1228,24 +1271,65 @@ recordPerformanceEventSafe({
 		display: grid;
 		gap: 0.65rem;
 	}
+	.volume-scroll-hint {
+		margin: -0.2rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+	}
+	.volume-scroll-shell {
+		position: relative;
+		max-width: 100%;
+		overflow-x: auto;
+		overflow-y: hidden;
+		overscroll-behavior-inline: contain;
+		scroll-behavior: smooth;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-color: rgba(87, 117, 144, 0.38) transparent;
+		scrollbar-width: thin;
+	}
+	.volume-scroll-shell::before,
+	.volume-scroll-shell::after {
+		content: "";
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 1.4rem;
+		z-index: 2;
+		pointer-events: none;
+		opacity: 0;
+		transition: opacity 160ms ease;
+	}
+	.volume-scroll-shell::before {
+		left: 0;
+		background: linear-gradient(90deg, #ffffff 0%, rgba(255, 255, 255, 0) 100%);
+	}
+	.volume-scroll-shell::after {
+		right: 0;
+		background: linear-gradient(270deg, #ffffff 0%, rgba(255, 255, 255, 0) 100%);
+	}
+	.volume-scroll-shell.can-scroll:not(.is-at-start)::before,
+	.volume-scroll-shell.can-scroll:not(.is-at-end)::after {
+		opacity: 1;
+	}
 	.volume-chart {
 		display: grid;
 		grid-auto-flow: column;
-		grid-auto-columns: minmax(10px, 1fr);
+		grid-auto-columns: minmax(14px, 1fr);
 		align-items: end;
 		gap: 3px;
 		height: 168px;
-		max-width: 100%;
-		overflow-x: auto;
-		padding: 0.25rem 0 0.35rem;
+		width: max(100%, var(--volume-chart-width, 100%));
+		max-width: none;
+		padding: 0.25rem 0 1.55rem;
 	}
 	.volume-day {
 		appearance: none;
+		position: relative;
 		display: flex;
 		align-items: end;
 		justify-content: stretch;
 		width: 100%;
-		min-width: 10px;
+		min-width: 14px;
 		height: 100%;
 		border: 0;
 		background: transparent;
@@ -1264,11 +1348,34 @@ recordPerformanceEventSafe({
 	.volume-day.level-2 span { background: #bfd9ab; }
 	.volume-day.level-3 span { background: #75bd9f; }
 	.volume-day.level-4 span { background: #277da1; }
+	.volume-day[data-month-marker="true"]::before {
+		content: "";
+		position: absolute;
+		left: -2px;
+		bottom: 0;
+		width: 1px;
+		height: 100%;
+		background: rgba(87, 117, 144, 0.3);
+	}
+	.volume-day[data-month-marker="true"]::after {
+		content: attr(data-month-label);
+		position: absolute;
+		left: 0;
+		bottom: -1.25rem;
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		font-weight: 750;
+		line-height: 1;
+		pointer-events: none;
+	}
 	.volume-day:hover span,
 	.volume-day:focus-visible span {
 		box-shadow: 0 0 0 2px rgba(31, 122, 69, 0.5);
 		outline: 2px solid rgba(31, 122, 69, 0.68);
 		outline-offset: 1px;
+	}
+	.volume-day:focus-visible {
+		outline: none;
 	}
 	.insight-columns {
 		display: grid;
@@ -1625,6 +1732,7 @@ recordPerformanceEventSafe({
 			// Session persistence is a convenience, not required.
 		}
 		hideCalendarTooltip();
+		syncVolumeScrollPanes({ scrollNewest: normalized === "volume" });
 	}
 
 	function applyVolumeRange(range) {
@@ -1643,6 +1751,7 @@ recordPerformanceEventSafe({
 			// Session persistence is a convenience, not required.
 		}
 		hideCalendarTooltip();
+		syncVolumeScrollPanes({ scrollNewest: true });
 	}
 
 	function restoreReadingActivityControls() {
@@ -1653,6 +1762,40 @@ recordPerformanceEventSafe({
 			applyReadingActivityView("calendar");
 			applyVolumeRange("30d");
 		}
+	}
+
+	function volumeScrollMax(pane) {
+		return Math.max(0, pane.scrollWidth - pane.clientWidth);
+	}
+
+	function updateVolumeScrollAffordance(pane) {
+		if (!(pane instanceof HTMLElement)) return;
+		const max = volumeScrollMax(pane);
+		pane.classList.toggle("can-scroll", max > 1);
+		pane.classList.toggle("is-at-start", pane.scrollLeft <= 1);
+		pane.classList.toggle("is-at-end", pane.scrollLeft >= max - 1);
+	}
+
+	function syncVolumeScrollPanes(options = {}) {
+		window.requestAnimationFrame(() => {
+			for (const pane of document.querySelectorAll("[data-volume-scroll-pane]")) {
+				if (!(pane instanceof HTMLElement) || pane.offsetParent === null) continue;
+				if (options.scrollNewest && pane.dataset.scrollNewest === "true") {
+					pane.scrollLeft = volumeScrollMax(pane);
+				}
+				updateVolumeScrollAffordance(pane);
+			}
+		});
+	}
+
+	function scrollVolumePaneBy(pane, delta) {
+		const max = volumeScrollMax(pane);
+		if (max <= 0) return false;
+		const next = Math.max(0, Math.min(max, pane.scrollLeft + delta));
+		if (Math.abs(next - pane.scrollLeft) < 1) return false;
+		pane.scrollLeft = next;
+		updateVolumeScrollAffordance(pane);
+		return true;
 	}
 
 	document.addEventListener("click", (event) => {
@@ -1700,9 +1843,39 @@ recordPerformanceEventSafe({
 		}, 0);
 	});
 	document.addEventListener("keydown", (event) => {
-		if (event.key === "Escape") hideCalendarTooltip();
+		if (event.key === "Escape") {
+			hideCalendarTooltip();
+			return;
+		}
+		const pane = event.target instanceof Element ? event.target.closest("[data-volume-scroll-pane]") : null;
+		if (!(pane instanceof HTMLElement)) return;
+		const step = Math.max(48, Math.round(pane.clientWidth * 0.22));
+		const page = Math.max(120, Math.round(pane.clientWidth * 0.82));
+		const deltas = {
+			ArrowLeft: -step,
+			ArrowRight: step,
+			PageUp: -page,
+			PageDown: page,
+			Home: -volumeScrollMax(pane),
+			End: volumeScrollMax(pane)
+		};
+		if (!(event.key in deltas)) return;
+		if (scrollVolumePaneBy(pane, deltas[event.key])) event.preventDefault();
 	});
+	document.addEventListener("wheel", (event) => {
+		const pane = event.target instanceof Element ? event.target.closest("[data-volume-scroll-pane]") : null;
+		if (!(pane instanceof HTMLElement)) return;
+		if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+		if (scrollVolumePaneBy(pane, event.deltaY)) event.preventDefault();
+	}, { passive: false });
+	document.addEventListener("scroll", (event) => {
+		const pane = event.target instanceof Element ? event.target.closest("[data-volume-scroll-pane]") : null;
+		if (pane instanceof HTMLElement) updateVolumeScrollAffordance(pane);
+	}, true);
 	window.addEventListener("scroll", syncCalendarTooltipPosition, { passive: true });
-	window.addEventListener("resize", syncCalendarTooltipPosition);
+	window.addEventListener("resize", () => {
+		syncCalendarTooltipPosition();
+		syncVolumeScrollPanes();
+	});
 	restoreReadingActivityControls();
 </script>

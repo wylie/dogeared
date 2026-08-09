@@ -286,6 +286,14 @@ test("Reading Calendar days expose accessible summaries and anchored tooltip beh
 	assert.match(source, /data-reading-activity-view="calendar"/);
 	assert.match(source, /data-reading-activity-view="volume"/);
 	assert.match(source, /data-volume-range-button=\{range\.id\}/);
+	assert.match(source, /class="volume-scroll-shell"/);
+	assert.match(source, /data-volume-scroll-pane/);
+	assert.match(source, /data-scroll-newest=\{range\.days\.length > 30 \? "true" : "false"\}/);
+	assert.match(source, /style=\{`--volume-chart-width: \$\{volumeChartWidth\(range\.days\.length\)\}px`\}/);
+	assert.match(source, /grid-auto-columns: minmax\(14px, 1fr\)/);
+	assert.match(source, /function syncVolumeScrollPanes/);
+	assert.match(source, /pane\.scrollLeft = volumeScrollMax\(pane\)/);
+	assert.match(source, /document\.addEventListener\("wheel"/);
 	assert.match(source, /class="calendar-grid" role="group"/);
 	assert.match(source, /data-calendar-day/);
 	assert.match(source, /data-activity-day/);
