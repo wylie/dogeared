@@ -435,7 +435,7 @@ const adminNavItems: NavItem[] = [
     border: 1px solid rgba(87, 117, 144, 0.18);
     border-radius: var(--radius-pill);
     padding: 0.58rem calc(var(--search-clear-control-space) + var(--search-spinner-control-space) + 0.75rem) 0.58rem 0.95rem;
-    margin-top: 1rem;
+    margin-top: 0;
     background: rgba(255, 255, 255, 0.72);
     color: var(--color-text);
   }
@@ -455,6 +455,7 @@ const adminNavItems: NavItem[] = [
     --search-spinner-control-space: 1.35rem;
     position: relative;
     width: 100%;
+    margin-top: 1rem;
   }
   .search-submit-status {
     position: absolute;
@@ -694,6 +695,9 @@ const adminNavItems: NavItem[] = [
       margin-top: 0;
       padding: 0.4rem calc(var(--search-clear-control-space) + var(--search-spinner-control-space) + 0.55rem) 0.4rem 0.8rem;
       border: var(--border-strong);
+    }
+    #left-hand-nav .search-input-wrap {
+      margin-top: 0;
     }
     #left-hand-nav .primary-links {
       --mobile-primary-nav-gap: 0.9rem;

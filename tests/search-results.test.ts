@@ -145,3 +145,18 @@ test("search page validates API results before rendering BookCard props", () => 
 	assert.match(source, /Already in DogEared/);
 	assert.doesNotMatch(source, /results = Array\.isArray\(payload\?\.results\) \? payload\.results : \[\];/);
 });
+
+test("search cards use the shared under-cover ShelfButton presentation", () => {
+	const source = readFileSync(new URL("../src/pages/search.astro", import.meta.url), "utf8");
+	const progressiveRenderStart = source.indexOf("function renderProgressiveResult(result)");
+	const progressiveRender = source.slice(progressiveRenderStart);
+
+	assert.ok(progressiveRenderStart > -1);
+	assert.match(source, /<div slot="actions">\s*<ShelfDropdown attrs=/s);
+	assert.match(progressiveRender, /<div class="progressive-cover-wrap">[\s\S]*<div class="cover-actions">\$\{renderProgressiveShelfDropdown\(result, author, categories\)\}<\/div>[\s\S]*<div class="progressive-card-body">/);
+	assert.match(source, /#search-results \.progressive-cover-wrap \.cover-actions \.shelf-dropdown\s*{[^}]*--shelf-trigger-width: 100%;/s);
+	assert.match(source, /#search-results \.progressive-cover-wrap \.cover-actions \.shelf-trigger\.shelf-fab\s*{[^}]*height: var\(--shelf-trigger-height, 32px\);/s);
+	assert.doesNotMatch(source, /progressive-shelf-dropdown/);
+	assert.doesNotMatch(progressiveRender, /<p class="shelf-state">Not on Shelf<\/p>/);
+	assert.doesNotMatch(source, /progressive-book-card \.progressive-shelf-dropdown/);
+});

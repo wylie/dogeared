@@ -1828,6 +1828,7 @@ const profilePerformanceTelemetry = {
 															inputmode="text"
 															placeholder="154"
 															value=""
+															aria-describedby={`progress-inline-feedback-${item.bookId}`}
 														/>
 														<button
 															type="button"
@@ -1867,6 +1868,13 @@ const profilePerformanceTelemetry = {
 															<span class="material-icons" aria-hidden="true">check</span>
 															<span>Finish</span>
 														</button>
+														<p
+															id={`progress-inline-feedback-${item.bookId}`}
+															class="progress-inline-feedback"
+															role="status"
+															aria-live="polite"
+															hidden
+														></p>
 													</div>
 												</div>
 											)}
@@ -3423,6 +3431,23 @@ const profilePerformanceTelemetry = {
 	.progress-inline-finish:hover {
 		filter: brightness(0.95);
 	}
+	.progress-inline-feedback {
+		grid-column: 1 / -1;
+		margin: 0;
+		min-height: 1rem;
+		font-size: 0.78rem;
+		font-weight: 700;
+		line-height: 1.25;
+		color: #8b1d1d;
+	}
+	.progress-inline-feedback[hidden] {
+		display: block;
+		visibility: hidden;
+	}
+	.progress-inline-input[aria-invalid="true"] {
+		border-color: #991b1b;
+		box-shadow: 0 0 0 2px rgba(153, 27, 27, 0.1);
+	}
 	.progress-track {
 		margin-top: 0.25rem;
 		width: min(320px, 100%);
@@ -4603,11 +4628,28 @@ const profilePerformanceTelemetry = {
 		if (!(input instanceof HTMLInputElement)) return;
 		const detail = String(message || "").trim() || "Failed to save progress.";
 		console.error("[progress.save.error]", detail);
+		input.setAttribute("aria-invalid", "true");
+		const card = input.closest(".book-card");
+		const feedback = card?.querySelector(".progress-inline-feedback");
+		if (feedback instanceof HTMLElement) {
+			feedback.textContent = detail;
+			feedback.hidden = false;
+		}
 		input.setCustomValidity(detail);
 		input.reportValidity();
-		window.setTimeout(() => {
-			if (input.validationMessage === detail) input.setCustomValidity("");
-		}, 0);
+		input.focus();
+	}
+
+	function clearProgressSaveError(input) {
+		if (!(input instanceof HTMLInputElement)) return;
+		input.removeAttribute("aria-invalid");
+		input.setCustomValidity("");
+		const card = input.closest(".book-card");
+		const feedback = card?.querySelector(".progress-inline-feedback");
+		if (feedback instanceof HTMLElement) {
+			feedback.textContent = "";
+			feedback.hidden = true;
+		}
 	}
 
 	function ensureProgressDisplay(card, currentPage, totalPages) {
@@ -4648,6 +4690,9 @@ const profilePerformanceTelemetry = {
 	for (const select of Array.from(document.querySelectorAll(".progress-inline-type"))) {
 		updateProgressInputPlaceholder(select);
 		select.addEventListener("change", () => updateProgressInputPlaceholder(select));
+	}
+	for (const input of Array.from(document.querySelectorAll(".progress-inline-input"))) {
+		input.addEventListener("input", () => clearProgressSaveError(input));
 	}
 
 	function valueForSelectedProgressType(input) {
@@ -5314,12 +5359,11 @@ const profilePerformanceTelemetry = {
 				progressType
 			});
 			if (!parsed.valid) {
-				progressSave.textContent = "Invalid";
-				setTimeout(() => {
-					progressSave.textContent = "Save";
-				}, 1000);
+				progressSave.textContent = "Save";
+				surfaceProgressSaveError(input, "Enter a valid progress value.");
 				return;
 			}
+			clearProgressSaveError(input);
 			const currentPage = parsed.currentPage;
 			const shouldFinish = totalPages > 0 && currentPage >= totalPages;
 			if (shouldFinish) {
@@ -5376,10 +5420,7 @@ const profilePerformanceTelemetry = {
 					if (dropdown) {
 						showShelfFeedback(dropdown, message, feedbackTimers);
 					}
-					progressSave.textContent = "Retry";
-					setTimeout(() => {
-						progressSave.textContent = originalLabel;
-					}, 1200);
+					progressSave.textContent = originalLabel;
 				} finally {
 					progressSave.disabled = false;
 					if (card instanceof HTMLElement) card.setAttribute("aria-busy", "false");
@@ -5461,6 +5502,7 @@ const profilePerformanceTelemetry = {
 					console.warn("Progress saved but local UI sync failed.", uiError);
 				}
 				input.value = "";
+				clearProgressSaveError(input);
 				progressSave.textContent = "Saved";
 				setTimeout(() => {
 					progressSave.textContent = originalLabel;
@@ -5470,10 +5512,12 @@ const profilePerformanceTelemetry = {
 				console.warn("Failed to save reading progress.", error);
 				surfaceProgressSaveError(input, message);
 				if (dropdown) showShelfFeedback(dropdown, message, feedbackTimers);
-				progressSave.textContent = persisted ? "Saved" : "Retry";
-				setTimeout(() => {
-					progressSave.textContent = originalLabel;
-				}, persisted ? 900 : 1200);
+				progressSave.textContent = persisted ? "Saved" : originalLabel;
+				if (persisted) {
+					setTimeout(() => {
+						progressSave.textContent = originalLabel;
+					}, 900);
+				}
 			} finally {
 				progressSave.disabled = false;
 				if (card instanceof HTMLElement) card.setAttribute("aria-busy", "false");

@@ -699,17 +699,69 @@ recordPerformanceEventSafe({
 			animation: none;
 		}
 	}
-	#search-results .progressive-book-card .progressive-shelf-dropdown {
-		position: absolute;
-		top: 0.6rem;
-		right: 0.6rem;
-		z-index: 5;
-	}
 	#search-results .progressive-cover-wrap {
 		width: 84px;
 		display: grid;
 		gap: 0.5rem;
 		align-self: start;
+	}
+	#search-results .progressive-cover-wrap .cover-actions {
+		width: 100%;
+		margin: 0;
+		padding: 0;
+	}
+	#search-results .progressive-cover-wrap .cover-actions .shelf-dropdown {
+		width: 100%;
+		min-width: 0;
+		--shelf-trigger-width: 100%;
+		--shelf-trigger-height: 32px;
+		--shelf-trigger-min-width: 100%;
+		--shelf-trigger-min-height: 32px;
+		--shelf-trigger-radius: var(--radius-sm);
+		--shelf-trigger-icon-size: 1.15rem;
+	}
+	#search-results .progressive-cover-wrap .cover-actions .shelf-button-wrapper {
+		position: relative;
+		width: var(--shelf-trigger-width, 100%);
+		min-width: var(--shelf-trigger-min-width, 100%);
+		overflow: visible;
+	}
+	#search-results .progressive-cover-wrap .cover-actions .shelf-trigger.shelf-fab {
+		width: var(--shelf-trigger-width, 100%);
+		height: var(--shelf-trigger-height, 32px);
+		min-width: var(--shelf-trigger-min-width, 100%);
+		min-height: var(--shelf-trigger-min-height, 32px);
+		border: none;
+		border-radius: var(--shelf-trigger-radius, var(--radius-sm));
+		padding: 0;
+		background: var(--color-primary);
+		color: #fff;
+		cursor: pointer;
+		display: grid;
+		place-items: center;
+		line-height: 1;
+	}
+	#search-results .progressive-cover-wrap .cover-actions .shelf-trigger.shelf-fab:hover {
+		background: var(--color-primary-hover);
+	}
+	#search-results .progressive-cover-wrap .cover-actions .shelf-plus {
+		font-size: var(--shelf-trigger-icon-size, 1.15rem);
+		line-height: 1;
+	}
+	#search-results .progressive-cover-wrap .cover-actions .shelf-state {
+		display: none !important;
+	}
+	#search-results .progressive-cover-wrap .cover-actions .shelf-feedback {
+		margin: 0.28rem 0 0;
+		width: 100%;
+		min-height: 2.1rem;
+		font-size: 0.82rem;
+		color: var(--color-primary);
+		line-height: 1.25;
+	}
+	#search-results .progressive-cover-wrap .cover-actions .shelf-feedback[hidden] {
+		display: block;
+		visibility: hidden;
 	}
 	#search-results .progressive-cover {
 		width: 84px;
@@ -727,7 +779,6 @@ recordPerformanceEventSafe({
 	}
 	#search-results .progressive-card-body {
 		min-width: 0;
-		padding-right: 2.8rem;
 	}
 	#search-results .progressive-card-body h3 {
 		margin: 0;
@@ -765,50 +816,7 @@ recordPerformanceEventSafe({
 		font-size: 0.9rem;
 		line-height: 1.45;
 	}
-	#search-results .progressive-shelf-dropdown {
-		display: inline-flex;
-		flex-direction: column;
-		align-items: flex-start;
-		width: 44px;
-		min-width: 44px;
-		overflow: visible;
-	}
-	#search-results .progressive-shelf-dropdown .shelf-button-wrapper {
-		position: relative;
-		width: 44px;
-		min-width: 44px;
-		overflow: visible;
-	}
-	#search-results .progressive-shelf-dropdown .shelf-trigger.shelf-fab {
-		width: 44px;
-		height: 44px;
-		min-width: 44px;
-		min-height: 44px;
-		border: none;
-		border-radius: var(--radius-pill);
-		padding: 0;
-		background: var(--color-primary);
-		color: #fff;
-		cursor: pointer;
-		display: grid;
-		place-items: center;
-		line-height: 1;
-	}
-	#search-results .progressive-shelf-dropdown .shelf-trigger.shelf-fab:hover {
-		background: var(--color-primary-hover);
-	}
-	#search-results .progressive-shelf-dropdown .shelf-plus {
-		font-size: 1.4rem;
-		line-height: 1;
-	}
-	#search-results .progressive-shelf-dropdown .shelf-state {
-		margin: 0.22rem 0 0;
-		font-size: 0.72rem;
-		line-height: 1.1;
-		font-weight: 700;
-		color: #1f5138;
-	}
-	#search-results .progressive-shelf-dropdown .shelf-menu {
+	#search-results .progressive-cover-wrap .cover-actions .shelf-menu {
 		position: absolute;
 		top: calc(100% + 0.38rem);
 		left: 0;
@@ -823,7 +831,7 @@ recordPerformanceEventSafe({
 		padding: 0.28rem;
 		z-index: 120;
 	}
-	#search-results .progressive-shelf-dropdown .shelf-option {
+	#search-results .progressive-cover-wrap .cover-actions .shelf-option {
 		display: flex;
 		align-items: center;
 		gap: 0.45rem;
@@ -839,26 +847,18 @@ recordPerformanceEventSafe({
 		line-height: 1.25;
 		border-radius: var(--radius-sm);
 	}
-	#search-results .progressive-shelf-dropdown .shelf-option:hover {
+	#search-results .progressive-cover-wrap .cover-actions .shelf-option:hover {
 		background: rgba(87, 117, 144, 0.09);
 	}
-	#search-results .progressive-shelf-dropdown .shelf-option-icon {
+	#search-results .progressive-cover-wrap .cover-actions .shelf-option-icon {
 		font-size: 1.15rem;
 		line-height: 1;
 		color: #9aa3af;
 	}
-	#search-results .progressive-shelf-dropdown .shelf-option-divider {
+	#search-results .progressive-cover-wrap .cover-actions .shelf-option-divider {
 		height: 1px;
 		margin: 0.22rem 0.18rem;
 		background: var(--color-border-soft);
-	}
-	#search-results .progressive-shelf-dropdown .shelf-feedback {
-		margin: 0.28rem 0 0;
-		width: 100%;
-		min-height: 2.1rem;
-		font-size: 0.82rem;
-		color: var(--color-primary);
-		line-height: 1.25;
 	}
 	@media (max-width: 420px) {
 		#search-results .progressive-book-card {
@@ -1265,7 +1265,7 @@ recordPerformanceEventSafe({
 			.map(([name, value]) => `${name}="${escapeHtml(value)}"`)
 			.join(" ");
 		return `
-			<div class="shelf-dropdown progressive-shelf-dropdown" ${attrHtml}>
+			<div class="shelf-dropdown" ${attrHtml}>
 				<div class="shelf-button-wrapper">
 					<button type="button" class="shelf-trigger shelf-fab" data-action="toggle-shelf" data-status="" aria-expanded="false" aria-haspopup="menu" aria-controls="${menuId}" aria-label="Shelf: Not on Shelf. Open shelf options" title="Shelf: Not on Shelf">
 						<span class="material-icons shelf-plus" aria-hidden="true">library_add</span>
@@ -1279,7 +1279,6 @@ recordPerformanceEventSafe({
 						<button type="button" class="shelf-option shelf-option-danger" data-action="remove-from-shelves" role="menuitem"><span class="material-icons shelf-option-icon" aria-hidden="true">remove_circle</span><span>Remove from Shelves</span></button>
 					</div>
 				</div>
-				<p class="shelf-state">Not on Shelf</p>
 				<p class="shelf-feedback" role="status" aria-live="polite" hidden></p>
 			</div>
 		`;
@@ -1301,9 +1300,9 @@ recordPerformanceEventSafe({
 		const description = truncateSearchDescription(result?.description || "");
 		return `
 			<li class="progressive-book-card" data-search-result-key="${escapeHtml(key)}" data-search-book-id="${bookId || ""}" data-search-title="${escapeHtml(title)}">
-				${renderProgressiveShelfDropdown(result, author, categories)}
 				<div class="progressive-cover-wrap">
 					${result?.thumbnail ? `<a href="${escapeHtml(titleHref)}" aria-label="View ${escapeHtml(title)}"><img class="progressive-cover" src="${escapeHtml(result.thumbnail)}" alt="${escapeHtml(title)} cover" loading="lazy" decoding="async" width="84" height="126" /></a>` : `<div class="progressive-cover progressive-cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>`}
+					<div class="cover-actions">${renderProgressiveShelfDropdown(result, author, categories)}</div>
 				</div>
 				<div class="progressive-card-body">
 					<h3><a href="${escapeHtml(titleHref)}">${escapeHtml(title)}</a></h3>

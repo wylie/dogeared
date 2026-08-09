@@ -75,7 +75,10 @@ test("search loading indicator stays inside the search input without layout shif
 	assert.match(source, /\.search-submit-status\s*{[^}]*right: var\(--search-clear-control-space\);/s);
 	assert.match(source, /\.search-submit-status\s*{[^}]*width: var\(--search-spinner-control-space\);/s);
 	assert.match(source, /input\[type="search"\]\s*{[^}]*padding: 0\.58rem calc\(var\(--search-clear-control-space\) \+ var\(--search-spinner-control-space\) \+ 0\.75rem\) 0\.58rem 0\.95rem;/s);
+	assert.match(source, /input\[type="search"\]\s*{[^}]*margin-top: 0;/s);
+	assert.match(source, /\.search-input-wrap\s*{[^}]*margin-top: 1rem;/s);
 	assert.match(source, /#left-hand-nav input\[type="search"\]\s*{[^}]*padding: 0\.4rem calc\(var\(--search-clear-control-space\) \+ var\(--search-spinner-control-space\) \+ 0\.55rem\) 0\.4rem 0\.8rem;/s);
+	assert.match(source, /#left-hand-nav \.search-input-wrap\s*{[^}]*margin-top: 0;/s);
 	assert.match(source, /<span class="search-submit-label visually-hidden">Searching books\.<\/span>/);
 	assert.match(source, /<button type="button" class="search-clear" data-search-clear aria-label="Clear search"/);
 	assert.match(source, /\.search-clear\s*{[^}]*position: absolute;/s);

@@ -55,6 +55,18 @@ test("chapter, location, and audio inputs still normalize through the same canon
 	}).currentPage, 120);
 });
 
+test("profile progress save never exposes internal invalid labels", () => {
+	const profile = readFileSync("src/pages/profile/[username].astro", "utf8");
+
+	assert.match(profile, /class="progress-inline-feedback"/);
+	assert.match(profile, /aria-describedby=\{`progress-inline-feedback-\$\{item\.bookId\}`\}/);
+	assert.match(profile, /surfaceProgressSaveError\(input, "Enter a valid progress value\."\)/);
+	assert.match(profile, /input\.setAttribute\("aria-invalid", "true"\)/);
+	assert.match(profile, /input\.focus\(\)/);
+	assert.doesNotMatch(profile, /progressSave\.textContent = "Invalid"/);
+	assert.doesNotMatch(profile, /progressSave\.textContent = "Retry"/);
+});
+
 test("profile progress updater uses shared canonical progress normalization", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	assert.equal(source.includes('import { normalizeProgressUpdateInput } from "../../lib/readingProgress.ts";'), true);
