@@ -12,19 +12,32 @@ import { authorHref, canonicalizeAuthor, normalizeAuthorName, slugifyAuthor } fr
 import { fetchExternalAuthorBooks, type ExternalAuthorBook } from "../../lib/externalAuthorBooks";
 import { authorCanonicalPath } from "../../lib/indexing";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
-import { ensureSeriesSchema, inferKnownSeriesMetadata } from "../../lib/series";
+import { inferKnownSeriesMetadata } from "../../lib/series";
 import { loadCollectionsForAuthor, type CollectionRecord } from "../../lib/collections";
-import { ensureCanonicalWorkSchema } from "../../lib/catalogWorks";
 import { canonicalizeCatalogAuthor, canonicalizeCatalogTitle } from "../../lib/catalogKeys";
-import { withRuntimeCache } from "../../lib/runtimeCache";
-import { recordPerformanceEventSafe } from "../../lib/performanceTelemetry";
+import { getRuntimeCacheValue, withRuntimeCache } from "../../lib/runtimeCache";
+import { recordPerformanceEventSafe, type PerformanceSpanInput } from "../../lib/performanceTelemetry";
 
 export const prerender = false;
 
 const pagePerfStartedAt = performance.now();
-const pagePerfStages: Record<string, number> = {};
-const markPagePerfStage = (stage: string) => {
-	pagePerfStages[stage] = Math.round((performance.now() - pagePerfStartedAt) * 10) / 10;
+const pagePerfSpans: PerformanceSpanInput[] = [];
+const recordPagePerfSpan = (name: string, durationMs: number, startedAt?: number, parentName?: string) => {
+	const normalizedDuration = Math.max(0, Math.round(durationMs * 10) / 10);
+	pagePerfSpans.push({
+		name,
+		durationMs: normalizedDuration,
+		...(Number.isFinite(startedAt) ? { startMs: Math.max(0, Math.round((Number(startedAt) - pagePerfStartedAt) * 10) / 10) } : {}),
+		...(parentName ? { parentName } : {})
+	});
+};
+const timePagePerf = async <T,>(name: string, work: () => Promise<T>, parentName?: string) => {
+	const startedAt = performance.now();
+	try {
+		return await work();
+	} finally {
+		recordPagePerfSpan(name, performance.now() - startedAt, startedAt, parentName);
+	}
 };
 
 type BookRow = {
@@ -51,6 +64,30 @@ type BookRow = {
 	bookOrder: number;
 	publicationOrder: number;
 	chronologicalOrder: number;
+};
+
+type BaseBookRow = Omit<BookRow, "shelves" | "readers" | "genres" | "averageRating" | "ratingCount" | "seriesId" | "seriesName" | "bookOrder" | "publicationOrder" | "chronologicalOrder">;
+
+type BookStatsRow = {
+	book_id: number;
+	shelves: number;
+	readers: number;
+	average_rating: number;
+	rating_count: number;
+};
+
+type BookGenreRow = {
+	book_id: number;
+	genres: string[];
+};
+
+type BookSeriesRow = {
+	book_id: number;
+	series_id: number;
+	series_name: string;
+	book_order: number;
+	publication_order: number;
+	chronological_order: number;
 };
 
 type BibliographyItem = {
@@ -82,8 +119,7 @@ const requestedName = normalizeAuthorName(Astro.url.searchParams.get("name"));
 const canonicalFromSlug = slug.replace(/[^a-z0-9]+/g, "");
 const canonical = canonicalizeAuthor(requestedName) || canonicalFromSlug;
 
-const session = await resolveUserBySession(Astro.request);
-markPagePerfStage("session_loaded");
+const session = await timePagePerf("authentication/session", () => resolveUserBySession(Astro.request));
 const viewerUserId = String(session?.userId || "");
 
 let authorName = requestedName;
@@ -100,6 +136,8 @@ let readersCount = 0;
 let externalBooks: ExternalAuthorBook[] = [];
 let authorId = 0;
 let featuredInCollections: CollectionRecord[] = [];
+let externalDiscoveryDeferred = false;
+let externalBioDeferred = false;
 
 function renderAverageStars(value: number) {
 	const rounded = Math.max(0, Math.min(5, Math.round((Number(value || 0) + Number.EPSILON) * 2) / 2));
@@ -197,9 +235,12 @@ function buildAuthorBibliographySections(localBooks: BookRow[], missingBooks: Ex
 		});
 	}
 
+	const seriesGroupingStartedAt = performance.now();
 	const sections = Array.from(seriesSections.values())
 		.map((section) => ({ ...section, books: [...section.books].sort(compareBibliographyItems) }))
 		.sort((a, b) => a.title.localeCompare(b.title));
+	recordPagePerfSpan("Series grouping", performance.now() - seriesGroupingStartedAt, seriesGroupingStartedAt, "BookCard preparation");
+	const standaloneGroupingStartedAt = performance.now();
 	if (standalone.length > 0) {
 		sections.push({
 			id: "standalone",
@@ -212,6 +253,7 @@ function buildAuthorBibliographySections(localBooks: BookRow[], missingBooks: Ex
 			})
 		});
 	}
+	recordPagePerfSpan("standalone grouping", performance.now() - standaloneGroupingStartedAt, standaloneGroupingStartedAt, "BookCard preparation");
 	return sections;
 }
 
@@ -245,14 +287,48 @@ async function fetchOpenLibraryBio(name: string) {
 	}
 }
 
+function warmAuthorExternalCache<T>(input: {
+	key: string;
+	ttlMs: number;
+	spanName: string;
+	loader: () => Promise<T>;
+	countValue?: (value: T) => number;
+}) {
+	const startedAt = performance.now();
+	void withRuntimeCache(input.key, input.ttlMs, input.loader)
+		.then((value) => {
+			const durationMs = performance.now() - startedAt;
+			recordPerformanceEventSafe({
+				operationName: "external.open-library",
+				route: "/author/[slug]",
+				externalProvider: "open-library",
+				totalMs: durationMs,
+				success: true,
+				httpStatus: 200,
+				spans: [{ name: input.spanName, durationMs, startMs: 0 }],
+				metadata: {
+					resultCount: input.countValue?.(value) ?? 0
+				}
+			});
+			return value;
+		})
+		.catch(() => {
+			const durationMs = performance.now() - startedAt;
+			recordPerformanceEventSafe({
+				operationName: "external.open-library",
+				route: "/author/[slug]",
+				externalProvider: "open-library",
+				totalMs: durationMs,
+				success: false,
+				httpStatus: 502,
+				spans: [{ name: input.spanName, durationMs, startMs: 0 }]
+			});
+		});
+}
+
 try {
 	const sql = getNeonSql();
-	await Promise.all([
-		ensureCanonicalWorkSchema(sql),
-		ensureSeriesSchema(sql)
-	]);
-	markPagePerfStage("schema_ready");
-	const canonicalAuthorRows = await sql<Array<{
+	const canonicalAuthorRows = await timePagePerf("author lookup", () => sql<Array<{
 		id: number;
 		name: string;
 		bio: string;
@@ -265,7 +341,7 @@ try {
 		where lower(regexp_replace(coalesce(name, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
 		order by id asc
 		limit 1
-	`;
+	`);
 	const canonicalAuthor = canonicalAuthorRows[0];
 	if (Number(canonicalAuthor?.id || 0) > 0) {
 		authorId = Number(canonicalAuthor.id || 0);
@@ -275,95 +351,166 @@ try {
 		bioSource = String(canonicalAuthor.bio_source || "").trim();
 		bioSourceUrl = String(canonicalAuthor.bio_source_url || "").trim();
 	}
-	const rows = await sql<BookRow[]>`
-		select
-			b.id,
-			coalesce(b.work_id, b.id)::bigint as "workId",
-			coalesce(nullif(trim(bw.canonical_title), ''), nullif(trim(bw.title), ''), b.title) as title,
-			coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
-			coalesce(b.author_id, 0)::bigint as "authorId",
-			count(ub.book_id)::int as shelves,
-			count(distinct ub.user_id)::int as readers,
-			coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}') as genres,
-			coalesce(nullif(trim(b.cover_url), ''), '') as "coverUrl",
-			coalesce(nullif(trim(b.language), ''), '') as language,
-			coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
-			coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
-			coalesce(nullif(trim(b.google_books_id), ''), '') as "googleBooksId",
-			coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
-			coalesce(b.published_year, 0)::int as "publishedYear",
-			coalesce(nullif(b.page_count, 0), 0)::int as "pageCount",
-			coalesce(rt.average_rating, 0) as "averageRating",
-			coalesce(rt.rating_count, 0)::int as "ratingCount",
-			coalesce(series_info.series_id, 0)::bigint as "seriesId",
-			coalesce(series_info.series_name, '') as "seriesName",
-			coalesce(series_info.book_order, 0)::numeric as "bookOrder",
-			coalesce(series_info.publication_order, 0)::numeric as "publicationOrder",
-			coalesce(series_info.chronological_order, 0)::numeric as "chronologicalOrder"
-		from book b
-		left join book_work bw on bw.id = b.work_id
-		left join user_book ub on ub.book_id = b.id
-		left join book_genre bg on bg.book_id = b.id
-		left join lateral (
+	const baseRows = authorId > 0
+		? await timePagePerf("DogEared Works", () => sql<BaseBookRow[]>`
 			select
-				candidate.series_id,
-				candidate.series_name,
-				candidate.book_order,
-				candidate.publication_order,
-				candidate.chronological_order
-			from (
-				select
-					s.id as series_id,
-					s.name as series_name,
-					sb.book_order,
-					sb.publication_order,
-					sb.chronological_order,
-					1 as priority
-				from series_book sb
-				join series s on s.id = sb.series_id
-				where sb.book_id = b.id
-				union all
-				select
-					s.id as series_id,
-					s.name as series_name,
-					sb.book_order,
-					sb.publication_order,
-					sb.chronological_order,
-					2 as priority
-				from book sibling
-				join series_book sb on sb.book_id = sibling.id
-				join series s on s.id = sb.series_id
-				where b.work_id is not null
-					and sibling.work_id = b.work_id
-				union all
-				select
-					s.id as series_id,
-					s.name as series_name,
-					bw.series_position as book_order,
-					bw.series_position as publication_order,
-					bw.series_position as chronological_order,
-					3 as priority
-				from series s
-				where s.id = bw.series_id
-			) candidate
-			order by candidate.priority asc, candidate.book_order nulls last, candidate.series_id asc
-			limit 1
-		) series_info on true
-		left join lateral (
+				b.id,
+				coalesce(b.work_id, b.id)::bigint as "workId",
+				coalesce(nullif(trim(bw.canonical_title), ''), nullif(trim(bw.title), ''), b.title) as title,
+				coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				coalesce(b.author_id, 0)::bigint as "authorId",
+				coalesce(nullif(trim(coalesce(bw.preferred_cover_url, b.cover_url)), ''), '') as "coverUrl",
+				coalesce(nullif(trim(b.language), ''), '') as language,
+				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(nullif(trim(b.google_books_id), ''), '') as "googleBooksId",
+				coalesce(nullif(trim(coalesce(bw.description, b.synopsis)), ''), '') as synopsis,
+				coalesce(bw.original_publication_year, b.published_year, 0)::int as "publishedYear",
+				coalesce(nullif(b.page_count, 0), 0)::int as "pageCount"
+			from book b
+			left join book_work bw on bw.id = b.work_id
+			where b.author_id = ${authorId}::bigint
+			order by coalesce(bw.original_publication_year, b.published_year, 999999) asc, b.title asc
+		`)
+		: await timePagePerf("DogEared Works", () => sql<BaseBookRow[]>`
 			select
-				round(avg(ub2.rating)::numeric, 2) as average_rating,
-				count(*) filter (where ub2.rating is not null)::int as rating_count
-			from user_book ub2
-			where ub2.book_id = b.id
-		) rt on true
-		where (
-			(${authorId} > 0 and b.author_id = ${authorId})
-			or lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
-		)
-		group by b.id, b.work_id, bw.canonical_title, bw.title, b.title, b.primary_author, b.author_id, b.cover_url, b.language, b.isbn10, b.isbn13, b.google_books_id, b.synopsis, b.published_year, b.page_count, rt.average_rating, rt.rating_count, series_info.series_id, series_info.series_name, series_info.book_order, series_info.publication_order, series_info.chronological_order
-		order by coalesce(series_info.series_name, '') asc, coalesce(series_info.book_order, 999999) asc, shelves desc, readers desc, b.title asc
-	`;
-	markPagePerfStage("local_books_loaded");
+				b.id,
+				coalesce(b.work_id, b.id)::bigint as "workId",
+				coalesce(nullif(trim(bw.canonical_title), ''), nullif(trim(bw.title), ''), b.title) as title,
+				coalesce(nullif(trim(b.primary_author), ''), 'Unknown') as author,
+				coalesce(b.author_id, 0)::bigint as "authorId",
+				coalesce(nullif(trim(coalesce(bw.preferred_cover_url, b.cover_url)), ''), '') as "coverUrl",
+				coalesce(nullif(trim(b.language), ''), '') as language,
+				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(nullif(trim(b.google_books_id), ''), '') as "googleBooksId",
+				coalesce(nullif(trim(coalesce(bw.description, b.synopsis)), ''), '') as synopsis,
+				coalesce(bw.original_publication_year, b.published_year, 0)::int as "publishedYear",
+				coalesce(nullif(b.page_count, 0), 0)::int as "pageCount"
+			from book b
+			left join book_work bw on bw.id = b.work_id
+			where lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
+			order by coalesce(bw.original_publication_year, b.published_year, 999999) asc, b.title asc
+		`);
+	const effectiveAuthorName = authorName || normalizeAuthorName(baseRows[0]?.author);
+	const rawBookIds = Array.from(new Set(baseRows.map((book) => Number(book.id || 0)).filter((id) => id > 0)));
+	const rawBookIdKey = [...rawBookIds].sort((a, b) => a - b).join("-");
+	const [
+		statsRows,
+		genreRows,
+		seriesRows,
+		authorCounts,
+		collections
+	] = await Promise.all([
+		rawBookIds.length > 0
+			? timePagePerf("ratings aggregation", () => sql<BookStatsRow[]>`
+				select
+					book_id,
+					count(book_id)::int as shelves,
+					count(distinct user_id)::int as readers,
+					coalesce(round(avg(rating)::numeric, 2), 0) as average_rating,
+					count(*) filter (where rating is not null)::int as rating_count
+				from user_book
+				where book_id = any(${rawBookIds}::bigint[])
+				group by book_id
+			`, "BookCard preparation")
+			: Promise.resolve([] as BookStatsRow[]),
+		rawBookIds.length > 0
+			? timePagePerf("genre aggregation", () => sql<BookGenreRow[]>`
+				select
+					book_id,
+					coalesce(array_agg(distinct genre_name order by genre_name) filter (where trim(coalesce(genre_name, '')) <> ''), '{}') as genres
+				from book_genre
+				where book_id = any(${rawBookIds}::bigint[])
+				group by book_id
+			`, "BookCard preparation")
+			: Promise.resolve([] as BookGenreRow[]),
+		rawBookIds.length > 0
+			? timePagePerf("Series lookup", () => sql<BookSeriesRow[]>`
+				with candidates as (
+					select
+						b.id as book_id,
+						s.id as series_id,
+						s.name as series_name,
+						sb.book_order,
+						sb.publication_order,
+						sb.chronological_order,
+						1 as priority
+					from book b
+					join series_book sb on sb.book_id = b.id
+					join series s on s.id = sb.series_id
+					where b.id = any(${rawBookIds}::bigint[])
+					union all
+					select
+						b.id as book_id,
+						s.id as series_id,
+						s.name as series_name,
+						sb.book_order,
+						sb.publication_order,
+						sb.chronological_order,
+						2 as priority
+					from book b
+					join book sibling on b.work_id is not null and sibling.work_id = b.work_id
+					join series_book sb on sb.book_id = sibling.id
+					join series s on s.id = sb.series_id
+					where b.id = any(${rawBookIds}::bigint[])
+					union all
+					select
+						b.id as book_id,
+						s.id as series_id,
+						s.name as series_name,
+						bw.series_position as book_order,
+						bw.series_position as publication_order,
+						bw.series_position as chronological_order,
+						3 as priority
+					from book b
+					join book_work bw on bw.id = b.work_id
+					join series s on s.id = bw.series_id
+					where b.id = any(${rawBookIds}::bigint[])
+				)
+				select distinct on (book_id)
+					book_id,
+					coalesce(series_id, 0)::bigint as series_id,
+					coalesce(series_name, '') as series_name,
+					coalesce(book_order, 0)::numeric as book_order,
+					coalesce(publication_order, 0)::numeric as publication_order,
+					coalesce(chronological_order, 0)::numeric as chronological_order
+				from candidates
+				order by book_id, priority asc, book_order nulls last, series_id asc
+			`)
+			: Promise.resolve([] as BookSeriesRow[]),
+		rawBookIds.length > 0
+			? timePagePerf("author metadata", () => sql<Array<{ shelves: number; readers: number }>>`
+				select
+					count(distinct concat(user_id::text, ':', coalesce(status, '')))::int as shelves,
+					count(distinct user_id)::int as readers
+				from user_book
+				where book_id = any(${rawBookIds}::bigint[])
+			`)
+			: Promise.resolve([] as Array<{ shelves: number; readers: number }>),
+		timePagePerf("editorial collections", () => loadCollectionsForAuthor(sql, { authorId, authorName: effectiveAuthorName }, 4, { ensureSchema: false }).catch(() => []))
+	]);
+	const statsByBookId = new Map(statsRows.map((row) => [Number(row.book_id || 0), row]));
+	const genresByBookId = new Map(genreRows.map((row) => [Number(row.book_id || 0), Array.isArray(row.genres) ? row.genres : []]));
+	const seriesByBookId = new Map(seriesRows.map((row) => [Number(row.book_id || 0), row]));
+	const rows = baseRows.map((row) => {
+		const bookId = Number(row.id || 0);
+		const stats = statsByBookId.get(bookId);
+		const series = seriesByBookId.get(bookId);
+		return {
+			...row,
+			shelves: Number(stats?.shelves || 0),
+			readers: Number(stats?.readers || 0),
+			genres: genresByBookId.get(bookId) || [],
+			averageRating: Number(stats?.average_rating || 0),
+			ratingCount: Number(stats?.rating_count || 0),
+			seriesId: Number(series?.series_id || 0),
+			seriesName: String(series?.series_name || ""),
+			bookOrder: Number(series?.book_order || 0),
+			publicationOrder: Number(series?.publication_order || 0),
+			chronologicalOrder: Number(series?.chronological_order || 0)
+		} satisfies BookRow;
+	});
 
 	if (rows.length > 0) {
 		authorName = normalizeAuthorName(rows[0].author);
@@ -383,42 +530,14 @@ try {
 	}
 
 	const bookIds = Array.from(new Set(books.map((book) => Number(book.id || 0)).filter((id) => id > 0)));
-	const authorCountsPromise = books.length > 0
-		? sql<Array<{ shelves: number; readers: number }>>`
-			select
-				count(distinct concat(ub.user_id::text, ':', coalesce(ub.status, '')))::int as shelves,
-				count(distinct ub.user_id)::int as readers
-			from user_book ub
-			join book b on b.id = ub.book_id
-			where lower(regexp_replace(coalesce(b.primary_author, ''), '[^[:alnum:]]+', '', 'g')) = ${canonical}
-		`
-		: Promise.resolve([] as Array<{ shelves: number; readers: number }>);
-	const viewerStatusPromise = viewerUserId && bookIds.length > 0
-		? sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
+	const statuses = viewerUserId && bookIds.length > 0
+		? await timePagePerf("shelf-state lookup", () => sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>>`
 				select book_id, status, rating
 				from user_book
 				where user_id = ${viewerUserId}::uuid
 					and book_id = any(${bookIds}::bigint[])
-			`
-		: Promise.resolve([] as Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>);
-	const openLibraryBioPromise = authorName && (!bio || !authorPhotoUrl)
-		? withRuntimeCache(`author-open-library-bio:v1:${canonicalizeCatalogAuthor(authorName)}`, 6 * 60 * 60 * 1000, () => fetchOpenLibraryBio(authorName)).catch(() => null)
-		: Promise.resolve(null);
-	const localBookKey = bookIds.sort((a, b) => a - b).join("-");
-	const externalBooksPromise = authorName
-		? withRuntimeCache(
-			`author-external-books:v1:${canonicalizeCatalogAuthor(authorName)}:${localBookKey}`,
-			60 * 60 * 1000,
-			() => fetchExternalAuthorBooks(authorName, books)
-		).catch(() => [])
-		: Promise.resolve([] as ExternalAuthorBook[]);
-	const [authorCounts, statuses, openLibrary, collections, loadedExternalBooks] = await Promise.all([
-		authorCountsPromise,
-		viewerStatusPromise,
-		openLibraryBioPromise,
-		loadCollectionsForAuthor(sql, { authorId, authorName }, 4).catch(() => []),
-		externalBooksPromise
-	]);
+			`)
+		: [] as Array<{ book_id: number; status: "want_to_read" | "reading" | "finished"; rating: number | null }>;
 	shelvesCount = Number(authorCounts[0]?.shelves || 0);
 	readersCount = Number(authorCounts[0]?.readers || 0);
 	viewerStatusByBookId = new Map(statuses.map((row) => [Number(row.book_id || 0), row.status]));
@@ -427,7 +546,37 @@ try {
 			.map((status) => [Number(status.book_id || 0), Number(status.rating || 0) || 0] as const)
 			.filter(([, rating]) => rating > 0)
 	);
-	markPagePerfStage("viewer_status_loaded");
+	const authorCacheKey = canonicalizeCatalogAuthor(authorName);
+	const bioCacheKey = `author-open-library-bio:v1:${authorCacheKey}`;
+	const externalBooksCacheKey = `author-external-books:v1:${authorCacheKey}:${rawBookIdKey}`;
+	const metadataStartedAt = performance.now();
+	const openLibrary = authorName && (!bio || !authorPhotoUrl)
+		? getRuntimeCacheValue<Awaited<ReturnType<typeof fetchOpenLibraryBio>>>(bioCacheKey)
+		: null;
+	if (authorName && (!bio || !authorPhotoUrl) && !openLibrary) {
+		externalBioDeferred = true;
+		warmAuthorExternalCache({
+			key: bioCacheKey,
+			ttlMs: 6 * 60 * 60 * 1000,
+			spanName: "author bio lookup",
+			loader: () => fetchOpenLibraryBio(authorName),
+			countValue: (value) => value ? 1 : 0
+		});
+	}
+	const cachedExternalBooks = authorName
+		? getRuntimeCacheValue<ExternalAuthorBook[]>(externalBooksCacheKey)
+		: null;
+	if (authorName && !cachedExternalBooks) {
+		externalDiscoveryDeferred = true;
+		warmAuthorExternalCache({
+			key: externalBooksCacheKey,
+			ttlMs: 60 * 60 * 1000,
+			spanName: "external author books",
+			loader: () => fetchExternalAuthorBooks(authorName, books),
+			countValue: (value) => Array.isArray(value) ? value.length : 0
+		});
+	}
+	recordPagePerfSpan("external discovery", performance.now() - metadataStartedAt, metadataStartedAt);
 	if (openLibrary) {
 		if (openLibrary.bio && !bio) {
 			bio = openLibrary.bio;
@@ -439,15 +588,15 @@ try {
 		}
 	}
 	featuredInCollections = collections;
-	externalBooks = loadedExternalBooks;
-	markPagePerfStage("author_metadata_loaded");
+	externalBooks = cachedExternalBooks || [];
 } catch (error) {
 	errorMessage = error instanceof Error ? error.message : "Failed to load author page.";
-	markPagePerfStage("load_failed");
+	recordPagePerfSpan("load failed", performance.now() - pagePerfStartedAt, pagePerfStartedAt);
 }
-markPagePerfStage("external_books_loaded");
+const bookCardPrepStartedAt = performance.now();
 const bibliographySections = buildAuthorBibliographySections(books, externalBooks);
 const knownBookCount = bibliographySections.reduce((total, section) => total + section.books.length, 0);
+recordPagePerfSpan("BookCard preparation", performance.now() - bookCardPrepStartedAt, bookCardPrepStartedAt);
 
 const displayName = authorName || requestedName || slug.replace(/-/g, " ");
 const cleanAuthorPath = displayName ? authorCanonicalPath(displayName) : "/authors";
@@ -460,13 +609,15 @@ if (displayName) {
 			totalMs: performance.now() - pagePerfStartedAt,
 			success: true,
 			httpStatus: 301,
-			spans: pagePerfStages,
+			spans: pagePerfSpans,
 			metadata: {
 				authenticated: !!viewerUserId,
 				redirect: true,
 				localBookCount: books.length,
 				externalBookCount: externalBooks.length,
-				collectionCount: featuredInCollections.length
+				collectionCount: featuredInCollections.length,
+				externalDiscoveryDeferred,
+				externalBioDeferred
 			}
 		});
 		return Astro.redirect(cleanAuthorPath, 301);
@@ -500,13 +651,15 @@ recordPerformanceEventSafe({
 	totalMs: performance.now() - pagePerfStartedAt,
 	success: !errorMessage,
 	httpStatus: errorMessage ? 500 : 200,
-	spans: pagePerfStages,
+	spans: pagePerfSpans,
 	metadata: {
 		authenticated: !!viewerUserId,
 		redirect: false,
 		localBookCount: books.length,
 		externalBookCount: externalBooks.length,
-		collectionCount: featuredInCollections.length
+		collectionCount: featuredInCollections.length,
+		externalDiscoveryDeferred,
+		externalBioDeferred
 	}
 });
 ---

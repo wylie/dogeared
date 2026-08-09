@@ -100,6 +100,41 @@ Profile remains the slowest representative route at about 1.8 s warm after this 
 - Same-origin links/forms are progressively enhanced by Astro client navigation and keep browser history behavior.
 - Notification badge state remains user-specific and client-refreshed through the existing count endpoint.
 - Public external Author Detail caches are keyed by normalized author plus local book IDs and do not contain user-specific shelf state.
+
+## 2026-08-09 Author Detail Telemetry Follow-up
+
+Production Admin Performance for `/author/[slug]` showed about 38 recent `page.author-detail` samples: p50 512.7 ms, p95 1,579.3 ms, p99 1,830.5 ms, and 0% errors. The user-provided production sample was p50 about 457 ms, p95 about 1.64 s, and p99 about 1.84 s across about 26 samples.
+
+The old Author Detail telemetry used cumulative stage marks, so the apparent `viewer status loaded` span hid multiple independent operations. Slow request waterfalls showed three contributors:
+
+| Span / stage | Slow sample signal | Finding |
+| --- | ---: | --- |
+| `schema ready` | up to 1,005.6 ms | Read-only Author renders were still awaiting canonical Work and Series schema/backfill readiness. |
+| `local books loaded` | up to 1,308.1 ms | One broad query combined author matching, shelf counts, readers, ratings, genres, and per-row Series resolution. |
+| `viewer status loaded` | up to 762.3 ms | This coarse stage also waited for author counts, shelf state, collections, Open Library bio, and external missing-book discovery. |
+
+Changes in this pass:
+
+- Replaced cumulative Author Detail stage marks with real timing spans and relative `startMs` offsets for request waterfalls.
+- Removed canonical Work and Series schema/backfill setup from the read-only Author Detail render path.
+- Kept canonical Work/Edition reuse by reading stored `book.work_id`, `book_work`, and `series_book` relationships; Author Detail does not run search-style canonical matching while rendering.
+- Split the broad local book query into a narrow DogEared Work row query plus batched Series lookup, ratings/shelf aggregation, genre aggregation, author metadata counts, editorial collections, and current-reader shelf state.
+- Used `book.author_id` when the canonical author row exists, with normalized `primary_author` matching retained only as the fallback for slugs without an author record.
+- Changed optional Open Library bio/photo and "not yet in DogEared" discovery to cache-only SSR reads with background warming on misses, so provider latency no longer blocks the initial Author page.
+- Added a read-only `loadCollectionsForAuthor(..., { ensureSchema: false })` path so Author Detail does not run collection DDL/index setup on GET.
+
+Post-change local route timings against the Astro dev server, excluding the first HMR/cold request:
+
+| Route | Samples | Median | Max warm sample |
+| --- | ---: | ---: | ---: |
+| `/author/sarah-j-maas` | 4 warm | 137.2 ms | 220.0 ms |
+| `/author/tui-t-sutherland` | 5 | 138.9 ms | 253.7 ms |
+| `/author/arthur-conan-doyle` | 5 | 129.6 ms | 219.4 ms |
+| `/author/samantha-harvey` | 5 | 192.0 ms | 209.4 ms |
+
+Latest local `page.author-detail` telemetry after the collections change showed totals from 113.6 ms to 198.3 ms for sampled warm requests. Typical spans were author lookup 34-105 ms, DogEared Works 33-38 ms, Series lookup 39-106 ms, ratings aggregation 38-45 ms, genre aggregation 37-45 ms, editorial collections 39-106 ms, and BookCard preparation about 1 ms. External discovery recorded 0-3 ms because SSR only reads cache and schedules background warming when data is absent.
+
+Production p95 should be rechecked after deployment and traffic. The expected p95 improvement comes from eliminating external-provider waits, render-path schema/backfill readiness, and per-row lateral aggregation from the Author Detail critical path.
 - Browser automation setup was attempted, but the in-app browser connector failed with a tool-side sandbox metadata error before interaction. Manual browser verification was therefore not completed in this run.
 
 ## Commands

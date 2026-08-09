@@ -288,8 +288,13 @@ export async function loadCollectionBySlug(sql: NeonQueryFunction<false, false>,
 	return { ...collection, books: bookMap.get(collection.id) || [] };
 }
 
-export async function loadCollectionsForAuthor(sql: NeonQueryFunction<false, false>, input: { authorId?: number; authorName?: string }, limit = 4): Promise<CollectionRecord[]> {
-	await ensureCollectionSchema(sql);
+export async function loadCollectionsForAuthor(
+	sql: NeonQueryFunction<false, false>,
+	input: { authorId?: number; authorName?: string },
+	limit = 4,
+	options: { ensureSchema?: boolean } = {}
+): Promise<CollectionRecord[]> {
+	if (options.ensureSchema !== false) await ensureCollectionSchema(sql);
 	const authorId = toCount(input.authorId);
 	const authorName = normalizeText(input.authorName).toLowerCase();
 	if (authorId <= 0 && !authorName) return [];
@@ -303,7 +308,7 @@ export async function loadCollectionsForAuthor(sql: NeonQueryFunction<false, fal
 		where c.publication_state = 'published'
 			and (
 				(${authorId}::bigint > 0 and b.author_id = ${authorId}::bigint)
-				or (${authorName} <> '' and lower(coalesce(b.primary_author, '')) = ${authorName})
+				or (${authorId}::bigint <= 0 and ${authorName} <> '' and lower(coalesce(b.primary_author, '')) = ${authorName})
 			)
 		order by c.featured desc, c.sort_order asc, c.title asc
 		limit ${Math.max(1, Math.min(12, Number(limit) || 4))}

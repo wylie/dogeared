@@ -53,6 +53,12 @@ export async function withRuntimeCache<T>(
 	}
 }
 
+export function getRuntimeCacheValue<T>(key: string): T | null {
+	const existing = getStore().get(key);
+	if (!existing || existing.expiresAt <= Date.now()) return null;
+	return existing.value as T;
+}
+
 export function createPublicCacheControl(maxAgeSeconds: number, staleWhileRevalidateSeconds = 0) {
 	const maxAge = Math.max(0, Math.floor(maxAgeSeconds));
 	const swr = Math.max(0, Math.floor(staleWhileRevalidateSeconds));

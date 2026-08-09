@@ -217,6 +217,8 @@ Status: Complete
 
 Author pages show author metadata through `AuthorSection`, reader/shelf counts, editorial collections featuring the author, and a bibliography organized around what the author has written. Series sections are the primary grouping, reuse the shared Series section presentation from Book Detail, append `Series` to their headings, and mix DogEared Works with known missing titles in reading order. Series entries render as `CollectionBookCard` items with standard shelf controls; Standalone Books is the only non-series grouping and remains a full BookCard grid sorted by publication date. Grouping uses structured series metadata from the exact representative row, another edition row for the same Work, canonical Work fields, or trusted known-series inference for external missing titles. A title is treated as standalone only when no structured or trusted series relationship exists.
 
+Author Detail rendering is local-first. The page does not run canonical Work matching, schema setup, or external provider fetches on the critical SSR path. It loads the author identity, DogEared Work rows, Series relationships, rating/shelf aggregates, genres, editorial collections, and current-reader shelf state in bounded batch queries, then groups Series and standalone books in memory. Optional Open Library bio/photo and "not yet in DogEared" discovery are read from short-lived public runtime cache during SSR and warmed in the background on misses, so provider latency cannot drive Author Detail p95.
+
 Limitations: Author bio and photo may be missing.
 
 ### Cover Proxy
