@@ -1,7 +1,9 @@
 import type { getNeonSql } from "./neon.ts";
 import { canonicalCatalogDisplayWorkKey } from "./catalogKeys.ts";
+import { normalizeReadingFormat, type ReadingFormat } from "./readingFormats.ts";
 
 type Sql = ReturnType<typeof getNeonSql>;
+let finishedBooksSchemaReady: Promise<void> | null = null;
 
 export type FinishedBookGenre = {
 	slug: string;
@@ -30,6 +32,7 @@ export type CanonicalFinishedBook = {
 	reviewUpdatedAt: string;
 	finishedDate: string;
 	updatedAt: string;
+	readingFormat: ReadingFormat;
 	genres: FinishedBookGenre[];
 	genreNames: string[];
 	seriesId: number | null;
@@ -57,6 +60,7 @@ type RawCanonicalFinishedBookRow = {
 	review_updated_at: string | null;
 	finished_date: string | null;
 	updated_at: string | null;
+	reading_format: string | null;
 	genres: FinishedBookGenre[] | string | null;
 	series_id: number | null;
 	series_name: string | null;
@@ -98,6 +102,18 @@ function parseGenres(value: RawCanonicalFinishedBookRow["genres"]): FinishedBook
 		byName.set(name.toLowerCase(), { slug, name });
 	}
 	return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function ensureFinishedBooksSchema(sql: Sql) {
+	if (!finishedBooksSchemaReady) {
+		finishedBooksSchemaReady = sql`alter table user_book add column if not exists reading_format text not null default 'unknown'`.then(() => undefined);
+	}
+	try {
+		await finishedBooksSchemaReady;
+	} catch (error) {
+		finishedBooksSchemaReady = null;
+		throw error;
+	}
 }
 
 function canonicalFinishedBookKey(input: {
@@ -221,6 +237,7 @@ function mapFinishedBookRow(row: RawCanonicalFinishedBookRow): CanonicalFinished
 		reviewUpdatedAt: cleanText(row.review_updated_at),
 		finishedDate,
 		updatedAt: cleanText(row.updated_at),
+		readingFormat: normalizeReadingFormat(row.reading_format),
 		genres,
 		genreNames: genres.map((genre) => genre.name),
 		seriesId: row.series_id ? Number(row.series_id) : null,
@@ -229,6 +246,7 @@ function mapFinishedBookRow(row: RawCanonicalFinishedBookRow): CanonicalFinished
 }
 
 export async function loadFinishedBooksForReader(sql: Sql, userId: string) {
+	await ensureFinishedBooksSchema(sql);
 	const rows = await sql<RawCanonicalFinishedBookRow[]>`
 		select
 			b.id as book_id,
@@ -251,6 +269,7 @@ export async function loadFinishedBooksForReader(sql: Sql, userId: string) {
 			ub.review_updated_at::text as review_updated_at,
 			ub.finished_date::text as finished_date,
 			ub.updated_at::text as updated_at,
+			coalesce(nullif(trim(ub.reading_format), ''), 'unknown') as reading_format,
 			(
 				select coalesce(
 					json_agg(distinct jsonb_build_object('slug', bg.genre_slug, 'name', bg.genre_name))

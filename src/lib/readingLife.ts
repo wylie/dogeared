@@ -1,5 +1,6 @@
 import { canonicalizeFinishedBooks, filterCanonicalFinishedBooksForYear } from "./finishedBooks.ts";
 import { resolveReadingGoalProgress, type ReadingGoalProgress } from "./readingGoal.ts";
+import { normalizeReadingFormat, readingFormatLabel, type ReadingFormat } from "./readingFormats.ts";
 
 export type ReadingLifeGenre = {
 	slug: string;
@@ -20,6 +21,7 @@ export type ReadingLifeFinishedBook = {
 	finishedDate?: string;
 	updatedAt?: string;
 	rating?: number | null;
+	readingFormat?: ReadingFormat;
 	genres?: ReadingLifeGenre[];
 	seriesId?: number | null;
 	seriesName?: string;
@@ -32,6 +34,7 @@ export type ReadingLifeCurrentBook = {
 	coverUrl?: string;
 	currentPage?: number;
 	totalPages?: number;
+	readingFormat?: ReadingFormat;
 	updatedAt?: string;
 };
 
@@ -42,12 +45,14 @@ export type ReadingLifeProgressEvent = {
 	author?: string;
 	date: string;
 	pageDelta: number;
+	readingFormat?: ReadingFormat;
 };
 
 export type ReadingLifeTimelineFilters = {
 	year?: string | number;
 	month?: string | number;
 	query?: string;
+	format?: string;
 };
 
 export type ReadingLifeTimelineItem = ReadingLifeFinishedBook & {
@@ -133,6 +138,16 @@ export type ReadingLifeYearSummary = {
 	topGenre: string;
 };
 
+export type ReadingLifeFormatMetric = {
+	format: ReadingFormat;
+	label: string;
+	books: number;
+	pages: number;
+	readingDays: number;
+	finishedBooks: number;
+	percent: number;
+};
+
 export type ReadingLifeSummary = {
 	overview: ReadingLifeOverview;
 	timeline: ReadingLifeTimelineItem[];
@@ -148,6 +163,7 @@ export type ReadingLifeSummary = {
 	};
 	funStats: ReadingLifeFunStats;
 	yearSummaries: ReadingLifeYearSummary[];
+	readingFormatMetrics: ReadingLifeFormatMetric[];
 	availableYears: number[];
 };
 
@@ -254,15 +270,63 @@ export function filterReadingTimeline(items: ReadingLifeTimelineItem[], filters:
 	const year = Number(filters.year || 0) || 0;
 	const month = Number(filters.month || 0) || 0;
 	const query = cleanText(filters.query).toLowerCase();
+	const format = normalizeReadingFormat(filters.format);
 	return items.filter((item) => {
 		if (year > 0 && item.year !== year) return false;
 		if (month > 0 && item.month !== month) return false;
+		if (format !== "unknown" && normalizeReadingFormat(item.readingFormat) !== format) return false;
 		if (query) {
 			const haystack = `${item.title} ${item.author} ${(item.genres || []).map((genre) => genre.name).join(" ")}`.toLowerCase();
 			if (!haystack.includes(query)) return false;
 		}
 		return true;
 	});
+}
+
+export function buildReadingFormatMetrics(input: {
+	finishedBooks: ReadingLifeFinishedBook[];
+	progressEvents: ReadingLifeProgressEvent[];
+}) {
+	const formats: ReadingFormat[] = ["physical", "ebook", "audio"];
+	const rows = new Map<ReadingFormat, ReadingLifeFormatMetric>();
+	const readingDays = new Map<ReadingFormat, Set<string>>();
+	for (const format of formats) {
+		rows.set(format, {
+			format,
+			label: readingFormatLabel(format),
+			books: 0,
+			pages: 0,
+			readingDays: 0,
+			finishedBooks: 0,
+			percent: 0
+		});
+		readingDays.set(format, new Set<string>());
+	}
+	for (const book of input.finishedBooks) {
+		const format = normalizeReadingFormat(book.readingFormat);
+		if (format === "unknown") continue;
+		const row = rows.get(format);
+		if (!row) continue;
+		row.books += 1;
+		row.finishedBooks += 1;
+		row.pages += Math.max(0, Math.round(toNumber(book.pageCount)));
+		const key = getFinishedDate(book);
+		if (key) readingDays.get(format)?.add(key);
+	}
+	for (const event of input.progressEvents) {
+		const format = normalizeReadingFormat(event.readingFormat);
+		if (format === "unknown") continue;
+		const row = rows.get(format);
+		if (!row) continue;
+		const key = dateKey(event.date);
+		if (key) readingDays.get(format)?.add(key);
+	}
+	const totalBooks = Array.from(rows.values()).reduce((sum, row) => sum + row.finishedBooks, 0);
+	return Array.from(rows.values()).map((row) => ({
+		...row,
+		readingDays: readingDays.get(row.format)?.size || 0,
+		percent: totalBooks > 0 ? Math.round((row.finishedBooks / totalBooks) * 100) : 0
+	}));
 }
 
 export function calculateReadingStreak(activityDates: string[], now = new Date()) {
@@ -673,6 +737,7 @@ export function buildReadingLifeSummary(input: {
 	const rollingStart = dateKeyFromTime((dateFromKey(todayKey)?.getTime() || now.getTime()) - (364 * MS_PER_DAY));
 	const finishedBooks = canonicalizeFinishedBooks(input.finishedBooks);
 	const timeline = buildReadingTimeline(finishedBooks);
+	const readingFormatMetrics = buildReadingFormatMetrics({ finishedBooks, progressEvents: input.progressEvents });
 	const thisYearBooks = filterCanonicalFinishedBooksForYear(timeline, year);
 	const pagesReadThisYear = thisYearBooks.reduce((sum, book) => sum + Math.max(0, Math.round(toNumber(book.pageCount))), 0);
 	const ratings = finishedBooks.map((book) => clampRating(book.rating)).filter((rating) => rating > 0);
@@ -708,6 +773,7 @@ export function buildReadingLifeSummary(input: {
 		authorInsights,
 		funStats: buildFunStats(finishedBooks),
 		yearSummaries: buildYearSummaries(finishedBooks),
+		readingFormatMetrics,
 		availableYears: Array.from(new Set(timeline.map((book) => book.year))).sort((a, b) => b - a)
 	};
 }

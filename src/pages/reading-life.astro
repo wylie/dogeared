@@ -12,6 +12,7 @@ import {
 	type ReadingLifeFinishedBook,
 	type ReadingLifeProgressEvent
 } from "../lib/readingLife.ts";
+import { readingFormatIcon, readingFormatLabel, readingFormatOptions, normalizeReadingFormat } from "../lib/readingFormats";
 import { recordPerformanceEventSafe } from "../lib/performanceTelemetry";
 
 export const prerender = false;
@@ -29,6 +30,7 @@ type RawCurrentBookRow = {
 	cover_url: string;
 	current_page: number;
 	total_pages: number;
+	reading_format: string;
 	updated_at: string | null;
 };
 
@@ -39,6 +41,7 @@ type RawProgressRow = {
 	primary_author: string;
 	date: string;
 	page_delta: number;
+	reading_format: string;
 };
 
 function formatDate(value: string) {
@@ -136,6 +139,11 @@ function formatRating(value: number | null | undefined) {
 	return rating > 0 ? `${rating}/5` : "Unrated";
 }
 
+function formatFilterLabel(value: string) {
+	const format = normalizeReadingFormat(value);
+	return format === "unknown" ? "All formats" : readingFormatLabel(format);
+}
+
 function ratingStars(value: number | null | undefined) {
 	const rating = Math.max(0, Math.min(5, Math.round(Number(value || 0))));
 	return rating > 0 ? Array.from({ length: 5 }, (_, index) => index < rating ? "★" : "☆").join("") : "";
@@ -169,6 +177,7 @@ async function ensureReadingLifeSchema(sql: ReturnType<typeof getNeonSql>) {
 		readingLifeSchemaReady = Promise.all([
 			sql`alter table user_book add column if not exists rating int`,
 			sql`alter table user_book add column if not exists finished_reflection text not null default ''`,
+			sql`alter table user_book add column if not exists reading_format text not null default 'unknown'`,
 			sql`
 				create table if not exists user_reading_progress_event (
 					id bigserial primary key,
@@ -198,6 +207,8 @@ const currentYear = now.getUTCFullYear();
 const selectedYear = Number(Astro.url.searchParams.get("year") || currentYear) || currentYear;
 const selectedMonth = Number(Astro.url.searchParams.get("month") || 0) || 0;
 const timelineQuery = String(Astro.url.searchParams.get("q") || "").trim();
+const selectedFormat = normalizeReadingFormat(Astro.url.searchParams.get("format"));
+const formatFilterOptions = [{ value: "", label: "All" }, ...readingFormatOptions(false).map((format) => ({ value: format.value, label: format.label }))];
 const sectionLinks = [
 	{ id: "overview", label: "Overview" },
 	{ id: "timeline", label: "History" },
@@ -232,6 +243,7 @@ if (viewerUserId) {
 					b.cover_url,
 					ub.current_page,
 					ub.total_pages,
+					coalesce(nullif(trim(ub.reading_format), ''), 'unknown') as reading_format,
 					ub.updated_at::text as updated_at
 				from user_book ub
 				join book b on b.id = ub.book_id
@@ -247,10 +259,12 @@ if (viewerUserId) {
 					b.title,
 					b.primary_author,
 					pe.recorded_at::date::text as date,
-					pe.page_delta
+					pe.page_delta,
+					coalesce(nullif(trim(ub.reading_format), ''), 'unknown') as reading_format
 				from user_reading_progress_event pe
 				join book b on b.id = pe.book_id
 				left join book_work bw on bw.id = b.work_id
+				left join user_book ub on ub.user_id = pe.user_id and ub.book_id = pe.book_id
 				where pe.user_id = ${viewerUserId}::uuid
 				order by pe.recorded_at desc
 			`
@@ -268,6 +282,7 @@ if (viewerUserId) {
 			coverUrl: String(row.cover_url || ""),
 			currentPage: Number(row.current_page || 0),
 			totalPages: Number(row.total_pages || 0),
+			readingFormat: normalizeReadingFormat(row.reading_format),
 			updatedAt: String(row.updated_at || "")
 		}));
 		progressEvents = progressRows.map((row) => ({
@@ -276,7 +291,8 @@ if (viewerUserId) {
 			title: String(row.title || "Untitled"),
 			author: String(row.primary_author || "Unknown Author"),
 			date: String(row.date || ""),
-			pageDelta: Number(row.page_delta || 0)
+			pageDelta: Number(row.page_delta || 0),
+			readingFormat: normalizeReadingFormat(row.reading_format)
 		}));
 		markPagePerfStage("reading_life_loaded");
 	} catch (error) {
@@ -297,7 +313,8 @@ pagePerfStages.daily_reading_activity = Math.round((performance.now() - readingL
 const timelineItems = filterReadingTimeline(readingLife.timeline, {
 	year: selectedYear,
 	month: selectedMonth,
-	query: timelineQuery
+	query: timelineQuery,
+	format: selectedFormat
 });
 const calendarDays = readingLife.calendarDays;
 const todayKey = now.toISOString().slice(0, 10);
@@ -335,6 +352,7 @@ const volumeRanges = volumeRangeOptions.map((range) => {
 	};
 });
 const hasReadingLifeData = finishedBooks.length > 0 || currentBooks.length > 0 || progressEvents.length > 0;
+const hasReadingFormatData = readingLife.readingFormatMetrics.some((row) => row.finishedBooks > 0 || row.readingDays > 0);
 const yearOptions = readingLife.availableYears.length > 0 ? readingLife.availableYears : [currentYear];
 const months = Array.from({ length: 12 }, (_, index) => index + 1);
 
@@ -478,12 +496,56 @@ recordPerformanceEventSafe({
 														<small title={book.author}>{book.author}</small>
 													</span>
 												</div>
-												<span class="current-book-progress">{progress > 0 ? `${progress}% read` : "Progress forming"}</span>
+												<span class="current-book-progress">
+													{normalizeReadingFormat(book.readingFormat) !== "unknown" && (
+														<span class="format-chip" aria-label={readingFormatLabel(book.readingFormat)} title={readingFormatLabel(book.readingFormat)}>
+															<span class="material-icons" aria-hidden="true">{readingFormatIcon(book.readingFormat)}</span>
+															<span class="sr-only">{readingFormatLabel(book.readingFormat)}</span>
+														</span>
+													)}
+													<span>{progress > 0 ? `${progress}% read` : "Progress forming"}</span>
+												</span>
 											</a>
 										</li>
 									);
 								})}
 							</ul>
+						</div>
+					)}
+				</section>
+
+				<section id="formats" class="panel" aria-labelledby="formats-title">
+					<div class="section-head">
+						<div>
+							<p class="eyebrow">Reading formats</p>
+							<h2 id="formats-title">How you experienced books</h2>
+						</div>
+					</div>
+					{!hasReadingFormatData ? (
+						<p class="empty-state">No reading format information yet.</p>
+					) : (
+						<div class="format-metrics" aria-label="Reading format metrics">
+							{readingLife.readingFormatMetrics.map((format) => (
+								<article class="format-metric-card">
+									<div class="format-metric-head">
+										<span class="format-chip" aria-label={format.label} title={format.label}>
+											<span class="material-icons" aria-hidden="true">{readingFormatIcon(format.format)}</span>
+											<span class="sr-only">{format.label}</span>
+										</span>
+										<div>
+											<strong>{format.percent > 0 ? `${format.percent}%` : "0%"}</strong>
+											<span>{format.label}</span>
+										</div>
+									</div>
+									<div class="format-bar" aria-hidden="true"><span style={`width:${Math.max(0, Math.min(100, format.percent))}%`}></span></div>
+									<dl>
+										<div><dt>Books</dt><dd>{format.books.toLocaleString()}</dd></div>
+										<div><dt>Pages</dt><dd>{format.pages.toLocaleString()}</dd></div>
+										<div><dt>Reading days</dt><dd>{format.readingDays.toLocaleString()}</dd></div>
+										<div><dt>Finished</dt><dd>{format.finishedBooks.toLocaleString()}</dd></div>
+									</dl>
+								</article>
+							))}
 						</div>
 					)}
 				</section>
@@ -514,8 +576,15 @@ recordPerformanceEventSafe({
 							<span>Search</span>
 							<input type="search" name="q" value={timelineQuery} placeholder="Title, author, or genre" />
 						</label>
+						<label>
+							<span>Format</span>
+							<select name="format" aria-label="Reading format filter">
+								{formatFilterOptions.map((format) => <option value={format.value} selected={format.value === (selectedFormat === "unknown" ? "" : selectedFormat)}>{format.label}</option>)}
+							</select>
+						</label>
 						<button type="submit">Apply</button>
 					</form>
+					{selectedFormat !== "unknown" && <p class="text-alt">Filtered to {formatFilterLabel(selectedFormat)}.</p>}
 					{timelineItems.length === 0 ? (
 						<p class="empty-state">No finished books match these filters yet.</p>
 					) : (
@@ -527,7 +596,15 @@ recordPerformanceEventSafe({
 									</a>
 									<div>
 										<p class="timeline-date">{formatDate(book.dateKey)}</p>
-										<h3><a href={bookHref(book.id)}>{book.title}</a></h3>
+										<h3 class="timeline-title-row">
+											{normalizeReadingFormat(book.readingFormat) !== "unknown" && (
+												<span class="format-chip" aria-label={readingFormatLabel(book.readingFormat)} title={readingFormatLabel(book.readingFormat)}>
+													<span class="material-icons" aria-hidden="true">{readingFormatIcon(book.readingFormat)}</span>
+													<span class="sr-only">{readingFormatLabel(book.readingFormat)}</span>
+												</span>
+											)}
+											<a href={bookHref(book.id)}>{book.title}</a>
+										</h3>
 										<p class="meta">
 											{timelineAuthorHref(book)
 												? <a href={timelineAuthorHref(book)}>{book.author}</a>
@@ -895,18 +972,94 @@ recordPerformanceEventSafe({
 		font-weight: 700;
 	}
 	.overview-grid,
+	.format-metrics,
 	.fun-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 		gap: 0.7rem;
 	}
 	.memory-card,
+	.format-metric-card,
 	.fun-grid article {
 		background: rgba(255, 255, 255, 0.68);
 		border: var(--border-subtle);
 		border-radius: var(--radius-sm);
 		padding: 0.8rem;
 		min-width: 0;
+	}
+	.format-metric-head {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+	}
+	.format-metric-head strong {
+		display: block;
+		color: var(--color-text);
+		font-size: 1.36rem;
+		line-height: 1;
+	}
+	.format-metric-head span {
+		display: block;
+		color: var(--color-text-muted);
+		font-size: 0.86rem;
+		font-weight: 750;
+	}
+	.format-chip {
+		flex: 0 0 26px;
+		width: 26px;
+		height: 26px;
+		border-radius: 999px;
+		display: inline-grid;
+		place-items: center;
+		background: rgba(87, 117, 144, 0.12);
+		color: var(--color-nav);
+	}
+	.format-chip .material-icons {
+		font-size: 1.02rem;
+		line-height: 1;
+	}
+	.format-bar {
+		height: 0.44rem;
+		margin: 0.65rem 0;
+		border-radius: 999px;
+		background: rgba(87, 117, 144, 0.14);
+		overflow: hidden;
+	}
+	.format-bar span {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--color-primary);
+	}
+	.format-metric-card dl {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.48rem;
+		margin: 0;
+	}
+	.format-metric-card dl div {
+		min-width: 0;
+	}
+	.format-metric-card dt {
+		color: var(--color-text-muted);
+		font-size: 0.76rem;
+		font-weight: 800;
+	}
+	.format-metric-card dd {
+		margin: 0.12rem 0 0;
+		color: var(--color-text);
+		font-weight: 800;
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 	.memory-card.featured {
 		background: var(--color-chip-genre);
@@ -1036,7 +1189,9 @@ recordPerformanceEventSafe({
 		white-space: nowrap;
 	}
 	.current-book-progress {
-		display: block;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.38rem;
 		margin-top: auto;
 		color: var(--color-primary);
 		font-size: 0.84rem;
@@ -1065,7 +1220,7 @@ recordPerformanceEventSafe({
 	}
 	.timeline-filters {
 		display: grid;
-		grid-template-columns: minmax(120px, 0.5fr) minmax(140px, 0.6fr) minmax(180px, 1fr) auto;
+		grid-template-columns: minmax(120px, 0.5fr) minmax(140px, 0.6fr) minmax(180px, 1fr) minmax(140px, 0.6fr) auto;
 		gap: 0.65rem;
 		align-items: end;
 		margin-bottom: 1rem;
@@ -1118,6 +1273,12 @@ recordPerformanceEventSafe({
 	.timeline-list h3 {
 		margin: 0.08rem 0;
 		font-size: 1rem;
+	}
+	.timeline-title-row {
+		display: flex;
+		align-items: center;
+		gap: 0.42rem;
+		min-width: 0;
 	}
 	.timeline-list a,
 	.meta a {

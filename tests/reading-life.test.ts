@@ -5,12 +5,14 @@ import { authorHref } from "../src/lib/author.ts";
 import {
 	buildDailyReadingActivity,
 	buildGenreInsights,
+	buildReadingFormatMetrics,
 	buildReadingCalendar,
 	buildReadingLifeSummary,
 	buildReadingTimeline,
 	calculateReadingStreak,
 	filterReadingTimeline
 } from "../src/lib/readingLife.ts";
+import { normalizeReadingFormat, readingFormatIcon, readingFormatLabel } from "../src/lib/readingFormats.ts";
 
 const finishedBooks = [
 	{
@@ -83,6 +85,57 @@ test("timeline supports year, month, and search filters", () => {
 	assert.deepEqual(filterReadingTimeline(timeline, { year: 2026, query: "spring" }).map((book) => book.title), ["Spring Notes"]);
 	assert.deepEqual(filterReadingTimeline(timeline, { year: 2026, query: "avery" }).map((book) => book.title), ["Spring Notes", "Winter Pages"]);
 	assert.deepEqual(filterReadingTimeline(timeline, { query: "libraries" }).map((book) => book.title), ["Ancient Libraries"]);
+});
+
+test("timeline supports reading format filters without exposing Unknown as a primary filter", () => {
+	const timeline = buildReadingTimeline([
+		{ ...finishedBooks[0], readingFormat: "physical" },
+		{ ...finishedBooks[1], readingFormat: "ebook" },
+		{ ...finishedBooks[2], readingFormat: "audio" }
+	]);
+	assert.deepEqual(filterReadingTimeline(timeline, { format: "physical" }).map((book) => book.title), ["Winter Pages"]);
+	assert.deepEqual(filterReadingTimeline(timeline, { format: "ebook" }).map((book) => book.title), ["Spring Notes"]);
+	assert.deepEqual(filterReadingTimeline(timeline, { format: "audio" }).map((book) => book.title), ["Ancient Libraries"]);
+	assert.deepEqual(filterReadingTimeline(timeline, { format: "" }).map((book) => book.title), ["Spring Notes", "Winter Pages", "Ancient Libraries"]);
+});
+
+test("reading format metrics calculate books, pages, finished books, reading days, and percentages", () => {
+	const metrics = buildReadingFormatMetrics({
+		finishedBooks: [
+			{ ...finishedBooks[0], readingFormat: "physical" },
+			{ ...finishedBooks[1], readingFormat: "ebook" },
+			{ ...finishedBooks[2], readingFormat: "audio" },
+			{ id: 4, title: "Legacy Row", author: "Unknown", pageCount: 100, finishedDate: "2026-03-01", readingFormat: "unknown" }
+		],
+		progressEvents: [
+			{ bookId: 1, date: "2026-01-11", pageDelta: 20, readingFormat: "physical" },
+			{ bookId: 1, date: "2026-01-12", pageDelta: 20, readingFormat: "physical" },
+			{ bookId: 2, date: "2026-02-01", pageDelta: 10, readingFormat: "ebook" },
+			{ bookId: 4, date: "2026-03-01", pageDelta: 10, readingFormat: "unknown" }
+		]
+	});
+	const physical = metrics.find((row) => row.format === "physical");
+	const ebook = metrics.find((row) => row.format === "ebook");
+	const audio = metrics.find((row) => row.format === "audio");
+	assert.equal(physical?.books, 1);
+	assert.equal(physical?.pages, 320);
+	assert.equal(physical?.finishedBooks, 1);
+	assert.equal(physical?.readingDays, 2);
+	assert.equal(physical?.percent, 33);
+	assert.equal(ebook?.pages, 180);
+	assert.equal(ebook?.readingDays, 2);
+	assert.equal(audio?.pages, 420);
+	assert.equal(audio?.readingDays, 1);
+});
+
+test("reading format utility normalizes supported values and labels accessible icons", () => {
+	assert.equal(normalizeReadingFormat("Physical Book"), "physical");
+	assert.equal(normalizeReadingFormat("E-reader"), "ebook");
+	assert.equal(normalizeReadingFormat("Audiobook"), "audio");
+	assert.equal(normalizeReadingFormat(""), "unknown");
+	assert.equal(readingFormatLabel("physical"), "Physical book");
+	assert.equal(readingFormatIcon("ebook"), "tablet_mac");
+	assert.equal(readingFormatIcon("unknown"), "");
 });
 
 test("reading life canonicalizes finished Works before overview and timeline counts", () => {

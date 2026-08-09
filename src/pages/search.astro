@@ -890,6 +890,7 @@ recordPerformanceEventSafe({
 		resolveShelfDropdownFromTarget,
 		statusLabel,
 		saveShelfEntryWithRetry,
+		prepareReadingFormatForShelfStatus,
 		toggleShelfMenu,
 		initRatingControls
 	} from "../lib/shelfClient.ts";
@@ -1083,6 +1084,7 @@ recordPerformanceEventSafe({
 			if (categories.length > 0) draft.categories = categories;
 			if (description && !draft.description) draft.description = description;
 			applyStatus(draft, selectedStatus, totalPages || Number(draft.totalPages) || 0);
+			if (!(await prepareReadingFormatForShelfStatus(draft, selectedStatus))) return;
 			draft.updatedAt = Date.now();
 
 			const result = await saveShelfEntryWithRetry(draft);

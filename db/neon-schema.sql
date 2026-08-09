@@ -231,6 +231,7 @@ create table if not exists user_book (
 	rating int,
 	total_pages int not null default 0,
 	current_page int not null default 0,
+	reading_format text not null default 'unknown' check (reading_format in ('unknown', 'physical', 'ebook', 'audio')),
 	finished_date date,
 	finished_reflection text not null default '',
 	review_title text not null default '',

@@ -26,12 +26,14 @@ import {
 	type ReadingSummaryMomentumBook
 } from "../../lib/readingSummary";
 import type { ProgressInputMode } from "../../lib/readingProgress";
+import { readingFormatOptions, type ReadingFormat } from "../../lib/readingFormats";
 import type { PerformanceSpanInput } from "../../lib/performanceTelemetry";
 
 export const prerender = false;
 
 const pagePerfStartedAt = performance.now();
 const pagePerfSpans: PerformanceSpanInput[] = [];
+const readingFormatSelectOptions = readingFormatOptions(true);
 const recordPagePerfSpan = (name: string, durationMs: number, startedAt?: number, parentName?: string) => {
 	const normalizedDuration = Math.max(0, Math.round(durationMs * 10) / 10);
 	pagePerfSpans.push({
@@ -294,6 +296,7 @@ let currentlyReading: Array<{
 	currentPage: number;
 	totalPages: number;
 	preferredProgressType: ProgressInputMode;
+	readingFormat: ReadingFormat;
 	updatedAt: string;
 	firstAddedAt: string;
 	progressUpdates: number;
@@ -329,6 +332,7 @@ let finishedBooks: Array<{
 	reviewUpdatedAt: string;
 	finishedDate: string;
 	updatedAt: string;
+	readingFormat: ReadingFormat;
 	genres: string[];
 }> = [];
 let profileReviews: typeof finishedBooks = [];
@@ -613,6 +617,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		reviewUpdatedAt: String(row.reviewUpdatedAt || "").trim(),
 		finishedDate: String(row.finishedDate || "").trim(),
 		updatedAt: String(row.updatedAt || "").trim(),
+		readingFormat: row.readingFormat || "unknown",
 		genres: Array.isArray(row.genreNames) ? row.genreNames.map((genre) => String(genre || "").trim()).filter(Boolean) : []
 	}));
 	const reviewsStartedAt = performance.now();
@@ -1529,6 +1534,7 @@ const profilePerformanceTelemetry = {
 										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}`}
 										author={item.author}
 										authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
+										readingFormat={item.readingFormat}
 									thumbnail={item.thumbnail}
 									readers={1}
 									shelfEntries={1}
@@ -1754,6 +1760,7 @@ const profilePerformanceTelemetry = {
 										titleHref={`/book?bookId=${encodeURIComponent(String(item.bookId || 0))}`}
 										author={item.author}
 										authorHref={item.author ? authorHref(item.author, item.authorId) : ""}
+										readingFormat={item.readingFormat}
 									thumbnail={item.thumbnail}
 									readers={1}
 									shelfEntries={1}
@@ -1766,6 +1773,7 @@ const profilePerformanceTelemetry = {
 											"data-momentum-current-page": String(Math.max(0, Number(item.currentPage || 0))),
 											"data-momentum-total-pages": String(Math.max(0, Number(item.totalPages || 0))),
 											"data-preferred-progress-type": item.preferredProgressType || "page",
+											"data-reading-format": item.readingFormat || "unknown",
 											"data-momentum-updated-at": item.updatedAt,
 											"data-momentum-first-added-at": item.firstAddedAt || item.updatedAt,
 											"data-momentum-progress-updates": String(Math.max(0, Number(item.progressUpdates || 0)))
@@ -1814,6 +1822,14 @@ const profilePerformanceTelemetry = {
 												<div class="progress-inline">
 													<label class="progress-inline-label" for={`progress-inline-${item.bookId}`}>Update progress</label>
 													<div class="progress-inline-controls">
+														<label class="progress-format-label">
+															<span>Reading format</span>
+															<select class="progress-inline-format" aria-label="Reading format">
+																{readingFormatSelectOptions.map((format) => (
+																	<option value={format.value} selected={(item.readingFormat || "unknown") === format.value}>{format.label}</option>
+																))}
+															</select>
+														</label>
 														<select class="progress-inline-type" aria-label="Progress type">
 															<option value="page" selected={(item.preferredProgressType || "page") === "page"}>Page Number</option>
 															<option value="percent" selected={item.preferredProgressType === "percent"}>Percentage</option>
@@ -1844,6 +1860,7 @@ const profilePerformanceTelemetry = {
 															data-isbn13={item.isbn13}
 															data-google-books-id={item.googleBooksId}
 															data-total-pages={String(Math.max(0, Number(item.totalPages || 0)))}
+															data-reading-format={item.readingFormat || "unknown"}
 														>
 															Save
 														</button>
@@ -1862,6 +1879,7 @@ const profilePerformanceTelemetry = {
 															data-google-books-id={item.googleBooksId}
 															data-total-pages={String(Math.max(0, Number(item.totalPages || 0)))}
 															data-current-page={String(Math.max(0, Number(item.currentPage || 0)))}
+															data-reading-format={item.readingFormat || "unknown"}
 															aria-label="Mark as finished"
 															title="Finish"
 														>
@@ -3337,6 +3355,7 @@ const profilePerformanceTelemetry = {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(82px, 0.58fr);
 		grid-template-areas:
+			"format format"
 			"type input"
 			"save finish";
 		gap: 0.3rem;
@@ -3347,6 +3366,28 @@ const profilePerformanceTelemetry = {
 		border: var(--border-subtle);
 		border-radius: var(--radius-sm);
 		background: rgba(255, 255, 255, 0.56);
+		box-sizing: border-box;
+	}
+	.progress-format-label {
+		grid-area: format;
+		display: grid;
+		gap: 0.18rem;
+		margin: 0;
+		font-size: 0.76rem;
+		font-weight: 700;
+		color: var(--color-text-muted);
+	}
+	.progress-inline-format {
+		width: 100%;
+		min-width: 0;
+		height: 34px;
+		min-height: 34px;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		font-size: 0.82rem;
+		font-family: inherit;
+		color: var(--color-text);
+		background: #fff;
 		box-sizing: border-box;
 	}
 	.progress-inline-type,
@@ -3786,12 +3827,14 @@ const profilePerformanceTelemetry = {
 			display: grid;
 			grid-template-columns: minmax(0, 1fr) minmax(82px, 0.62fr);
 			grid-template-areas:
+				"format format"
 				"type input"
 				"save finish";
 			align-items: stretch;
 			gap: 0.34rem;
 		}
 		.progress-inline-type,
+		.progress-inline-format,
 		.progress-inline-input {
 			width: 100%;
 			min-width: 0;
@@ -3807,12 +3850,14 @@ const profilePerformanceTelemetry = {
 		.progress-inline-controls {
 			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 			grid-template-areas:
+				"format format"
 				"type input"
 				"save finish";
 			gap: 0.34rem;
 			padding: 0.36rem;
 		}
 		.progress-inline-type,
+		.progress-inline-format,
 		.progress-inline-input {
 			height: 44px;
 			min-height: 44px;
@@ -3861,6 +3906,7 @@ const profilePerformanceTelemetry = {
 		showShelfFeedback,
 		statusLabel,
 		saveShelfEntryWithRetry,
+		prepareReadingFormatForShelfStatus,
 		notifyReadingDataChanged,
 		toggleShelfMenu,
 		initRatingControls
@@ -3870,6 +3916,7 @@ const profilePerformanceTelemetry = {
 		migrateShelfEntriesInPlace
 	} from "../../lib/shelfStorage.ts";
 	import { normalizeProgressUpdateInput } from "../../lib/readingProgress.ts";
+	import { normalizeReadingFormat } from "../../lib/readingFormats.ts";
 	const followToggle = document.getElementById("follow-toggle");
 	const followFeedback = document.getElementById("follow-feedback");
 	const dismissWelcomeBanner = document.getElementById("dismiss-welcome-banner");
@@ -4207,6 +4254,7 @@ const profilePerformanceTelemetry = {
 		const totalPages = Math.max(0, Number(book.totalPages || momentum?.totalPages || 0) || 0);
 		const updatedAt = normalizePersistedDateValue(book.updatedAt || "");
 		const progressUpdates = Math.max(0, Number(book.progressUpdates || momentum?.progressUpdateCount || 0) || 0);
+		const readingFormat = updateReadingFormatUi(card, book.readingFormat || momentum?.readingFormat || card.dataset.readingFormat || "unknown");
 		card.dataset.momentumCurrentPage = String(currentPage);
 		card.dataset.momentumTotalPages = String(totalPages);
 		if (updatedAt) {
@@ -4219,6 +4267,7 @@ const profilePerformanceTelemetry = {
 		if (quickFinish instanceof HTMLButtonElement) {
 			quickFinish.dataset.currentPage = String(currentPage);
 			quickFinish.dataset.totalPages = String(totalPages);
+			quickFinish.dataset.readingFormat = readingFormat;
 		}
 		const dateNode = card.querySelector(".activity-date");
 		if (dateNode instanceof HTMLElement && updatedAt) {
@@ -4664,6 +4713,50 @@ const profilePerformanceTelemetry = {
 		);
 	}
 
+	function readingFormatBadgeData(value) {
+		const format = normalizeReadingFormat(value);
+		if (format === "physical") return { format, icon: "menu_book", label: "Physical book" };
+		if (format === "ebook") return { format, icon: "tablet_mac", label: "Ebook" };
+		if (format === "audio") return { format, icon: "headphones", label: "Audiobook" };
+		return { format: "unknown", icon: "", label: "Unknown" };
+	}
+
+	function updateReadingFormatUi(card, value) {
+		if (!(card instanceof HTMLElement)) return "unknown";
+		const data = readingFormatBadgeData(value);
+		card.dataset.readingFormat = data.format;
+		const formatSelect = card.querySelector(".progress-inline-format");
+		if (formatSelect instanceof HTMLSelectElement) formatSelect.value = data.format;
+		for (const button of Array.from(card.querySelectorAll("[data-reading-format]"))) {
+			if (button instanceof HTMLElement) button.dataset.readingFormat = data.format;
+		}
+		let badge = card.querySelector(".reading-format-badge");
+		if (data.format === "unknown") {
+			if (badge instanceof HTMLElement) badge.remove();
+			return data.format;
+		}
+		const titleRow = card.querySelector(".book-card-title-row");
+		if (!(titleRow instanceof HTMLElement)) return data.format;
+		if (!(badge instanceof HTMLElement)) {
+			badge = document.createElement("span");
+			const iconNode = document.createElement("span");
+			iconNode.className = "material-icons";
+			iconNode.setAttribute("aria-hidden", "true");
+			const srLabel = document.createElement("span");
+			srLabel.className = "sr-only";
+			badge.append(iconNode, srLabel);
+			titleRow.insertBefore(badge, titleRow.firstChild);
+		}
+		badge.className = `reading-format-badge reading-format-${data.format}`;
+		badge.setAttribute("aria-label", data.label);
+		badge.setAttribute("title", data.label);
+		const iconNode = badge.querySelector(".material-icons");
+		if (iconNode instanceof HTMLElement) iconNode.textContent = data.icon;
+		const srLabel = badge.querySelector(".sr-only");
+		if (srLabel instanceof HTMLElement) srLabel.textContent = data.label;
+		return data.format;
+	}
+
 	function ensureProgressDisplay(card, currentPage, totalPages) {
 		if (!(card instanceof HTMLElement)) return null;
 		const progressBlock = card.querySelector(".reading-progress-block");
@@ -5008,6 +5101,8 @@ const profilePerformanceTelemetry = {
 
 	function buildEntryFromDropdown(dropdown, status) {
 		const nextStatus = String(status || "").trim();
+		const card = dropdown.closest(".book-card");
+		const cardReadingFormat = card instanceof HTMLElement ? card.dataset.readingFormat : "";
 		return buildShelfEntryFromRecord({
 			bookId: Number(dropdown.dataset.bookId || 0),
 			title: String(dropdown.dataset.title || "").trim(),
@@ -5024,6 +5119,7 @@ const profilePerformanceTelemetry = {
 			status: nextStatus,
 			totalPages: 0,
 			currentPage: nextStatus === "reading" ? 1 : 0,
+			readingFormat: String(dropdown.dataset.readingFormat || cardReadingFormat || "").trim(),
 			finishedDate: nextStatus === "finished" ? new Date().toISOString().slice(0, 10) : ""
 		});
 	}
@@ -5204,6 +5300,7 @@ const profilePerformanceTelemetry = {
 				}
 				const status = option.dataset.status || "want_to_read";
 				const entry = buildEntryFromDropdown(dropdown, status);
+				if (!(await prepareReadingFormatForShelfStatus(entry, status))) return;
 				if (status === "finished") {
 					const finishResult = await promptAndSaveFinishedEntry(entry);
 					if (!finishResult.ok) return;
@@ -5311,6 +5408,7 @@ const profilePerformanceTelemetry = {
 			const card = quickFinish.closest(".book-card");
 			const totalPages = resolveProgressTotalPages(quickFinish, card);
 			const currentPageRaw = positiveDatasetNumber(quickFinish.dataset.currentPage);
+			const readingFormat = normalizeReadingFormat(quickFinish.dataset.readingFormat || (card instanceof HTMLElement ? card.dataset.readingFormat : ""));
 			const finishedPage = totalPages > 0 ? totalPages : currentPageRaw;
 			const entry = buildShelfEntryFromRecord({
 				bookId: Number(quickFinish.dataset.bookId || 0),
@@ -5328,6 +5426,7 @@ const profilePerformanceTelemetry = {
 				status: "finished",
 				totalPages,
 				currentPage: finishedPage,
+				readingFormat,
 				finishedDate: new Date().toISOString().slice(0, 10)
 			});
 			if (!entry.title) return;
@@ -5362,8 +5461,12 @@ const profilePerformanceTelemetry = {
 			const card = progressSave.closest(".book-card");
 			const input = card?.querySelector(".progress-inline-input");
 			const progressTypeInput = card?.querySelector(".progress-inline-type");
+			const readingFormatInput = card?.querySelector(".progress-inline-format");
 			if (!(input instanceof HTMLInputElement)) return;
 			const progressType = progressTypeInput instanceof HTMLSelectElement ? progressTypeInput.value : "page";
+			const readingFormat = readingFormatInput instanceof HTMLSelectElement
+				? normalizeReadingFormat(readingFormatInput.value)
+				: normalizeReadingFormat(card instanceof HTMLElement ? card.dataset.readingFormat : "");
 			const totalPages = resolveProgressTotalPages(progressSave, card);
 			const parsed = normalizeProgressUpdateInput({
 				rawValue: input.value,
@@ -5395,6 +5498,7 @@ const profilePerformanceTelemetry = {
 					totalPages,
 					currentPage: totalPages,
 					preferredProgressType: progressType,
+					readingFormat,
 					finishedDate: new Date().toISOString().slice(0, 10)
 				});
 				const directBookId = Math.max(0, Number(progressSave.dataset.bookId || 0) || 0);
@@ -5457,7 +5561,8 @@ const profilePerformanceTelemetry = {
 					bookId: directBookId,
 					currentPage,
 					totalPages,
-					preferredProgressType: progressType
+					preferredProgressType: progressType,
+					readingFormat
 				});
 				if (!result.ok) throw new Error(result.message || "Failed to save progress.");
 				persisted = true;
@@ -5468,6 +5573,7 @@ const profilePerformanceTelemetry = {
 					const nextTotalPages = Math.max(0, Number((persistedProgress && persistedProgress.totalPages) || totalPages || 0) || 0);
 					const nextCurrentPage = Math.max(0, Number((persistedProgress && persistedProgress.currentPage) || currentPage || 0) || 0);
 					const nextPreferredProgressType = String((persistedProgress && persistedProgress.preferredProgressType) || progressType || "page").trim() || "page";
+					const nextReadingFormat = normalizeReadingFormat((persistedProgress && persistedProgress.readingFormat) || readingFormat);
 					const previousCurrentPage = card instanceof HTMLElement
 						? Math.max(0, Number(card.dataset.momentumCurrentPage || 0) || 0)
 						: 0;
@@ -5480,11 +5586,13 @@ const profilePerformanceTelemetry = {
 					if (quickFinish instanceof HTMLButtonElement) {
 						quickFinish.dataset.currentPage = String(nextCurrentPage);
 						quickFinish.dataset.totalPages = String(nextTotalPages);
+						quickFinish.dataset.readingFormat = nextReadingFormat;
 					}
 					if (card instanceof HTMLElement) {
 						card.dataset.momentumCurrentPage = String(nextCurrentPage);
 						card.dataset.momentumTotalPages = String(nextTotalPages);
 						card.dataset.preferredProgressType = nextPreferredProgressType;
+						updateReadingFormatUi(card, nextReadingFormat);
 						card.dataset.momentumUpdatedAt = updatedAtValue;
 						const priorUpdates = Math.max(0, Number(card.dataset.momentumProgressUpdates || 0) || 0);
 						card.dataset.momentumProgressUpdates = String(persistedProgressUpdates > 0
@@ -5552,6 +5660,7 @@ const profilePerformanceTelemetry = {
 			if (!dropdown) return;
 			const status = option.dataset.status || "want_to_read";
 			const entry = buildEntryFromDropdown(dropdown, status);
+			if (!(await prepareReadingFormatForShelfStatus(entry, status))) return;
 			if (status === "finished") {
 				const finishResult = await promptAndSaveFinishedEntry(entry);
 				if (!finishResult.ok) return;

@@ -10,6 +10,12 @@ We believe books are for everyone. No book should be hidden, restricted, or left
 
 This is a space for readers, built and maintained with care, where the goal is not growth at all costs, but something better, a tool that stays useful, thoughtful, and true to the people who use it.
 
+## Reading Formats
+
+DogEared v0.4.0 records how a reader experienced a book on their own shelf/progress entry. Reading format is stored on `user_book.reading_format`, not on the shared `book` record. Supported values are `physical`, `ebook`, and `audio`, with internal `unknown` for legacy rows and imports until the reader chooses a format.
+
+Readers choose a format when moving a book to Currently Reading and can edit it later from the progress controls. Format changes preserve progress, journal entries, reading dates, finish dates, ratings, and shelves. My Reading Life uses this data for personal format metrics and timeline filtering.
+
 ## Vercel + Neon Data Structure
 
 DogEared now includes a Neon-ready schema for app-driven genre lists.

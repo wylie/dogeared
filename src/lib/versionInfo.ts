@@ -1,5 +1,5 @@
 export function resolveAppVersion() {
-	const raw = String(import.meta.env.PUBLIC_APP_VERSION || import.meta.env.npm_package_version || "0.1.1").trim();
+	const raw = String(import.meta.env.PUBLIC_APP_VERSION || import.meta.env.npm_package_version || "0.4.0").trim();
 	const version = raw.startsWith("v") ? raw : `v${raw}`;
 	return version.includes("beta") ? version : `${version}-beta`;
 }

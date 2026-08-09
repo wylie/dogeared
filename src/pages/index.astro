@@ -1379,6 +1379,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		showShelfFeedback,
 		statusLabel,
 		saveShelfEntryWithRetry,
+		prepareReadingFormatForShelfStatus,
 		toggleShelfMenu,
 		initRatingControls
 	} from "../lib/shelfClient.ts";
@@ -1633,7 +1634,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		}
 	}
 
-	function setShelf(dropdown, selectedStatus) {
+	async function setShelf(dropdown, selectedStatus) {
 		if (!isAuthenticated) {
 			promptForShelfLogin();
 			return;
@@ -1676,6 +1677,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			if (sourceUrl) existing.sourceUrl = sourceUrl;
 			if (description && !existing.description) existing.description = description;
 			applyStatus(existing, selectedStatus, totalPages || Number(existing.totalPages) || 0);
+			if (!(await prepareReadingFormatForShelfStatus(existing, selectedStatus))) return;
 			existing.updatedAt = Date.now();
 			saveShelfEntries(entries);
 			if (previousStatus !== selectedStatus) {
@@ -1725,6 +1727,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			updatedAt: Date.now()
 		});
 		applyStatus(next, selectedStatus, totalPages);
+		if (!(await prepareReadingFormatForShelfStatus(next, selectedStatus))) return;
 		entries.unshift(next);
 		saveShelfEntries(entries);
 		logShelfUpdate(next, selectedStatus);
@@ -1824,7 +1827,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			const dropdown = resolveShelfDropdownFromTarget(option);
 			if (dropdown instanceof HTMLElement) {
 				const status = option.dataset.status || "want_to_read";
-				setShelf(dropdown, status);
+				void setShelf(dropdown, status);
 				closeShelfMenus(shelfDropdowns);
 			}
 			return;

@@ -26,6 +26,7 @@ import { inferKnownSeriesMetadata, upsertKnownSeriesForBook } from "../../../lib
 import { createReadingMilestoneNotifications } from "../../../lib/notifications";
 import { withSqlDebug, type SqlDebugParam } from "../../../lib/sqlDebug";
 import { normalizeProgressInputMode, type ProgressInputMode } from "../../../lib/readingProgress";
+import { normalizeReadingFormat, type ReadingFormat } from "../../../lib/readingFormats";
 import { recordPerformanceEventSafe } from "../../../lib/performanceTelemetry";
 
 export const prerender = false;
@@ -43,6 +44,7 @@ type ShelfEntryInput = {
 	currentPage?: unknown;
 	preferredProgressType?: unknown;
 	progressType?: unknown;
+	readingFormat?: unknown;
 	finishedDate?: unknown;
 	coverUrl?: unknown;
 	format?: unknown;
@@ -121,6 +123,7 @@ function userBookUpsertDebugParams(input: {
 	effectiveTotalPages: number;
 	currentPage: number;
 	preferredProgressType: ProgressInputMode | "";
+	readingFormat: ReadingFormat;
 	finishedDate: string | null;
 	finishedReflection: string;
 	reviewTitle: string;
@@ -135,6 +138,7 @@ function userBookUpsertDebugParams(input: {
 		{ name: "totalPages", pgType: "int", value: input.effectiveTotalPages },
 		{ name: "currentPage", pgType: "int", value: input.currentPage },
 		{ name: "preferredProgressType", pgType: "text", value: input.preferredProgressType },
+		{ name: "readingFormat", pgType: "text", value: input.readingFormat },
 		{ name: "finishedDate", pgType: "date", value: input.finishedDate },
 		{ name: "finishedReflection", pgType: "text", value: input.finishedReflection },
 		{ name: "reviewTitle", pgType: "text", value: input.reviewTitle },
@@ -440,6 +444,13 @@ async function ensureShelfSchema() {
 			`;
 			await sql`create index if not exists idx_progress_event_user_recorded_at on user_reading_progress_event(user_id, recorded_at desc)`;
 			await sql`alter table user_book add column if not exists preferred_progress_type text not null default 'page'`;
+			await sql`alter table user_book add column if not exists reading_format text not null default 'unknown'`;
+			await sql`
+				update user_book
+				set reading_format = 'unknown'
+				where reading_format is null
+					or reading_format not in ('unknown', 'physical', 'ebook', 'audio')
+			`;
 		})();
 	}
 	try {
@@ -748,6 +759,7 @@ export const POST: APIRoute = async ({ request }) => {
 		const preferredProgressType = hasPreferredProgressType
 			? normalizeProgressInputMode(rawPreferredProgressType)
 			: "";
+		const readingFormat = normalizeReadingFormat(entry.readingFormat);
 		const finishedDateRaw = normalizeText(entry.finishedDate);
 		const finishedDate = status === "finished" && finishedDateRaw ? finishedDateRaw : "";
 		const finishedReflection = status === "finished"
@@ -1085,6 +1097,7 @@ export const POST: APIRoute = async ({ request }) => {
 				effectiveTotalPages: requestedTotalPages,
 				currentPage,
 				preferredProgressType,
+				readingFormat,
 				finishedDate: finishedDateParam,
 				finishedReflection,
 				reviewTitle,
@@ -1102,6 +1115,7 @@ export const POST: APIRoute = async ({ request }) => {
 				total_pages: number;
 				current_page: number;
 				preferred_progress_type: string;
+				reading_format: string;
 				finished_date: string | null;
 				first_added_at: string | null;
 				review_updated_at: string | null;
@@ -1132,6 +1146,7 @@ export const POST: APIRoute = async ({ request }) => {
 				total_pages,
 				current_page,
 				preferred_progress_type,
+				reading_format,
 				finished_date,
 				finished_reflection,
 				review_title,
@@ -1149,6 +1164,7 @@ export const POST: APIRoute = async ({ request }) => {
 				${requestedTotalPages}::int,
 				${currentPage}::int,
 				${(preferredProgressType || "page")}::text,
+				${readingFormat}::text,
 				${finishedDateParam}::date,
 				${finishedReflection}::text,
 				${reviewTitle}::text,
@@ -1170,6 +1186,10 @@ export const POST: APIRoute = async ({ request }) => {
 					when ${preferredProgressType}::text <> '' then ${preferredProgressType}::text
 					else user_book.preferred_progress_type
 				end,
+				reading_format = case
+					when ${readingFormat}::text in ('physical', 'ebook', 'audio') then ${readingFormat}::text
+					else user_book.reading_format
+				end,
 				finished_date = excluded.finished_date,
 				finished_reflection = excluded.finished_reflection,
 				review_title = excluded.review_title,
@@ -1190,6 +1210,7 @@ export const POST: APIRoute = async ({ request }) => {
 				total_pages,
 				current_page,
 				coalesce(nullif(trim(preferred_progress_type), ''), 'page') as preferred_progress_type,
+				coalesce(nullif(trim(reading_format), ''), 'unknown') as reading_format,
 				finished_date::text as finished_date,
 				first_added_at::text as first_added_at,
 				review_updated_at::text as review_updated_at,
@@ -1206,6 +1227,7 @@ export const POST: APIRoute = async ({ request }) => {
 				upserted.total_pages,
 				upserted.current_page,
 				upserted.preferred_progress_type,
+				upserted.reading_format,
 				upserted.finished_date,
 				upserted.first_added_at,
 				upserted.review_updated_at,
@@ -1224,6 +1246,7 @@ export const POST: APIRoute = async ({ request }) => {
 		const effectiveTotalPages = normalizePositiveInt(mutationRow?.total_pages);
 		const nextCurrentPage = normalizePositiveInt(mutationRow?.current_page);
 		const persistedPreferredProgressType = normalizeProgressInputMode(mutationRow?.preferred_progress_type || preferredProgressType || "page");
+		const persistedReadingFormat = normalizeReadingFormat(mutationRow?.reading_format);
 		const persistedFinishedDate = normalizeText(mutationRow?.finished_date) || finishedDate;
 		const persistedReviewUpdatedAt = normalizeText(mutationRow?.review_updated_at);
 		const persistedFirstAddedAt = normalizeText(mutationRow?.first_added_at);
@@ -1314,6 +1337,7 @@ export const POST: APIRoute = async ({ request }) => {
 			totalPages: effectiveTotalPages,
 			currentPage: nextCurrentPage,
 			preferredProgressType: persistedPreferredProgressType,
+			readingFormat: persistedReadingFormat,
 			finishedDate: persistedFinishedDate,
 			addedAt: Date.parse(persistedFirstAddedAt || "") || nowMs,
 			coverUrl,

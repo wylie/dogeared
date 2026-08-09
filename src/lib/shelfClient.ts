@@ -1,4 +1,5 @@
 import { normalizeBookPayload } from "./bookPayload.ts";
+import { normalizeReadingFormat, readingFormatLabel, type ReadingFormat } from "./readingFormats.ts";
 
 export const STATUS_LABELS: Record<string, string> = {
 	want_to_read: "Want to Read",
@@ -158,6 +159,167 @@ export function notifyReadingDataChanged() {
 	} catch {
 		// Storage notifications are best-effort cross-tab hydration.
 	}
+}
+
+function ensureReadingFormatPromptStyles() {
+	if (typeof document === "undefined" || document.getElementById("reading-format-prompt-styles")) return;
+	const style = document.createElement("style");
+	style.id = "reading-format-prompt-styles";
+	style.textContent = `
+		.reading-format-overlay {
+			position: fixed;
+			inset: 0;
+			z-index: 20000;
+			display: grid;
+			place-items: center;
+			padding: 1rem;
+			background: rgba(34, 34, 34, 0.28);
+		}
+		.reading-format-dialog {
+			width: min(420px, 100%);
+			border-radius: var(--radius-lg, 12px);
+			background: var(--color-surface, #fff);
+			box-shadow: var(--shadow-popover, 0 18px 50px rgba(0, 0, 0, 0.18));
+			padding: 1rem;
+			color: var(--color-text, #222);
+		}
+		.reading-format-dialog h2 {
+			margin: 0;
+			font-size: 1.1rem;
+			line-height: 1.25;
+		}
+		.reading-format-dialog p {
+			margin: 0.35rem 0 0;
+			color: var(--color-text-muted, #59636f);
+			font-size: 0.92rem;
+			line-height: 1.4;
+		}
+		.reading-format-options {
+			display: grid;
+			gap: 0.5rem;
+			margin-top: 0.85rem;
+		}
+		.reading-format-option {
+			width: 100%;
+			min-height: 48px;
+			border: 1px solid var(--color-border-soft, rgba(87, 117, 144, 0.28));
+			border-radius: var(--radius-md, 10px);
+			background: rgba(255, 255, 255, 0.74);
+			color: var(--color-text, #222);
+			font: inherit;
+			font-weight: 750;
+			display: flex;
+			align-items: center;
+			gap: 0.65rem;
+			padding: 0.65rem 0.75rem;
+			cursor: pointer;
+			text-align: left;
+		}
+		.reading-format-option:hover,
+		.reading-format-option:focus-visible {
+			border-color: var(--color-primary, #1f7a45);
+			background: rgba(191, 217, 171, 0.22);
+		}
+		.reading-format-option .material-icons {
+			width: 28px;
+			height: 28px;
+			border-radius: 999px;
+			display: inline-grid;
+			place-items: center;
+			background: rgba(87, 117, 144, 0.12);
+			color: var(--color-nav, #1f5d87);
+			font-size: 1.05rem;
+			line-height: 1;
+		}
+		.reading-format-cancel {
+			margin-top: 0.65rem;
+			border: none;
+			background: transparent;
+			color: var(--color-text-muted, #59636f);
+			font: inherit;
+			font-weight: 700;
+			cursor: pointer;
+		}
+	`;
+	document.head.append(style);
+}
+
+export function promptForReadingFormat(defaultFormat: ReadingFormat = "physical"): Promise<ReadingFormat | "cancelled"> {
+	if (typeof document === "undefined") return Promise.resolve(normalizeReadingFormat(defaultFormat));
+	ensureReadingFormatPromptStyles();
+	const existing = document.getElementById("reading-format-overlay");
+	if (existing) existing.remove();
+	const normalizedDefault = normalizeReadingFormat(defaultFormat);
+	const options: Array<{ value: ReadingFormat; icon: string; label: string }> = [
+		{ value: "physical", icon: "menu_book", label: "Physical Book" },
+		{ value: "ebook", icon: "tablet_mac", label: "Ebook" },
+		{ value: "audio", icon: "headphones", label: "Audiobook" }
+	];
+	return new Promise((resolve) => {
+		const overlay = document.createElement("div");
+		overlay.id = "reading-format-overlay";
+		overlay.className = "reading-format-overlay";
+		const dialog = document.createElement("div");
+		dialog.className = "reading-format-dialog";
+		dialog.setAttribute("role", "dialog");
+		dialog.setAttribute("aria-modal", "true");
+		dialog.setAttribute("aria-labelledby", "reading-format-title");
+		const title = document.createElement("h2");
+		title.id = "reading-format-title";
+		title.textContent = "How are you reading this book?";
+		const hint = document.createElement("p");
+		hint.textContent = `Default is ${readingFormatLabel(normalizedDefault)}.`;
+		const optionWrap = document.createElement("div");
+		optionWrap.className = "reading-format-options";
+		const onKeydown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") close("cancelled");
+		};
+		const close = (value: ReadingFormat | "cancelled") => {
+			document.removeEventListener("keydown", onKeydown);
+			overlay.remove();
+			resolve(value);
+		};
+		for (const option of options) {
+			const button = document.createElement("button");
+			button.type = "button";
+			button.className = "reading-format-option";
+			button.dataset.readingFormat = option.value;
+			button.setAttribute("aria-label", option.label);
+			const icon = document.createElement("span");
+			icon.className = "material-icons";
+			icon.setAttribute("aria-hidden", "true");
+			icon.textContent = option.icon;
+			const label = document.createElement("span");
+			label.textContent = option.label;
+			button.append(icon, label);
+			button.addEventListener("click", () => close(option.value));
+			optionWrap.append(button);
+		}
+		const cancel = document.createElement("button");
+		cancel.type = "button";
+		cancel.className = "reading-format-cancel";
+		cancel.textContent = "Cancel";
+		cancel.addEventListener("click", () => close("cancelled"));
+		overlay.addEventListener("click", (event) => {
+			if (event.target === overlay) close("cancelled");
+		});
+		document.addEventListener("keydown", onKeydown);
+		dialog.append(title, hint, optionWrap, cancel);
+		overlay.append(dialog);
+		document.body.append(overlay);
+		const defaultButton = optionWrap.querySelector(`[data-reading-format="${normalizedDefault === "unknown" ? "physical" : normalizedDefault}"]`);
+		(defaultButton instanceof HTMLElement ? defaultButton : optionWrap.querySelector("button"))?.focus();
+	});
+}
+
+export async function prepareReadingFormatForShelfStatus(entry: Record<string, unknown>, status: string) {
+	if (String(status || "").trim() !== "reading") return true;
+	const existingFormat = normalizeReadingFormat(entry.readingFormat);
+	if (existingFormat !== "unknown") return true;
+	const selected = await promptForReadingFormat("physical");
+	if (selected === "cancelled") return false;
+	entry.readingFormat = selected;
+	return true;
 }
 
 export async function syncShelfRatingToServer(input: { bookId: unknown; rating: unknown }) {
@@ -669,6 +831,7 @@ function shelfMutationKey(action: string, entry: unknown) {
 		title: String(record.title || "").trim().toLowerCase(),
 		author: String(record.author || "").trim().toLowerCase(),
 		status: String(record.status || "").trim(),
+		readingFormat: normalizeReadingFormat(record.readingFormat),
 		isbn10: String(record.isbn10 || "").trim().toUpperCase(),
 		isbn13: String(record.isbn13 || "").trim().toUpperCase(),
 		googleBooksId: String(record.googleBooksId || "").trim(),
@@ -796,6 +959,7 @@ type ShelfEntryOptions = {
 	currentPage?: number;
 	preferredProgressType?: string;
 	progressType?: string;
+	readingFormat?: string;
 	finishedDate?: string;
 	source?: string;
 	sourceWorkId?: string;
@@ -839,6 +1003,7 @@ export function buildShelfEntryFromRecord(record: Record<string, unknown>, optio
 		totalPages,
 		currentPage: Math.max(0, Number(options.currentPage ?? 0) || 0),
 		preferredProgressType: String(options.preferredProgressType ?? options.progressType ?? "").trim(),
+		readingFormat: normalizeReadingFormat(options.readingFormat),
 		finishedDate: String(options.finishedDate || "").trim(),
 		finishedReflection: String(options.finishedReflection || "").trim().slice(0, 4000),
 		reviewTitle: String(options.reviewTitle || "").trim().slice(0, 160),

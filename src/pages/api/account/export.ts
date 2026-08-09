@@ -16,6 +16,7 @@ export const GET: APIRoute = async ({ request }) => {
 
 		const sql = getNeonSql();
 		const encryptionKey = getEncryptionKey();
+		await sql`alter table user_book add column if not exists reading_format text not null default 'unknown'`;
 
 		const [userRows, shelfRows] = await Promise.all([
 			sql<Array<{
@@ -43,6 +44,7 @@ export const GET: APIRoute = async ({ request }) => {
 				rating: number | null;
 				total_pages: number;
 				current_page: number;
+				reading_format: string;
 				finished_date: string | null;
 				first_added_at: string | null;
 				updated_at: string | null;
@@ -60,6 +62,7 @@ export const GET: APIRoute = async ({ request }) => {
 					ub.rating,
 					coalesce(ub.total_pages, 0)::int as total_pages,
 					coalesce(ub.current_page, 0)::int as current_page,
+					coalesce(nullif(trim(ub.reading_format), ''), 'unknown') as reading_format,
 					ub.finished_date::text as finished_date,
 					ub.first_added_at::text as first_added_at,
 					ub.updated_at::text as updated_at,
@@ -73,7 +76,7 @@ export const GET: APIRoute = async ({ request }) => {
 				join book b on b.id = ub.book_id
 				left join book_genre bg on bg.book_id = b.id
 				where ub.user_id = ${session.userId}::uuid
-				group by b.id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.finished_date, ub.first_added_at, ub.updated_at
+				group by b.id, ub.status, ub.rating, ub.total_pages, ub.current_page, ub.reading_format, ub.finished_date, ub.first_added_at, ub.updated_at
 				order by ub.updated_at desc nulls last
 			`
 		]);
@@ -132,4 +135,3 @@ export const GET: APIRoute = async ({ request }) => {
 		});
 	}
 };
-

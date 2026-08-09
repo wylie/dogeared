@@ -699,6 +699,7 @@ const relatedStructuredDataPayload = JSON.stringify([
 		showShelfFeedback,
 		statusLabel,
 		saveShelfEntryWithRetry,
+		prepareReadingFormatForShelfStatus,
 		toggleShelfMenu
 	} from "../lib/shelfClient.ts";
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
@@ -741,6 +742,7 @@ const relatedStructuredDataPayload = JSON.stringify([
 				currentPage: status === "reading" ? 1 : 0,
 				finishedDate: status === "finished" ? new Date().toISOString().slice(0, 10) : ""
 			});
+			if (!(await prepareReadingFormatForShelfStatus(entry, status))) return;
 			try {
 				const result = await saveShelfEntryWithRetry(entry);
 				if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");

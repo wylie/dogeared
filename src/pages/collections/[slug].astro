@@ -145,6 +145,7 @@ const sectionLinks = collection?.books.length ? [
 		showShelfFeedback,
 		statusLabel,
 		saveShelfEntryWithRetry,
+		prepareReadingFormatForShelfStatus,
 		toggleShelfMenu,
 		initRatingControls
 	} from "../../lib/shelfClient.ts";
@@ -198,7 +199,9 @@ const sectionLinks = collection?.books.length ? [
 				return;
 			}
 			const status = String(option.dataset.status || "want_to_read");
-			const result = await saveShelfEntryWithRetry(buildEntry(dropdown, status));
+			const entry = buildEntry(dropdown, status);
+			if (!(await prepareReadingFormatForShelfStatus(entry, status))) return;
+			const result = await saveShelfEntryWithRetry(entry);
 			if (result.ok) {
 				setDropdownLabel(dropdown, status);
 				setShelvedState(dropdown, true);

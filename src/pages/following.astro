@@ -552,6 +552,7 @@ const sectionLinks = [
 		setShelvedState,
 		showShelfFeedback,
 		saveShelfEntryWithRetry,
+		prepareReadingFormatForShelfStatus,
 		toggleShelfMenu
 	} from "../lib/shelfClient.ts";
 
@@ -620,6 +621,7 @@ const sectionLinks = [
 				isbn13: dropdown.getAttribute("data-isbn13")
 			}, { status });
 			Object.assign(entry, { bookId: Number(dropdown.getAttribute("data-book-id") || 0) || undefined });
+			if (!(await prepareReadingFormatForShelfStatus(entry, status))) return;
 			showShelfFeedback(dropdown, "Saving...", feedbackTimers);
 			const result = await saveShelfEntryWithRetry(entry, { redirectPath: "/settings#account-settings" });
 			if (!result.ok) {

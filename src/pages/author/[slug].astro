@@ -881,6 +881,7 @@ recordPerformanceEventSafe({
 		showShelfFeedback,
 		statusLabel,
 		saveShelfEntryWithRetry,
+		prepareReadingFormatForShelfStatus,
 		toggleShelfMenu,
 		initRatingControls
 	} from "../../lib/shelfClient.ts";
@@ -936,6 +937,7 @@ recordPerformanceEventSafe({
 			const title = String(dropdown.dataset.title || "").trim();
 			if (!title) return;
 			const entry = buildEntry(dropdown, status);
+			if (!(await prepareReadingFormatForShelfStatus(entry, status))) return;
 			try {
 				const result = await saveShelfEntryWithRetry(entry);
 				if (!result.ok) throw new Error(result.message || "Failed to save shelf entry.");

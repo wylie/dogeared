@@ -156,7 +156,7 @@ test("progress type is persisted through the shared shelf entry lifecycle", () =
 
 	assert.match(api, /alter table user_book add column if not exists preferred_progress_type text not null default 'page'/);
 	assert.match(api, /preferredProgressType\?: unknown/);
-	assert.match(api, /preferred_progress_type,\s+finished_date/);
+	assert.match(api, /preferred_progress_type,\s+reading_format,\s+finished_date/);
 	assert.match(api, /when \$\{preferredProgressType\}::text <> '' then \$\{preferredProgressType\}::text\s+else user_book\.preferred_progress_type/);
 	assert.match(api, /preferredProgressType: (normalizeProgressInputMode\((persisted\.preferred_progress_type|preferredProgressType \|\| "page")\)|persistedPreferredProgressType)/);
 	assert.match(api, /preferredProgressType: normalizeProgressInputMode\(row\.preferred_progress_type\)/);

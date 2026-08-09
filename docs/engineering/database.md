@@ -302,6 +302,7 @@ Stores a reader's default shelf state for a book:
 - Status: `want_to_read`, `reading`, or `finished`.
 - Rating.
 - Total pages and current page.
+- Reading format: `unknown`, `physical`, `ebook`, or `audio`.
 - Finished date.
 - Review title.
 - Finished reflection/review body.
@@ -314,6 +315,7 @@ Relationships:
 - Joins `app_user` and the representative `book` row for a Work.
 - May reference `book_edition` for the chosen Edition.
 - Source of Work-level ratings, reviews, shelf counts, reading progress, profile shelves, metrics, and admin user counts.
+- Reading format belongs here because it describes the reader's experience of this instance. It must not be stored on the shared `book` record.
 
 Current limitation:
 
@@ -371,14 +373,15 @@ Created lazily by shelf/admin code. Stores forward reading movement:
 Relationships:
 
 - Belongs to `app_user` and the representative `book` row for a Work.
-- Used by profile momentum/streak, metrics, and My Reading Life calendar/streak summaries.
-- Progress belongs to the Work. Edition page counts or formats may influence calculations, but changing editions should not lose progress.
+- Used by profile momentum/streak, metrics, reading format summaries, and My Reading Life calendar/streak summaries.
+- Progress belongs to the Work. Edition page counts or catalog format metadata may influence calculations, but changing editions should not lose progress. Reader-chosen reading format belongs to `user_book`.
 
 ## My Reading Life And Timeline Data
 
 My Reading Life does not introduce a new persistence table. It derives its summaries from existing entities:
 
 - `user_book` for finished books, current books, ratings, pages, finished dates, and reflections.
+- `user_book.reading_format` for Physical, Ebook, Audiobook, and Unknown reading-format history.
 - `user_reading_progress_event` for reading activity dates and page movement.
 - `book_work`, representative `book`, `book_edition`, `author`, `book_genre`, and `series_book`/`series` for catalog, author, genre, edition, and series context.
 - `app_user.profile_data.readingGoal` for annual goal progress.

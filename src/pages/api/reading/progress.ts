@@ -8,6 +8,7 @@ import {
 	loadReaderReadingSummary
 } from "../../../lib/readingSummary";
 import { normalizeProgressInputMode, type ProgressInputMode } from "../../../lib/readingProgress";
+import { normalizeReadingFormat, type ReadingFormat } from "../../../lib/readingFormats";
 import { recordPerformanceEventSafe } from "../../../lib/performanceTelemetry";
 
 export const prerender = false;
@@ -20,6 +21,7 @@ type ExistingProgressRow = {
 	total_pages: number;
 	book_page_count: number;
 	preferred_progress_type: string;
+	reading_format: string;
 	progress_updates: number;
 };
 
@@ -28,6 +30,7 @@ type UpdatedProgressRow = {
 	current_page: number;
 	total_pages: number;
 	preferred_progress_type: string;
+	reading_format: string;
 	updated_at: string;
 };
 
@@ -101,6 +104,7 @@ export const POST: APIRoute = async ({ request }) => {
 		const preferredProgressType: ProgressInputMode = normalizeProgressInputMode(
 			input.preferredProgressType || input.progressType
 		);
+		const requestedReadingFormat: ReadingFormat = normalizeReadingFormat(input.readingFormat);
 		if (bookId <= 0) {
 			recordProgressPerformance(false, 400);
 			return jsonResponse({ error: "Missing book id." }, 400);
@@ -115,6 +119,7 @@ export const POST: APIRoute = async ({ request }) => {
 				coalesce(ub.total_pages, 0)::int as total_pages,
 				coalesce(b.page_count, 0)::int as book_page_count,
 				coalesce(nullif(trim(ub.preferred_progress_type), ''), 'page') as preferred_progress_type,
+				coalesce(nullif(trim(ub.reading_format), ''), 'unknown') as reading_format,
 				coalesce(pe.progress_updates, 0)::int as progress_updates
 			from user_book ub
 			join book b on b.id = ub.book_id
@@ -156,6 +161,10 @@ export const POST: APIRoute = async ({ request }) => {
 						current_page = ${nextCurrentPage},
 						total_pages = ${effectiveTotalPages},
 						preferred_progress_type = ${preferredProgressType},
+						reading_format = case
+							when ${requestedReadingFormat}::text in ('physical', 'ebook', 'audio') then ${requestedReadingFormat}::text
+							else reading_format
+						end,
 						updated_at = now()
 					where user_id = ${session.userId}::uuid
 						and book_id = ${bookId}
@@ -165,6 +174,7 @@ export const POST: APIRoute = async ({ request }) => {
 						current_page,
 						total_pages,
 						coalesce(nullif(trim(preferred_progress_type), ''), 'page') as preferred_progress_type,
+						coalesce(nullif(trim(reading_format), ''), 'unknown') as reading_format,
 						updated_at::text as updated_at
 				`,
 				tx<Array<{ id: number }>>`
@@ -197,6 +207,10 @@ export const POST: APIRoute = async ({ request }) => {
 						current_page = ${nextCurrentPage},
 						total_pages = ${effectiveTotalPages},
 						preferred_progress_type = ${preferredProgressType},
+						reading_format = case
+							when ${requestedReadingFormat}::text in ('physical', 'ebook', 'audio') then ${requestedReadingFormat}::text
+							else reading_format
+						end,
 						updated_at = now()
 					where user_id = ${session.userId}::uuid
 						and book_id = ${bookId}
@@ -206,6 +220,7 @@ export const POST: APIRoute = async ({ request }) => {
 						current_page,
 						total_pages,
 						coalesce(nullif(trim(preferred_progress_type), ''), 'page') as preferred_progress_type,
+						coalesce(nullif(trim(reading_format), ''), 'unknown') as reading_format,
 						updated_at::text as updated_at
 				`
 			]);
@@ -262,6 +277,7 @@ export const POST: APIRoute = async ({ request }) => {
 				percent,
 				preferredProgressType: normalizeProgressInputMode(updated.preferred_progress_type),
 				selectedProgressType: normalizeProgressInputMode(updated.preferred_progress_type),
+				readingFormat: normalizeReadingFormat(updated.reading_format || existing.reading_format),
 				updatedAt: updated.updated_at,
 				previousCurrentPage,
 				progressUpdates,
