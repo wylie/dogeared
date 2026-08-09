@@ -17,10 +17,11 @@ test("Data Health exposes format-aware catalog metadata checks and filters", () 
 	const lib = readFileSync("src/lib/adminCatalog.ts", "utf8");
 	const migration = readFileSync("db/migrations/2026-08-09-admin-catalog-tools.sql", "utf8");
 
-	assert.match(page, /Catalog Metadata/);
+	assert.match(page, /Catalog Review Queue/);
 	assert.match(page, /loadCatalogMetadataHealth/);
 	assert.match(page, /catalogMetadataHealth\.records/);
 	assert.match(page, /Needs attention/);
+	assert.match(page, /stat-link/);
 	assert.match(page, /Pagination/);
 	assert.match(page, /catalog_page/);
 	assert.match(page, /catalogPageHref/);
@@ -33,6 +34,7 @@ test("Data Health exposes format-aware catalog metadata checks and filters", () 
 	assert.match(page, /Progress-blocking metadata issues/);
 	assert.match(page, /Edit catalog data/);
 	assert.match(page, /\/admin\/books\/\$\{record\.workId\}/);
+	assert.doesNotMatch(page, /id="metadata-gaps"/);
 	assert.doesNotMatch(page, /id="metadata-review"/);
 	assert.doesNotMatch(page, /id="page-count-gaps"/);
 	assert.doesNotMatch(page, /id="publisher-gaps"/);

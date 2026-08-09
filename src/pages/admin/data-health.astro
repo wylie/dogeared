@@ -3,7 +3,7 @@ import Layout from "../../layouts/Layout.astro";
 import Pagination from "../../components/Pagination.astro";
 import { getNeonSql } from "../../lib/neon";
 import { resolveAdminSession } from "../../lib/admin";
-import { formatDate, formatNumber, percentOf, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
+import { formatDate, formatNumber, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
 import { loadCanonicalTitleCleanupCandidates, normalizeCanonicalSeriesTitles } from "../../lib/canonicalTitleCleanup";
 import { ignorePotentialDuplicateWork, loadPotentialDuplicateWorks, mergeCatalogWorks, normalizeCanonicalWorkRelationships } from "../../lib/workNormalization";
 import { loadCatalogMetadataHealth, type CatalogHealthResult } from "../../lib/adminCatalog";
@@ -122,9 +122,6 @@ if (Astro.request.method === "POST") {
 }
 
 const [
-	bookCoverageResult,
-	genreCoverageResult,
-	authorCoverageResult,
 	importHealthResult,
 	duplicateGroupsResult,
 	potentialDuplicateWorksResult,
@@ -133,57 +130,6 @@ const [
 	canonicalTitleCleanupResult,
 	recentBackfillResult
 ] = await Promise.all([
-	safeAdminLoad("Book coverage", () => sql<Array<{
-		total_books: number;
-		missing_author: number;
-		missing_cover: number;
-		missing_published_year: number;
-		missing_synopsis: number;
-		missing_isbn: number;
-		missing_page_count: number;
-		missing_publisher: number;
-		missing_series: number;
-	}>>`
-		select
-			count(*)::int as total_books,
-			count(*) filter (where trim(coalesce(b.primary_author, '')) = '')::int as missing_author,
-			count(*) filter (where trim(coalesce(b.cover_url, '')) = '')::int as missing_cover,
-			count(*) filter (where b.published_year is null or b.published_year <= 0)::int as missing_published_year,
-			count(*) filter (where trim(coalesce(b.synopsis, '')) = '')::int as missing_synopsis,
-			count(*) filter (
-				where coalesce(trim(coalesce(b.isbn13, '')), trim(coalesce(b.isbn10, '')), '') = ''
-			)::int as missing_isbn,
-			count(*) filter (where coalesce(b.page_count, 0) <= 0)::int as missing_page_count,
-			count(*) filter (where trim(coalesce(b.publisher, '')) = '')::int as missing_publisher,
-			count(*) filter (
-				where lower(b.title) ~ '(#|book [0-9]|series|trilogy|saga|chronicles)'
-					and not exists (select 1 from series_book sb where sb.book_id = b.id)
-			)::int as missing_series
-		from book b
-	`, []),
-	safeAdminLoad("Genre coverage", () => sql<Array<{ books_without_genres: number; books_with_genres: number }>>`
-		with genre_counts as (
-			select b.id as book_id, count(bg.genre_slug)::int as genre_count
-			from book b
-			left join book_genre bg on bg.book_id = b.id
-			group by b.id
-		)
-		select
-			count(*) filter (where genre_count = 0)::int as books_without_genres,
-			count(*) filter (where genre_count > 0)::int as books_with_genres
-		from genre_counts
-	`, []),
-	safeAdminLoad("Author coverage", () => sql<Array<{
-		total_authors: number;
-		authors_without_bio: number;
-		authors_without_photo: number;
-	}>>`
-		select
-			count(*)::int as total_authors,
-			count(*) filter (where trim(coalesce(bio, '')) = '')::int as authors_without_bio,
-			count(*) filter (where trim(coalesce(photo_url, '')) = '')::int as authors_without_photo
-		from author
-	`, []),
 	safeAdminLoad("Import health", () => sql<Array<{
 		total_user_books: number;
 		active_readers: number;
@@ -383,9 +329,6 @@ const [
 	`, [])
 ]);
 
-const bookCoverageRows = safeArray(bookCoverageResult.data);
-const genreCoverageRows = safeArray(genreCoverageResult.data);
-const authorCoverageRows = safeArray(authorCoverageResult.data);
 const importHealthRows = safeArray(importHealthResult.data);
 const duplicateGroupsRows = safeArray(duplicateGroupsResult.data);
 const potentialDuplicateWorksRows = safeArray(potentialDuplicateWorksResult.data);
@@ -406,9 +349,6 @@ const canonicalTitleCleanupRows = safeArray(canonicalTitleCleanupResult.data);
 const recentBackfillRows = safeArray(recentBackfillResult.data);
 const adminWarnings = [
 	publisherSchemaResult.warning,
-	bookCoverageResult.warning,
-	genreCoverageResult.warning,
-	authorCoverageResult.warning,
 	importHealthResult.warning,
 	duplicateGroupsResult.warning,
 	potentialDuplicateWorksResult.warning,
@@ -421,8 +361,7 @@ const adminWarnings = [
 
 const sectionLinks = [
 	{ id: "overview", label: "Overview" },
-	{ id: "metadata-gaps", label: "Metadata Gaps" },
-	{ id: "catalog-metadata", label: "Catalog Metadata" },
+	{ id: "catalog-metadata", label: "Review Queue" },
 	{ id: "import-health", label: "Import Health" },
 	{ id: "potential-duplicates", label: "Work Duplicates" },
 	{ id: "relationship-health", label: "Relationships" },
@@ -430,10 +369,6 @@ const sectionLinks = [
 	{ id: "duplicates", label: "Duplicates" },
 	{ id: "backfills", label: "Backfills" }
 ];
-
-function countWithPct(count: unknown, total: unknown) {
-	return `${formatNumber(count)} (${percentOf(count, total)}%)`;
-}
 
 function catalogSeverityLabel(value: string) {
 	if (value === "critical") return "Critical";
@@ -479,19 +414,6 @@ function catalogPageHref(page: number) {
 	return `/admin/data-health${params.toString() ? `?${params.toString()}` : ""}#catalog-metadata`;
 }
 
-const books = bookCoverageRows[0] || {
-	total_books: 0,
-	missing_author: 0,
-	missing_cover: 0,
-	missing_published_year: 0,
-	missing_synopsis: 0,
-	missing_isbn: 0,
-	missing_page_count: 0,
-	missing_publisher: 0,
-	missing_series: 0
-};
-const genres = genreCoverageRows[0] || { books_without_genres: 0, books_with_genres: 0 };
-const authors = authorCoverageRows[0] || { total_authors: 0, authors_without_bio: 0, authors_without_photo: 0 };
 const imports = importHealthRows[0] || {
 	total_user_books: 0,
 	active_readers: 0,
@@ -551,11 +473,11 @@ const catalogShowingStart = catalogMetadataHealth.pagination.total > 0 ? ((catal
 const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catalogShowingStart + catalogMetadataHealth.records.length - 1);
 ---
 
-<Layout title="Admin Data Health" sectionLinks={sectionLinks} robots="noindex,nofollow">
+<Layout title="Catalog Review Queue" sectionLinks={sectionLinks} robots="noindex,nofollow">
 	<div slot="right" class="admin-data-health-page">
 		<header id="overview" class="hero">
-			<h1>Admin Data Health</h1>
-			<p>Coverage, duplicate risk, import quality, and backfill movement in one view.</p>
+			<h1>Catalog Review Queue</h1>
+			<p>An admin inbox of Work and Edition records that need catalog attention.</p>
 		</header>
 
 		{adminWarnings.length > 0 && (
@@ -570,115 +492,36 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 			</div>
 		)}
 
-		<section class="panel" id="metadata-gaps">
-			<div class="panel-head">
-				<h2>Metadata Gaps</h2>
-			</div>
-			<div class="grid metadata-stats" role="list">
-				<article class="stat">
-					<p>Total books</p>
-					<strong>{formatNumber(books.total_books)}</strong>
-				</article>
-				<article class="stat">
-					<p>Total authors</p>
-					<strong>{formatNumber(authors.total_authors)}</strong>
-				</article>
-				<article class="stat">
-					<p>Cover coverage</p>
-					<strong>{percentOf(books.total_books - books.missing_cover, books.total_books)}%</strong>
-				</article>
-				<article class="stat">
-					<p>Synopsis coverage</p>
-					<strong>{percentOf(books.total_books - books.missing_synopsis, books.total_books)}%</strong>
-				</article>
-				<article class="stat">
-					<p>Genre coverage</p>
-					<strong>{percentOf(genres.books_with_genres, books.total_books)}%</strong>
-				</article>
-				<article class="stat">
-					<p>Page count coverage</p>
-					<strong>{percentOf(books.total_books - books.missing_page_count, books.total_books)}%</strong>
-				</article>
-				<article class="stat">
-					<p>Publisher coverage</p>
-					<strong>{percentOf(books.total_books - books.missing_publisher, books.total_books)}%</strong>
-				</article>
-				<article class="stat">
-					<p>Potential duplicate Works</p>
-					<strong>{formatNumber(potentialDuplicateWorksRows.length)}</strong>
-				</article>
-				<article class="stat">
-					<p>Canonical title cleanup</p>
-					<strong>{formatNumber(canonicalTitleCleanupRows.length)}</strong>
-				</article>
-				<article class="stat">
-					<p>Series position conflicts</p>
-					<strong>{formatNumber(relationships.series_position_conflicts)}</strong>
-				</article>
-			</div>
-			<div class="table-wrap">
-				<table>
-					<thead>
-						<tr><th>Signal</th><th>Count</th></tr>
-					</thead>
-					<tbody>
-						<tr><td>Books missing author</td><td>{formatNumber(books.missing_author)}</td></tr>
-						<tr><td>Books missing cover</td><td>{formatNumber(books.missing_cover)}</td></tr>
-						<tr><td>Books missing published year</td><td>{formatNumber(books.missing_published_year)}</td></tr>
-						<tr><td>Books missing synopsis</td><td>{formatNumber(books.missing_synopsis)}</td></tr>
-						<tr><td>Books missing ISBN</td><td>{formatNumber(books.missing_isbn)}</td></tr>
-						<tr><td>Books missing page count</td><td>{formatNumber(books.missing_page_count)}</td></tr>
-						<tr><td>Books missing publisher</td><td>{formatNumber(books.missing_publisher)}</td></tr>
-						<tr><td>Books with possible missing series</td><td>{formatNumber(books.missing_series)}</td></tr>
-						<tr><td>Potential duplicate Works</td><td>{formatNumber(potentialDuplicateWorksRows.length)}</td></tr>
-						<tr><td>Duplicate Works</td><td>{formatNumber(relationships.duplicate_works)}</td></tr>
-						<tr><td>Duplicate Editions</td><td>{formatNumber(relationships.duplicate_editions)}</td></tr>
-						<tr><td>Broken Series</td><td>{formatNumber(relationships.broken_series)}</td></tr>
-						<tr><td>Multiple Canonical Works</td><td>{formatNumber(relationships.multiple_canonical_works)}</td></tr>
-						<tr><td>Missing Canonical Title</td><td>{formatNumber(relationships.missing_canonical_title)}</td></tr>
-						<tr><td>Missing Series Position</td><td>{formatNumber(relationships.missing_series_position)}</td></tr>
-						<tr><td>Incorrect standalone classification</td><td>{formatNumber(relationships.incorrect_standalone)}</td></tr>
-						<tr><td>Canonical title conflicts</td><td>{formatNumber(relationships.canonical_title_conflicts)}</td></tr>
-						<tr><td>Series position conflicts</td><td>{formatNumber(relationships.series_position_conflicts)}</td></tr>
-						<tr><td>Canonical title cleanup candidates</td><td>{formatNumber(canonicalTitleCleanupRows.length)}</td></tr>
-						<tr><td>Books without genres</td><td>{formatNumber(genres.books_without_genres)}</td></tr>
-						<tr><td>Authors without bio</td><td>{countWithPct(authors.authors_without_bio, authors.total_authors)}</td></tr>
-						<tr><td>Authors without photo</td><td>{countWithPct(authors.authors_without_photo, authors.total_authors)}</td></tr>
-					</tbody>
-				</table>
-			</div>
-		</section>
-
 		<section class="panel" id="catalog-metadata">
 			<div class="panel-head">
-				<h2>Catalog Metadata</h2>
-				<p>Format-aware Work and Edition health checks for progress normalization, canonical grouping, search dedupe, and reader-facing BookCards.</p>
+				<h2>Catalog Review Queue</h2>
+				<p>One row per affected Work or Edition, with all current catalog issues grouped for review.</p>
 			</div>
 			<div class="grid metadata-stats" role="list">
-				<article class="stat">
+				<a class="stat stat-link" href="/admin/data-health#catalog-metadata">
 					<p>Catalog records needing attention</p>
 					<strong>{formatNumber(catalogMetadataHealth.summary.totalRecords)}</strong>
-				</article>
-				<article class="stat">
+				</a>
+				<a class="stat stat-link" href={catalogFilterHref({ catalog_severity: "critical" })}>
 					<p>Critical</p>
 					<strong>{formatNumber(catalogMetadataHealth.summary.critical)}</strong>
-				</article>
-				<article class="stat">
+				</a>
+				<a class="stat stat-link" href={catalogFilterHref({ catalog_issue: "missing_page_count" })}>
 					<p>Missing page counts</p>
 					<strong>{formatNumber(catalogMetadataHealth.summary.missingPageCounts)}</strong>
-				</article>
-				<article class="stat">
+				</a>
+				<a class="stat stat-link" href={catalogFilterHref({ catalog_issue: "missing_audiobook_duration" })}>
 					<p>Missing audiobook duration</p>
 					<strong>{formatNumber(catalogMetadataHealth.summary.missingAudiobookDurations)}</strong>
-				</article>
-				<article class="stat">
+				</a>
+				<a class="stat stat-link" href={catalogFilterHref({ catalog_issue: "progress_not_normalizable" })}>
 					<p>Progress-blocking metadata issues</p>
 					<strong>{formatNumber(catalogMetadataHealth.summary.progressBlocking)}</strong>
-				</article>
-				<article class="stat">
+				</a>
+				<a class="stat stat-link" href={catalogFilterHref({ catalog_issue: "potential_duplicate_work" })}>
 					<p>Potential duplicate Works</p>
 					<strong>{formatNumber(catalogMetadataHealth.summary.potentialDuplicates)}</strong>
-				</article>
+				</a>
 			</div>
 			<form class="catalog-health-filters" method="get" action="/admin/data-health">
 				<label>
@@ -723,10 +566,10 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 				</label>
 				<div class="catalog-filter-actions">
 					<button type="submit">Apply filters</button>
-					<a href="/admin/data-health#catalog-metadata">Clear</a>
+					<a href="/admin/data-health#catalog-metadata">Clear filters</a>
 				</div>
 			</form>
-			<div class="quick-filters" aria-label="Catalog health quick filters">
+			<div class="quick-filters" aria-label="Catalog review quick filters">
 				<a href={catalogFilterHref({ catalog_severity: "critical" })}>Critical</a>
 				<a href={catalogFilterHref({ catalog_issue: "missing_audiobook_duration" })}>Audiobook durations</a>
 				<a href={catalogFilterHref({ catalog_issue: "progress_not_normalizable" })}>Progress blocking</a>
@@ -744,7 +587,7 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 					</thead>
 					<tbody>
 						{catalogMetadataHealth.records.length === 0 ? (
-							<tr><td colspan="7">No catalog metadata issues matched the current filters.</td></tr>
+							<tr><td colspan="7">No catalog review items matched the current filters.</td></tr>
 						) : catalogMetadataHealth.records.map((record) => (
 							<tr>
 								<td>
@@ -780,7 +623,7 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 					totalPages={catalogTotalPages}
 					previousHref={catalogSafePage > 1 ? catalogPageHref(catalogSafePage - 1) : ""}
 					nextHref={catalogSafePage < catalogTotalPages ? catalogPageHref(catalogSafePage + 1) : ""}
-					label="Catalog metadata pagination"
+					label="Catalog review queue pagination"
 				/>
 			)}
 			<p class="note">The queue edits shared catalog records only. Shelf state, reading format, progress, ratings, and journal content remain reader-owned data and are not cached or exposed here.</p>
@@ -1031,6 +874,19 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 	.stat { border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.56); padding: 0.6rem; }
 	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }
 	.stat strong { display: block; margin-top: 0.2rem; font-size: 1.2rem; }
+	a.stat-link {
+		color: inherit;
+		text-decoration: none;
+	}
+	a.stat-link:hover,
+	a.stat-link:focus-visible {
+		border-color: rgba(31, 93, 135, 0.48);
+		background: rgba(255, 255, 255, 0.82);
+	}
+	a.stat-link:hover p,
+	a.stat-link:focus-visible p {
+		color: var(--color-nav);
+	}
 	.note { margin-top: 0.6rem; color: #5c5c5c; font-size: 0.86rem; }
 	.catalog-health-filters {
 		margin-top: 0.8rem;

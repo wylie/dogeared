@@ -159,7 +159,7 @@ Shows metadata coverage and gaps:
 - Missing publisher.
 - Books with/without genres.
 - Authors without bio/photo.
-- Format-aware Catalog Metadata records, including missing page counts, missing descriptions, missing audiobook duration, missing location/chapter counts, missing identifiers, missing Series position, malformed Work titles, potential duplicate Works, and progress-blocking normalization gaps.
+- Catalog Review Queue records, including missing page counts, missing descriptions, missing audiobook duration, missing location/chapter counts, missing identifiers, missing Series position, malformed Work titles, potential duplicate Works, and progress-blocking normalization gaps.
 
 ## Catalog Metadata Editor
 
@@ -198,13 +198,13 @@ Safety rules:
 - The editor shows an impact preview before saving reader-adjacent catalog metadata.
 - Data Health issue styling is applied only to affected controls. The editor keeps Work and Edition sections lightweight with headings, spacing, subtle dividers, shrink-safe grids, and full-width controls to avoid overflow.
 
-## Catalog Metadata Health
+## Catalog Review Queue
 
 Route: `/admin/data-health#catalog-metadata`
 
-The Catalog Metadata queue is the single metadata review table. Raw health checks still run independently, but the page aggregates them into one row per affected Edition when an Edition-specific issue exists, or one row per Work for Work-level issues. Each row shows the cover, title, author, Work ID, Edition ID when available, a compact Needs attention list, the highest-severity issue as the row severity, format, source, updated date, and one Catalog Editor link.
+Catalog Review Queue is the single metadata review table. Raw health checks still run independently, but the page aggregates them into one row per affected Edition when an Edition-specific issue exists, or one row per Work for Work-level issues. Each row shows the cover, title, author, Work ID, Edition ID when available, a compact Needs attention list, the highest-severity issue as the row severity, format, source, updated date, and one Catalog Editor link.
 
-The queue is server-paginated at 25 unique records per page and uses the shared `Pagination` component. Search, Issue, Severity, Format, Provider, and page state live in query parameters so admins can refresh, use Back, and return from an editor visit without losing context. Filter and quick-filter changes intentionally omit `catalog_page`, resetting the queue to Page 1.
+The queue is server-paginated at 25 unique records per page and uses the shared `Pagination` component. Search, Issue, Severity, Format, Provider, and page state live in query parameters so admins can refresh, use Back, and return from an editor visit without losing context. Summary cards and quick filters apply the corresponding query filters to this queue; separate page-count, publisher, and metadata-review reports are not rendered as independent tables. Filter and quick-filter changes intentionally omit `catalog_page`, resetting the queue to Page 1.
 
 ## Import Health
 
