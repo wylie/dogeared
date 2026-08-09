@@ -51,8 +51,8 @@ test("admin catalog editor separates Work and Edition metadata and records audit
 
 	assert.match(editor, /resolveAdminSession/);
 	assert.match(editor, /if \(!admin\.isAdmin\) return Astro\.redirect\("\/"\)/);
-	assert.match(editor, /Work-Level Metadata/);
-	assert.match(editor, /Edition-Level Metadata/);
+	assert.match(editor, /Work Metadata/);
+	assert.match(editor, /Edition Metadata/);
 	assert.match(editor, /Impact Preview/);
 	assert.match(editor, /Audit History/);
 	assert.match(editor, /name="duration"/);
@@ -69,6 +69,40 @@ test("admin catalog editor separates Work and Edition metadata and records audit
 	assert.match(lib, /Publication date must be a valid date/);
 	assert.match(lib, /sql\.transaction/);
 	assert.match(lib, /durationSeconds: nextEdition\.durationSeconds/);
+});
+
+test("admin catalog editor surfaces Data Health issues next to relevant fields", () => {
+	const editor = readFileSync("src/pages/admin/books/[workId].astro", "utf8");
+
+	assert.match(editor, /Data Health Summary/);
+	assert.match(editor, /data-health-summary/);
+	assert.match(editor, /data-health-summary-link/);
+	assert.match(editor, /data-target-field/);
+	assert.match(editor, /fieldHealthByField/);
+	assert.match(editor, /has-health-issue/);
+	assert.match(editor, /field-warning/);
+	assert.match(editor, /why-note/);
+	assert.match(editor, /warning-icon/);
+	assert.match(editor, /scrollIntoView/);
+	assert.match(editor, /refreshHealthState/);
+	assert.match(editor, /All visible Data Health issues look corrected/);
+	for (const group of [
+		"Work Identity",
+		"Series",
+		"Classification",
+		"Description",
+		"Cover",
+		"Edition Identity",
+		"Publication",
+		"Progress Metadata",
+		"External Identifiers"
+	]) {
+		assert.match(editor, new RegExp(group));
+	}
+	assert.match(editor, /Percentage tracking, Reading Activity, Daily Reading Volume/);
+	assert.match(editor, /Series pages, reading order, Previous\/Next navigation/);
+	assert.match(editor, /cover-preview/);
+	assert.match(editor, /Replace cover URL/);
 });
 
 test("Book Detail exposes catalog repair shortcut only through admin session", () => {

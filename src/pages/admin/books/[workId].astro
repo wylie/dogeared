@@ -7,8 +7,10 @@ import {
 	catalogEditorFormatOptions,
 	formatDuration,
 	loadCatalogEditorData,
+	loadCatalogMetadataHealth,
 	saveCatalogEditorData
 } from "../../../lib/adminCatalog";
+import type { CatalogHealthIssue } from "../../../lib/adminCatalog";
 
 export const prerender = false;
 
@@ -38,6 +40,10 @@ const editorResult = await safeAdminLoad("Catalog editor data", () => loadCatalo
 if (editorResult.warning) warnings.push(editorResult.warning);
 const editor = editorResult.data;
 const selectedEdition = editor?.editions.find((edition) => edition.id === selectedEditionId) || editor?.editions[0] || null;
+const healthResult = editor
+	? await safeAdminLoad("Catalog editor health", () => loadCatalogMetadataHealth(sql, { q: String(editor.work.id), limit: 200 }), { issues: [], summary: { totalIssues: 0, critical: 0, needsAttention: 0, optional: 0, missingPageCounts: 0, missingAudiobookDurations: 0, potentialDuplicates: 0, progressBlocking: 0 } })
+	: { data: { issues: [], summary: { totalIssues: 0, critical: 0, needsAttention: 0, optional: 0, missingPageCounts: 0, missingAudiobookDurations: 0, potentialDuplicates: 0, progressBlocking: 0 } }, warning: "" };
+if (healthResult.warning) warnings.push(healthResult.warning);
 const workMetadata = editor?.work.metadata || {};
 const workProvenance = typeof workMetadata.provenance === "object" && workMetadata.provenance !== null ? workMetadata.provenance as Record<string, unknown> : {};
 const editionMetadata = selectedEdition?.metadata || {};
@@ -48,6 +54,155 @@ const sectionLinks = [
 	{ id: "impact-preview", label: "Impact" },
 	{ id: "audit-history", label: "Audit History" }
 ];
+const allEditorIssues = editor
+	? healthResult.data.issues.filter((issue) => issue.workId === editor.work.id)
+	: [];
+const editorIssues = allEditorIssues.filter((issue) => !selectedEdition || issue.editionId === 0 || issue.editionId === selectedEdition.id || issue.bookId === selectedEdition.bookId);
+
+type FieldHealth = {
+	field: string;
+	label: string;
+	helper: string;
+	uses: string[];
+	issue: CatalogHealthIssue;
+};
+
+function issueLabel(value: string) {
+	return String(value || "")
+		.replace(/[_-]+/g, " ")
+		.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function severityLabel(value: string) {
+	if (value === "critical") return "Critical";
+	if (value === "needs_attention") return "Needs attention";
+	return "Optional";
+}
+
+function issueToField(issue: CatalogHealthIssue): FieldHealth {
+	const isAudioProgress = issue.issueType === "progress_not_normalizable" && /audio/i.test(issue.issue);
+	const field = isAudioProgress ? "duration" : ({
+		missing_audiobook_duration: "duration",
+		missing_page_count: "pageCount",
+		missing_location_count: "locationCount",
+		missing_chapter_count: "chapterCount",
+		missing_cover: issue.editionId > 0 ? "coverUrl" : "preferredCoverUrl",
+		missing_author: "primaryAuthor",
+		missing_publication_year: issue.editionId > 0 ? "publicationYear" : "originalPublicationYear",
+		missing_publisher: "publisher",
+		missing_identifiers: "externalIdentifiers",
+		missing_series_position: "seriesPosition",
+		missing_series_relationship: "seriesId",
+		malformed_title: "workTitle",
+		missing_reading_format_metadata: "editionFormat",
+		progress_not_normalizable: "pageCount"
+	} as Record<string, string>)[issue.issueType] || "catalogEditor";
+	const details: Record<string, { label: string; helper: string; uses: string[] }> = {
+		duration: {
+			label: "Audiobook duration",
+			helper: "Audiobook progress cannot be normalized until this Edition has a total duration.",
+			uses: ["Percentage tracking", "Reading Activity", "Daily Reading Volume"]
+		},
+		pageCount: {
+			label: "Page count",
+			helper: "Page and percentage progress need a total page count for reliable normalization.",
+			uses: ["Percentage tracking", "Reading statistics", "Reading Activity"]
+		},
+		locationCount: {
+			label: "Location count",
+			helper: "Location-based Editions are easier to normalize when the total location count is known.",
+			uses: ["Location tracking", "Reading Activity", "Daily Reading Volume"]
+		},
+		chapterCount: {
+			label: "Chapter count",
+			helper: "Chapter metadata helps keep chapter progress meaningful across Editions.",
+			uses: ["Chapter tracking", "Progress labels", "Reading Activity"]
+		},
+		seriesPosition: {
+			label: "Series position",
+			helper: "Series membership exists, but DogEared does not know this Work's reading order.",
+			uses: ["Series pages", "Reading order", "Previous/Next navigation"]
+		},
+		seriesId: {
+			label: "Series",
+			helper: "The title strongly suggests Series membership. Confirm the structured Series relationship.",
+			uses: ["Series pages", "Search dedupe", "Author pages"]
+		},
+		primaryAuthor: {
+			label: "Primary author",
+			helper: "Author metadata is part of canonical Work identity and duplicate prevention.",
+			uses: ["Search dedupe", "Author pages", "BookCards"]
+		},
+		workTitle: {
+			label: "Work title",
+			helper: "The Work title may include Edition or format text that should live on an Edition instead.",
+			uses: ["Search dedupe", "BookCards", "Series grouping"]
+		},
+		editionFormat: {
+			label: "Edition format",
+			helper: "Format determines which extent metadata matters for this Edition.",
+			uses: ["Data Health", "Progress metadata", "Edition display"]
+		},
+		publisher: {
+			label: "Publisher",
+			helper: "Publisher helps administrators distinguish Editions and provider matches.",
+			uses: ["Edition display", "Provider review", "Catalog QA"]
+		},
+		publicationYear: {
+			label: "Publication year",
+			helper: "Publication information helps distinguish similar Editions.",
+			uses: ["Edition display", "Search filters", "Catalog QA"]
+		},
+		originalPublicationYear: {
+			label: "Original publication year",
+			helper: "Original publication year helps describe the canonical Work.",
+			uses: ["Book detail", "Search context", "Catalog QA"]
+		},
+		preferredCoverUrl: {
+			label: "Preferred cover",
+			helper: "A preferred Work cover keeps cards recognizable when Editions disagree.",
+			uses: ["BookCards", "Search results", "Series pages"]
+		},
+		coverUrl: {
+			label: "Edition cover",
+			helper: "Edition covers help distinguish formats and provider records.",
+			uses: ["Edition display", "Book detail", "Search results"]
+		},
+		externalIdentifiers: {
+			label: "External identifiers",
+			helper: "Identifiers help DogEared avoid duplicate Works and Editions during search/import.",
+			uses: ["Search dedupe", "Provider matching", "Import cleanup"]
+		},
+		catalogEditor: {
+			label: issue.issue,
+			helper: "Review this issue in Data Health before changing canonical catalog identity.",
+			uses: ["Data Health", "Duplicate prevention", "Catalog integrity"]
+		}
+	};
+	const detail = details[field] || details.catalogEditor;
+	return { field, issue, ...detail };
+}
+
+const fieldHealthItems = editorIssues.map(issueToField);
+const fieldHealthByField = fieldHealthItems.reduce((map, item) => {
+	if (!map.has(item.field)) map.set(item.field, item);
+	const existing = map.get(item.field);
+	if (existing && existing.issue.severity !== "critical" && item.issue.severity === "critical") map.set(item.field, item);
+	return map;
+}, new Map<string, FieldHealth>());
+
+function fieldHealth(field: string) {
+	return fieldHealthByField.get(field) || null;
+}
+
+function fieldClass(field: string, extra = "") {
+	const health = fieldHealth(field);
+	return ["field-control", health ? `has-health-issue ${health.issue.severity}` : "", extra].filter(Boolean).join(" ");
+}
+
+function issueTarget(issue: CatalogHealthIssue) {
+	return issueToField(issue).field;
+}
 ---
 
 <Layout title={editor ? `Edit ${editor.work.title}` : "Catalog Editor"} sectionLinks={sectionLinks} robots="noindex,nofollow">
@@ -86,6 +241,33 @@ const sectionLinks = [
 			</section>
 		) : (
 			<>
+				<section id="field-catalogEditor" class={`health-summary ${editorIssues.length > 0 ? "has-issues" : "is-healthy"}`} aria-labelledby="catalog-health-summary-heading" data-health-summary tabindex="-1">
+					<div class="health-summary-head">
+						<span class="material-icons" aria-hidden="true">{editorIssues.length > 0 ? "warning" : "check_circle"}</span>
+						<div>
+							<h2 id="catalog-health-summary-heading">Data Health Summary</h2>
+							<p data-health-summary-count>
+								{editorIssues.length > 0
+									? `${editorIssues.length.toLocaleString()} issue${editorIssues.length === 1 ? "" : "s"} require attention`
+									: "No Data Health issues detected for this Work and selected Edition"}
+							</p>
+						</div>
+					</div>
+					{editorIssues.length > 0 && (
+						<ul class="health-summary-list">
+							{editorIssues.map((issue) => (
+								<li data-health-summary-item={issueTarget(issue)}>
+									<a href={`#field-${issueTarget(issue)}`} data-health-summary-link data-target-field={issueTarget(issue)}>
+										<span class={`severity-dot ${issue.severity}`} aria-hidden="true"></span>
+										<span class="sr-only">{severityLabel(issue.severity)}: </span>
+										{issue.issue}
+									</a>
+								</li>
+							))}
+						</ul>
+					)}
+				</section>
+
 				{editor.editions.length > 1 && (
 					<form class="edition-switch" method="get" action={`/admin/books/${editor.work.id}`}>
 						<label>
@@ -107,62 +289,104 @@ const sectionLinks = [
 
 					<section class="panel">
 						<div class="panel-head">
-							<h2>Work-Level Metadata</h2>
+							<h2>Work Metadata</h2>
 							<p>Shared canonical identity used for grouping, search dedupe, Series membership, and reader-facing catalog reuse.</p>
 						</div>
-						<div class="field-grid two">
-							<label>
-								<span>Work title</span>
-								<input name="workTitle" value={editor.work.title} required maxlength="500" />
-							</label>
-							<label>
-								<span>Canonical title</span>
-								<input name="canonicalTitle" value={editor.work.canonicalTitle} maxlength="500" />
-							</label>
-							<label>
-								<span>Primary author</span>
-								<input name="primaryAuthor" value={editor.work.primaryAuthor} maxlength="300" />
-							</label>
-							<label>
-								<span>Original publication year</span>
-								<input name="originalPublicationYear" inputmode="numeric" value={editor.work.originalPublicationYear > 0 ? String(editor.work.originalPublicationYear) : ""} />
-							</label>
-							<label>
-								<span>Series</span>
-								<select name="seriesId">
-									<option value="0">Standalone / no Series</option>
-									{editor.seriesOptions.map((series) => (
-										<option value={String(series.id)} selected={series.id === editor.work.seriesId}>{series.name}</option>
-									))}
-								</select>
-							</label>
-							<label>
-								<span>Series position</span>
-								<input name="seriesPosition" inputmode="decimal" value={editor.work.seriesPosition} />
-							</label>
-							<label class="span-two">
-								<span>Preferred cover URL</span>
-								<input name="preferredCoverUrl" value={editor.work.preferredCoverUrl} maxlength="1000" />
-							</label>
-							<label class="span-two">
-								<span>Subjects</span>
-								<textarea name="subjects" rows="3">{editor.work.subjects.join(", ")}</textarea>
-							</label>
-							<label class="span-two">
-								<span>Genres</span>
-								<textarea name="genres" rows="3">{editor.work.genres.join(", ")}</textarea>
-							</label>
-							<label class="span-two">
+						<fieldset class="field-group">
+							<legend>Work Identity</legend>
+							<div class="field-grid two">
+								<label id="field-workTitle" class={fieldClass("workTitle")} data-health-field="workTitle">
+									<span class="field-label">Work title {fieldHealth("workTitle") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+									<input name="workTitle" value={editor.work.title} required maxlength="500" aria-describedby={fieldHealth("workTitle") ? "help-workTitle why-workTitle" : undefined} />
+									{fieldHealth("workTitle") && <p id="help-workTitle" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("workTitle")!.issue.severity)}: </span>{fieldHealth("workTitle")!.helper}</p>}
+								</label>
+								<label class={fieldClass("canonicalTitle")}>
+									<span>Canonical title</span>
+									<input name="canonicalTitle" value={editor.work.canonicalTitle} maxlength="500" />
+								</label>
+								<label id="field-primaryAuthor" class={fieldClass("primaryAuthor")} data-health-field="primaryAuthor">
+									<span class="field-label">Primary author {fieldHealth("primaryAuthor") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+									<input name="primaryAuthor" value={editor.work.primaryAuthor} maxlength="300" aria-describedby={fieldHealth("primaryAuthor") ? "help-primaryAuthor why-primaryAuthor" : undefined} />
+									{fieldHealth("primaryAuthor") && <p id="help-primaryAuthor" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("primaryAuthor")!.issue.severity)}: </span>{fieldHealth("primaryAuthor")!.helper}</p>}
+								</label>
+								<label id="field-originalPublicationYear" class={fieldClass("originalPublicationYear")} data-health-field="originalPublicationYear">
+									<span class="field-label">Original publication year {fieldHealth("originalPublicationYear") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+									<input name="originalPublicationYear" inputmode="numeric" value={editor.work.originalPublicationYear > 0 ? String(editor.work.originalPublicationYear) : ""} aria-describedby={fieldHealth("originalPublicationYear") ? "help-originalPublicationYear why-originalPublicationYear" : undefined} />
+									{fieldHealth("originalPublicationYear") && <p id="help-originalPublicationYear" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("originalPublicationYear")!.issue.severity)}: </span>{fieldHealth("originalPublicationYear")!.helper}</p>}
+								</label>
+							</div>
+						</fieldset>
+						<fieldset class="field-group">
+							<legend>Series</legend>
+							<div class="field-grid two">
+								<label id="field-seriesId" class={fieldClass("seriesId")} data-health-field="seriesId">
+									<span class="field-label">Series {fieldHealth("seriesId") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+									<select name="seriesId" aria-describedby={fieldHealth("seriesId") ? "help-seriesId why-seriesId" : "why-seriesId"}>
+										<option value="0">Standalone / no Series</option>
+										{editor.seriesOptions.map((series) => (
+											<option value={String(series.id)} selected={series.id === editor.work.seriesId}>{series.name}</option>
+										))}
+									</select>
+									{fieldHealth("seriesId") && <p id="help-seriesId" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("seriesId")!.issue.severity)}: </span>{fieldHealth("seriesId")!.helper}</p>}
+									<p id="why-seriesId" class="why-note"><strong>Used for:</strong> Series pages, search dedupe, author pages.</p>
+								</label>
+								<label id="field-seriesPosition" class={fieldClass("seriesPosition")} data-health-field="seriesPosition">
+									<span class="field-label">Series position {fieldHealth("seriesPosition") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+									<input name="seriesPosition" inputmode="decimal" value={editor.work.seriesPosition} aria-describedby={fieldHealth("seriesPosition") ? "help-seriesPosition why-seriesPosition" : "why-seriesPosition"} />
+									{fieldHealth("seriesPosition") && <p id="help-seriesPosition" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("seriesPosition")!.issue.severity)}: </span>{fieldHealth("seriesPosition")!.helper}</p>}
+									<p id="why-seriesPosition" class="why-note"><strong>Used for:</strong> Series pages, reading order, Previous/Next navigation.</p>
+								</label>
+							</div>
+						</fieldset>
+						<fieldset class="field-group">
+							<legend>Classification</legend>
+							<div class="field-grid two">
+								<label class="span-two">
+									<span>Subjects</span>
+									<textarea name="subjects" rows="3">{editor.work.subjects.join(", ")}</textarea>
+								</label>
+								<label class="span-two">
+									<span>Genres</span>
+									<textarea name="genres" rows="3">{editor.work.genres.join(", ")}</textarea>
+								</label>
+							</div>
+						</fieldset>
+						<fieldset class="field-group">
+							<legend>Description</legend>
+							<label class="field-control">
 								<span>Description</span>
 								<textarea name="description" rows="6">{editor.work.description}</textarea>
 							</label>
-						</div>
+						</fieldset>
+						<fieldset class="field-group">
+							<legend>Cover</legend>
+							<div id="field-preferredCoverUrl" class={fieldClass("preferredCoverUrl", "cover-editor")} data-health-field="preferredCoverUrl">
+								<div class="cover-preview">
+									{editor.work.preferredCoverUrl ? <img src={editor.work.preferredCoverUrl} alt={`Preferred cover for ${editor.work.title}`} loading="lazy" decoding="async" /> : <span class="cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></span>}
+								</div>
+								<div class="cover-editor-main">
+									<div class="cover-editor-head">
+										<strong>Preferred cover</strong>
+										<span>{String(workProvenance.source || "Existing DogEared data")}</span>
+									</div>
+									{fieldHealth("preferredCoverUrl") && <p id="help-preferredCoverUrl" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("preferredCoverUrl")!.issue.severity)}: </span>{fieldHealth("preferredCoverUrl")!.helper}</p>}
+									<p id="why-preferredCoverUrl" class="why-note"><strong>Used for:</strong> BookCards, search results, Series pages.</p>
+									<details class="advanced-field">
+										<summary>Replace cover URL</summary>
+										<label>
+											<span>Preferred cover URL</span>
+											<input name="preferredCoverUrl" value={editor.work.preferredCoverUrl} maxlength="1000" aria-describedby={fieldHealth("preferredCoverUrl") ? "help-preferredCoverUrl why-preferredCoverUrl" : "why-preferredCoverUrl"} />
+										</label>
+									</details>
+								</div>
+							</div>
+						</fieldset>
 						<p class="note">Work provenance: {String(workProvenance.source || "Existing DogEared data")} · Updated {formatDate(editor.work.updatedAt)}</p>
 					</section>
 
 					<section class="panel">
 						<div class="panel-head">
-							<h2>Edition-Level Metadata</h2>
+							<h2>Edition Metadata</h2>
 							<p>Format, identifiers, publisher, page count, audiobook duration, locations, chapters, and cover data belong to a specific Edition.</p>
 						</div>
 						{editor.editions.length === 0 ? (
@@ -170,75 +394,128 @@ const sectionLinks = [
 						) : (
 							<>
 								<p class="edition-current">Editing Edition #{selectedEdition?.id}{selectedEdition?.bookId ? ` · Book ${selectedEdition.bookId}` : ""}</p>
-								<div class="field-grid two">
-									<label>
-										<span>Edition title</span>
-										<input name="editionTitle" value={selectedEdition?.title || ""} maxlength="500" />
-									</label>
-									<label>
-										<span>Format</span>
-										<input name="editionFormat" list="edition-format-options" value={selectedEdition?.format || ""} maxlength="100" />
-										<datalist id="edition-format-options">
-											{catalogEditorFormatOptions().map((format) => format ? <option value={format} /> : null)}
-										</datalist>
-									</label>
-									<label>
-										<span>ISBN-10</span>
-										<input name="isbn10" value={selectedEdition?.isbn10 || ""} maxlength="40" />
-									</label>
-									<label>
-										<span>ISBN-13</span>
-										<input name="isbn13" value={selectedEdition?.isbn13 || ""} maxlength="40" />
-									</label>
-									<label>
-										<span>Publisher</span>
-										<input name="publisher" value={selectedEdition?.publisher || ""} maxlength="300" />
-									</label>
-									<label>
-										<span>Language</span>
-										<input name="language" value={selectedEdition?.language || ""} maxlength="80" />
-									</label>
-									<label>
-										<span>Publication date</span>
-										<input name="publicationDate" value={selectedEdition?.publicationDate || ""} maxlength="80" />
-									</label>
-									<label>
-										<span>Publication year</span>
-										<input name="publicationYear" inputmode="numeric" value={selectedEdition && selectedEdition.publicationYear > 0 ? String(selectedEdition.publicationYear) : ""} />
-									</label>
-									<label>
-										<span>Page count</span>
-										<input name="pageCount" inputmode="numeric" value={selectedEdition && selectedEdition.pageCount > 0 ? String(selectedEdition.pageCount) : ""} />
-									</label>
-									<label>
-										<span>Audiobook duration</span>
-										<input name="duration" value={formatDuration(selectedEdition?.durationSeconds || 0)} placeholder="11 hr 24 min" />
-									</label>
-									<label>
-										<span>Location count</span>
-										<input name="locationCount" inputmode="numeric" value={selectedEdition && selectedEdition.locationCount > 0 ? String(selectedEdition.locationCount) : ""} />
-									</label>
-									<label>
-										<span>Chapter count</span>
-										<input name="chapterCount" inputmode="numeric" value={selectedEdition && selectedEdition.chapterCount > 0 ? String(selectedEdition.chapterCount) : ""} />
-									</label>
-									<label class="span-two">
-										<span>Cover URL</span>
-										<input name="coverUrl" value={selectedEdition?.coverUrl || ""} maxlength="1000" />
-									</label>
-									<label>
-										<span>Google Books ID</span>
-										<input name="googleBooksId" value={selectedEdition?.googleBooksId || ""} maxlength="200" />
-									</label>
-									<label>
-										<span>Open Library Work ID</span>
-										<input name="openLibraryWorkId" value={selectedEdition?.openLibraryWorkId || ""} maxlength="200" />
-									</label>
-									<label>
-										<span>Open Library Edition ID</span>
-										<input name="openLibraryEditionId" value={selectedEdition?.openLibraryEditionId || ""} maxlength="200" />
-									</label>
-								</div>
+								<fieldset class="field-group">
+									<legend>Edition Identity</legend>
+									<div class="field-grid two">
+										<label class="field-control">
+											<span>Edition title</span>
+											<input name="editionTitle" value={selectedEdition?.title || ""} maxlength="500" />
+										</label>
+										<label id="field-editionFormat" class={fieldClass("editionFormat")} data-health-field="editionFormat">
+											<span class="field-label">Format {fieldHealth("editionFormat") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+											<input name="editionFormat" list="edition-format-options" value={selectedEdition?.format || ""} maxlength="100" aria-describedby={fieldHealth("editionFormat") ? "help-editionFormat why-editionFormat" : "why-editionFormat"} />
+											<datalist id="edition-format-options">
+												{catalogEditorFormatOptions().map((format) => format ? <option value={format} /> : null)}
+											</datalist>
+											{fieldHealth("editionFormat") && <p id="help-editionFormat" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("editionFormat")!.issue.severity)}: </span>{fieldHealth("editionFormat")!.helper}</p>}
+											<p id="why-editionFormat" class="why-note"><strong>Used for:</strong> Data Health, progress metadata, Edition display.</p>
+										</label>
+										<label class="field-control">
+											<span>Language</span>
+											<input name="language" value={selectedEdition?.language || ""} maxlength="80" />
+										</label>
+									</div>
+								</fieldset>
+								<fieldset class="field-group">
+									<legend>Publication</legend>
+									<div class="field-grid two">
+										<label id="field-publisher" class={fieldClass("publisher")} data-health-field="publisher">
+											<span class="field-label">Publisher {fieldHealth("publisher") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+											<input name="publisher" value={selectedEdition?.publisher || ""} maxlength="300" aria-describedby={fieldHealth("publisher") ? "help-publisher why-publisher" : "why-publisher"} />
+											{fieldHealth("publisher") && <p id="help-publisher" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("publisher")!.issue.severity)}: </span>{fieldHealth("publisher")!.helper}</p>}
+											<p id="why-publisher" class="why-note"><strong>Used for:</strong> Edition display, provider review, catalog QA.</p>
+										</label>
+										<label class="field-control">
+											<span>Publication date</span>
+											<input name="publicationDate" value={selectedEdition?.publicationDate || ""} maxlength="80" />
+										</label>
+										<label id="field-publicationYear" class={fieldClass("publicationYear")} data-health-field="publicationYear">
+											<span class="field-label">Publication year {fieldHealth("publicationYear") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+											<input name="publicationYear" inputmode="numeric" value={selectedEdition && selectedEdition.publicationYear > 0 ? String(selectedEdition.publicationYear) : ""} aria-describedby={fieldHealth("publicationYear") ? "help-publicationYear why-publicationYear" : "why-publicationYear"} />
+											{fieldHealth("publicationYear") && <p id="help-publicationYear" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("publicationYear")!.issue.severity)}: </span>{fieldHealth("publicationYear")!.helper}</p>}
+											<p id="why-publicationYear" class="why-note"><strong>Used for:</strong> Edition display, search filters, catalog QA.</p>
+										</label>
+									</div>
+								</fieldset>
+								<fieldset class="field-group">
+									<legend>Progress Metadata</legend>
+									<div class="field-grid two">
+										<label id="field-pageCount" class={fieldClass("pageCount")} data-health-field="pageCount">
+											<span class="field-label">Page count {fieldHealth("pageCount") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+											<input name="pageCount" inputmode="numeric" value={selectedEdition && selectedEdition.pageCount > 0 ? String(selectedEdition.pageCount) : ""} aria-describedby={fieldHealth("pageCount") ? "help-pageCount why-pageCount" : "why-pageCount"} />
+											{fieldHealth("pageCount") && <p id="help-pageCount" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("pageCount")!.issue.severity)}: </span>{fieldHealth("pageCount")!.helper}</p>}
+											<p id="why-pageCount" class="why-note"><strong>Used for:</strong> Percentage tracking, reading statistics, Reading Activity.</p>
+										</label>
+										<label id="field-duration" class={fieldClass("duration")} data-health-field="duration">
+											<span class="field-label">Audiobook duration {fieldHealth("duration") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+											<input name="duration" value={formatDuration(selectedEdition?.durationSeconds || 0)} placeholder="11 hr 24 min" aria-describedby={fieldHealth("duration") ? "help-duration why-duration" : "why-duration"} />
+											{fieldHealth("duration") && <p id="help-duration" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("duration")!.issue.severity)}: </span>{fieldHealth("duration")!.helper}</p>}
+											<p id="why-duration" class="why-note"><strong>Used for:</strong> Percentage tracking, Reading Activity, Daily Reading Volume.</p>
+										</label>
+										<label id="field-locationCount" class={fieldClass("locationCount")} data-health-field="locationCount">
+											<span class="field-label">Location count {fieldHealth("locationCount") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+											<input name="locationCount" inputmode="numeric" value={selectedEdition && selectedEdition.locationCount > 0 ? String(selectedEdition.locationCount) : ""} aria-describedby={fieldHealth("locationCount") ? "help-locationCount why-locationCount" : "why-locationCount"} />
+											{fieldHealth("locationCount") && <p id="help-locationCount" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("locationCount")!.issue.severity)}: </span>{fieldHealth("locationCount")!.helper}</p>}
+											<p id="why-locationCount" class="why-note"><strong>Used for:</strong> Location tracking, Reading Activity, Daily Reading Volume.</p>
+										</label>
+										<label id="field-chapterCount" class={fieldClass("chapterCount")} data-health-field="chapterCount">
+											<span class="field-label">Chapter count {fieldHealth("chapterCount") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+											<input name="chapterCount" inputmode="numeric" value={selectedEdition && selectedEdition.chapterCount > 0 ? String(selectedEdition.chapterCount) : ""} aria-describedby={fieldHealth("chapterCount") ? "help-chapterCount why-chapterCount" : "why-chapterCount"} />
+											{fieldHealth("chapterCount") && <p id="help-chapterCount" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("chapterCount")!.issue.severity)}: </span>{fieldHealth("chapterCount")!.helper}</p>}
+											<p id="why-chapterCount" class="why-note"><strong>Used for:</strong> Chapter tracking, progress labels, Reading Activity.</p>
+										</label>
+									</div>
+								</fieldset>
+								<fieldset class="field-group">
+									<legend>Cover</legend>
+									<div id="field-coverUrl" class={fieldClass("coverUrl", "cover-editor")} data-health-field="coverUrl">
+										<div class="cover-preview">
+											{selectedEdition?.coverUrl ? <img src={selectedEdition.coverUrl} alt={`Cover for Edition ${selectedEdition.id}`} loading="lazy" decoding="async" /> : <span class="cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></span>}
+										</div>
+										<div class="cover-editor-main">
+											<div class="cover-editor-head">
+												<strong>Edition cover</strong>
+												<span>{String(editionProvenance.source || "Existing DogEared data")}</span>
+											</div>
+											{fieldHealth("coverUrl") && <p id="help-coverUrl" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("coverUrl")!.issue.severity)}: </span>{fieldHealth("coverUrl")!.helper}</p>}
+											<p id="why-coverUrl" class="why-note"><strong>Used for:</strong> Edition display, Book Detail, search results.</p>
+											<details class="advanced-field">
+												<summary>Replace cover URL</summary>
+												<label>
+													<span>Cover URL</span>
+													<input name="coverUrl" value={selectedEdition?.coverUrl || ""} maxlength="1000" aria-describedby={fieldHealth("coverUrl") ? "help-coverUrl why-coverUrl" : "why-coverUrl"} />
+												</label>
+											</details>
+										</div>
+									</div>
+								</fieldset>
+								<fieldset id="field-externalIdentifiers" class={fieldClass("externalIdentifiers", "field-group")} data-health-field="externalIdentifiers">
+									<legend>External Identifiers {fieldHealth("externalIdentifiers") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</legend>
+									{fieldHealth("externalIdentifiers") && <p id="help-externalIdentifiers" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("externalIdentifiers")!.issue.severity)}: </span>{fieldHealth("externalIdentifiers")!.helper}</p>}
+									<p id="why-externalIdentifiers" class="why-note"><strong>Used for:</strong> Search dedupe, provider matching, import cleanup.</p>
+									<div class="field-grid two">
+										<label>
+											<span>ISBN-10</span>
+											<input name="isbn10" value={selectedEdition?.isbn10 || ""} maxlength="40" />
+										</label>
+										<label>
+											<span>ISBN-13</span>
+											<input name="isbn13" value={selectedEdition?.isbn13 || ""} maxlength="40" />
+										</label>
+										<label>
+											<span>Google Books ID</span>
+											<input name="googleBooksId" value={selectedEdition?.googleBooksId || ""} maxlength="200" />
+										</label>
+										<label>
+											<span>Open Library Work ID</span>
+											<input name="openLibraryWorkId" value={selectedEdition?.openLibraryWorkId || ""} maxlength="200" />
+										</label>
+										<label>
+											<span>Open Library Edition ID</span>
+											<input name="openLibraryEditionId" value={selectedEdition?.openLibraryEditionId || ""} maxlength="200" />
+										</label>
+									</div>
+								</fieldset>
 								<p class="note">Edition provenance: {String(editionProvenance.source || "Existing DogEared data")} · Updated {formatDate(selectedEdition?.updatedAt)}</p>
 							</>
 						)}
@@ -306,6 +583,66 @@ const sectionLinks = [
 		text-decoration: none;
 	}
 	.hero-actions a:hover, .actions a:hover { color: var(--color-nav-hover); text-decoration: underline; }
+	.health-summary {
+		margin-top: 1rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		padding: 0.9rem 1rem;
+	}
+	.health-summary.has-issues { border-color: rgba(243, 114, 44, 0.78); background: #fffaf0; }
+	.health-summary.is-healthy { border-color: rgba(31, 122, 69, 0.32); background: rgba(31, 122, 69, 0.06); }
+	.health-summary-head {
+		display: flex;
+		gap: 0.55rem;
+		align-items: flex-start;
+	}
+	.health-summary-head .material-icons {
+		color: #6b3f0a;
+		font-size: 1.25rem;
+		margin-top: 0.05rem;
+	}
+	.health-summary.is-healthy .material-icons { color: var(--color-primary); }
+	.health-summary h2 {
+		margin: 0;
+		font-size: 1rem;
+	}
+	.health-summary p {
+		margin: 0.16rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.9rem;
+	}
+	.health-summary-list {
+		margin: 0.7rem 0 0;
+		padding: 0;
+		list-style: none;
+		display: grid;
+		gap: 0.34rem;
+	}
+	.health-summary-list a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.42rem;
+		color: var(--color-nav);
+		font-weight: 800;
+		text-decoration: none;
+	}
+	.health-summary-list a:hover,
+	.health-summary-list a:focus-visible {
+		color: var(--color-nav-hover);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.severity-dot {
+		width: 0.58rem;
+		height: 0.58rem;
+		border-radius: 999px;
+		border: 1px solid currentColor;
+		flex: 0 0 auto;
+	}
+	.severity-dot.critical { background: #991b1b; color: #991b1b; }
+	.severity-dot.needs_attention { background: var(--palette-2); color: var(--palette-2); }
+	.severity-dot.optional { background: var(--color-text-muted); color: var(--color-text-muted); }
 	.warning-list, .notice-list {
 		margin-top: 1rem;
 		border: var(--border-subtle);
@@ -319,9 +656,31 @@ const sectionLinks = [
 	.panel { margin-top: 1rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
 	.panel-head h2 { margin: 0; }
 	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }
+	.field-group {
+		margin: 1rem 0 0;
+		border: 0;
+		border-top: var(--border-subtle);
+		padding: 0.85rem 0 0;
+	}
+	.field-group legend {
+		color: var(--color-text);
+		font-size: 0.94rem;
+		font-weight: 800;
+		padding: 0 0.45rem 0 0;
+	}
 	.field-grid { display: grid; gap: 0.7rem; margin-top: 0.9rem; }
 	.field-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	label { display: grid; gap: 0.3rem; font-weight: 700; color: #444; font-size: 0.86rem; }
+	label, .field-control { display: grid; gap: 0.3rem; font-weight: 700; color: #444; font-size: 0.86rem; }
+	.field-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+	.warning-icon {
+		color: #8f1d1d;
+		font-size: 1rem;
+		line-height: 1;
+	}
 	input, select, textarea {
 		width: 100%;
 		border: var(--border-subtle);
@@ -332,9 +691,113 @@ const sectionLinks = [
 		font-weight: 500;
 		padding: 0.5rem 0.55rem;
 	}
+	.has-health-issue {
+		border: 1px solid transparent;
+		border-radius: var(--radius-md);
+		padding: 0.55rem;
+		background: rgba(255, 255, 255, 0.58);
+	}
+	.has-health-issue.critical {
+		border-color: #991b1b;
+		background: #fff0f0;
+	}
+	.has-health-issue.needs_attention {
+		border-color: var(--palette-2);
+		background: #fffaf0;
+	}
+	.has-health-issue.optional {
+		border-color: rgba(87, 117, 144, 0.48);
+		background: rgba(87, 117, 144, 0.08);
+	}
+	.has-health-issue.critical input,
+	.has-health-issue.critical select,
+	.has-health-issue.critical textarea {
+		border-color: #991b1b;
+	}
+	.has-health-issue.needs_attention input,
+	.has-health-issue.needs_attention select,
+	.has-health-issue.needs_attention textarea {
+		border-color: var(--palette-2);
+	}
+	.field-warning {
+		margin: 0.15rem 0 0;
+		color: #6b1f1f;
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+	.needs_attention .field-warning { color: #6b3f0a; }
+	.optional .field-warning { color: #4d5a66; }
+	.why-note {
+		margin: 0.05rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.8rem;
+		font-weight: 500;
+		line-height: 1.35;
+	}
+	.why-note strong { color: #444; font-weight: 800; }
 	textarea { resize: vertical; }
 	.span-two { grid-column: 1 / -1; }
 	.edition-select { margin-top: 0.8rem; }
+	.edition-switch {
+		margin-top: 1rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.56);
+		padding: 0.75rem;
+	}
+	.edition-current {
+		margin: 0.75rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.86rem;
+		font-weight: 700;
+	}
+	.cover-editor {
+		display: grid;
+		grid-template-columns: 88px minmax(0, 1fr);
+		gap: 0.8rem;
+		align-items: start;
+	}
+	.cover-preview img,
+	.cover-placeholder {
+		width: 88px;
+		height: 132px;
+		border-radius: var(--radius-sm);
+		object-fit: cover;
+		background: rgba(87, 117, 144, 0.12);
+	}
+	.cover-placeholder {
+		display: grid;
+		place-items: center;
+		color: var(--color-text-muted);
+	}
+	.cover-placeholder .material-icons { font-size: 1.35rem; }
+	.cover-editor-main {
+		display: grid;
+		gap: 0.45rem;
+		min-width: 0;
+	}
+	.cover-editor-head strong {
+		display: block;
+		color: var(--color-text);
+		font-size: 0.94rem;
+	}
+	.cover-editor-head span {
+		color: var(--color-text-muted);
+		display: block;
+		font-size: 0.82rem;
+		font-weight: 700;
+		margin-top: 0.1rem;
+	}
+	.advanced-field {
+		margin-top: 0.2rem;
+	}
+	.advanced-field summary {
+		color: var(--color-nav);
+		cursor: pointer;
+		font-weight: 800;
+	}
+	.advanced-field summary:hover { color: var(--color-nav-hover); }
+	.advanced-field label { margin-top: 0.45rem; }
 	.grid { display: grid; gap: 0.55rem; margin-top: 0.7rem; }
 	.grid.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 	.stat { border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.56); padding: 0.6rem; }
@@ -357,10 +820,90 @@ const sectionLinks = [
 	table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 	th, td { text-align: left; padding: 0.45rem; border-bottom: var(--border-subtle); vertical-align: top; }
 	th { font-weight: 700; color: #444; }
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
 
 	@media (max-width: 800px) {
 		.hero { display: block; }
 		.hero-actions { margin-top: 0.7rem; }
 		.field-grid.two, .grid.five { grid-template-columns: 1fr; }
+		.cover-editor { grid-template-columns: 72px minmax(0, 1fr); }
+		.cover-preview img,
+		.cover-placeholder {
+			width: 72px;
+			height: 108px;
+		}
 	}
 </style>
+
+<script>
+	const summary = document.querySelector("[data-health-summary]");
+	const countNode = summary?.querySelector("[data-health-summary-count]");
+	const issueNodes = Array.from(document.querySelectorAll("[data-health-summary-item]"));
+	const initialFieldValues = new Map();
+	for (const container of document.querySelectorAll("[data-health-field]")) {
+		const field = container.getAttribute("data-health-field") || "";
+		const values = Array.from(container.querySelectorAll("input, select, textarea")).map((control) => String(control.value || "").trim());
+		initialFieldValues.set(field, values);
+	}
+	function isFieldCorrected(field) {
+		const containers = Array.from(document.querySelectorAll(`[data-health-field="${CSS.escape(field)}"]`));
+		return containers.some((container) => {
+			const controls = Array.from(container.querySelectorAll("input, select, textarea"));
+			return controls.some((control, index) => {
+				const value = String(control.value || "").trim();
+				const initialValue = initialFieldValues.get(field)?.[index] || "";
+				if (control instanceof HTMLSelectElement) return value !== "" && value !== "0" && value !== initialValue;
+				if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) return value !== "" && (initialValue === "" || value !== initialValue);
+				return false;
+			});
+		});
+	}
+	function refreshHealthState() {
+		let visibleIssues = 0;
+		for (const item of issueNodes) {
+			const field = item.getAttribute("data-health-summary-item") || "";
+			const corrected = field && isFieldCorrected(field);
+			item.toggleAttribute("hidden", corrected);
+			if (!corrected) visibleIssues += 1;
+			for (const container of document.querySelectorAll(`[data-health-field="${CSS.escape(field)}"]`)) {
+				container.classList.toggle("is-corrected", corrected);
+			}
+		}
+		if (countNode) {
+			countNode.textContent = visibleIssues > 0
+				? `${visibleIssues.toLocaleString()} issue${visibleIssues === 1 ? "" : "s"} require attention`
+				: "All visible Data Health issues look corrected. Save to clear them from Data Health.";
+		}
+		summary?.classList.toggle("is-healthy", visibleIssues === 0);
+		summary?.classList.toggle("has-issues", visibleIssues > 0);
+	}
+	document.addEventListener("input", (event) => {
+		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) refreshHealthState();
+	});
+	document.addEventListener("change", (event) => {
+		if (event.target instanceof HTMLSelectElement || event.target instanceof HTMLInputElement) refreshHealthState();
+	});
+	for (const link of document.querySelectorAll("[data-health-summary-link]")) {
+		link.addEventListener("click", (event) => {
+			const targetField = link.getAttribute("data-target-field") || "";
+			const target = document.getElementById(`field-${targetField}`);
+			if (!target) return;
+			event.preventDefault();
+			target.scrollIntoView({ behavior: "smooth", block: "center" });
+			const focusable = target.querySelector("input, select, textarea, summary");
+			if (focusable instanceof HTMLElement) focusable.focus({ preventScroll: true });
+			history.replaceState(null, "", `#field-${targetField}`);
+		});
+	}
+	refreshHealthState();
+</script>
