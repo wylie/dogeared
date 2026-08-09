@@ -41,8 +41,8 @@ if (editorResult.warning) warnings.push(editorResult.warning);
 const editor = editorResult.data;
 const selectedEdition = editor?.editions.find((edition) => edition.id === selectedEditionId) || editor?.editions[0] || null;
 const healthResult = editor
-	? await safeAdminLoad("Catalog editor health", () => loadCatalogMetadataHealth(sql, { q: String(editor.work.id), limit: 200 }), { issues: [], summary: { totalIssues: 0, critical: 0, needsAttention: 0, optional: 0, missingPageCounts: 0, missingAudiobookDurations: 0, potentialDuplicates: 0, progressBlocking: 0 } })
-	: { data: { issues: [], summary: { totalIssues: 0, critical: 0, needsAttention: 0, optional: 0, missingPageCounts: 0, missingAudiobookDurations: 0, potentialDuplicates: 0, progressBlocking: 0 } }, warning: "" };
+	? await safeAdminLoad("Catalog editor health", () => loadCatalogMetadataHealth(sql, { q: String(editor.work.id), limit: 200 }), { issues: [], pagination: { limit: 200, offset: 0, total: 0 }, facets: { formats: [], providers: [] }, summary: { totalIssues: 0, critical: 0, needsAttention: 0, optional: 0, missingPageCounts: 0, missingAudiobookDurations: 0, potentialDuplicates: 0, progressBlocking: 0 } })
+	: { data: { issues: [], pagination: { limit: 200, offset: 0, total: 0 }, facets: { formats: [], providers: [] }, summary: { totalIssues: 0, critical: 0, needsAttention: 0, optional: 0, missingPageCounts: 0, missingAudiobookDurations: 0, potentialDuplicates: 0, progressBlocking: 0 } }, warning: "" };
 if (healthResult.warning) warnings.push(healthResult.warning);
 const workMetadata = editor?.work.metadata || {};
 const workProvenance = typeof workMetadata.provenance === "object" && workMetadata.provenance !== null ? workMetadata.provenance as Record<string, unknown> : {};
@@ -570,7 +570,7 @@ function issueTarget(issue: CatalogHealthIssue) {
 </Layout>
 
 <style>
-	.admin-catalog-page { max-width: 980px; }
+	.admin-catalog-page { max-width: 980px; min-width: 0; }
 	.breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.35rem; color: var(--color-text-muted); font-size: 0.86rem; }
 	.breadcrumbs a { color: var(--color-nav); font-weight: 700; text-decoration: none; }
 	.hero { margin-top: 0.85rem; display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
@@ -657,19 +657,27 @@ function issueTarget(issue: CatalogHealthIssue) {
 	.panel-head h2 { margin: 0; }
 	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }
 	.field-group {
-		margin: 1rem 0 0;
+		min-width: 0;
+		margin: 1.15rem 0 0;
 		border: 0;
-		border-top: var(--border-subtle);
-		padding: 0.85rem 0 0;
+		border-top: 1px solid rgba(87, 117, 144, 0.22);
+		padding: 0.95rem 0 0;
 	}
 	.field-group legend {
 		color: var(--color-text);
-		font-size: 0.94rem;
+		font-size: 0.78rem;
 		font-weight: 800;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
 		padding: 0 0.45rem 0 0;
 	}
-	.field-grid { display: grid; gap: 0.7rem; margin-top: 0.9rem; }
+	.field-grid { display: grid; gap: 0.8rem; margin-top: 0.85rem; min-width: 0; }
 	.field-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.field-grid > *,
+	label,
+	.field-control {
+		min-width: 0;
+	}
 	label, .field-control { display: grid; gap: 0.3rem; font-weight: 700; color: #444; font-size: 0.86rem; }
 	.field-label {
 		display: inline-flex;
@@ -683,6 +691,9 @@ function issueTarget(issue: CatalogHealthIssue) {
 	}
 	input, select, textarea {
 		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
 		border: var(--border-subtle);
 		border-radius: var(--radius-sm);
 		background: #fff;
@@ -690,34 +701,50 @@ function issueTarget(issue: CatalogHealthIssue) {
 		font: inherit;
 		font-weight: 500;
 		padding: 0.5rem 0.55rem;
+		overflow-wrap: anywhere;
+	}
+	textarea {
+		resize: vertical;
+		overflow-wrap: anywhere;
 	}
 	.has-health-issue {
-		border: 1px solid transparent;
-		border-radius: var(--radius-md);
-		padding: 0.55rem;
-		background: rgba(255, 255, 255, 0.58);
-	}
-	.has-health-issue.critical {
-		border-color: #991b1b;
-		background: #fff0f0;
-	}
-	.has-health-issue.needs_attention {
-		border-color: var(--palette-2);
-		background: #fffaf0;
-	}
-	.has-health-issue.optional {
-		border-color: rgba(87, 117, 144, 0.48);
-		background: rgba(87, 117, 144, 0.08);
+		border-radius: var(--radius-sm);
 	}
 	.has-health-issue.critical input,
 	.has-health-issue.critical select,
 	.has-health-issue.critical textarea {
 		border-color: #991b1b;
+		box-shadow: 0 0 0 1px rgba(153, 27, 27, 0.18);
 	}
 	.has-health-issue.needs_attention input,
 	.has-health-issue.needs_attention select,
 	.has-health-issue.needs_attention textarea {
+		border-color: #991b1b;
+		box-shadow: 0 0 0 1px rgba(153, 27, 27, 0.18);
+	}
+	.has-health-issue.optional input,
+	.has-health-issue.optional select,
+	.has-health-issue.optional textarea {
 		border-color: var(--palette-2);
+		box-shadow: 0 0 0 1px rgba(243, 114, 44, 0.16);
+	}
+	.has-health-issue.critical input:focus,
+	.has-health-issue.critical select:focus,
+	.has-health-issue.critical textarea:focus,
+	.has-health-issue.needs_attention input:focus,
+	.has-health-issue.needs_attention select:focus,
+	.has-health-issue.needs_attention textarea:focus {
+		outline-color: #991b1b;
+	}
+	.has-health-issue.is-corrected input,
+	.has-health-issue.is-corrected select,
+	.has-health-issue.is-corrected textarea {
+		border: var(--border-subtle);
+		box-shadow: none;
+	}
+	.has-health-issue.is-corrected .warning-icon,
+	.has-health-issue.is-corrected .field-warning {
+		display: none;
 	}
 	.field-warning {
 		margin: 0.15rem 0 0;
@@ -735,7 +762,6 @@ function issueTarget(issue: CatalogHealthIssue) {
 		line-height: 1.35;
 	}
 	.why-note strong { color: #444; font-weight: 800; }
-	textarea { resize: vertical; }
 	.span-two { grid-column: 1 / -1; }
 	.edition-select { margin-top: 0.8rem; }
 	.edition-switch {
@@ -756,6 +782,23 @@ function issueTarget(issue: CatalogHealthIssue) {
 		grid-template-columns: 88px minmax(0, 1fr);
 		gap: 0.8rem;
 		align-items: start;
+		min-width: 0;
+	}
+	.cover-editor.has-health-issue.critical .cover-preview img,
+	.cover-editor.has-health-issue.critical .cover-placeholder,
+	.cover-editor.has-health-issue.needs_attention .cover-preview img,
+	.cover-editor.has-health-issue.needs_attention .cover-placeholder {
+		outline: 2px solid #991b1b;
+		outline-offset: 2px;
+	}
+	.cover-editor.has-health-issue.optional .cover-preview img,
+	.cover-editor.has-health-issue.optional .cover-placeholder {
+		outline: 2px solid var(--palette-2);
+		outline-offset: 2px;
+	}
+	.cover-editor.has-health-issue.is-corrected .cover-preview img,
+	.cover-editor.has-health-issue.is-corrected .cover-placeholder {
+		outline: 0;
 	}
 	.cover-preview img,
 	.cover-placeholder {
@@ -820,6 +863,7 @@ function issueTarget(issue: CatalogHealthIssue) {
 	table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 	th, td { text-align: left; padding: 0.45rem; border-bottom: var(--border-subtle); vertical-align: top; }
 	th { font-weight: 700; color: #444; }
+	td, th, .cover-editor-head, .note { overflow-wrap: anywhere; }
 	.sr-only {
 		position: absolute;
 		width: 1px;
@@ -832,7 +876,7 @@ function issueTarget(issue: CatalogHealthIssue) {
 		border: 0;
 	}
 
-	@media (max-width: 800px) {
+	@media (max-width: 840px) {
 		.hero { display: block; }
 		.hero-actions { margin-top: 0.7rem; }
 		.field-grid.two, .grid.five { grid-template-columns: 1fr; }
@@ -842,6 +886,12 @@ function issueTarget(issue: CatalogHealthIssue) {
 			width: 72px;
 			height: 108px;
 		}
+	}
+	@media (max-width: 520px) {
+		.panel { padding: 0.85rem; }
+		.cover-editor { grid-template-columns: 1fr; }
+		.cover-editor-main { width: 100%; }
+		.span-two { grid-column: auto; }
 	}
 </style>
 

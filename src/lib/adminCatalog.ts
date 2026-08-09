@@ -22,6 +22,8 @@ export type CatalogHealthIssue = {
 export type CatalogHealthResult = {
 	issues: CatalogHealthIssue[];
 	summary: CatalogHealthSummary;
+	pagination: CatalogHealthPagination;
+	facets: CatalogHealthFacets;
 };
 
 export type CatalogHealthFilters = {
@@ -31,6 +33,7 @@ export type CatalogHealthFilters = {
 	format?: string;
 	provider?: string;
 	limit?: number;
+	offset?: number;
 };
 
 export type CatalogHealthSummary = {
@@ -42,6 +45,17 @@ export type CatalogHealthSummary = {
 	missingAudiobookDurations: number;
 	potentialDuplicates: number;
 	progressBlocking: number;
+};
+
+export type CatalogHealthPagination = {
+	limit: number;
+	offset: number;
+	total: number;
+};
+
+export type CatalogHealthFacets = {
+	formats: string[];
+	providers: string[];
 };
 
 export type CatalogEditorData = {
@@ -275,6 +289,7 @@ type HealthRow = {
 
 export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealthFilters = {}) {
 	const limit = Math.max(10, Math.min(200, normalizeInt(filters.limit || 100)));
+	const offset = normalizeInt(filters.offset || 0);
 	const rows = await sql<HealthRow[]>`
 		select
 			coalesce(bw.id, b.work_id, b.id)::bigint as work_id,
@@ -477,7 +492,7 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 			audio_progress_entries: 0
 		}, "potential_duplicate_edition", "critical", "Potential duplicate Edition");
 	}
-	const limitedIssues = issues.slice(0, limit);
+	const limitedIssues = issues.slice(offset, offset + limit);
 	const summary: CatalogHealthSummary = {
 		totalIssues: issues.length,
 		critical: issues.filter((issue) => issue.severity === "critical").length,
@@ -488,7 +503,11 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 		potentialDuplicates: issues.filter((issue) => issue.issueType.includes("duplicate")).length,
 		progressBlocking: issues.filter((issue) => issue.issueType === "progress_not_normalizable" || issue.severity === "critical").length
 	};
-	return { issues: limitedIssues, summary };
+	const facets: CatalogHealthFacets = {
+		formats: Array.from(new Set(issues.map((issue) => normalizeText(issue.format || "unknown", 80).toLowerCase()).filter(Boolean))).sort(),
+		providers: Array.from(new Set(issues.map((issue) => normalizeText(issue.source || "Existing DogEared data", 80).toLowerCase()).filter(Boolean))).sort()
+	};
+	return { issues: limitedIssues, summary, pagination: { limit, offset, total: issues.length }, facets };
 }
 
 export async function countCatalogHealthIssuesForWork(sql: Sql, workId: unknown) {

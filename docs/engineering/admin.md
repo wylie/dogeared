@@ -198,6 +198,13 @@ Safety rules:
 - Manual changes update metadata provenance and manual override fields.
 - Each save writes an `admin_catalog_audit_event`.
 - The editor shows an impact preview before saving reader-adjacent catalog metadata.
+- Data Health issue styling is applied only to affected controls. The editor keeps Work and Edition sections lightweight with headings, spacing, subtle dividers, shrink-safe grids, and full-width controls to avoid overflow.
+
+## Catalog Metadata Health
+
+Route: `/admin/data-health#catalog-metadata`
+
+The Catalog Metadata queue is server-paginated at 25 records per page and uses the shared `Pagination` component. Search, Issue, Severity, Format, Provider, and page state live in query parameters so admins can refresh, use Back, and return from an editor visit without losing context. Filter and quick-filter changes intentionally omit `catalog_page`, resetting the queue to Page 1.
 
 ## Import Health
 

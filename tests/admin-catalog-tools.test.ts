@@ -19,6 +19,10 @@ test("Data Health exposes format-aware catalog metadata checks and filters", () 
 
 	assert.match(page, /Catalog Metadata/);
 	assert.match(page, /loadCatalogMetadataHealth/);
+	assert.match(page, /Pagination/);
+	assert.match(page, /catalog_page/);
+	assert.match(page, /catalogPageHref/);
+	assert.match(page, /Showing \$\{formatNumber\(catalogShowingStart\)\}/);
 	assert.match(page, /catalog_issue/);
 	assert.match(page, /catalog_severity/);
 	assert.match(page, /catalog_format/);
@@ -80,6 +84,10 @@ test("admin catalog editor surfaces Data Health issues next to relevant fields",
 	assert.match(editor, /data-target-field/);
 	assert.match(editor, /fieldHealthByField/);
 	assert.match(editor, /has-health-issue/);
+	assert.match(editor, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+	assert.match(editor, /min-width: 0/);
+	assert.match(editor, /box-sizing: border-box/);
+	assert.doesNotMatch(editor, /border: 1px solid transparent/);
 	assert.match(editor, /field-warning/);
 	assert.match(editor, /why-note/);
 	assert.match(editor, /warning-icon/);

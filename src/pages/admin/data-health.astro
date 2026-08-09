@@ -1,5 +1,6 @@
 ---
 import Layout from "../../layouts/Layout.astro";
+import Pagination from "../../components/Pagination.astro";
 import { getNeonSql } from "../../lib/neon";
 import { resolveAdminSession } from "../../lib/admin";
 import { formatDate, formatNumber, percentOf, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
@@ -18,16 +19,21 @@ const publisherSchemaResult = await safeAdminLoad("Publisher schema", async () =
 	return true;
 }, false);
 const adminNotices: string[] = [];
+const catalogPageSize = 25;
+const catalogCurrentPage = Math.max(1, Number.parseInt(Astro.url.searchParams.get("catalog_page") || "1", 10) || 1);
 const catalogHealthFilters = {
 	q: Astro.url.searchParams.get("catalog_q") || "",
 	issueType: Astro.url.searchParams.get("catalog_issue") || "all",
 	severity: Astro.url.searchParams.get("catalog_severity") || "all",
 	format: Astro.url.searchParams.get("catalog_format") || "all",
 	provider: Astro.url.searchParams.get("catalog_provider") || "all",
-	limit: 100
+	limit: catalogPageSize,
+	offset: (catalogCurrentPage - 1) * catalogPageSize
 };
 const emptyCatalogHealth: CatalogHealthResult = {
 	issues: [],
+	pagination: { limit: catalogPageSize, offset: 0, total: 0 },
+	facets: { formats: [], providers: [] },
 	summary: {
 		totalIssues: 0,
 		critical: 0,
@@ -463,7 +469,18 @@ const duplicateGroupsRows = safeArray(duplicateGroupsResult.data);
 const potentialDuplicateWorksRows = safeArray(potentialDuplicateWorksResult.data);
 const metadataReviewRows = safeArray(metadataReviewResult.data);
 const relationshipHealthRows = safeArray(relationshipHealthResult.data);
-const catalogMetadataHealth = catalogMetadataHealthResult.data || emptyCatalogHealth;
+const catalogClampWarnings: string[] = [];
+let catalogMetadataHealth = catalogMetadataHealthResult.data || emptyCatalogHealth;
+if (catalogMetadataHealth.pagination.total > 0 && catalogHealthFilters.offset >= catalogMetadataHealth.pagination.total) {
+	const clampedPage = Math.max(1, Math.ceil(catalogMetadataHealth.pagination.total / catalogPageSize));
+	const clampedHealthResult = await safeAdminLoad(
+		"Catalog metadata health page clamp",
+		() => loadCatalogMetadataHealth(sql, { ...catalogHealthFilters, offset: (clampedPage - 1) * catalogPageSize }),
+		emptyCatalogHealth
+	);
+	if (clampedHealthResult.warning) catalogClampWarnings.push(clampedHealthResult.warning);
+	catalogMetadataHealth = clampedHealthResult.data || emptyCatalogHealth;
+}
 const canonicalTitleCleanupRows = safeArray(canonicalTitleCleanupResult.data);
 const recentBackfillRows = safeArray(recentBackfillResult.data);
 const unresolvedPageCountRows = safeArray(unresolvedPageCountResult.data);
@@ -482,7 +499,8 @@ const adminWarnings = [
 	canonicalTitleCleanupResult.warning,
 	recentBackfillResult.warning,
 	unresolvedPageCountResult.warning,
-	unresolvedPublisherResult.warning
+	unresolvedPublisherResult.warning,
+	...catalogClampWarnings
 ].filter(Boolean);
 
 const sectionLinks = [
@@ -535,6 +553,22 @@ function catalogFilterHref(overrides: Record<string, string>) {
 		catalog_format: catalogHealthFilters.format,
 		catalog_provider: catalogHealthFilters.provider,
 		...overrides
+	};
+	for (const [key, value] of Object.entries(next)) {
+		if (value && value !== "all") params.set(key, value);
+	}
+	return `/admin/data-health${params.toString() ? `?${params.toString()}` : ""}#catalog-metadata`;
+}
+
+function catalogPageHref(page: number) {
+	const params = new URLSearchParams();
+	const next = {
+		catalog_q: catalogHealthFilters.q,
+		catalog_issue: catalogHealthFilters.issueType,
+		catalog_severity: catalogHealthFilters.severity,
+		catalog_format: catalogHealthFilters.format,
+		catalog_provider: catalogHealthFilters.provider,
+		catalog_page: page > 1 ? String(page) : ""
 	};
 	for (const [key, value] of Object.entries(next)) {
 		if (value && value !== "all") params.set(key, value);
@@ -599,8 +633,18 @@ const catalogIssueOptions = Array.from(new Set([
 	"potential_duplicate_edition",
 	...catalogMetadataHealth.issues.map((issue) => issue.issueType)
 ])).sort();
-const catalogFormatOptions = Array.from(new Set(catalogMetadataHealth.issues.map((issue) => String(issue.format || "unknown").toLowerCase()).filter(Boolean))).sort();
-const catalogProviderOptions = Array.from(new Set(catalogMetadataHealth.issues.map((issue) => String(issue.source || "Existing DogEared data").toLowerCase()).filter(Boolean))).sort();
+const catalogFormatOptions = Array.from(new Set([
+	...catalogMetadataHealth.facets.formats,
+	catalogHealthFilters.format !== "all" ? catalogHealthFilters.format : ""
+].filter(Boolean))).sort();
+const catalogProviderOptions = Array.from(new Set([
+	...catalogMetadataHealth.facets.providers,
+	catalogHealthFilters.provider !== "all" ? catalogHealthFilters.provider : ""
+].filter(Boolean))).sort();
+const catalogTotalPages = Math.max(1, Math.ceil(catalogMetadataHealth.pagination.total / catalogPageSize));
+const catalogSafePage = Math.max(1, Math.min(catalogCurrentPage, catalogTotalPages));
+const catalogShowingStart = catalogMetadataHealth.pagination.total > 0 ? ((catalogSafePage - 1) * catalogPageSize) + 1 : 0;
+const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catalogShowingStart + catalogMetadataHealth.issues.length - 1);
 ---
 
 <Layout title="Admin Data Health" sectionLinks={sectionLinks} robots="noindex,nofollow">
@@ -784,6 +828,11 @@ const catalogProviderOptions = Array.from(new Set(catalogMetadataHealth.issues.m
 				<a href={catalogFilterHref({ catalog_issue: "progress_not_normalizable" })}>Progress blocking</a>
 				<a href={catalogFilterHref({ catalog_issue: "potential_duplicate_work" })}>Duplicate Works</a>
 			</div>
+			<p class="table-context" aria-live="polite">
+				{catalogMetadataHealth.pagination.total > 0
+					? `Showing ${formatNumber(catalogShowingStart)}–${formatNumber(catalogShowingEnd)} of ${formatNumber(catalogMetadataHealth.pagination.total)} records`
+					: "No records to show"}
+			</p>
 			<div class="table-wrap catalog-health-table">
 				<table>
 					<thead>
@@ -814,6 +863,15 @@ const catalogProviderOptions = Array.from(new Set(catalogMetadataHealth.issues.m
 					</tbody>
 				</table>
 			</div>
+			{catalogTotalPages > 1 && (
+				<Pagination
+					currentPage={catalogSafePage}
+					totalPages={catalogTotalPages}
+					previousHref={catalogSafePage > 1 ? catalogPageHref(catalogSafePage - 1) : ""}
+					nextHref={catalogSafePage < catalogTotalPages ? catalogPageHref(catalogSafePage + 1) : ""}
+					label="Catalog metadata pagination"
+				/>
+			)}
 			<p class="note">The queue edits shared catalog records only. Shelf state, reading format, progress, ratings, and journal content remain reader-owned data and are not cached or exposed here.</p>
 		</section>
 
@@ -1150,6 +1208,7 @@ const catalogProviderOptions = Array.from(new Set(catalogMetadataHealth.issues.m
 		grid-template-columns: minmax(180px, 1.4fr) repeat(4, minmax(120px, 1fr)) auto;
 		gap: 0.55rem;
 		align-items: end;
+		min-width: 0;
 	}
 	.catalog-health-filters label {
 		display: grid;
@@ -1157,10 +1216,14 @@ const catalogProviderOptions = Array.from(new Set(catalogMetadataHealth.issues.m
 		color: #444;
 		font-size: 0.8rem;
 		font-weight: 700;
+		min-width: 0;
 	}
 	.catalog-health-filters input,
 	.catalog-health-filters select {
 		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
 		border: var(--border-subtle);
 		border-radius: var(--radius-sm);
 		background: #fff;
@@ -1212,6 +1275,11 @@ const catalogProviderOptions = Array.from(new Set(catalogMetadataHealth.issues.m
 		gap: 0.5rem;
 		align-items: center;
 		min-width: 220px;
+		max-width: 320px;
+	}
+	.catalog-book-cell strong,
+	.catalog-book-cell .muted {
+		overflow-wrap: anywhere;
 	}
 	.catalog-book-cell img,
 	.cover-placeholder {
@@ -1241,9 +1309,23 @@ const catalogProviderOptions = Array.from(new Set(catalogMetadataHealth.issues.m
 	.severity-chip.critical { background: #fff0f0; color: #8f1d1d; }
 	.severity-chip.needs_attention { background: #fffaf0; color: #6b3f0a; }
 	.severity-chip.optional { background: rgba(87, 117, 144, 0.1); color: #4d5a66; }
+	.table-context {
+		margin: 0.7rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.84rem;
+		font-weight: 700;
+	}
 	.table-wrap { margin-top: 0.7rem; overflow-x: auto; }
 	table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-	th, td { text-align: left; padding: 0.45rem; border-bottom: var(--border-subtle); vertical-align: top; }
+	.catalog-health-table table { table-layout: fixed; min-width: 860px; }
+	.catalog-health-table th:nth-child(1) { width: 32%; }
+	.catalog-health-table th:nth-child(2) { width: 20%; }
+	.catalog-health-table th:nth-child(3) { width: 12%; }
+	.catalog-health-table th:nth-child(4) { width: 10%; }
+	.catalog-health-table th:nth-child(5) { width: 12%; }
+	.catalog-health-table th:nth-child(6) { width: 8%; }
+	.catalog-health-table th:nth-child(7) { width: 12%; }
+	th, td { text-align: left; padding: 0.45rem; border-bottom: var(--border-subtle); vertical-align: top; overflow-wrap: anywhere; }
 	th { font-weight: 700; color: #444; }
 	code { font-size: 0.8rem; }
 	.actions { margin-top: 0.7rem; display: flex; gap: 0.75rem; }
@@ -1294,6 +1376,11 @@ const catalogProviderOptions = Array.from(new Set(catalogMetadataHealth.issues.m
 	}
 
 	@media (max-width: 560px) {
+		.panel { padding: 0.85rem; }
 		.catalog-health-filters { grid-template-columns: 1fr; }
+		.catalog-book-cell {
+			min-width: 190px;
+			max-width: 260px;
+		}
 	}
 </style>
