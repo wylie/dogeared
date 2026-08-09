@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 test("admin dashboard and users pages require admin session", () => {
-	for (const path of ["src/pages/admin.astro", "src/pages/admin/analytics.astro", "src/pages/admin/users.astro", "src/pages/admin/users/[username].astro", "src/pages/admin/founding-readers.astro", "src/pages/admin/releases.astro"]) {
+	for (const path of ["src/pages/admin.astro", "src/pages/admin/analytics.astro", "src/pages/admin/users.astro", "src/pages/admin/users/[username].astro", "src/pages/admin/founding-readers.astro", "src/pages/admin/releases.astro", "src/pages/admin/books/[workId].astro"]) {
 		const source = readFileSync(path, "utf8");
 		assert.equal(source.includes("resolveAdminSession"), true);
 		assert.equal(source.includes("if (!admin.isAdmin) return Astro.redirect(\"/\")"), true);
@@ -14,8 +14,10 @@ test("admin dashboard and users pages require admin session", () => {
 test("admin navigation is rendered only for admin sessions", () => {
 	const layout = readFileSync("src/layouts/Layout.astro", "utf8");
 	const nav = readFileSync("src/components/LeftHand.astro", "utf8");
+	const admin = readFileSync("src/lib/admin.ts", "utf8");
 	assert.equal(layout.includes("resolveAdminSession"), true);
 	assert.equal(layout.includes("isAdmin={isAdmin}"), true);
+	assert.equal(admin.includes("adminSessionByRequest"), true);
 	assert.equal(nav.includes("isAdmin = false"), true);
 	assert.equal(nav.includes("{isAdmin && ("), true);
 	assert.equal(nav.includes("<h3 class=\"nav-group-title\">Admin</h3>"), true);
@@ -99,10 +101,11 @@ test("admin pages use defensive loaders and formatting", () => {
 	const foundingReaders = readFileSync("src/pages/admin/founding-readers.astro", "utf8");
 	const releases = readFileSync("src/pages/admin/releases.astro", "utf8");
 	const detail = readFileSync("src/pages/admin/users/[username].astro", "utf8");
+	const catalogEditor = readFileSync("src/pages/admin/books/[workId].astro", "utf8");
 	for (const helper of ["formatNumber", "formatDate", "safePercent", "percentOf", "safeAdminLoad"]) {
 		assert.equal(formatting.includes(`function ${helper}`), true);
 	}
-	for (const source of [dashboard, analytics, operations, feedback, dataHealth, users, foundingReaders, releases, detail]) {
+	for (const source of [dashboard, analytics, operations, feedback, dataHealth, users, foundingReaders, releases, detail, catalogEditor]) {
 		assert.equal(source.includes("safeAdminLoad"), true);
 	}
 	assert.equal(analytics.includes("emptyAdminProductAnalytics"), true);

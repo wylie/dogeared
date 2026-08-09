@@ -5,6 +5,7 @@ import { resolveAdminSession } from "../../lib/admin";
 import { formatDate, formatNumber, percentOf, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
 import { loadCanonicalTitleCleanupCandidates, normalizeCanonicalSeriesTitles } from "../../lib/canonicalTitleCleanup";
 import { ignorePotentialDuplicateWork, loadPotentialDuplicateWorks, mergeCatalogWorks, normalizeCanonicalWorkRelationships } from "../../lib/workNormalization";
+import { loadCatalogMetadataHealth, type CatalogHealthResult } from "../../lib/adminCatalog";
 
 export const prerender = false;
 
@@ -17,6 +18,27 @@ const publisherSchemaResult = await safeAdminLoad("Publisher schema", async () =
 	return true;
 }, false);
 const adminNotices: string[] = [];
+const catalogHealthFilters = {
+	q: Astro.url.searchParams.get("catalog_q") || "",
+	issueType: Astro.url.searchParams.get("catalog_issue") || "all",
+	severity: Astro.url.searchParams.get("catalog_severity") || "all",
+	format: Astro.url.searchParams.get("catalog_format") || "all",
+	provider: Astro.url.searchParams.get("catalog_provider") || "all",
+	limit: 100
+};
+const emptyCatalogHealth: CatalogHealthResult = {
+	issues: [],
+	summary: {
+		totalIssues: 0,
+		critical: 0,
+		needsAttention: 0,
+		optional: 0,
+		missingPageCounts: 0,
+		missingAudiobookDurations: 0,
+		potentialDuplicates: 0,
+		progressBlocking: 0
+	}
+};
 
 if (Astro.request.method === "POST") {
 	const formData = await Astro.request.formData();
@@ -100,6 +122,7 @@ const [
 	potentialDuplicateWorksResult,
 	metadataReviewResult,
 	relationshipHealthResult,
+	catalogMetadataHealthResult,
 	canonicalTitleCleanupResult,
 	recentBackfillResult,
 	unresolvedPageCountResult,
@@ -372,6 +395,7 @@ const [
 			(select count(*)::int from canonical_title_conflict_rows) as canonical_title_conflicts,
 			(select count(*)::int from series_position_conflict_rows) as series_position_conflicts
 	`, []),
+	safeAdminLoad("Catalog metadata health", () => loadCatalogMetadataHealth(sql, catalogHealthFilters), emptyCatalogHealth),
 	safeAdminLoad("Canonical title cleanup", () => loadCanonicalTitleCleanupCandidates(sql, 50), []),
 	safeAdminLoad("Backfill movement", () => sql<Array<{
 		updated_books_24h: number;
@@ -439,6 +463,7 @@ const duplicateGroupsRows = safeArray(duplicateGroupsResult.data);
 const potentialDuplicateWorksRows = safeArray(potentialDuplicateWorksResult.data);
 const metadataReviewRows = safeArray(metadataReviewResult.data);
 const relationshipHealthRows = safeArray(relationshipHealthResult.data);
+const catalogMetadataHealth = catalogMetadataHealthResult.data || emptyCatalogHealth;
 const canonicalTitleCleanupRows = safeArray(canonicalTitleCleanupResult.data);
 const recentBackfillRows = safeArray(recentBackfillResult.data);
 const unresolvedPageCountRows = safeArray(unresolvedPageCountResult.data);
@@ -453,6 +478,7 @@ const adminWarnings = [
 	potentialDuplicateWorksResult.warning,
 	metadataReviewResult.warning,
 	relationshipHealthResult.warning,
+	catalogMetadataHealthResult.warning,
 	canonicalTitleCleanupResult.warning,
 	recentBackfillResult.warning,
 	unresolvedPageCountResult.warning,
@@ -462,6 +488,7 @@ const adminWarnings = [
 const sectionLinks = [
 	{ id: "overview", label: "Overview" },
 	{ id: "metadata-gaps", label: "Metadata Gaps" },
+	{ id: "catalog-metadata", label: "Catalog Metadata" },
 	{ id: "import-health", label: "Import Health" },
 	{ id: "potential-duplicates", label: "Work Duplicates" },
 	{ id: "relationship-health", label: "Relationships" },
@@ -485,6 +512,34 @@ function reviewReasons(row: { cover_url?: string; primary_author?: string; synop
 	if (Number(row.page_count || 0) <= 0) reasons.push("Missing page count");
 	if (/(#|book [0-9]|series|trilogy|saga|chronicles)/i.test(String(row.title || "")) && !String(row.series_name || "").trim()) reasons.push("Possible missing series");
 	return reasons;
+}
+
+function catalogSeverityLabel(value: string) {
+	if (value === "critical") return "Critical";
+	if (value === "needs_attention") return "Needs attention";
+	return "Optional";
+}
+
+function catalogIssueLabel(value: string) {
+	return String(value || "")
+		.replace(/[_-]+/g, " ")
+		.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function catalogFilterHref(overrides: Record<string, string>) {
+	const params = new URLSearchParams();
+	const next = {
+		catalog_q: catalogHealthFilters.q,
+		catalog_issue: catalogHealthFilters.issueType,
+		catalog_severity: catalogHealthFilters.severity,
+		catalog_format: catalogHealthFilters.format,
+		catalog_provider: catalogHealthFilters.provider,
+		...overrides
+	};
+	for (const [key, value] of Object.entries(next)) {
+		if (value && value !== "all") params.set(key, value);
+	}
+	return `/admin/data-health${params.toString() ? `?${params.toString()}` : ""}#catalog-metadata`;
 }
 
 const books = bookCoverageRows[0] || {
@@ -525,6 +580,27 @@ const backfills = recentBackfillRows[0] || {
 	updated_authors_24h: 0,
 	updated_authors_7d: 0
 };
+const catalogIssueOptions = Array.from(new Set([
+	"missing_page_count",
+	"missing_audiobook_duration",
+	"missing_location_count",
+	"missing_chapter_count",
+	"missing_reading_format_metadata",
+	"missing_cover",
+	"missing_author",
+	"missing_publication_year",
+	"missing_publisher",
+	"missing_identifiers",
+	"missing_series_position",
+	"missing_series_relationship",
+	"malformed_title",
+	"progress_not_normalizable",
+	"potential_duplicate_work",
+	"potential_duplicate_edition",
+	...catalogMetadataHealth.issues.map((issue) => issue.issueType)
+])).sort();
+const catalogFormatOptions = Array.from(new Set(catalogMetadataHealth.issues.map((issue) => String(issue.format || "unknown").toLowerCase()).filter(Boolean))).sort();
+const catalogProviderOptions = Array.from(new Set(catalogMetadataHealth.issues.map((issue) => String(issue.source || "Existing DogEared data").toLowerCase()).filter(Boolean))).sort();
 ---
 
 <Layout title="Admin Data Health" sectionLinks={sectionLinks} robots="noindex,nofollow">
@@ -623,6 +699,122 @@ const backfills = recentBackfillRows[0] || {
 					</tbody>
 				</table>
 			</div>
+		</section>
+
+		<section class="panel" id="catalog-metadata">
+			<div class="panel-head">
+				<h2>Catalog Metadata</h2>
+				<p>Format-aware Work and Edition health checks for progress normalization, canonical grouping, search dedupe, and reader-facing BookCards.</p>
+			</div>
+			<div class="grid metadata-stats" role="list">
+				<article class="stat">
+					<p>Catalog records needing attention</p>
+					<strong>{formatNumber(catalogMetadataHealth.summary.totalIssues)}</strong>
+				</article>
+				<article class="stat">
+					<p>Critical</p>
+					<strong>{formatNumber(catalogMetadataHealth.summary.critical)}</strong>
+				</article>
+				<article class="stat">
+					<p>Missing page counts</p>
+					<strong>{formatNumber(catalogMetadataHealth.summary.missingPageCounts)}</strong>
+				</article>
+				<article class="stat">
+					<p>Missing audiobook duration</p>
+					<strong>{formatNumber(catalogMetadataHealth.summary.missingAudiobookDurations)}</strong>
+				</article>
+				<article class="stat">
+					<p>Progress-blocking metadata issues</p>
+					<strong>{formatNumber(catalogMetadataHealth.summary.progressBlocking)}</strong>
+				</article>
+				<article class="stat">
+					<p>Potential duplicate Works</p>
+					<strong>{formatNumber(catalogMetadataHealth.summary.potentialDuplicates)}</strong>
+				</article>
+			</div>
+			<form class="catalog-health-filters" method="get" action="/admin/data-health">
+				<label>
+					<span>Search Work or Edition</span>
+					<input type="search" name="catalog_q" value={catalogHealthFilters.q} placeholder="Title, author, Work ID, Book ID" />
+				</label>
+				<label>
+					<span>Issue</span>
+					<select name="catalog_issue">
+						<option value="all">All issues</option>
+						{catalogIssueOptions.map((issueType) => (
+							<option value={issueType} selected={catalogHealthFilters.issueType === issueType}>{catalogIssueLabel(issueType)}</option>
+						))}
+					</select>
+				</label>
+				<label>
+					<span>Severity</span>
+					<select name="catalog_severity">
+						<option value="all">All severities</option>
+						<option value="critical" selected={catalogHealthFilters.severity === "critical"}>Critical</option>
+						<option value="needs_attention" selected={catalogHealthFilters.severity === "needs_attention"}>Needs attention</option>
+						<option value="optional" selected={catalogHealthFilters.severity === "optional"}>Optional</option>
+					</select>
+				</label>
+				<label>
+					<span>Format</span>
+					<select name="catalog_format">
+						<option value="all">All formats</option>
+						{catalogFormatOptions.map((format) => (
+							<option value={format} selected={catalogHealthFilters.format === format}>{format}</option>
+						))}
+					</select>
+				</label>
+				<label>
+					<span>Provider</span>
+					<select name="catalog_provider">
+						<option value="all">All providers</option>
+						{catalogProviderOptions.map((provider) => (
+							<option value={provider} selected={catalogHealthFilters.provider === provider}>{provider}</option>
+						))}
+					</select>
+				</label>
+				<div class="catalog-filter-actions">
+					<button type="submit">Apply filters</button>
+					<a href="/admin/data-health#catalog-metadata">Clear</a>
+				</div>
+			</form>
+			<div class="quick-filters" aria-label="Catalog health quick filters">
+				<a href={catalogFilterHref({ catalog_severity: "critical" })}>Critical</a>
+				<a href={catalogFilterHref({ catalog_issue: "missing_audiobook_duration" })}>Audiobook durations</a>
+				<a href={catalogFilterHref({ catalog_issue: "progress_not_normalizable" })}>Progress blocking</a>
+				<a href={catalogFilterHref({ catalog_issue: "potential_duplicate_work" })}>Duplicate Works</a>
+			</div>
+			<div class="table-wrap catalog-health-table">
+				<table>
+					<thead>
+						<tr><th>Book</th><th>Issue</th><th>Severity</th><th>Format</th><th>Source</th><th>Updated</th><th>Action</th></tr>
+					</thead>
+					<tbody>
+						{catalogMetadataHealth.issues.length === 0 ? (
+							<tr><td colspan="7">No catalog metadata issues matched the current filters.</td></tr>
+						) : catalogMetadataHealth.issues.map((issue) => (
+							<tr>
+								<td>
+									<div class="catalog-book-cell">
+										{issue.coverUrl ? <img src={issue.coverUrl} alt="" loading="lazy" decoding="async" /> : <span class="cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></span>}
+										<div>
+											<strong>{issue.title}</strong><br />
+											<span class="muted">{issue.author} · Work {issue.workId}{issue.editionId ? ` · Edition ${issue.editionId}` : ""}</span>
+										</div>
+									</div>
+								</td>
+								<td>{issue.issue}</td>
+								<td><span class={`severity-chip ${issue.severity}`}>{catalogSeverityLabel(issue.severity)}</span></td>
+								<td>{issue.format || "unknown"}</td>
+								<td>{issue.source}</td>
+								<td>{formatDate(issue.updatedAt)}</td>
+								<td><a href={`/admin/books/${issue.workId}${issue.editionId ? `?editionId=${issue.editionId}` : ""}`}>Edit catalog data</a></td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+			<p class="note">The queue edits shared catalog records only. Shelf state, reading format, progress, ratings, and journal content remain reader-owned data and are not cached or exposed here.</p>
 		</section>
 
 		<section class="panel" id="import-health">
@@ -952,6 +1144,103 @@ const backfills = recentBackfillRows[0] || {
 	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }
 	.stat strong { display: block; margin-top: 0.2rem; font-size: 1.2rem; }
 	.note { margin-top: 0.6rem; color: #5c5c5c; font-size: 0.86rem; }
+	.catalog-health-filters {
+		margin-top: 0.8rem;
+		display: grid;
+		grid-template-columns: minmax(180px, 1.4fr) repeat(4, minmax(120px, 1fr)) auto;
+		gap: 0.55rem;
+		align-items: end;
+	}
+	.catalog-health-filters label {
+		display: grid;
+		gap: 0.25rem;
+		color: #444;
+		font-size: 0.8rem;
+		font-weight: 700;
+	}
+	.catalog-health-filters input,
+	.catalog-health-filters select {
+		width: 100%;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: #fff;
+		color: var(--color-text);
+		font: inherit;
+		font-weight: 500;
+		padding: 0.45rem 0.5rem;
+	}
+	.catalog-filter-actions,
+	.quick-filters {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+		align-items: center;
+	}
+	.catalog-filter-actions button {
+		border: 0;
+		border-radius: var(--radius-pill);
+		background: var(--color-primary);
+		color: #fff;
+		cursor: pointer;
+		font: inherit;
+		font-size: 0.84rem;
+		font-weight: 700;
+		padding: 0.48rem 0.7rem;
+	}
+	.catalog-filter-actions button:hover { background: var(--color-primary-hover); }
+	.catalog-filter-actions a,
+	.quick-filters a,
+	.catalog-health-table a {
+		color: var(--color-nav);
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.catalog-filter-actions a:hover,
+	.quick-filters a:hover,
+	.catalog-health-table a:hover { color: var(--color-nav-hover); text-decoration: underline; }
+	.quick-filters { margin-top: 0.55rem; }
+	.quick-filters a {
+		border: var(--border-subtle);
+		border-radius: var(--radius-pill);
+		background: rgba(255, 255, 255, 0.68);
+		font-size: 0.82rem;
+		padding: 0.32rem 0.55rem;
+	}
+	.catalog-book-cell {
+		display: grid;
+		grid-template-columns: 34px minmax(0, 1fr);
+		gap: 0.5rem;
+		align-items: center;
+		min-width: 220px;
+	}
+	.catalog-book-cell img,
+	.cover-placeholder {
+		width: 34px;
+		height: 50px;
+		border-radius: var(--radius-sm);
+		object-fit: cover;
+		background: rgba(87, 117, 144, 0.12);
+	}
+	.cover-placeholder {
+		display: grid;
+		place-items: center;
+		color: var(--color-text-muted);
+	}
+	.cover-placeholder .material-icons { font-size: 1rem; }
+	.severity-chip {
+		display: inline-flex;
+		align-items: center;
+		border-radius: var(--radius-pill);
+		border: var(--border-subtle);
+		font-size: 0.76rem;
+		font-weight: 800;
+		line-height: 1;
+		padding: 0.28rem 0.46rem;
+		white-space: nowrap;
+	}
+	.severity-chip.critical { background: #fff0f0; color: #8f1d1d; }
+	.severity-chip.needs_attention { background: #fffaf0; color: #6b3f0a; }
+	.severity-chip.optional { background: rgba(87, 117, 144, 0.1); color: #4d5a66; }
 	.table-wrap { margin-top: 0.7rem; overflow-x: auto; }
 	table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 	th, td { text-align: left; padding: 0.45rem; border-bottom: var(--border-subtle); vertical-align: top; }
@@ -1000,5 +1289,11 @@ const backfills = recentBackfillRows[0] || {
 	@media (max-width: 900px) {
 		.grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 		.grid.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.catalog-health-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.catalog-filter-actions { grid-column: 1 / -1; }
+	}
+
+	@media (max-width: 560px) {
+		.catalog-health-filters { grid-template-columns: 1fr; }
 	}
 </style>

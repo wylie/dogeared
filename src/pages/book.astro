@@ -9,6 +9,7 @@ import SeriesSection from "../components/SeriesSection.astro";
 import { normalizeReadingFormat, type ReadingFormat } from "../lib/readingFormats";
 import { getNeonSql } from "../lib/neon";
 import { getEncryptionKey, resolveUserBySession } from "../lib/auth";
+import { resolveAdminSession } from "../lib/admin";
 import { authorHref } from "../lib/author";
 import { normalizeGenreEntry } from "../lib/genres";
 import { buildBookReviewList, ensureReviewSchema, type BookReview } from "../lib/bookReviews";
@@ -23,6 +24,7 @@ import { publicReaderAccountFilterSql } from "../lib/publicReaderPolicy";
 import { enrichMissingSeriesBookCovers } from "../lib/bookCoverEnrichment";
 import { normalizeRedundantSeriesTitle } from "../lib/catalog";
 import { recordPerformanceEventSafe } from "../lib/performanceTelemetry";
+import { countCatalogHealthIssuesForWork } from "../lib/adminCatalog";
 
 export const prerender = false;
 
@@ -220,6 +222,14 @@ let errorMessage = "";
 const session = await resolveUserBySession(Astro.request);
 markPagePerfStage("session_loaded");
 const isAuthenticated = !!session?.userId;
+let bookDetailAdminSession = { isAdmin: false, userId: "", username: "" };
+if (isAuthenticated) {
+	try {
+		bookDetailAdminSession = await resolveAdminSession(Astro.request);
+	} catch (error) {
+		logBookDetailLoadError("admin-session", error);
+	}
+}
 let viewerShelfStatus: "want_to_read" | "reading" | "finished" | "" = "";
 let viewerReadingFormat: ReadingFormat = "unknown";
 let viewerRating = 0;
@@ -235,6 +245,8 @@ let readerOwnsBook = false;
 let readersAlsoEnjoyed: RecommendationSection | null = null;
 let availableEditions: AvailableEdition[] = [];
 let bookDetailReadingFormatSchemaReady: Promise<void> | null = null;
+let bookDetailSql: ReturnType<typeof getNeonSql> | null = null;
+let adminCatalogIssueCount = 0;
 
 async function ensureBookDetailReadingFormatSchema(sql: ReturnType<typeof getNeonSql>) {
 	if (!bookDetailReadingFormatSchemaReady) {
@@ -321,6 +333,7 @@ async function fetchOpenLibraryBook() {
 
 try {
 	const sql = getNeonSql();
+	bookDetailSql = sql;
 	await ensureCanonicalWorkSchema(sql);
 	markPagePerfStage("schema_ready");
 	let rows: Array<{
@@ -974,6 +987,14 @@ markPagePerfStage("related_content_loaded");
 	markPagePerfStage("load_failed");
 }
 
+if (bookDetailAdminSession.isAdmin && book?.workId && bookDetailSql) {
+	try {
+		adminCatalogIssueCount = await countCatalogHealthIssuesForWork(bookDetailSql, book.workId);
+	} catch (error) {
+		logBookDetailLoadError("admin-catalog-health", error);
+	}
+}
+
 const synopsisBlocks = book ? synopsisParagraphs(book.synopsis) : [];
 const canonicalBookId = Math.max(0, Number(book?.id || 0) || 0);
 const bookCanonicalUrl = canonicalBookId > 0
@@ -1128,6 +1149,19 @@ recordPerformanceEventSafe({
 						</BookCard>
 					</ul>
 				</section>
+
+				{bookDetailAdminSession.isAdmin && book.workId > 0 && (
+					<section class="admin-catalog-shortcut" aria-label="Admin catalog tools">
+						<div>
+							<strong>Catalog metadata</strong>
+							<span>{adminCatalogIssueCount > 0 ? `${adminCatalogIssueCount.toLocaleString()} metadata issue${adminCatalogIssueCount === 1 ? "" : "s"} detected` : "No current metadata issues detected"}</span>
+						</div>
+						<div class="admin-catalog-actions">
+							<a href={`/admin/books/${book.workId}`}>Edit catalog data</a>
+							<a href={`/admin/data-health?catalog_q=${encodeURIComponent(String(book.workId))}#catalog-metadata`}>View Data Health</a>
+						</div>
+					</section>
+				)}
 
 				{availableEditions.length > 1 && (
 					<section class="panel editions-panel" aria-labelledby="available-editions-heading">
@@ -2018,6 +2052,44 @@ recordPerformanceEventSafe({
 	.rating { color: var(--color-text-muted); font-weight: 400; }
 	.community-rating { color: var(--color-text-muted); font-size: 0.88rem; font-weight: 400; }
 	.book-head :global(.shelf-state) { display: none !important; }
+	.admin-catalog-shortcut {
+		margin-top: 0.75rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(87, 117, 144, 0.08);
+		display: flex;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: 0.65rem 0.75rem;
+	}
+	.admin-catalog-shortcut strong {
+		display: block;
+		font-size: 0.9rem;
+	}
+	.admin-catalog-shortcut span {
+		color: var(--color-text-muted);
+		display: block;
+		font-size: 0.84rem;
+		margin-top: 0.12rem;
+	}
+	.admin-catalog-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.55rem;
+		justify-content: flex-end;
+	}
+	.admin-catalog-actions a {
+		color: var(--color-nav);
+		font-size: 0.86rem;
+		font-weight: 800;
+		text-decoration: none;
+	}
+	.admin-catalog-actions a:hover,
+	.admin-catalog-actions a:focus-visible {
+		color: var(--color-nav-hover);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
 	.panel { margin-top: 0.95rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
 	.panel h2 { margin: 0 0 0.55rem; }
 	.editions-panel {

@@ -159,8 +159,45 @@ Shows metadata coverage and gaps:
 - Missing publisher.
 - Books with/without genres.
 - Authors without bio/photo.
+- Format-aware Catalog Metadata issues, including missing page counts, missing audiobook duration, missing location/chapter counts, missing identifiers, missing Series position, malformed Work titles, potential duplicate Works, and progress-blocking normalization gaps.
 
 It also lists unresolved page-count and publisher gaps.
+
+## Catalog Metadata Editor
+
+Route: `/admin/books/[workId]`
+
+Admin-only Work and Edition editor reached from Data Health or the Book Detail admin shortcut.
+
+Work-level fields:
+
+- Title and canonical title.
+- Primary author.
+- Description, subjects, and genres.
+- Series and Series position.
+- Original publication year.
+- Preferred cover URL.
+
+Edition-level fields:
+
+- Format.
+- ISBN-10 and ISBN-13.
+- Publisher.
+- Publication date and year.
+- Page count.
+- Cover URL.
+- Google Books and Open Library IDs.
+- Language.
+- Audiobook duration, stored as seconds in Edition metadata.
+- Location count and chapter count, stored in Edition metadata.
+
+Safety rules:
+
+- Regular readers cannot access the route.
+- Edits preserve shelves, reading progress, journal entries, ratings, reading formats, reading dates, finish dates, and activity.
+- Manual changes update metadata provenance and manual override fields.
+- Each save writes an `admin_catalog_audit_event`.
+- The editor shows an impact preview before saving reader-adjacent catalog metadata.
 
 ## Import Health
 

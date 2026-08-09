@@ -1,0 +1,366 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import { resolveAdminSession } from "../../../lib/admin";
+import { getNeonSql } from "../../../lib/neon";
+import { formatDate, formatNumber, safeAdminLoad } from "../../../lib/adminFormatting";
+import {
+	catalogEditorFormatOptions,
+	formatDuration,
+	loadCatalogEditorData,
+	saveCatalogEditorData
+} from "../../../lib/adminCatalog";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const sql = getNeonSql();
+const workId = Number(Astro.params.workId || 0);
+const notices: string[] = [];
+const warnings: string[] = [];
+let selectedEditionId = Number(Astro.url.searchParams.get("editionId") || 0);
+
+if (Astro.request.method === "POST") {
+	const formData = await Astro.request.formData();
+	selectedEditionId = Number(formData.get("editionId") || 0);
+	const saveResult = await safeAdminLoad(
+		"Catalog editor save",
+		() => saveCatalogEditorData(sql, admin.userId, formData),
+		{ ok: false, message: "Catalog changes could not be saved." }
+	);
+	if (saveResult.warning) warnings.push(saveResult.warning);
+	if (saveResult.data.ok) notices.push(saveResult.data.message);
+	else warnings.push(saveResult.data.message);
+}
+
+const editorResult = await safeAdminLoad("Catalog editor data", () => loadCatalogEditorData(sql, workId), null);
+if (editorResult.warning) warnings.push(editorResult.warning);
+const editor = editorResult.data;
+const selectedEdition = editor?.editions.find((edition) => edition.id === selectedEditionId) || editor?.editions[0] || null;
+const workMetadata = editor?.work.metadata || {};
+const workProvenance = typeof workMetadata.provenance === "object" && workMetadata.provenance !== null ? workMetadata.provenance as Record<string, unknown> : {};
+const editionMetadata = selectedEdition?.metadata || {};
+const editionProvenance = typeof editionMetadata.provenance === "object" && editionMetadata.provenance !== null ? editionMetadata.provenance as Record<string, unknown> : {};
+const issueHref = `/admin/data-health?catalog_q=${encodeURIComponent(String(workId))}#catalog-metadata`;
+const sectionLinks = [
+	{ id: "catalog-editor", label: "Editor" },
+	{ id: "impact-preview", label: "Impact" },
+	{ id: "audit-history", label: "Audit History" }
+];
+---
+
+<Layout title={editor ? `Edit ${editor.work.title}` : "Catalog Editor"} sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="admin-catalog-page">
+		<nav class="breadcrumbs" aria-label="Breadcrumb">
+			<a href="/admin">Admin</a><span aria-hidden="true">/</span><a href="/admin/data-health">Data Health</a><span aria-hidden="true">/</span><span>Catalog Editor</span>
+		</nav>
+
+		<header class="hero">
+			<div>
+				<h1>{editor ? editor.work.title : "Catalog Editor"}</h1>
+				<p>Admin-only Work and Edition metadata repair. Reader shelves, progress, journal entries, ratings, and finish dates are preserved.</p>
+			</div>
+			<div class="hero-actions">
+				<a href={issueHref}>View health issues</a>
+				{editor?.work.bookId ? <a href={`/book?bookId=${encodeURIComponent(String(editor.work.bookId))}`}>View book detail</a> : null}
+			</div>
+		</header>
+
+		{warnings.length > 0 && (
+			<div class="warning-list" role="alert">
+				{warnings.map((warning) => <p>{warning}</p>)}
+			</div>
+		)}
+
+		{notices.length > 0 && (
+			<div class="notice-list" role="status">
+				{notices.map((notice) => <p>{notice}</p>)}
+			</div>
+		)}
+
+		{!editor ? (
+			<section class="panel">
+				<h2>Work Not Found</h2>
+				<p>No catalog Work matched this admin editor URL.</p>
+			</section>
+		) : (
+			<>
+				{editor.editions.length > 1 && (
+					<form class="edition-switch" method="get" action={`/admin/books/${editor.work.id}`}>
+						<label>
+							<span>Edition to edit</span>
+							<select name="editionId" onchange="this.form.submit()">
+								{editor.editions.map((edition) => (
+									<option value={String(edition.id)} selected={edition.id === selectedEdition?.id}>
+										{`#${edition.id} · ${edition.format || "Format unknown"}${edition.publisher ? ` · ${edition.publisher}` : ""}${edition.bookId ? ` · Book ${edition.bookId}` : ""}`}
+									</option>
+								))}
+							</select>
+						</label>
+					</form>
+				)}
+
+				<form id="catalog-editor" class="catalog-editor-form" method="post">
+					<input type="hidden" name="workId" value={String(editor.work.id)} />
+					<input type="hidden" name="editionId" value={String(selectedEdition?.id || 0)} />
+
+					<section class="panel">
+						<div class="panel-head">
+							<h2>Work-Level Metadata</h2>
+							<p>Shared canonical identity used for grouping, search dedupe, Series membership, and reader-facing catalog reuse.</p>
+						</div>
+						<div class="field-grid two">
+							<label>
+								<span>Work title</span>
+								<input name="workTitle" value={editor.work.title} required maxlength="500" />
+							</label>
+							<label>
+								<span>Canonical title</span>
+								<input name="canonicalTitle" value={editor.work.canonicalTitle} maxlength="500" />
+							</label>
+							<label>
+								<span>Primary author</span>
+								<input name="primaryAuthor" value={editor.work.primaryAuthor} maxlength="300" />
+							</label>
+							<label>
+								<span>Original publication year</span>
+								<input name="originalPublicationYear" inputmode="numeric" value={editor.work.originalPublicationYear > 0 ? String(editor.work.originalPublicationYear) : ""} />
+							</label>
+							<label>
+								<span>Series</span>
+								<select name="seriesId">
+									<option value="0">Standalone / no Series</option>
+									{editor.seriesOptions.map((series) => (
+										<option value={String(series.id)} selected={series.id === editor.work.seriesId}>{series.name}</option>
+									))}
+								</select>
+							</label>
+							<label>
+								<span>Series position</span>
+								<input name="seriesPosition" inputmode="decimal" value={editor.work.seriesPosition} />
+							</label>
+							<label class="span-two">
+								<span>Preferred cover URL</span>
+								<input name="preferredCoverUrl" value={editor.work.preferredCoverUrl} maxlength="1000" />
+							</label>
+							<label class="span-two">
+								<span>Subjects</span>
+								<textarea name="subjects" rows="3">{editor.work.subjects.join(", ")}</textarea>
+							</label>
+							<label class="span-two">
+								<span>Genres</span>
+								<textarea name="genres" rows="3">{editor.work.genres.join(", ")}</textarea>
+							</label>
+							<label class="span-two">
+								<span>Description</span>
+								<textarea name="description" rows="6">{editor.work.description}</textarea>
+							</label>
+						</div>
+						<p class="note">Work provenance: {String(workProvenance.source || "Existing DogEared data")} · Updated {formatDate(editor.work.updatedAt)}</p>
+					</section>
+
+					<section class="panel">
+						<div class="panel-head">
+							<h2>Edition-Level Metadata</h2>
+							<p>Format, identifiers, publisher, page count, audiobook duration, locations, chapters, and cover data belong to a specific Edition.</p>
+						</div>
+						{editor.editions.length === 0 ? (
+							<p>No Editions exist for this Work yet.</p>
+						) : (
+							<>
+								<p class="edition-current">Editing Edition #{selectedEdition?.id}{selectedEdition?.bookId ? ` · Book ${selectedEdition.bookId}` : ""}</p>
+								<div class="field-grid two">
+									<label>
+										<span>Edition title</span>
+										<input name="editionTitle" value={selectedEdition?.title || ""} maxlength="500" />
+									</label>
+									<label>
+										<span>Format</span>
+										<input name="editionFormat" list="edition-format-options" value={selectedEdition?.format || ""} maxlength="100" />
+										<datalist id="edition-format-options">
+											{catalogEditorFormatOptions().map((format) => format ? <option value={format} /> : null)}
+										</datalist>
+									</label>
+									<label>
+										<span>ISBN-10</span>
+										<input name="isbn10" value={selectedEdition?.isbn10 || ""} maxlength="40" />
+									</label>
+									<label>
+										<span>ISBN-13</span>
+										<input name="isbn13" value={selectedEdition?.isbn13 || ""} maxlength="40" />
+									</label>
+									<label>
+										<span>Publisher</span>
+										<input name="publisher" value={selectedEdition?.publisher || ""} maxlength="300" />
+									</label>
+									<label>
+										<span>Language</span>
+										<input name="language" value={selectedEdition?.language || ""} maxlength="80" />
+									</label>
+									<label>
+										<span>Publication date</span>
+										<input name="publicationDate" value={selectedEdition?.publicationDate || ""} maxlength="80" />
+									</label>
+									<label>
+										<span>Publication year</span>
+										<input name="publicationYear" inputmode="numeric" value={selectedEdition && selectedEdition.publicationYear > 0 ? String(selectedEdition.publicationYear) : ""} />
+									</label>
+									<label>
+										<span>Page count</span>
+										<input name="pageCount" inputmode="numeric" value={selectedEdition && selectedEdition.pageCount > 0 ? String(selectedEdition.pageCount) : ""} />
+									</label>
+									<label>
+										<span>Audiobook duration</span>
+										<input name="duration" value={formatDuration(selectedEdition?.durationSeconds || 0)} placeholder="11 hr 24 min" />
+									</label>
+									<label>
+										<span>Location count</span>
+										<input name="locationCount" inputmode="numeric" value={selectedEdition && selectedEdition.locationCount > 0 ? String(selectedEdition.locationCount) : ""} />
+									</label>
+									<label>
+										<span>Chapter count</span>
+										<input name="chapterCount" inputmode="numeric" value={selectedEdition && selectedEdition.chapterCount > 0 ? String(selectedEdition.chapterCount) : ""} />
+									</label>
+									<label class="span-two">
+										<span>Cover URL</span>
+										<input name="coverUrl" value={selectedEdition?.coverUrl || ""} maxlength="1000" />
+									</label>
+									<label>
+										<span>Google Books ID</span>
+										<input name="googleBooksId" value={selectedEdition?.googleBooksId || ""} maxlength="200" />
+									</label>
+									<label>
+										<span>Open Library Work ID</span>
+										<input name="openLibraryWorkId" value={selectedEdition?.openLibraryWorkId || ""} maxlength="200" />
+									</label>
+									<label>
+										<span>Open Library Edition ID</span>
+										<input name="openLibraryEditionId" value={selectedEdition?.openLibraryEditionId || ""} maxlength="200" />
+									</label>
+								</div>
+								<p class="note">Edition provenance: {String(editionProvenance.source || "Existing DogEared data")} · Updated {formatDate(selectedEdition?.updatedAt)}</p>
+							</>
+						)}
+					</section>
+
+					<section id="impact-preview" class="panel">
+						<div class="panel-head">
+							<h2>Impact Preview</h2>
+							<p>These reader-owned records are preserved. The editor updates catalog metadata only.</p>
+						</div>
+						<div class="grid five">
+							<article class="stat"><p>Readers</p><strong>{formatNumber(editor.impact.readers)}</strong></article>
+							<article class="stat"><p>Shelf entries</p><strong>{formatNumber(editor.impact.shelfEntries)}</strong></article>
+							<article class="stat"><p>Progress events</p><strong>{formatNumber(editor.impact.progressEvents)}</strong></article>
+							<article class="stat"><p>Journal entries</p><strong>{formatNumber(editor.impact.journalEntries)}</strong></article>
+							<article class="stat"><p>Editions</p><strong>{formatNumber(editor.impact.editionCount)}</strong></article>
+						</div>
+						<div class="actions">
+							<button type="submit">Save catalog data</button>
+						</div>
+					</section>
+				</form>
+
+				<section id="audit-history" class="panel">
+					<div class="panel-head">
+						<h2>Audit History</h2>
+						<p>Manual catalog changes are tracked without storing reader content.</p>
+					</div>
+					<div class="table-wrap">
+						<table>
+							<thead>
+								<tr><th>Time</th><th>Admin</th><th>Entity</th><th>Fields</th></tr>
+							</thead>
+							<tbody>
+								{editor.auditEvents.length === 0 ? (
+									<tr><td colspan="4">No manual catalog edits recorded for this Work.</td></tr>
+								) : editor.auditEvents.map((event) => (
+									<tr>
+										<td>{formatDate(event.createdAt)}</td>
+										<td>{event.adminUsername}</td>
+										<td>{event.entityType} #{event.entityId}</td>
+										<td>{event.changedFields.map((change) => change.field).join(", ") || "Catalog update"}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</section>
+			</>
+		)}
+	</div>
+</Layout>
+
+<style>
+	.admin-catalog-page { max-width: 980px; }
+	.breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.35rem; color: var(--color-text-muted); font-size: 0.86rem; }
+	.breadcrumbs a { color: var(--color-nav); font-weight: 700; text-decoration: none; }
+	.hero { margin-top: 0.85rem; display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+	.hero h1 { margin: 0; }
+	.hero p { margin: 0.35rem 0 0; color: var(--color-text-muted); }
+	.hero-actions, .actions { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+	.hero-actions a, .actions a {
+		color: var(--color-nav);
+		font-weight: 700;
+		text-decoration: none;
+	}
+	.hero-actions a:hover, .actions a:hover { color: var(--color-nav-hover); text-decoration: underline; }
+	.warning-list, .notice-list {
+		margin-top: 1rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		padding: 0.65rem 0.75rem;
+	}
+	.warning-list { background: #fffaf0; color: #6b3f0a; }
+	.notice-list { background: rgba(31, 122, 69, 0.08); color: var(--color-primary); }
+	.warning-list p, .notice-list p { margin: 0; }
+	.warning-list p + p, .notice-list p + p { margin-top: 0.3rem; }
+	.panel { margin-top: 1rem; border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
+	.panel-head h2 { margin: 0; }
+	.panel-head p { margin: 0.3rem 0 0; color: #575757; font-size: 0.9rem; }
+	.field-grid { display: grid; gap: 0.7rem; margin-top: 0.9rem; }
+	.field-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	label { display: grid; gap: 0.3rem; font-weight: 700; color: #444; font-size: 0.86rem; }
+	input, select, textarea {
+		width: 100%;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: #fff;
+		color: var(--color-text);
+		font: inherit;
+		font-weight: 500;
+		padding: 0.5rem 0.55rem;
+	}
+	textarea { resize: vertical; }
+	.span-two { grid-column: 1 / -1; }
+	.edition-select { margin-top: 0.8rem; }
+	.grid { display: grid; gap: 0.55rem; margin-top: 0.7rem; }
+	.grid.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+	.stat { border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.56); padding: 0.6rem; }
+	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }
+	.stat strong { display: block; margin-top: 0.2rem; font-size: 1.2rem; }
+	.note { margin-top: 0.65rem; color: #5c5c5c; font-size: 0.86rem; }
+	.actions { margin-top: 0.8rem; }
+	.actions button {
+		border: 0;
+		border-radius: var(--radius-pill);
+		background: var(--color-primary);
+		color: #fff;
+		cursor: pointer;
+		font: inherit;
+		font-weight: 700;
+		padding: 0.55rem 0.9rem;
+	}
+	.actions button:hover { background: var(--color-primary-hover); }
+	.table-wrap { margin-top: 0.7rem; overflow-x: auto; }
+	table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+	th, td { text-align: left; padding: 0.45rem; border-bottom: var(--border-subtle); vertical-align: top; }
+	th { font-weight: 700; color: #444; }
+
+	@media (max-width: 800px) {
+		.hero { display: block; }
+		.hero-actions { margin-top: 0.7rem; }
+		.field-grid.two, .grid.five { grid-template-columns: 1fr; }
+	}
+</style>

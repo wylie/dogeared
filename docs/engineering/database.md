@@ -134,10 +134,34 @@ Stores edition-specific metadata beneath a Work:
 - Google Books ID.
 - Open Library work and edition IDs.
 - External IDs, metadata, and timestamps.
+- Format-specific reading extents stored in metadata when they are not ordinary print page counts, currently `durationSeconds` for audiobooks plus optional `locationCount` and `chapterCount`.
 
 Relationships:
 
 - Belongs to `book_work`.
+
+## Admin Catalog Audit Events
+
+Entity: `admin_catalog_audit_event`
+
+Stores manual admin catalog repairs:
+
+- Admin user ID when available.
+- Entity type, either `work` or `edition`.
+- Entity ID.
+- Changed field list with old and new values.
+- Creation timestamp.
+
+Relationships:
+
+- References `app_user` with `on delete set null` so user deletion does not erase operational catalog history.
+- Does not reference reader shelf/progress/journal rows; admin catalog edits must preserve reader-owned data.
+
+Policy:
+
+- Used by `/admin/books/[workId]` to display recent Work/Edition edit history.
+- Manual edits update Work or Edition metadata provenance with `source: Manual` and `manualOverrides`.
+- Audiobook duration is stored as seconds in Edition metadata so progress normalization can remain deterministic.
 - May point at a compatibility `book` row.
 - May be remembered by `user_book.edition_id` for the reader's chosen edition.
 
