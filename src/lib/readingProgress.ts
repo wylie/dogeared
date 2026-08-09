@@ -1,11 +1,18 @@
 export type ProgressInputMode = "page" | "percent" | "chapter" | "location" | "audio";
 
+export type ProgressValidationErrorCode =
+	| "progress-value-required"
+	| "progress-value-not-numeric"
+	| "progress-value-out-of-range"
+	| "progress-total-pages-required";
+
 export type NormalizedProgressUpdate = {
 	valid: boolean;
 	currentPage: number;
 	mode: ProgressInputMode;
 	normalizedText: string;
 	percent: number;
+	errorCode?: ProgressValidationErrorCode;
 };
 
 export function normalizeProgressInputMode(value: unknown): ProgressInputMode {
@@ -46,26 +53,61 @@ export function normalizeProgressUpdateInput(input: {
 	rawValue: unknown;
 	totalPages?: unknown;
 	progressType?: unknown;
+	allowMissingTotalPagesForPercent?: boolean;
 }): NormalizedProgressUpdate {
-	const raw = String(input.rawValue || "").trim();
-	if (!raw) return { valid: false, currentPage: 0, mode: "page", normalizedText: "", percent: 0 };
+	const mode = normalizeProgressInputMode(input.progressType);
+	const raw = input.rawValue === null || typeof input.rawValue === "undefined"
+		? ""
+		: String(input.rawValue).trim();
+	if (!raw) {
+		return { valid: false, currentPage: 0, mode, normalizedText: "", percent: 0, errorCode: "progress-value-required" };
+	}
 
 	const totalPages = Math.max(0, Number(input.totalPages || 0) || 0);
-	const mode = normalizeProgressInputMode(input.progressType);
 
 	if (mode === "percent" || raw.endsWith("%")) {
 		const percentText = raw.replace("%", "").trim();
 		const percentValue = finiteNumberFromText(percentText);
-		if (percentValue === null || percentValue < 0 || percentValue > 100 || totalPages <= 0) {
+		if (percentValue === null) {
 			return {
 				valid: false,
 				currentPage: 0,
 				mode: "percent",
 				normalizedText: raw,
-				percent: 0
+				percent: 0,
+				errorCode: "progress-value-not-numeric"
+			};
+		}
+		if (percentValue < 0 || percentValue > 100) {
+			return {
+				valid: false,
+				currentPage: 0,
+				mode: "percent",
+				normalizedText: raw,
+				percent: 0,
+				errorCode: "progress-value-out-of-range"
 			};
 		}
 		const percent = clampPercent(percentValue);
+		if (totalPages <= 0) {
+			if (input.allowMissingTotalPagesForPercent) {
+				return {
+					valid: true,
+					currentPage: 0,
+					mode: "percent",
+					normalizedText: `${percent}%`,
+					percent
+				};
+			}
+			return {
+				valid: false,
+				currentPage: 0,
+				mode: "percent",
+				normalizedText: raw,
+				percent: 0,
+				errorCode: "progress-total-pages-required"
+			};
+		}
 		return {
 			valid: true,
 			currentPage: clampCurrentPage((percent / 100) * totalPages, totalPages),
@@ -81,7 +123,8 @@ export function normalizeProgressUpdateInput(input: {
 			currentPage: 0,
 			mode,
 			normalizedText: raw,
-			percent: 0
+			percent: 0,
+			errorCode: "progress-value-out-of-range"
 		};
 	}
 
@@ -94,7 +137,8 @@ export function normalizeProgressUpdateInput(input: {
 			currentPage: 0,
 			mode,
 			normalizedText: raw,
-			percent: 0
+			percent: 0,
+			errorCode: "progress-value-required"
 		};
 	}
 
@@ -105,7 +149,8 @@ export function normalizeProgressUpdateInput(input: {
 			currentPage: 0,
 			mode,
 			normalizedText: raw,
-			percent: 0
+			percent: 0,
+			errorCode: "progress-value-not-numeric"
 		};
 	}
 

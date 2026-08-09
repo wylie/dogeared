@@ -4794,7 +4794,12 @@ const profilePerformanceTelemetry = {
 
 	for (const select of Array.from(document.querySelectorAll(".progress-inline-type"))) {
 		updateProgressInputPlaceholder(select);
-		select.addEventListener("change", () => updateProgressInputPlaceholder(select));
+		select.addEventListener("change", () => {
+			updateProgressInputPlaceholder(select);
+			const card = select.closest(".book-card");
+			const input = card?.querySelector(".progress-inline-input");
+			if (input instanceof HTMLInputElement) clearProgressSaveError(input);
+		});
 	}
 	for (const input of Array.from(document.querySelectorAll(".progress-inline-input"))) {
 		input.addEventListener("input", () => clearProgressSaveError(input));
@@ -5468,17 +5473,18 @@ const profilePerformanceTelemetry = {
 				? normalizeReadingFormat(readingFormatInput.value)
 				: normalizeReadingFormat(card instanceof HTMLElement ? card.dataset.readingFormat : "");
 			const totalPages = resolveProgressTotalPages(progressSave, card);
+			clearProgressSaveError(input);
 			const parsed = normalizeProgressUpdateInput({
 				rawValue: input.value,
 				totalPages,
-				progressType
+				progressType,
+				allowMissingTotalPagesForPercent: true
 			});
 			if (!parsed.valid) {
 				progressSave.textContent = "Save";
 				surfaceProgressSaveError(input, "Enter a valid progress value.");
 				return;
 			}
-			clearProgressSaveError(input);
 			const currentPage = parsed.currentPage;
 			const shouldFinish = totalPages > 0 && currentPage >= totalPages;
 			if (shouldFinish) {
@@ -5559,6 +5565,7 @@ const profilePerformanceTelemetry = {
 			try {
 				const result = await saveReadingProgressUpdate({
 					bookId: directBookId,
+					rawValue: input.value,
 					currentPage,
 					totalPages,
 					preferredProgressType: progressType,

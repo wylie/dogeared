@@ -28,7 +28,7 @@ test("percentage progress updates normalize into canonical current page", () => 
 });
 
 test("percentage progress accepts valid low and boundary values", () => {
-	for (const value of ["0", "1", "2", "14", "25", "50", "99", "100"]) {
+	for (const value of ["0", 0, "1", "2", "14", "25", "50", "99", "100"]) {
 		const result = normalizeProgressUpdateInput({
 			rawValue: value,
 			totalPages: 400,
@@ -61,6 +61,16 @@ test("percentage updates require total pages to avoid saving zero progress", () 
 	});
 	assert.equal(result.valid, false);
 	assert.equal(result.currentPage, 0);
+	assert.equal(result.errorCode, "progress-total-pages-required");
+	const deferred = normalizeProgressUpdateInput({
+		rawValue: "14",
+		totalPages: 0,
+		progressType: "percent",
+		allowMissingTotalPagesForPercent: true
+	});
+	assert.equal(deferred.valid, true);
+	assert.equal(deferred.currentPage, 0);
+	assert.equal(deferred.percent, 14);
 });
 
 test("chapter, location, and audio inputs still normalize through the same canonical page field", () => {
@@ -120,6 +130,9 @@ test("profile progress updater uses shared canonical progress normalization", ()
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	assert.equal(source.includes('import { normalizeProgressUpdateInput } from "../../lib/readingProgress.ts";'), true);
 	assert.equal(source.includes("const parsed = normalizeProgressUpdateInput({"), true);
+	assert.equal(source.includes("allowMissingTotalPagesForPercent: true"), true);
+	assert.equal(source.includes("rawValue: input.value,"), true);
+	assert.match(source, /clearProgressSaveError\(input\);\s+const parsed = normalizeProgressUpdateInput/);
 	assert.equal(source.includes("function resolveProgressTotalPages(button, card)"), true);
 	assert.match(source, /const totalPages = resolveProgressTotalPages\(progressSave, card\)/);
 	assert.equal(source.includes("function parseProgressInput("), false);
@@ -182,6 +195,8 @@ test("reading progress saves use the dedicated narrow API path", () => {
 	const shelfClient = readFileSync("src/lib/shelfClient.ts", "utf8");
 
 	assert.match(api, /where ub\.user_id = \$\{session\.userId\}::uuid\s+and ub\.book_id = \$\{bookId\}\s+and ub\.status = 'reading'/);
+	assert.match(api, /const normalizedProgress = rawProgressValue === null\s+\?\s+null\s+:\s+normalizeProgressUpdateInput/);
+	assert.match(api, /code: normalizedProgress\.errorCode \|\| "progress-value-invalid"/);
 	assert.match(api, /update user_book\s+set\s+current_page = \$\{nextCurrentPage\}/);
 	assert.match(api, /insert into user_reading_progress_event/);
 	assert.match(api, /if \(progressEventRecorded\) \{\s+await createReadingMilestoneNotifications/);

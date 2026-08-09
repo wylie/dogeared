@@ -7,7 +7,7 @@ import {
 	ensureReadingProgressEventSchema,
 	loadReaderReadingSummary
 } from "../../../lib/readingSummary";
-import { normalizeProgressInputMode, type ProgressInputMode } from "../../../lib/readingProgress";
+import { normalizeProgressInputMode, normalizeProgressUpdateInput, type ProgressInputMode } from "../../../lib/readingProgress";
 import { normalizeReadingFormat, type ReadingFormat } from "../../../lib/readingFormats";
 import { recordPerformanceEventSafe } from "../../../lib/performanceTelemetry";
 
@@ -48,6 +48,13 @@ function normalizePositiveInt(value: unknown) {
 	const parsed = Number(value);
 	if (!Number.isFinite(parsed) || parsed < 0) return 0;
 	return Math.floor(parsed);
+}
+
+function progressValidationMessage(code: unknown) {
+	if (code === "progress-total-pages-required") return "This book needs a page count before percentage progress can be saved.";
+	if (code === "progress-value-out-of-range") return "Enter a progress value in range.";
+	if (code === "progress-value-not-numeric") return "Enter a numeric progress value.";
+	return "Enter a valid progress value.";
 }
 
 function markPerf(
@@ -99,12 +106,15 @@ export const POST: APIRoute = async ({ request }) => {
 		}
 		const input = body as Record<string, unknown>;
 		bookId = normalizePositiveInt(input.bookId);
-		const requestedCurrentPage = normalizePositiveInt(input.currentPage);
+		const requestedCurrentPageInput = normalizePositiveInt(input.currentPage);
 		const requestedTotalPages = normalizePositiveInt(input.totalPages);
 		const preferredProgressType: ProgressInputMode = normalizeProgressInputMode(
 			input.preferredProgressType || input.progressType
 		);
 		const requestedReadingFormat: ReadingFormat = normalizeReadingFormat(input.readingFormat);
+		const rawProgressValue = Object.hasOwn(input, "rawValue")
+			? input.rawValue
+			: (Object.hasOwn(input, "progressValue") ? input.progressValue : null);
 		if (bookId <= 0) {
 			recordProgressPerformance(false, 400);
 			return jsonResponse({ error: "Missing book id." }, 400);
@@ -147,6 +157,29 @@ export const POST: APIRoute = async ({ request }) => {
 			normalizePositiveInt(existing.book_page_count),
 			requestedTotalPages
 		);
+		const normalizedProgress = rawProgressValue === null
+			? null
+			: normalizeProgressUpdateInput({
+				rawValue: rawProgressValue,
+				totalPages: effectiveTotalPages,
+				progressType: preferredProgressType
+			});
+		if (normalizedProgress && !normalizedProgress.valid) {
+			const detail = progressValidationMessage(normalizedProgress.errorCode);
+			recordProgressPerformance(false, 400, {
+				code: normalizedProgress.errorCode || "progress-value-invalid",
+				progressType: preferredProgressType,
+				hasEffectiveTotalPages: effectiveTotalPages > 0
+			});
+			return jsonResponse({
+				error: "Unable to save reading progress.",
+				detail,
+				code: normalizedProgress.errorCode || "progress-value-invalid"
+			}, 400);
+		}
+		const requestedCurrentPage = normalizedProgress?.valid
+			? normalizePositiveInt(normalizedProgress.currentPage)
+			: requestedCurrentPageInput;
 		const nextCurrentPage = effectiveTotalPages > 0
 			? Math.min(requestedCurrentPage, effectiveTotalPages)
 			: requestedCurrentPage;
