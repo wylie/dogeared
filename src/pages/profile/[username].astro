@@ -4652,6 +4652,18 @@ const profilePerformanceTelemetry = {
 		}
 	}
 
+	function positiveDatasetNumber(value) {
+		return Math.max(0, Number(value || 0) || 0);
+	}
+
+	function resolveProgressTotalPages(button, card) {
+		return Math.max(
+			0,
+			positiveDatasetNumber(button?.dataset?.totalPages),
+			card instanceof HTMLElement ? positiveDatasetNumber(card.dataset.momentumTotalPages) : 0
+		);
+	}
+
 	function ensureProgressDisplay(card, currentPage, totalPages) {
 		if (!(card instanceof HTMLElement)) return null;
 		const progressBlock = card.querySelector(".reading-progress-block");
@@ -5296,8 +5308,9 @@ const profilePerformanceTelemetry = {
 		if (quickFinish instanceof HTMLButtonElement) {
 			event.preventDefault();
 			event.stopPropagation();
-			const totalPages = Math.max(0, Number(quickFinish.dataset.totalPages || 0) || 0);
-			const currentPageRaw = Math.max(0, Number(quickFinish.dataset.currentPage || 0) || 0);
+			const card = quickFinish.closest(".book-card");
+			const totalPages = resolveProgressTotalPages(quickFinish, card);
+			const currentPageRaw = positiveDatasetNumber(quickFinish.dataset.currentPage);
 			const finishedPage = totalPages > 0 ? totalPages : currentPageRaw;
 			const entry = buildShelfEntryFromRecord({
 				bookId: Number(quickFinish.dataset.bookId || 0),
@@ -5319,7 +5332,6 @@ const profilePerformanceTelemetry = {
 			});
 			if (!entry.title) return;
 			quickFinish.disabled = true;
-			const card = quickFinish.closest(".book-card");
 			const dropdown = card?.querySelector(".shelf-dropdown");
 			try {
 				const finishResult = await promptAndSaveFinishedEntry(entry);
@@ -5352,7 +5364,7 @@ const profilePerformanceTelemetry = {
 			const progressTypeInput = card?.querySelector(".progress-inline-type");
 			if (!(input instanceof HTMLInputElement)) return;
 			const progressType = progressTypeInput instanceof HTMLSelectElement ? progressTypeInput.value : "page";
-			const totalPages = Math.max(0, Number(progressSave.dataset.totalPages || 0) || 0);
+			const totalPages = resolveProgressTotalPages(progressSave, card);
 			const parsed = normalizeProgressUpdateInput({
 				rawValue: input.value,
 				totalPages,

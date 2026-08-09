@@ -28,7 +28,7 @@ test("percentage progress updates normalize into canonical current page", () => 
 });
 
 test("percentage progress accepts valid low and boundary values", () => {
-	for (const value of ["0", "1", "2", "25", "50", "99", "100"]) {
+	for (const value of ["0", "1", "2", "14", "25", "50", "99", "100"]) {
 		const result = normalizeProgressUpdateInput({
 			rawValue: value,
 			totalPages: 400,
@@ -120,7 +120,18 @@ test("profile progress updater uses shared canonical progress normalization", ()
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	assert.equal(source.includes('import { normalizeProgressUpdateInput } from "../../lib/readingProgress.ts";'), true);
 	assert.equal(source.includes("const parsed = normalizeProgressUpdateInput({"), true);
+	assert.equal(source.includes("function resolveProgressTotalPages(button, card)"), true);
+	assert.match(source, /const totalPages = resolveProgressTotalPages\(progressSave, card\)/);
 	assert.equal(source.includes("function parseProgressInput("), false);
+});
+
+test("profile percent progress validates against the effective stored or catalog total pages", () => {
+	const summary = readFileSync("src/lib/readingSummary.ts", "utf8");
+	const profile = readFileSync("src/pages/profile/[username].astro", "utf8");
+
+	assert.match(summary, /coalesce\(nullif\(ub\.total_pages, 0\), nullif\(b\.page_count, 0\), 0\)::int as total_pages/);
+	assert.match(profile, /positiveDatasetNumber\(button\?\.dataset\?\.totalPages\)/);
+	assert.match(profile, /card instanceof HTMLElement \? positiveDatasetNumber\(card\.dataset\.momentumTotalPages\) : 0/);
 });
 
 test("progress input mode normalization uses the supported persisted enum", () => {
