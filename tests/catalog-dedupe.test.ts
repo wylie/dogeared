@@ -150,3 +150,66 @@ test("canonical catalog resolution scores title, author, series, and provider id
 	assert.equal(openLibrary.score >= 98, true);
 	assert.equal(openLibrary.reasons.some((reason) => reason.includes("Open Library")), true);
 });
+
+test("canonical catalog scoring preserves duplicate prevention without over-merging", () => {
+	const isbnMatch = scoreCanonicalCatalogCandidate({
+		title: "Project Hail Mary",
+		author: "Andy Weir",
+		isbn13: "978-0-593-13520-4"
+	}, resolutionCandidate({
+		title: "Project Hail Mary",
+		author: "Andy Weir",
+		isbn13: "9780593135204"
+	}));
+	assert.equal(isbnMatch.score >= 98, true);
+
+	const googleBooksMatch = scoreCanonicalCatalogCandidate({
+		title: "Alternate Edition",
+		author: "Andy Weir",
+		googleBooksId: "abc123"
+	}, resolutionCandidate({
+		googleBooksId: "abc123"
+	}));
+	assert.equal(googleBooksMatch.score >= 98, true);
+
+	const editionKeyMatch = scoreCanonicalCatalogCandidate({
+		title: "The Fellowship of the Ring",
+		author: "J.R.R. Tolkien",
+		isbn10: "0618346252"
+	}, resolutionCandidate({
+		title: "The Fellowship of the Ring",
+		author: "J.R.R. Tolkien",
+		editionKeys: ["isbn10:0618346252"]
+	}));
+	assert.equal(editionKeyMatch.score >= 96, true);
+
+	const missingIsbnTitleAuthor = scoreCanonicalCatalogCandidate({
+		title: "The Ministry of Time",
+		author: "Kaliane Bradley"
+	}, resolutionCandidate({
+		title: "The Ministry of Time",
+		author: "Kaliane Bradley",
+		workKey: "title_author:ministry of time|kaliane bradley",
+		canonicalWorkKey: "title_author:ministry of time|kaliane bradley"
+	}));
+	assert.equal(missingIsbnTitleAuthor.score >= 90, true);
+
+	const malformedMetadata = scoreCanonicalCatalogCandidate({
+		title: " ".repeat(240),
+		author: "",
+		isbn13: "",
+		googleBooksId: ""
+	}, resolutionCandidate({}));
+	assert.equal(malformedMetadata.score, 0);
+
+	const similarDifferentBook = scoreCanonicalCatalogCandidate({
+		title: "Star Wars: The High Republic, Vol. 1: There Is No Fear",
+		author: "Cavan Scott"
+	}, resolutionCandidate({
+		title: "Star Wars",
+		author: "George Lucas",
+		workKey: "title_author:star wars|george lucas",
+		canonicalWorkKey: "title_author:star wars|george lucas"
+	}));
+	assert.equal(similarDifferentBook.score, 0);
+});

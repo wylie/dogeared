@@ -40,10 +40,13 @@ test("search API supports local-first and deferred external results", () => {
 	assert.match(source, /measureSearchSpan\("Google Books"/);
 	assert.match(source, /measureSearchSpan\("Open Library"/);
 	assert.match(source, /measureSearchSpanSync\("dedupe"/);
-	assert.match(source, /measureSearchSpan\("canonical Work matching"/);
+	assert.match(source, /resolveCanonicalCatalogWorksForSearch/);
+	assert.match(source, /recordSearchSpan\("canonical Work matching"/);
 	assert.match(source, /withSearchTimeout\("canonical Work matching", CANONICAL_MATCH_TIMEOUT_MS/);
 	assert.match(source, /skipSchemaBackfill: true/);
 	assert.match(source, /canonicalTimeoutCount/);
+	assert.match(source, /canonicalDbQueryCount/);
+	assert.match(source, /canonicalComparisonCount/);
 	assert.match(source, /providerTimeoutCount/);
 	assert.match(source, /retryCount: 0/);
 	assert.match(source, /measureSearchSpanSync\("result merge"/);

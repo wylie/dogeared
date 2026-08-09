@@ -45,6 +45,34 @@ Post-fix Admin Performance telemetry sampled after the canonical setup guard sho
 
 Production telemetry on 2026-08-08 showed Search p50 around 569 ms but p95/p99 around 45-48 s. The slow rows were not provider-bound: Google Books measured 689.3 ms and Open Library measured 1,054.7 ms. Both catastrophic search rows were dominated by `canonical Work matching`, at 46,818.2 ms and 46,487.7 ms respectively.
 
+## 2026-08-08 Canonical Matching Pathology Fix
+
+Follow-up production telemetry showed the original 45-48 s p99 class was reduced but not eliminated: `search.books` had p50 640 ms, p75 1,382 ms, p95 3,180 ms, and p99 47,537 ms over the latest 24-hour sample. Recent slow rows still showed `canonical Work matching` as the dominant span: 46,818.2 ms for Google Books and 46,487.7 ms for Open Library, while provider p95 was about 990-1,098 ms.
+
+Measured cause: Search was invoking the shared `resolveCanonicalCatalogWork` once per external candidate. That resolver used one monolithic query containing broad `OR` branches and title/series `LIKE` fallbacks, then ran lateral Edition, source, shelf, and representative-book aggregation for every candidate row returned by that query. Even though Search capped external candidates to 24 and wrapped each resolver call in a 900 ms `Promise.race`, the underlying database work could continue after the timeout and still dominate the request. The worst case was not provider latency; it was search-time fuzzy catalog resolution doing import-level work.
+
+Changes:
+
+- Added `resolveCanonicalCatalogWorksForSearch`, a search-only batched canonical detector.
+- Search now deduplicates provider results first, prepares normalized lookup identities once, and performs bounded batch lookups for stable provider identifiers, ISBNs, Edition keys, canonical Work keys, and exact series signals.
+- Search no longer runs broad title `LIKE` fuzzy catalog scans during external-result rendering. If stable signals do not produce a bounded DogEared candidate set, the result remains an unresolved external result until the reader shelves/imports it.
+- Candidate scoring now runs in memory over the bounded candidate set returned by batch lookup instead of comparing every external result against broad catalog slices.
+- Search telemetry now records canonical child spans for candidate preparation, identifier matching, ISBN matching, edition lookup, normalized title matching, series matching, existing Work lookup, candidate scoring, and dedupe.
+- Search telemetry metadata now records canonical DB query count, DogEared candidate count, candidate comparison count, cache hits/misses, and whether the candidate set was truncated.
+
+Local canonical resolver measurements using the Neon client after the fix:
+
+| Scenario | Total | DB queries | DogEared candidates | Comparisons | Notes |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Mixed batch: ISBN, Open Library ID, title+author, series, malformed metadata | 220.7 ms warm | 6 | 4 | 20 | Preserved direct and fallback detection without per-result resolver queries |
+| Deliberately pathological 24 malformed candidates | 40.4 ms warm | 1 | 0 | 0 | No broad catalog scan; unresolved external candidates fail fast |
+
+Before this pass, query count scaled with external candidates: up to one monolithic resolver query plus a representative-book query per matched candidate, so a 9-result Google Books response could trigger roughly 9-18 resolver queries and up to 720 candidate comparisons from `limit 80` per resolver call. After this pass, the same class of search uses a fixed set of bounded batch queries, with measured mixed-batch comparisons at 20 and pathological malformed comparisons at 0.
+
+No speculative indexes were added. Existing indexes cover the stable lookup paths used by the batch detector, including `book.canonical_work_key`, `book.work_id`, `book_edition(work_id)`, `book_edition(book_id)`, and `book_source(source, source_work_id, source_edition_id)`. The fix removes the broad search-time query shape instead of trying to index unbounded fuzzy matching.
+
+Degradation behavior: if batch canonical detection times out or finds no bounded candidate set, Search returns the external result without a local `bookId`. That avoids creating duplicate Works during Search; duplicate prevention remains authoritative when the reader shelves/imports the external book through the catalog write path.
+
 Root cause: external Search called the shared canonical resolver, and the resolver's schema guard was still allowed to run canonical Work/Edition backfill before resolving. When any catalog row needed backfill, Search inherited the full catalog maintenance cost.
 
 Fix:

@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { googleBooksCoverUrl } from "../../../lib/bookCovers";
-import { normalizeRedundantSeriesTitle, resolveCanonicalCatalogWork, type CatalogSourceInput } from "../../../lib/catalog";
+import { normalizeRedundantSeriesTitle, resolveCanonicalCatalogWorksForSearch, type CatalogBookLookupInput, type CatalogSourceInput } from "../../../lib/catalog";
 import { getNeonSql } from "../../../lib/neon";
 import { createPublicCacheControl, withRuntimeCache } from "../../../lib/runtimeCache";
 import { inferKnownSeriesMetadata } from "../../../lib/series";
@@ -438,6 +438,12 @@ export const GET: APIRoute = async ({ request, url }) => {
 	let canonicalTimeoutCount = 0;
 	let canonicalCandidateCount = 0;
 	let canonicalResolvedCount = 0;
+	let canonicalDbQueryCount = 0;
+	let canonicalDogEaredCandidateCount = 0;
+	let canonicalComparisonCount = 0;
+	let canonicalCacheHits = 0;
+	let canonicalCacheMisses = 0;
+	let canonicalCandidateSetTruncated = false;
 	const providerTimeouts = new Set<string>();
 	const markPerfStage = (stage: string) => {
 		perfStages[stage] = Math.round((performance.now() - perfStartedAt) * 10) / 10;
@@ -497,6 +503,12 @@ export const GET: APIRoute = async ({ request, url }) => {
 				canonicalCandidateCount,
 				canonicalResolvedCount,
 				canonicalTimeoutCount,
+				canonicalDbQueryCount,
+				canonicalDogEaredCandidateCount,
+				canonicalComparisonCount,
+				canonicalCacheHits,
+				canonicalCacheMisses,
+				canonicalCandidateSetTruncated,
 				timeout: providerTimeoutCount > 0 || localTimeoutCount > 0 || canonicalTimeoutCount > 0,
 				clientAborted: isRequestAborted(requestSignal),
 				retryCount: 0,
@@ -939,8 +951,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 						.filter((result): result is SearchResult => !!result));
 					canonicalCandidateCount = canonicalCandidates.length;
 
-					const resolutionCache = new Map<string, Promise<Awaited<ReturnType<typeof resolveCanonicalCatalogWork>>>>();
-					const resolveSearchResult = async (item: SearchResult) => {
+					const canonicalInputs = canonicalCandidates.map((item): { item: SearchResult; cacheKey: string; lookup: CatalogBookLookupInput } => {
 						const authors = Array.isArray(item.authors) ? item.authors : [];
 						const inferredSeries = item.seriesName ? null : inferKnownSeriesMetadata({ title: item.title, author: authors[0] || "" });
 						const seriesName = item.seriesName || inferredSeries?.seriesName || "";
@@ -964,9 +975,10 @@ export const GET: APIRoute = async ({ request, url }) => {
 							seriesName,
 							seriesBookOrder
 						].join("|");
-						let resolutionPromise = resolutionCache.get(cacheKey);
-						if (!resolutionPromise) {
-							resolutionPromise = resolveCanonicalCatalogWork(sql, {
+						return {
+							item,
+							cacheKey,
+							lookup: {
 								title,
 								author: authors[0] || "",
 								isbn10: item.isbn10,
@@ -977,22 +989,47 @@ export const GET: APIRoute = async ({ request, url }) => {
 								seriesBookOrder,
 								pageCount: item.pageCount,
 								publishedYear: publishedYear(item.publishedDate)
-							}, {
-								skipSchemaBackfill: true
-							});
-							resolutionCache.set(cacheKey, resolutionPromise);
-						}
-						let resolution: Awaited<ReturnType<typeof resolveCanonicalCatalogWork>> | null = null;
-						try {
-							resolution = await withSearchTimeout("canonical Work matching", CANONICAL_MATCH_TIMEOUT_MS, () => resolutionPromise);
-							if (resolution?.bookId) canonicalResolvedCount += 1;
-						} catch (error) {
-							if (error instanceof SearchTimeoutError) {
-								canonicalTimeoutCount += 1;
-							} else {
-								throw error;
 							}
+						};
+					});
+					let canonicalResolutions: Awaited<ReturnType<typeof resolveCanonicalCatalogWorksForSearch>> | null = null;
+					const canonicalMatchingStartedAt = performance.now();
+					try {
+						canonicalResolutions = await withSearchTimeout("canonical Work matching", CANONICAL_MATCH_TIMEOUT_MS, () => resolveCanonicalCatalogWorksForSearch(
+							sql,
+							canonicalInputs.map(({ cacheKey, lookup }) => ({ ...lookup, cacheKey })),
+							{
+								skipSchemaBackfill: true,
+								maxDatabaseCandidates: Math.max(80, MAX_CANONICAL_MATCH_CANDIDATES * 8)
+							}
+						));
+					} catch (error) {
+						if (error instanceof SearchTimeoutError) {
+							canonicalTimeoutCount += canonicalInputs.length;
+						} else {
+							throw error;
 						}
+					} finally {
+						recordSearchSpan("canonical Work matching", performance.now() - canonicalMatchingStartedAt);
+					}
+					if (canonicalResolutions) {
+						canonicalDbQueryCount = canonicalResolutions.metrics.dbQueryCount;
+						canonicalDogEaredCandidateCount = canonicalResolutions.metrics.dogEaredCandidateCount;
+						canonicalComparisonCount = canonicalResolutions.metrics.candidateComparisons;
+						canonicalCacheHits = canonicalResolutions.metrics.cacheHits;
+						canonicalCacheMisses = canonicalResolutions.metrics.cacheMisses;
+						canonicalCandidateSetTruncated = canonicalResolutions.metrics.truncatedCandidateSet;
+						canonicalResolvedCount = canonicalResolutions.resolutions.size;
+						for (const span of canonicalResolutions.spans) {
+							recordSearchSpan(`canonical ${span.name}`, span.durationMs);
+						}
+					}
+					const resolveSearchResult = ({ item, cacheKey, lookup }: { item: SearchResult; cacheKey: string; lookup: CatalogBookLookupInput }) => {
+						const authors = Array.isArray(item.authors) ? item.authors : [];
+						const resolution = canonicalResolutions?.resolutions.get(cacheKey) || null;
+						const seriesName = String(lookup.seriesName || "");
+						const seriesBookOrder = Number(lookup.seriesBookOrder || 0) || 0;
+						const title = String(lookup.title || item.title);
 						const resolvedSeriesName = resolution?.seriesName || seriesName;
 						const resolvedSeriesBookOrder = Number(resolution?.seriesBookOrder || 0) || seriesBookOrder;
 						const resolvedAuthor = resolution?.author || authors[0] || "";
@@ -1014,7 +1051,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 							seriesLabel: item.seriesLabel || formatSeriesSearchLabel(resolvedSeriesName, resolvedSeriesBookOrder)
 						};
 					};
-					const mappedWithIds = (await measureSearchSpan("canonical Work matching", () => Promise.all(canonicalCandidates.map(resolveSearchResult))))
+					const mappedWithIds = measureSearchSpanSync("rendering preparation", () => canonicalInputs.map(resolveSearchResult))
 						.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.catalog", index, query }))
 						.filter((result): result is SearchResult => !!result);
 					markPerfStage("canonical_resolution_complete");

@@ -82,8 +82,27 @@ export type CanonicalCatalogResolution = CanonicalCatalogResolutionCandidate & {
 	representativeBookId: number;
 };
 
+export type CanonicalCatalogSearchLookupInput = CatalogBookLookupInput & {
+	cacheKey: string;
+};
+
+export type CanonicalCatalogSearchLookupResult = {
+	resolutions: Map<string, CanonicalCatalogResolution>;
+	metrics: {
+		dbQueryCount: number;
+		externalCandidateCount: number;
+		dogEaredCandidateCount: number;
+		candidateComparisons: number;
+		cacheHits: number;
+		cacheMisses: number;
+		truncatedCandidateSet: boolean;
+	};
+	spans: Array<{ name: string; durationMs: number }>;
+};
+
 type CatalogResolutionRow = {
 	book_id: number;
+	representative_book_id?: number | null;
 	work_id: number | null;
 	author_id: number | null;
 	title: string;
@@ -216,6 +235,14 @@ function rowToCandidate(row: CatalogResolutionRow): CanonicalCatalogResolutionCa
 		ratingCount: toPositiveNumber(row.rating_count),
 		averageRating: Number(row.average_rating || 0) || 0
 	};
+}
+
+function uniqueNonEmpty(values: unknown[]) {
+	return Array.from(new Set(values.map((value) => normalizeCatalogText(value)).filter(Boolean)));
+}
+
+function uniqueNonEmptyIsbns(values: unknown[]) {
+	return Array.from(new Set(values.map((value) => normalizeCatalogIsbn(value)).filter(Boolean)));
 }
 
 function hasSharedValue(values: string[], target: string) {
@@ -459,6 +486,304 @@ export async function resolveBestCatalogBookId(
 ) {
 	const resolution = await resolveCanonicalCatalogWork(sql, input);
 	return Number(resolution?.bookId || 0);
+}
+
+export async function resolveCanonicalCatalogWorksForSearch(
+	sql: ReturnType<typeof getNeonSql>,
+	inputs: CanonicalCatalogSearchLookupInput[],
+	options: { minConfidence?: number; maxDatabaseCandidates?: number; skipSchemaBackfill?: boolean } = {}
+): Promise<CanonicalCatalogSearchLookupResult> {
+	const spans: Array<{ name: string; durationMs: number }> = [];
+	const span = async <T>(name: string, work: () => Promise<T>) => {
+		const startedAt = performance.now();
+		try {
+			return await work();
+		} finally {
+			spans.push({ name, durationMs: Math.round((performance.now() - startedAt) * 10) / 10 });
+		}
+	};
+	const spanSync = <T>(name: string, work: () => T) => {
+		const startedAt = performance.now();
+		try {
+			return work();
+		} finally {
+			spans.push({ name, durationMs: Math.round((performance.now() - startedAt) * 10) / 10 });
+		}
+	};
+	const metrics = {
+		dbQueryCount: 0,
+		externalCandidateCount: inputs.length,
+		dogEaredCandidateCount: 0,
+		candidateComparisons: 0,
+		cacheHits: 0,
+		cacheMisses: 0,
+		truncatedCandidateSet: false
+	};
+	const uniqueInputs = spanSync("candidate preparation", () => {
+		const byKey = new Map<string, CanonicalCatalogSearchLookupInput>();
+		for (const input of inputs) {
+			const key = normalizeCatalogText(input.cacheKey);
+			if (!key) continue;
+			if (byKey.has(key)) {
+				metrics.cacheHits += 1;
+				continue;
+			}
+			metrics.cacheMisses += 1;
+			byKey.set(key, input);
+		}
+		return Array.from(byKey.values());
+	});
+	const identities = uniqueInputs.map((input) => ({ input, identity: inputIdentity(input) }));
+	const bookIds = new Set<number>();
+	const addBookIds = (rows: Array<{ book_id: number }>) => {
+		for (const row of rows) {
+			const bookId = toPositiveNumber(row.book_id);
+			if (bookId > 0) bookIds.add(bookId);
+		}
+	};
+	await ensureCanonicalWorkSchema(sql, { backfill: options.skipSchemaBackfill !== true });
+
+	const googleBooksIds = uniqueNonEmpty(identities.map(({ identity }) => identity.googleBooksId));
+	const sourceKeys = uniqueNonEmpty(identities.flatMap(({ identity }) => identity.sourceKeys));
+	if (googleBooksIds.length > 0 || sourceKeys.length > 0) {
+		addBookIds(await span("identifier matching", async () => {
+			metrics.dbQueryCount += 1;
+			return sql<Array<{ book_id: number }>>`
+				select b.id as book_id
+				from book b
+				where array_length(${googleBooksIds}::text[], 1) is not null
+					and b.google_books_id = any(${googleBooksIds}::text[])
+				union
+				select bs.book_id
+				from book_source bs
+				where array_length(${sourceKeys}::text[], 1) is not null
+					and (
+						(bs.source || ':' || bs.source_key) = any(${sourceKeys}::text[])
+						or (bs.source || ':' || bs.source_work_id) = any(${sourceKeys}::text[])
+						or (bs.source || ':' || bs.source_edition_id) = any(${sourceKeys}::text[])
+					)
+			`;
+		}));
+	}
+
+	const isbn13s = uniqueNonEmptyIsbns(identities.map(({ identity }) => identity.isbn13));
+	const isbn10s = uniqueNonEmptyIsbns(identities.map(({ identity }) => identity.isbn10));
+	if (isbn13s.length > 0 || isbn10s.length > 0) {
+		addBookIds(await span("ISBN matching", async () => {
+			metrics.dbQueryCount += 1;
+			return sql<Array<{ book_id: number }>>`
+				select b.id as book_id
+				from book b
+				where (array_length(${isbn13s}::text[], 1) is not null and b.isbn13 = any(${isbn13s}::text[]))
+					or (array_length(${isbn10s}::text[], 1) is not null and b.isbn10 = any(${isbn10s}::text[]))
+				union
+				select coalesce(be.book_id, rb.id) as book_id
+				from book_edition be
+				left join lateral (
+					select b.id
+					from book b
+					where b.work_id = be.work_id
+					order by b.id asc
+					limit 1
+				) rb on true
+				where (array_length(${isbn13s}::text[], 1) is not null and be.isbn13 = any(${isbn13s}::text[]))
+					or (array_length(${isbn10s}::text[], 1) is not null and be.isbn10 = any(${isbn10s}::text[]))
+			`;
+		}));
+	}
+
+	const editionKeys = uniqueNonEmpty(identities.map(({ identity }) => identity.editionKey));
+	const openLibraryWorkIds = uniqueNonEmpty(identities.flatMap(({ identity }) => identity.openLibraryWorkIds));
+	const openLibraryEditionIds = uniqueNonEmpty(identities.flatMap(({ identity }) => identity.openLibraryEditionIds));
+	if (editionKeys.length > 0 || openLibraryWorkIds.length > 0 || openLibraryEditionIds.length > 0 || googleBooksIds.length > 0) {
+		addBookIds(await span("edition lookup", async () => {
+			metrics.dbQueryCount += 1;
+			return sql<Array<{ book_id: number }>>`
+				select coalesce(be.book_id, rb.id) as book_id
+				from book_edition be
+				left join lateral (
+					select b.id
+					from book b
+					where b.work_id = be.work_id
+					order by b.id asc
+					limit 1
+				) rb on true
+				where (array_length(${editionKeys}::text[], 1) is not null and be.edition_key = any(${editionKeys}::text[]))
+					or (array_length(${googleBooksIds}::text[], 1) is not null and be.google_books_id = any(${googleBooksIds}::text[]))
+					or (array_length(${openLibraryWorkIds}::text[], 1) is not null and be.open_library_work_id = any(${openLibraryWorkIds}::text[]))
+					or (array_length(${openLibraryEditionIds}::text[], 1) is not null and be.open_library_edition_id = any(${openLibraryEditionIds}::text[]))
+			`;
+		}));
+	}
+
+	const workKeys = uniqueNonEmpty(identities.flatMap(({ identity }) => [identity.canonicalWorkKey, identity.titleAuthorKey]));
+	if (workKeys.length > 0) {
+		addBookIds(await span("normalized title matching", async () => {
+			metrics.dbQueryCount += 1;
+			return sql<Array<{ book_id: number }>>`
+				select b.id as book_id
+				from book b
+				left join book_work bw on bw.id = b.work_id
+				where b.canonical_work_key = any(${workKeys}::text[])
+					or bw.work_key = any(${workKeys}::text[])
+			`;
+		}));
+	}
+
+	const seriesKeys = uniqueNonEmpty(identities.map(({ input, identity }) => {
+		const rawSeries = normalizeCatalogText(input.seriesName).toLowerCase();
+		const rawAuthor = normalizeCatalogText(input.author).toLowerCase();
+		if (!rawSeries || !rawAuthor || identity.seriesBookOrder <= 0) return "";
+		return `${rawSeries}|${identity.seriesBookOrder}|${rawAuthor}`;
+	}));
+	if (seriesKeys.length > 0) {
+		addBookIds(await span("series matching", async () => {
+			metrics.dbQueryCount += 1;
+			return sql<Array<{ book_id: number }>>`
+				select b.id as book_id
+				from book b
+				left join book_work bw on bw.id = b.work_id
+				left join series_book sb on sb.book_id = b.id
+				left join series s on s.id = coalesce(sb.series_id, bw.series_id)
+				where (
+					lower(coalesce(s.name, ''))
+					|| '|'
+					|| trim((coalesce(sb.book_order, bw.series_position, 0))::text)
+					|| '|'
+					|| lower(coalesce(nullif(trim(b.primary_author), ''), nullif(trim(bw.primary_author), ''), ''))
+				) = any(${seriesKeys}::text[])
+			`;
+		}));
+	}
+
+	const maxDatabaseCandidates = Math.max(20, Math.min(400, Math.floor(Number(options.maxDatabaseCandidates || 160))));
+	const candidateIds = Array.from(bookIds).slice(0, maxDatabaseCandidates);
+	metrics.truncatedCandidateSet = bookIds.size > candidateIds.length;
+	const candidates = candidateIds.length > 0 ? await span("existing Work lookup", async () => {
+		metrics.dbQueryCount += 1;
+		return sql<CatalogResolutionRow[]>`
+			select
+				b.id as book_id,
+				coalesce(rep.representative_book_id, b.id) as representative_book_id,
+				b.work_id,
+				b.author_id,
+				coalesce(nullif(trim(b.title), ''), 'Untitled') as title,
+				coalesce(nullif(trim(b.primary_author), ''), '') as primary_author,
+				coalesce(nullif(trim(b.synopsis), ''), '') as description,
+				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
+				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
+				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
+				b.published_year,
+				coalesce(nullif(b.page_count, 0), 0)::int as page_count,
+				coalesce(nullif(trim(s.name), ''), '') as series_name,
+				coalesce(sb.book_order, bw.series_position, 0)::numeric as series_book_order,
+				coalesce(nullif(trim(bw.work_key), ''), '') as work_key,
+				coalesce(nullif(trim(b.canonical_work_key), ''), '') as canonical_work_key,
+				coalesce(ed.edition_keys, '{}'::text[]) as edition_keys,
+				coalesce(src.source_keys, '{}'::text[]) as source_keys,
+				coalesce(ed.open_library_work_ids, '{}'::text[]) as open_library_work_ids,
+				coalesce(ed.open_library_edition_ids, '{}'::text[]) as open_library_edition_ids,
+				coalesce(ed.google_books_ids, '{}'::text[]) as edition_google_books_ids,
+				coalesce(ed.isbn10s, '{}'::text[]) as edition_isbn10s,
+				coalesce(ed.isbn13s, '{}'::text[]) as edition_isbn13s,
+				coalesce(sc.shelf_count, 0)::int as shelf_count,
+				coalesce(sc.rating_count, 0)::int as rating_count,
+				sc.average_rating as average_rating
+			from book b
+			left join book_work bw on bw.id = b.work_id
+			left join series_book sb on sb.book_id = b.id
+			left join series s on s.id = coalesce(sb.series_id, bw.series_id)
+			left join lateral (
+				select
+					array_agg(distinct be.edition_key) filter (where trim(coalesce(be.edition_key, '')) <> '') as edition_keys,
+					array_agg(distinct be.open_library_work_id) filter (where trim(coalesce(be.open_library_work_id, '')) <> '') as open_library_work_ids,
+					array_agg(distinct be.open_library_edition_id) filter (where trim(coalesce(be.open_library_edition_id, '')) <> '') as open_library_edition_ids,
+					array_agg(distinct be.google_books_id) filter (where trim(coalesce(be.google_books_id, '')) <> '') as google_books_ids,
+					array_agg(distinct be.isbn10) filter (where trim(coalesce(be.isbn10, '')) <> '') as isbn10s,
+					array_agg(distinct be.isbn13) filter (where trim(coalesce(be.isbn13, '')) <> '') as isbn13s
+				from book_edition be
+				where be.book_id = b.id
+					or (b.work_id is not null and be.work_id = b.work_id)
+			) ed on true
+			left join lateral (
+				select array_agg(distinct bs.source || ':' || bs.source_key) filter (where trim(coalesce(bs.source_key, '')) <> '') as source_keys
+				from book_source bs
+				where bs.book_id = b.id
+			) src on true
+			left join lateral (
+				select
+					count(*)::int as shelf_count,
+					count(*) filter (where rating is not null)::int as rating_count,
+					avg(rating) filter (where rating is not null) as average_rating
+				from user_book ub
+				where ub.book_id = b.id
+			) sc on true
+			left join lateral (
+				select rb.id as representative_book_id
+				from book rb
+				left join lateral (
+					select
+						count(*)::int as shelf_count,
+						count(*) filter (where rating is not null)::int as rating_count
+					from user_book ub
+					where ub.book_id = rb.id
+				) rsc on true
+				where b.work_id is not null and rb.work_id = b.work_id
+				order by
+					coalesce(rsc.shelf_count, 0) desc,
+					coalesce(rsc.rating_count, 0) desc,
+					(nullif(trim(coalesce(rb.cover_url, '')), '') is not null) desc,
+					(nullif(trim(coalesce(rb.synopsis, '')), '') is not null) desc,
+					rb.id asc
+				limit 1
+			) rep on true
+			where b.id = any(${candidateIds}::bigint[])
+			limit ${maxDatabaseCandidates}
+		`;
+	}) : [];
+	const catalogCandidates = candidates.map((row) => {
+		const candidate = rowToCandidate(row);
+		const representativeBookId = toPositiveNumber(row.representative_book_id) || candidate.bookId;
+		return {
+			...candidate,
+			representativeBookId,
+			bookId: representativeBookId || candidate.bookId
+		};
+	});
+	metrics.dogEaredCandidateCount = catalogCandidates.length;
+
+	const resolutions = spanSync("candidate scoring", () => {
+		const out = new Map<string, CanonicalCatalogResolution>();
+		for (const { input } of identities) {
+			const scored = catalogCandidates
+				.map((candidate) => {
+					metrics.candidateComparisons += 1;
+					const score = scoreCanonicalCatalogCandidate(input, candidate);
+					return { candidate, ...score };
+				})
+				.filter((candidate) => candidate.score >= (options.minConfidence ?? 85))
+				.sort((a, b) => (
+					b.score - a.score
+					|| b.candidate.shelfCount - a.candidate.shelfCount
+					|| b.candidate.ratingCount - a.candidate.ratingCount
+					|| a.candidate.bookId - b.candidate.bookId
+				));
+			const best = scored[0];
+			if (!best) continue;
+			out.set(input.cacheKey, {
+				...best.candidate,
+				confidenceScore: best.score,
+				reasons: best.reasons,
+				representativeBookId: best.candidate.representativeBookId || best.candidate.bookId
+			});
+		}
+		return out;
+	});
+
+	spanSync("dedupe", () => resolutions.size);
+
+	return { resolutions, metrics, spans };
 }
 
 export async function upsertBookSources(

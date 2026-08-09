@@ -90,13 +90,49 @@ test("search results preserve external source identifiers for canonical resoluti
 test("search API resolves external results through canonical catalog engine", () => {
 	const source = readFileSync(new URL("../src/pages/api/books/search.ts", import.meta.url), "utf8");
 
-	assert.match(source, /resolveCanonicalCatalogWork/);
+	assert.match(source, /resolveCanonicalCatalogWorksForSearch/);
 	assert.match(source, /skipSchemaBackfill: true/);
 	assert.match(source, /CANONICAL_MATCH_TIMEOUT_MS/);
 	assert.match(source, /canonicalTimeoutCount/);
+	assert.match(source, /canonicalDbQueryCount/);
+	assert.match(source, /canonicalDogEaredCandidateCount/);
+	assert.match(source, /canonicalComparisonCount/);
 	assert.match(source, /catalogSourcesForResult/);
 	assert.match(source, /const sourceWorkId = openLibraryId/);
 	assert.match(source, /`catalog:\$\{catalogBookId\}`/);
+});
+
+test("search canonical matching is batched and bounded by stable signals", () => {
+	const catalog = readFileSync(new URL("../src/lib/catalog.ts", import.meta.url), "utf8");
+	const batchStart = catalog.indexOf("export async function resolveCanonicalCatalogWorksForSearch");
+	const batchSource = catalog.slice(batchStart);
+
+	assert.ok(batchStart > -1);
+	for (const span of [
+		"candidate preparation",
+		"identifier matching",
+		"ISBN matching",
+		"edition lookup",
+		"normalized title matching",
+		"series matching",
+		"existing Work lookup",
+		"candidate scoring",
+		"dedupe"
+	]) {
+		assert.match(batchSource, new RegExp(span));
+	}
+	assert.match(batchSource, /maxDatabaseCandidates/);
+	assert.match(batchSource, /candidateComparisons/);
+	assert.match(batchSource, /cacheHits/);
+	assert.match(batchSource, /cacheMisses/);
+	assert.match(batchSource, /truncatedCandidateSet/);
+	assert.match(batchSource, /b\.google_books_id = any/);
+	assert.match(batchSource, /be\.isbn13 = any/);
+	assert.match(batchSource, /be\.edition_key = any/);
+	assert.match(batchSource, /b\.canonical_work_key = any/);
+	assert.match(batchSource, /bw\.work_key = any/);
+	assert.doesNotMatch(batchSource, /lower\(coalesce\(b\.title, ''\)\) like/);
+	assert.doesNotMatch(batchSource, /limit 80/);
 });
 
 test("search page validates API results before rendering BookCard props", () => {
