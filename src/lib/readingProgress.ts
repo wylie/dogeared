@@ -9,8 +9,15 @@ export type NormalizedProgressUpdate = {
 };
 
 export function normalizeProgressInputMode(value: unknown): ProgressInputMode {
-	const raw = String(value || "").trim();
-	if (raw === "percent" || raw === "chapter" || raw === "location" || raw === "audio") return raw;
+	const raw = String(value || "")
+		.trim()
+		.toLowerCase()
+		.replace(/[\s_-]+/g, " ");
+	if (raw === "percent" || raw === "percentage" || raw === "pct" || raw === "%") return "percent";
+	if (raw === "chapter" || raw === "chapters") return "chapter";
+	if (raw === "location" || raw === "kindle location" || raw === "kindle locations") return "location";
+	if (raw === "audio" || raw === "audiobook" || raw === "audiobook time" || raw === "time") return "audio";
+	if (raw === "page" || raw === "pages" || raw === "page number" || raw === "page numbers") return "page";
 	return "page";
 }
 
@@ -25,6 +32,16 @@ function clampCurrentPage(value: number, totalPages: number) {
 	return Math.max(0, Math.min(maxPages, Math.round(value)));
 }
 
+function finiteNumberFromText(value: string) {
+	if (!/^\d+(?:\.\d+)?$/.test(value)) return null;
+	const parsed = Number(value);
+	return Number.isFinite(parsed) ? parsed : null;
+}
+
+function numericTokenFromText(value: string) {
+	return value.match(/\d+(?:\.\d+)?/)?.[0] || "";
+}
+
 export function normalizeProgressUpdateInput(input: {
 	rawValue: unknown;
 	totalPages?: unknown;
@@ -37,8 +54,9 @@ export function normalizeProgressUpdateInput(input: {
 	const mode = normalizeProgressInputMode(input.progressType);
 
 	if (mode === "percent" || raw.endsWith("%")) {
-		const percentValue = Number(raw.replace("%", "").trim());
-		if (!Number.isFinite(percentValue) || totalPages <= 0) {
+		const percentText = raw.replace("%", "").trim();
+		const percentValue = finiteNumberFromText(percentText);
+		if (percentValue === null || percentValue < 0 || percentValue > 100 || totalPages <= 0) {
 			return {
 				valid: false,
 				currentPage: 0,
@@ -57,7 +75,19 @@ export function normalizeProgressUpdateInput(input: {
 		};
 	}
 
-	const numericText = raw.replace(/[^0-9.]/g, "");
+	if (/-\s*\d/.test(raw)) {
+		return {
+			valid: false,
+			currentPage: 0,
+			mode,
+			normalizedText: raw,
+			percent: 0
+		};
+	}
+
+	const numericText = mode === "page"
+		? raw.trim()
+		: (mode === "audio" ? raw.replace(/[^0-9.]/g, "") : numericTokenFromText(raw));
 	if (!numericText) {
 		return {
 			valid: false,
@@ -68,8 +98,8 @@ export function normalizeProgressUpdateInput(input: {
 		};
 	}
 
-	const numericValue = Number(numericText);
-	if (!Number.isFinite(numericValue)) {
+	const numericValue = finiteNumberFromText(numericText);
+	if (numericValue === null) {
 		return {
 			valid: false,
 			currentPage: 0,

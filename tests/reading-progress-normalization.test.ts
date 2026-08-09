@@ -27,6 +27,32 @@ test("percentage progress updates normalize into canonical current page", () => 
 	assert.equal(result.normalizedText, "31%");
 });
 
+test("percentage progress accepts valid low and boundary values", () => {
+	for (const value of ["0", "1", "2", "25", "50", "99", "100"]) {
+		const result = normalizeProgressUpdateInput({
+			rawValue: value,
+			totalPages: 400,
+			progressType: "Percentage"
+		});
+		assert.equal(result.valid, true, `${value}% should be valid`);
+		assert.equal(result.mode, "percent");
+		assert.equal(result.percent, Number(value));
+		assert.equal(result.normalizedText, `${Number(value)}%`);
+	}
+});
+
+test("percentage progress rejects out-of-range and nonnumeric values", () => {
+	for (const value of ["-1", "101", "not a number", "Infinity"]) {
+		const result = normalizeProgressUpdateInput({
+			rawValue: value,
+			totalPages: 400,
+			progressType: "percent"
+		});
+		assert.equal(result.valid, false, `${value} should be invalid`);
+		assert.equal(result.mode, "percent");
+	}
+});
+
 test("percentage updates require total pages to avoid saving zero progress", () => {
 	const result = normalizeProgressUpdateInput({
 		rawValue: "31",
@@ -53,6 +79,29 @@ test("chapter, location, and audio inputs still normalize through the same canon
 		totalPages: 400,
 		progressType: "audio"
 	}).currentPage, 120);
+	assert.equal(normalizeProgressUpdateInput({
+		rawValue: "Chapter -4",
+		totalPages: 400,
+		progressType: "chapter"
+	}).valid, false);
+});
+
+test("page progress rejects negative and nonnumeric values", () => {
+	assert.equal(normalizeProgressUpdateInput({
+		rawValue: "154",
+		totalPages: 400,
+		progressType: "Page Number"
+	}).valid, true);
+	assert.equal(normalizeProgressUpdateInput({
+		rawValue: "-1",
+		totalPages: 400,
+		progressType: "page"
+	}).valid, false);
+	assert.equal(normalizeProgressUpdateInput({
+		rawValue: "page ten",
+		totalPages: 400,
+		progressType: "page"
+	}).valid, false);
 });
 
 test("profile progress save never exposes internal invalid labels", () => {
@@ -78,6 +127,11 @@ test("progress input mode normalization uses the supported persisted enum", () =
 	for (const mode of ["page", "percent", "chapter", "location", "audio"] as const) {
 		assert.equal(normalizeProgressInputMode(mode), mode);
 	}
+	assert.equal(normalizeProgressInputMode("Percentage"), "percent");
+	assert.equal(normalizeProgressInputMode("percentage"), "percent");
+	assert.equal(normalizeProgressInputMode("Page Number"), "page");
+	assert.equal(normalizeProgressInputMode("Kindle Location"), "location");
+	assert.equal(normalizeProgressInputMode("Audiobook Time"), "audio");
 	assert.equal(normalizeProgressInputMode("pages"), "page");
 	assert.equal(normalizeProgressInputMode(""), "page");
 });
