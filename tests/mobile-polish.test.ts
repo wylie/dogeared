@@ -77,10 +77,19 @@ test("search loading indicator stays inside the search input without layout shif
 	assert.match(source, /input\[type="search"\]\s*{[^}]*padding: 0\.58rem calc\(var\(--search-clear-control-space\) \+ var\(--search-spinner-control-space\) \+ 0\.75rem\) 0\.58rem 0\.95rem;/s);
 	assert.match(source, /#left-hand-nav input\[type="search"\]\s*{[^}]*padding: 0\.4rem calc\(var\(--search-clear-control-space\) \+ var\(--search-spinner-control-space\) \+ 0\.55rem\) 0\.4rem 0\.8rem;/s);
 	assert.match(source, /<span class="search-submit-label visually-hidden">Searching books\.<\/span>/);
+	assert.match(source, /<button type="button" class="search-clear" data-search-clear aria-label="Clear search"/);
+	assert.match(source, /\.search-clear\s*{[^}]*position: absolute;/s);
+	assert.match(source, /\.search-clear\s*{[^}]*right: 0\.34rem;/s);
+	assert.match(source, /\.search-clear\s*{[^}]*top: 50%;/s);
+	assert.match(source, /\.search-clear\s*{[^}]*transform: translateY\(-50%\);/s);
+	assert.match(source, /\.search-clear:focus-visible\s*{[^}]*outline: 3px solid/s);
+	assert.match(source, /input\.dispatchEvent\(new Event\("input", \{ bubbles: true \}\)\);/);
 	assert.equal(source.includes("Searching..."), false);
 	assert.match(source, /leftHandSearchStatus\.hidden = false;/);
 	assert.equal(searchPage.includes("search-pending-state"), false);
 	assert.equal(searchPage.includes("search-results-skeleton"), false);
+	assert.match(searchPage, /data-search-live-status/);
+	assert.match(searchPage, /No results for \$\{queryText\}\./);
 });
 
 test("Home and Discover use tighter mobile section rhythm", () => {

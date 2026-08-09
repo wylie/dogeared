@@ -183,8 +183,15 @@ markPagePerfStage("custom_shelves_loaded");
 
 const completedResultCount = results.length + collectionResults.length;
 const completionStatus = query && !errorMessage
-	? `${completedResultCount.toLocaleString()} result${completedResultCount === 1 ? "" : "s"} found for ${query}.`
+	? completedResultCount > 0
+		? `${completedResultCount.toLocaleString()} result${completedResultCount === 1 ? "" : "s"} found for ${query}. Checking Google Books and Open Library for more matches.`
+		: "Searching books."
 	: "";
+const initialSearchState = !query
+	? "idle"
+	: errorMessage
+		? "error"
+		: "loading";
 
 recordPerformanceEventSafe({
 	operationName: "page.search",
@@ -214,12 +221,13 @@ recordPerformanceEventSafe({
 			id="search-page"
 			data-guided-anchor="search-page"
 			data-query={query}
+			data-search-state={initialSearchState}
 			data-authenticated={String(isAuthenticated)}
 			data-custom-shelves={customShelfOptionsJson}
 		>
 		<h1>Search</h1>
 		{!query && <p>Search for a favorite title, then add it to Want to Read, Currently Reading, or Read to build recommendations.</p>}
-		<p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">{completionStatus}</p>
+		<p class="visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-search-live-status>{completionStatus}</p>
 		{query && errorMessage && (
 			<div class="search-state search-state-error" role="status">
 				<p>{errorMessage}</p>
@@ -338,6 +346,17 @@ recordPerformanceEventSafe({
 					);
 				})()
 			))}
+			{query && !errorMessage && results.length === 0 && collectionResults.length === 0 && Array.from({ length: 4 }).map((_, index) => (
+				<li class="search-result-skeleton" data-search-skeleton={String(index)} aria-hidden="true">
+					<span class="search-skeleton-cover"></span>
+					<span class="search-skeleton-copy">
+						<span class="search-skeleton-line title"></span>
+						<span class="search-skeleton-line author"></span>
+						<span class="search-skeleton-line meta"></span>
+						<span class="search-skeleton-line description"></span>
+					</span>
+				</li>
+			))}
 		</ul>
 		{query && !errorMessage && results.length > 0 && (
 			<div id="search-sentinel-wrap">
@@ -380,6 +399,9 @@ recordPerformanceEventSafe({
 		border-radius: var(--radius-lg);
 		background: rgba(255, 255, 255, 0.58);
 		padding: 0.85rem;
+	}
+	.search-state[hidden] {
+		display: none;
 	}
 	.search-state p {
 		margin: 0;
@@ -1115,6 +1137,7 @@ recordPerformanceEventSafe({
 
 	const searchResultsRoot = document.getElementById("search-results");
 	const progressiveStatus = document.querySelector("[data-search-progressive-status]");
+	const searchLiveStatus = document.querySelector("[data-search-live-status]");
 	const emptySearchState = document.querySelector("[data-empty-search-state]");
 	let externalSearchController = null;
 	let externalSearchRequestId = 0;
@@ -1324,6 +1347,26 @@ recordPerformanceEventSafe({
 		progressiveStatus.hidden = hidden;
 	}
 
+	function setSearchLiveStatus(message) {
+		if (!(searchLiveStatus instanceof HTMLElement)) return;
+		searchLiveStatus.textContent = message;
+	}
+
+	function setSearchLifecycleState(state) {
+		if (!(searchPage instanceof HTMLElement)) return;
+		searchPage.dataset.searchState = state;
+	}
+
+	function setCompletedEmptyState(visible, queryText) {
+		if (emptySearchState instanceof HTMLElement) {
+			emptySearchState.hidden = !visible;
+		}
+		if (visible) {
+			setSearchLifecycleState("empty");
+			setSearchLiveStatus(`No results for ${queryText}.`);
+		}
+	}
+
 	function renderExternalSearchSkeletons() {
 		return Array.from({ length: 4 }, (_, index) => `
 			<li class="search-result-skeleton" data-search-skeleton="${index}" aria-hidden="true">
@@ -1352,7 +1395,15 @@ recordPerformanceEventSafe({
 	async function loadProgressiveExternalResults() {
 		const queryText = String(searchPage?.dataset.query || "").trim();
 		if (!queryText || !(searchResultsRoot instanceof HTMLElement)) return;
+		setSearchLifecycleState("loading");
+		setCompletedEmptyState(false, queryText);
+		setSearchLiveStatus("Searching books.");
 		if (hasExactLocalTitle(queryText)) {
+			const totalCards = searchResultsRoot.querySelectorAll("[data-search-result-key]").length;
+			setSearchLifecycleState(totalCards > 0 ? "results" : "empty");
+			setSearchLiveStatus(totalCards > 0
+				? `${totalCards.toLocaleString()} result${totalCards === 1 ? "" : "s"} found for ${queryText}.`
+				: `No results for ${queryText}.`);
 			setProgressiveStatus("Showing DogEared catalog matches.", true);
 			return;
 		}
@@ -1388,6 +1439,9 @@ recordPerformanceEventSafe({
 				const appended = appendExternalResults(payload?.results || []);
 				appendedTotal += appended;
 				if (appended > 0) {
+					setSearchLifecycleState("loading");
+					setCompletedEmptyState(false, queryText);
+					setSearchLiveStatus(`Added ${appended.toLocaleString()} more match${appended === 1 ? "" : "es"} from ${provider.label}.`);
 					setProgressiveStatus(`Added ${appended.toLocaleString()} more match${appended === 1 ? "" : "es"} from ${provider.label}.`, false);
 				}
 			} catch (error) {
@@ -1399,14 +1453,22 @@ recordPerformanceEventSafe({
 		hideExternalSearchSkeletons();
 		if (requestId !== externalSearchRequestId) return;
 		const totalCards = searchResultsRoot.querySelectorAll("[data-search-result-key]").length;
-		if (emptySearchState instanceof HTMLElement) {
-			emptySearchState.hidden = totalCards > 0;
-		}
 		if (appendedTotal > 0) {
+			setSearchLifecycleState("results");
+			setCompletedEmptyState(false, queryText);
+			setSearchLiveStatus(`${totalCards.toLocaleString()} result${totalCards === 1 ? "" : "s"} found for ${queryText}.`);
 			setProgressiveStatus(`Added ${appendedTotal.toLocaleString()} more match${appendedTotal === 1 ? "" : "es"}.`, false);
 		} else if (providerFailures > 0 && totalCards === 0) {
+			setSearchLifecycleState("error");
+			setCompletedEmptyState(false, queryText);
+			setSearchLiveStatus("Search results are temporarily unavailable.");
 			setProgressiveStatus("More matches are temporarily unavailable.", false);
 		} else {
+			setCompletedEmptyState(totalCards === 0, queryText);
+			if (totalCards > 0) {
+				setSearchLifecycleState("results");
+				setSearchLiveStatus(`${totalCards.toLocaleString()} result${totalCards === 1 ? "" : "s"} found for ${queryText}.`);
+			}
 			setProgressiveStatus("", true);
 		}
 	}
@@ -1451,14 +1513,16 @@ recordPerformanceEventSafe({
 		externalSearchController?.abort();
 		externalSearchRequestId += 1;
 		hideExternalSearchSkeletons();
+		setCompletedEmptyState(false, String(searchPage?.dataset.query || "").trim());
 	});
 
 	document.getElementById("left-hand-search")?.addEventListener("input", (event) => {
 		const nextQuery = event.target instanceof HTMLInputElement ? event.target.value.trim() : "";
-		if (nextQuery && nextQuery !== String(searchPage?.dataset.query || "").trim()) {
+		if (nextQuery !== String(searchPage?.dataset.query || "").trim()) {
 			externalSearchController?.abort();
 			externalSearchRequestId += 1;
 			hideExternalSearchSkeletons();
+			setCompletedEmptyState(false, String(searchPage?.dataset.query || "").trim());
 		}
 	});
 

@@ -36,10 +36,15 @@ test("search page empty states are actionable", () => {
 	assert.equal(source.includes("Search again"), true);
 	assert.equal(source.includes("Unable to search right now. Please try again in a moment."), true);
 	assert.equal(source.includes("search-pending-state"), false);
+	assert.equal(source.includes('data-search-state={initialSearchState}'), true);
+	assert.match(source, /\.search-state\[hidden\]\s*{\s*display: none;\s*}/s);
+	assert.match(source, /setCompletedEmptyState\(totalCards === 0, queryText\)/);
+	assert.match(source, /setSearchLifecycleState\("loading"\)/);
 	assert.equal(source.includes("completedResultCount"), true);
 	assert.equal(leftHandSource.includes("data-search-form"), true);
 	assert.equal(leftHandSource.includes("search-input-wrap"), true);
 	assert.equal(leftHandSource.includes("search-submit-spinner"), true);
+	assert.equal(leftHandSource.includes('aria-label="Clear search"'), true);
 	assert.equal(leftHandSource.includes("Searching books."), true);
 	assert.equal(leftHandSource.includes("Searching..."), false);
 	assert.equal(leftHandSource.includes("aria-busy"), true);

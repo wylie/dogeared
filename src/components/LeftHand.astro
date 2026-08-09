@@ -120,6 +120,9 @@ const adminNavItems: NavItem[] = [
           <span class="search-submit-spinner" aria-hidden="true"></span>
           <span class="search-submit-label visually-hidden">Searching books.</span>
         </span>
+        <button type="button" class="search-clear" data-search-clear aria-label="Clear search" title="Clear search" hidden={!query.trim()}>
+          <span aria-hidden="true">×</span>
+        </button>
       </div>
     </form>
     <nav id="left-hand-primary-links" class="primary-links" aria-label="Primary navigation">
@@ -436,6 +439,10 @@ const adminNavItems: NavItem[] = [
     background: rgba(255, 255, 255, 0.72);
     color: var(--color-text);
   }
+  input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+  }
   input[type="search"]::placeholder {
     color: var(--color-text-subtle);
   }
@@ -484,6 +491,37 @@ const adminNavItems: NavItem[] = [
   }
   .search-submit-label {
     color: inherit;
+  }
+  .search-clear {
+    position: absolute;
+    top: 50%;
+    right: 0.34rem;
+    transform: translateY(-50%);
+    width: 1.75rem;
+    height: 1.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-text-muted);
+    font: inherit;
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2;
+  }
+  .search-clear:hover {
+    background: rgba(87, 117, 144, 0.12);
+    color: var(--color-text);
+  }
+  .search-clear:focus-visible {
+    outline: 3px solid rgba(31, 122, 69, 0.34);
+    outline-offset: 2px;
+  }
+  .search-clear[hidden] {
+    display: none;
   }
   .visually-hidden {
     position: absolute;
@@ -856,6 +894,7 @@ const adminNavItems: NavItem[] = [
   const leftHandSearchForm = leftHandNav?.querySelector("[data-search-form]");
   const leftHandSearchInput = document.getElementById("left-hand-search");
   const leftHandSearchStatus = leftHandNav?.querySelector("[data-search-submit-status]");
+  const leftHandSearchClear = leftHandNav?.querySelector("[data-search-clear]");
   const NAV_SCROLL_KEY_PRIMARY = "dogeared:left-nav:primary-scroll-left";
   const NAV_SCROLL_KEY_SECONDARY = "dogeared:left-nav:secondary-scroll-left";
 
@@ -1069,6 +1108,35 @@ const adminNavItems: NavItem[] = [
       leftHandSearchStatus.hidden = false;
     }
   });
+
+  function syncSearchClearButton() {
+    if (!(leftHandSearchClear instanceof HTMLButtonElement)) return;
+    const input = leftHandSearchInput instanceof HTMLInputElement ? leftHandSearchInput : null;
+    leftHandSearchClear.hidden = !String(input?.value || "").trim();
+  }
+
+  leftHandSearchInput?.addEventListener("input", () => {
+    syncSearchClearButton();
+  });
+
+  leftHandSearchClear?.addEventListener("click", (event) => {
+    event.preventDefault();
+    const input = leftHandSearchInput instanceof HTMLInputElement ? leftHandSearchInput : null;
+    if (!input) return;
+    input.value = "";
+    syncSearchClearButton();
+    if (leftHandSearchForm instanceof HTMLFormElement) {
+      leftHandSearchForm.dataset.searching = "false";
+      leftHandSearchForm.removeAttribute("aria-busy");
+    }
+    if (leftHandSearchStatus instanceof HTMLElement) {
+      leftHandSearchStatus.hidden = true;
+    }
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.focus();
+  });
+
+  syncSearchClearButton();
 
   leftHandMenuToggle?.addEventListener("click", () => {
     if (!(leftHandNav instanceof HTMLElement)) return;
