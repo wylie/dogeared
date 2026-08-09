@@ -448,10 +448,12 @@ export const GET: APIRoute = async ({ request, url }) => {
 	const markPerfStage = (stage: string) => {
 		perfStages[stage] = Math.round((performance.now() - perfStartedAt) * 10) / 10;
 	};
-	const recordSearchSpan = (name: string, durationMs: number) => {
+	const recordSearchSpan = (name: string, durationMs: number, startMs?: number, parentName?: string) => {
 		perfSpanDurations.push({
 			name,
-			durationMs: Math.round(Math.max(0, durationMs) * 10) / 10
+			durationMs: Math.round(Math.max(0, durationMs) * 10) / 10,
+			...(Number.isFinite(startMs) && Number(startMs) >= 0 ? { startMs: Math.round(Number(startMs) * 10) / 10 } : {}),
+			...(parentName ? { parentName } : {})
 		});
 	};
 	const measureSearchSpan = async <T>(name: string, work: () => Promise<T>) => {
@@ -459,7 +461,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 		try {
 			return await work();
 		} finally {
-			recordSearchSpan(name, performance.now() - startedAt);
+			recordSearchSpan(name, performance.now() - startedAt, startedAt - perfStartedAt);
 		}
 	};
 	const measureSearchSpanSync = <T>(name: string, work: () => T) => {
@@ -467,7 +469,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 		try {
 			return work();
 		} finally {
-			recordSearchSpan(name, performance.now() - startedAt);
+			recordSearchSpan(name, performance.now() - startedAt, startedAt - perfStartedAt);
 		}
 	};
 	const logPerf = (outcome: string, extra: Record<string, unknown> = {}) => {
@@ -797,7 +799,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 							throw error;
 						})
 				]);
-				recordSearchSpan("local catalog search", performance.now() - localStartedAt);
+				recordSearchSpan("local catalog search", performance.now() - localStartedAt, localStartedAt - perfStartedAt);
 				markPerfStage("local_catalog_loaded");
 				const results = measureSearchSpanSync("rendering preparation", () => normalizeAndDedupe(mapCatalogRows(dbdRows), "api.books.search.local"));
 				return {
@@ -943,7 +945,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 						.filter((result): result is SearchResult => !!result)
 						.filter((result) => isLikelyMatch(result, query))
 						.filter((result) => passesQualityGate(result));
-					recordSearchSpan("metadata enrichment", performance.now() - metadataStartedAt);
+					recordSearchSpan("metadata enrichment", performance.now() - metadataStartedAt, metadataStartedAt - perfStartedAt);
 					if (isRequestAborted(requestSignal)) return { results: [] as SearchResult[], hasMore: false };
 					const canonicalCandidates = measureSearchSpanSync("dedupe", () => dedupeVariants(mapped, query)
 						.slice(0, Math.max(pageSize, MAX_CANONICAL_MATCH_CANDIDATES))
@@ -1010,7 +1012,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 							throw error;
 						}
 					} finally {
-						recordSearchSpan("canonical Work matching", performance.now() - canonicalMatchingStartedAt);
+						recordSearchSpan("canonical Work matching", performance.now() - canonicalMatchingStartedAt, canonicalMatchingStartedAt - perfStartedAt);
 					}
 					if (canonicalResolutions) {
 						canonicalDbQueryCount = canonicalResolutions.metrics.dbQueryCount;
@@ -1021,7 +1023,10 @@ export const GET: APIRoute = async ({ request, url }) => {
 						canonicalCandidateSetTruncated = canonicalResolutions.metrics.truncatedCandidateSet;
 						canonicalResolvedCount = canonicalResolutions.resolutions.size;
 						for (const span of canonicalResolutions.spans) {
-							recordSearchSpan(`canonical ${span.name}`, span.durationMs);
+							const childStart = Number.isFinite(span.startMs)
+								? (canonicalMatchingStartedAt - perfStartedAt) + Number(span.startMs)
+								: undefined;
+							recordSearchSpan(`canonical ${span.name}`, span.durationMs, childStart, "canonical Work matching");
 						}
 					}
 					const resolveSearchResult = ({ item, cacheKey, lookup }: { item: SearchResult; cacheKey: string; lookup: CatalogBookLookupInput }) => {

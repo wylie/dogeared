@@ -54,6 +54,8 @@ const summaryMetrics = [
 	{ label: "Error rate", value: safePercent(analytics.summary.errorRate) },
 	{ label: "Slow operations", value: formatNumber(analytics.summary.slowCount) }
 ];
+const breakdownHighlights = safeArray(analytics.breakdowns).slice(0, 10);
+const maxBreakdownP95 = Math.max(1, ...breakdownHighlights.map((row) => Number(row.p95 || 0)));
 ---
 
 <Layout title="Admin Performance" sectionLinks={sectionLinks} robots="noindex,nofollow">
@@ -173,26 +175,47 @@ const summaryMetrics = [
 				<p>Timing spans identify the work contributing most to each operation’s latency.</p>
 			</div>
 			{safeArray(analytics.breakdowns).length > 0 ? (
-				<div class="data-table breakdown-table" role="table">
-					<div class="data-row data-row-head" role="row">
-						<span role="columnheader">Workflow</span>
-						<span role="columnheader">Span</span>
-						<span role="columnheader">Samples</span>
-						<span role="columnheader">Avg</span>
-						<span role="columnheader">p95</span>
-						<span role="columnheader">Share</span>
+				<>
+					<div class="breakdown-bars" aria-label="Aggregate p95 span contribution by workflow">
+						{breakdownHighlights.map((row) => {
+							const width = Math.max(2, Math.min(100, (Number(row.p95 || 0) / maxBreakdownP95) * 100));
+							return (
+								<article class="breakdown-bar-row">
+									<div>
+										<strong>{row.workflowLabel}</strong>
+										<span>{row.spanName}</span>
+									</div>
+									<div class="bar-track" aria-label={`${row.workflowLabel} ${row.spanName} p95 ${formatPerformanceMs(row.p95)}, ${safePercent(row.shareOfTotalP95)} of operation p95`}>
+										<span class="bar-fill" style={`width: ${width}%`}></span>
+									</div>
+									<em>{formatPerformanceMs(row.p95)} p95</em>
+								</article>
+							);
+						})}
 					</div>
-					{safeArray(analytics.breakdowns).map((row) => (
-						<div class="data-row" role="row">
-							<span role="cell">{row.workflowLabel}</span>
-							<span role="cell">{row.spanName}</span>
-							<span role="cell">{formatNumber(row.count)}</span>
-							<span role="cell">{formatPerformanceMs(row.avg)}</span>
-							<span role="cell">{formatPerformanceMs(row.p95)}</span>
-							<span role="cell">{safePercent(row.shareOfTotalP95)}</span>
+					<div class="data-table breakdown-table" role="table">
+						<div class="data-row data-row-head" role="row">
+							<span role="columnheader">Workflow</span>
+							<span role="columnheader">Span</span>
+							<span role="columnheader">Samples</span>
+							<span role="columnheader">Avg</span>
+							<span role="columnheader">p50</span>
+							<span role="columnheader">p95</span>
+							<span role="columnheader">Share</span>
 						</div>
-					))}
-				</div>
+						{safeArray(analytics.breakdowns).map((row) => (
+							<div class="data-row" role="row">
+								<span role="cell">{row.workflowLabel}</span>
+								<span role="cell">{row.spanName}</span>
+								<span role="cell">{formatNumber(row.count)}</span>
+								<span role="cell">{formatPerformanceMs(row.avg)}</span>
+								<span role="cell">{formatPerformanceMs(row.p50)}</span>
+								<span role="cell">{formatPerformanceMs(row.p95)}</span>
+								<span role="cell">{safePercent(row.shareOfTotalP95)}</span>
+							</div>
+						))}
+					</div>
+				</>
 			) : (
 				<p class="empty">Span breakdowns will appear after workflows record structured timing stages.</p>
 			)}
@@ -244,6 +267,7 @@ const summaryMetrics = [
 						<span role="columnheader">Release</span>
 						<span role="columnheader">Dominant span</span>
 						<span role="columnheader">Status</span>
+						<span role="columnheader">Inspect</span>
 					</div>
 					{safeArray(analytics.slowOperations).map((row) => (
 						<div class="data-row" role="row">
@@ -257,6 +281,7 @@ const summaryMetrics = [
 								{row.timeoutDetail ? <em>{row.timeoutDetail}</em> : null}
 								{row.retryCount > 0 ? <em>{`Retries: ${formatNumber(row.retryCount)}`}</em> : null}
 							</span>
+							<span role="cell"><a class="inspect-link" href={`/admin/performance/operations/${row.id}?period=${period}`}>Waterfall</a></span>
 						</div>
 					))}
 				</div>
@@ -541,6 +566,46 @@ const summaryMetrics = [
 		display: grid;
 		gap: 0.32rem;
 	}
+	.breakdown-bars {
+		display: grid;
+		gap: 0.45rem;
+		margin-bottom: 0.75rem;
+	}
+	.breakdown-bar-row {
+		display: grid;
+		grid-template-columns: minmax(160px, 1.1fr) minmax(180px, 2fr) 92px;
+		gap: 0.65rem;
+		align-items: center;
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.62);
+		padding: 0.5rem 0.55rem;
+	}
+	.breakdown-bar-row strong,
+	.breakdown-bar-row span,
+	.breakdown-bar-row em {
+		display: block;
+	}
+	.breakdown-bar-row span,
+	.breakdown-bar-row em {
+		color: var(--color-text-muted);
+		font-size: 0.8rem;
+		font-style: normal;
+	}
+	.bar-track {
+		position: relative;
+		height: 16px;
+		overflow: hidden;
+		border: var(--border-subtle);
+		border-radius: var(--radius-pill);
+		background: rgba(255, 255, 255, 0.78);
+	}
+	.bar-fill {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--color-primary);
+	}
 	.data-row {
 		display: grid;
 		align-items: center;
@@ -553,10 +618,10 @@ const summaryMetrics = [
 		grid-template-columns: minmax(180px, 1.4fr) 82px 82px 82px 82px 82px minmax(110px, 0.8fr);
 	}
 	.breakdown-table .data-row {
-		grid-template-columns: minmax(120px, 1fr) minmax(130px, 1.3fr) 72px 82px 82px 72px;
+		grid-template-columns: minmax(120px, 1fr) minmax(130px, 1.3fr) 72px 82px 82px 82px 72px;
 	}
 	.slow-table .data-row {
-		grid-template-columns: minmax(130px, 1fr) minmax(145px, 1fr) 84px minmax(100px, 0.8fr) minmax(150px, 1.2fr) 92px;
+		grid-template-columns: minmax(130px, 1fr) minmax(145px, 1fr) 84px minmax(100px, 0.8fr) minmax(150px, 1.2fr) 92px 82px;
 	}
 	.release-table .data-row {
 		grid-template-columns: minmax(100px, 1fr) minmax(120px, 1fr) 78px 82px 92px minmax(100px, 0.9fr);
@@ -584,6 +649,15 @@ const summaryMetrics = [
 	.target-card strong {
 		color: var(--color-nav);
 	}
+	.inspect-link {
+		color: var(--color-nav);
+		font-weight: 900;
+		text-decoration: none;
+	}
+	.inspect-link:focus-visible {
+		outline: 3px solid var(--color-focus);
+		outline-offset: 3px;
+	}
 	.warning {
 		border: var(--border-subtle);
 		border-radius: var(--radius-md);
@@ -604,6 +678,7 @@ const summaryMetrics = [
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 		.data-row,
+		.breakdown-bar-row,
 		.route-table .data-row,
 		.breakdown-table .data-row,
 		.slow-table .data-row,

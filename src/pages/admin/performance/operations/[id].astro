@@ -1,0 +1,457 @@
+---
+import Layout from "../../../../layouts/Layout.astro";
+import { resolveAdminSession } from "../../../../lib/admin";
+import { formatDate, formatNumber, safeArray, safePercent, safeText } from "../../../../lib/adminFormatting";
+import { getNeonSql } from "../../../../lib/neon";
+import { loadPerformanceOperationDetail, normalizePerformancePeriod, type PerformanceOperationSpanSummary } from "../../../../lib/performanceTelemetry";
+import { formatPerformanceMs, performanceStatusClass } from "../../../../lib/performanceFormatting";
+
+export const prerender = false;
+
+const admin = await resolveAdminSession(Astro.request);
+if (!admin.isAdmin) return Astro.redirect("/");
+
+const period = normalizePerformancePeriod(Astro.url.searchParams.get("period"));
+const spanSort = String(Astro.url.searchParams.get("spanSort") || "duration").trim();
+const detail = await loadPerformanceOperationDetail(getNeonSql(), Astro.params.id);
+if (!detail) return Astro.redirect(`/admin/performance?period=${period}#slow`);
+
+const sectionLinks = [
+	{ id: "summary", label: "Summary" },
+	{ id: "waterfall", label: "Waterfall" },
+	{ id: "breakdown", label: "Breakdown" },
+	{ id: "metadata", label: "Counts" },
+	{ id: "spans", label: "Spans" }
+];
+
+const maxSpanDuration = Math.max(1, ...safeArray(detail.spans).map((span) => Number(span.durationMs || 0)), Number(detail.totalMs || 0));
+const maxSummaryDuration = Math.max(1, ...safeArray(detail.spanSummaries).map((span) => Number(span.durationMs || 0)));
+const waterfallRows = [
+	{
+		name: "Request",
+		durationMs: detail.totalMs,
+		startMs: 0,
+		parentName: "",
+		status: detail.success ? "OK" : "Slow",
+		shareOfTotal: 100
+	},
+	...safeArray(detail.spans)
+];
+const sortedSpanSummaries = [...safeArray(detail.spanSummaries)].sort((a, b) => {
+	if (spanSort === "name") return a.name.localeCompare(b.name);
+	if (spanSort === "share") return b.shareOfTotal - a.shareOfTotal || b.durationMs - a.durationMs;
+	if (spanSort === "status") return a.status.localeCompare(b.status) || b.durationMs - a.durationMs;
+	return b.durationMs - a.durationMs || a.name.localeCompare(b.name);
+});
+const topLevelSummaries = safeArray(detail.spanSummaries).filter((span) => !span.parentName);
+const childSummaries = (parent: PerformanceOperationSpanSummary) => safeArray(detail.spanSummaries)
+	.filter((span) => span.parentName === parent.name)
+	.sort((a, b) => b.durationMs - a.durationMs);
+const dominantShare = detail.dominantSpan ? safePercent(detail.dominantSpan.shareOfTotal) : "0%";
+const backHref = `/admin/performance?period=${period}#slow`;
+---
+
+<Layout title={`Performance Operation ${detail.id}`} sectionLinks={sectionLinks} robots="noindex,nofollow">
+	<div slot="right" class="operation-page">
+		<header id="summary" class="hero">
+			<nav class="breadcrumbs" aria-label="Breadcrumb">
+				<a href="/admin">Admin</a><span aria-hidden="true">/</span><a href={backHref}>Performance</a><span aria-hidden="true">/</span><span>Operation</span>
+			</nav>
+			<div class="hero-row">
+				<div>
+					<h1>{detail.operationName}</h1>
+					<p>{safeText(detail.route, "No route recorded")}</p>
+				</div>
+				<a class="back-link" href={backHref}>Back to Performance</a>
+			</div>
+		</header>
+
+		<section class="panel">
+			<div class="summary-grid">
+				<article class="metric-card"><p>Total</p><strong>{formatPerformanceMs(detail.totalMs)}</strong></article>
+				<article class="metric-card"><p>Status</p><strong>{detail.success ? `HTTP ${detail.httpStatus || 200}` : "Failed"}</strong></article>
+				<article class="metric-card"><p>Timestamp</p><strong>{formatDate(detail.createdAt)}</strong></article>
+				<article class="metric-card"><p>Release</p><strong>{safeText(detail.releaseVersion, "unknown")}</strong></article>
+				<article class="metric-card"><p>Environment</p><strong>{safeText(detail.environment, "unknown")}</strong></article>
+				<article class="metric-card"><p>Dominant span</p><strong>{detail.dominantSpan ? detail.dominantSpan.name : "—"}</strong></article>
+			</div>
+			{detail.timeoutDetail || detail.retryCount > 0 ? (
+				<p class="notice">{[detail.timeoutDetail, detail.retryCount > 0 ? `Retries: ${formatNumber(detail.retryCount)}` : ""].filter(Boolean).join(" · ")}</p>
+			) : null}
+		</section>
+
+		{detail.dominantSpan ? (
+			<section class="panel bottleneck">
+				<div>
+					<p>Bottleneck</p>
+					<h2>{detail.dominantSpan.name}</h2>
+				</div>
+				<strong>{formatPerformanceMs(detail.dominantSpan.durationMs)} of {formatPerformanceMs(detail.totalMs)}</strong>
+				<span>{dominantShare} of request time</span>
+			</section>
+		) : null}
+
+		<section id="waterfall" class="panel">
+			<div class="panel-head">
+				<h2>Request Waterfall</h2>
+				<p>{detail.hasWaterfallOffsets ? "Bars are positioned by recorded relative start time and duration." : "This event has historical duration-only spans, so bars show relative duration without implying start order."}</p>
+			</div>
+			<div class="waterfall" role="list" aria-label="Request timing waterfall">
+				{waterfallRows.map((span) => {
+					const start = detail.hasWaterfallOffsets || span.name === "Request" ? Number(span.startMs || 0) : 0;
+					const left = Math.max(0, Math.min(96, (start / maxSpanDuration) * 100));
+					const width = Math.max(1.5, Math.min(100 - left, (Number(span.durationMs || 0) / maxSpanDuration) * 100));
+					return (
+						<div class="waterfall-row" role="listitem">
+							<span>{span.name}</span>
+							<div class="waterfall-track" aria-label={`${span.name}: starts at ${formatPerformanceMs(start)}, lasts ${formatPerformanceMs(span.durationMs)}`}>
+								<span class={`waterfall-bar ${span.status === "Slow" ? "slow" : ""}`} style={`left: ${left}%; width: ${width}%;`}></span>
+							</div>
+							<em>{formatPerformanceMs(span.durationMs)}</em>
+						</div>
+					);
+				})}
+			</div>
+		</section>
+
+		<section id="breakdown" class="panel">
+			<div class="panel-head">
+				<h2>Span Breakdown</h2>
+				<p>Nested spans appear beneath their recorded parent. Bar length is proportional to elapsed duration.</p>
+			</div>
+			<div class="flame" aria-label="Hierarchical timing breakdown">
+				<div class="flame-row root">
+					<strong>{detail.operationName}</strong>
+					<div class="bar-track"><span style="width: 100%"></span></div>
+					<em>{formatPerformanceMs(detail.totalMs)}</em>
+				</div>
+				{topLevelSummaries.map((span) => {
+					const width = Math.max(2, Math.min(100, (Number(span.durationMs || 0) / Math.max(1, detail.totalMs)) * 100));
+					const children = childSummaries(span);
+					return (
+						<>
+							<div class="flame-row">
+								<strong>{span.name}</strong>
+								<div class="bar-track" aria-label={`${span.name}: ${formatPerformanceMs(span.durationMs)}`}>
+									<span style={`width: ${width}%`}></span>
+								</div>
+								<em>{formatPerformanceMs(span.durationMs)}</em>
+							</div>
+							{children.map((child) => {
+								const childWidth = Math.max(2, Math.min(100, (Number(child.durationMs || 0) / Math.max(1, span.durationMs)) * 100));
+								return (
+									<div class="flame-row child">
+										<strong>{child.name}</strong>
+										<div class="bar-track" aria-label={`${child.name}: ${formatPerformanceMs(child.durationMs)}`}>
+											<span style={`width: ${childWidth}%`}></span>
+										</div>
+										<em>{formatPerformanceMs(child.durationMs)}</em>
+									</div>
+								);
+							})}
+						</>
+					);
+				})}
+			</div>
+		</section>
+
+		<section id="metadata" class="panel">
+			<div class="panel-head">
+				<h2>Diagnostic Counts</h2>
+				<p>Only sanitized counts and timeout flags are shown here.</p>
+			</div>
+			{safeArray(detail.metadataItems).length > 0 ? (
+				<div class="count-grid">
+					{safeArray(detail.metadataItems).map((item) => (
+						<article class="count-card">
+							<p>{item.label}</p>
+							<strong>{item.value}</strong>
+						</article>
+					))}
+				</div>
+			) : (
+				<p class="empty">No safe diagnostic counts were recorded for this operation.</p>
+			)}
+		</section>
+
+		<section id="spans" class="panel">
+			<div class="panel-head split">
+				<div>
+					<h2>Span Table</h2>
+					<p>Complete nonvisual timing data for this operation.</p>
+				</div>
+				<nav class="sort-filter" aria-label="Span sort">
+					<a href={`?period=${period}&spanSort=duration`} class={spanSort === "duration" ? "active" : ""}>Duration</a>
+					<a href={`?period=${period}&spanSort=share`} class={spanSort === "share" ? "active" : ""}>Share</a>
+					<a href={`?period=${period}&spanSort=status`} class={spanSort === "status" ? "active" : ""}>Status</a>
+					<a href={`?period=${period}&spanSort=name`} class={spanSort === "name" ? "active" : ""}>Name</a>
+				</nav>
+			</div>
+			{sortedSpanSummaries.length > 0 ? (
+				<div class="data-table span-table" role="table">
+					<div class="data-row data-row-head" role="row">
+						<span role="columnheader">Span</span>
+						<span role="columnheader">Duration</span>
+						<span role="columnheader">% of total</span>
+						<span role="columnheader">Calls</span>
+						<span role="columnheader">Status</span>
+					</div>
+					{sortedSpanSummaries.map((span) => (
+						<div class="data-row" role="row">
+							<span role="cell"><strong>{span.name}</strong>{span.parentName ? <em>{`Parent: ${span.parentName}`}</em> : null}</span>
+							<span role="cell">{formatPerformanceMs(span.durationMs)}</span>
+							<span role="cell">{safePercent(span.shareOfTotal)}</span>
+							<span role="cell">{formatNumber(span.calls)}</span>
+							<span role="cell"><span class={`status-pill ${performanceStatusClass(span.status)}`}>{span.status}</span></span>
+						</div>
+					))}
+				</div>
+			) : (
+				<p class="empty">No timing spans were recorded for this operation.</p>
+			)}
+		</section>
+	</div>
+</Layout>
+
+<style>
+	.operation-page {
+		max-width: 1120px;
+		display: grid;
+		gap: 1rem;
+	}
+	.breadcrumbs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		color: var(--color-text-subtle);
+		font-size: 0.88rem;
+	}
+	.breadcrumbs a,
+	.back-link,
+	.sort-filter a {
+		color: var(--color-nav);
+		text-decoration: none;
+	}
+	.hero,
+	.panel-head {
+		display: grid;
+		gap: 0.35rem;
+	}
+	.hero-row,
+	.panel-head.split {
+		display: flex;
+		align-items: start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.hero h1,
+	.hero p,
+	.panel-head h2,
+	.panel-head p,
+	.metric-card p,
+	.count-card p,
+	.empty,
+	.notice,
+	.bottleneck p,
+	.bottleneck h2 {
+		margin: 0;
+	}
+	.hero p,
+	.panel-head p,
+	.metric-card p,
+	.count-card p,
+	.empty,
+	.notice,
+	.data-row em,
+	.waterfall-row em,
+	.flame-row em,
+	.bottleneck p,
+	.bottleneck span {
+		color: var(--color-text-muted);
+	}
+	.back-link,
+	.sort-filter a,
+	.status-pill {
+		display: inline-flex;
+		min-height: 28px;
+		align-items: center;
+		border: var(--border-subtle);
+		border-radius: var(--radius-pill);
+		background: rgba(255, 255, 255, 0.68);
+		padding: 0 0.65rem;
+		font-size: 0.82rem;
+		font-weight: 800;
+	}
+	.sort-filter {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+	.sort-filter a.active {
+		background: var(--color-primary);
+		border-color: transparent;
+		color: #fff;
+	}
+	.panel {
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface-raised);
+		padding: 1rem;
+	}
+	.summary-grid,
+	.count-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.65rem;
+	}
+	.metric-card,
+	.count-card,
+	.data-row,
+	.notice {
+		border: var(--border-subtle);
+		background: rgba(255, 255, 255, 0.62);
+	}
+	.metric-card,
+	.count-card {
+		border-radius: var(--radius-md);
+		padding: 0.75rem;
+	}
+	.metric-card strong,
+	.count-card strong {
+		display: block;
+		margin-top: 0.2rem;
+		line-height: 1.15;
+	}
+	.metric-card strong {
+		font-size: 1.05rem;
+	}
+	.notice {
+		margin-top: 0.75rem;
+		border-radius: var(--radius-md);
+		padding: 0.65rem;
+	}
+	.bottleneck {
+		display: grid;
+		grid-template-columns: minmax(180px, 1fr) auto auto;
+		gap: 0.75rem;
+		align-items: center;
+	}
+	.bottleneck strong {
+		color: #8a1d1d;
+		font-size: 1.2rem;
+	}
+	.waterfall,
+	.flame,
+	.data-table {
+		display: grid;
+		gap: 0.38rem;
+	}
+	.waterfall-row,
+	.flame-row {
+		display: grid;
+		grid-template-columns: minmax(150px, 1fr) minmax(180px, 2.4fr) 86px;
+		gap: 0.65rem;
+		align-items: center;
+		font-size: 0.86rem;
+	}
+	.waterfall-track,
+	.bar-track {
+		position: relative;
+		height: 18px;
+		overflow: hidden;
+		border: var(--border-subtle);
+		border-radius: var(--radius-pill);
+		background: rgba(255, 255, 255, 0.78);
+	}
+	.waterfall-bar,
+	.bar-track span {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		border-radius: inherit;
+		background: var(--color-primary);
+	}
+	.waterfall-bar.slow {
+		background: #8a1d1d;
+	}
+	.flame-row.root .bar-track span {
+		background: var(--color-nav);
+	}
+	.flame-row.child {
+		padding-left: 1rem;
+	}
+	.flame-row.child strong::before {
+		content: "↳ ";
+		color: var(--color-text-muted);
+	}
+	.data-row {
+		display: grid;
+		grid-template-columns: minmax(170px, 1.4fr) 95px 92px 72px 120px;
+		align-items: center;
+		gap: 0.55rem;
+		border-radius: var(--radius-md);
+		padding: 0.5rem 0.55rem;
+		font-size: 0.86rem;
+	}
+	.data-row-head {
+		background: transparent;
+		border-color: transparent;
+		color: var(--color-text-muted);
+		font-size: 0.76rem;
+		font-weight: 900;
+		text-transform: uppercase;
+	}
+	.data-row strong,
+	.data-row em {
+		display: block;
+	}
+	.data-row em {
+		margin-top: 0.12rem;
+		font-size: 0.78rem;
+		font-style: normal;
+	}
+	.status-pill.ok {
+		background: rgba(59, 124, 90, 0.12);
+		color: #24573d;
+	}
+	.status-pill.needs-attention {
+		background: rgba(183, 122, 34, 0.13);
+		color: #7a4b10;
+	}
+	.status-pill.slow {
+		background: rgba(138, 29, 29, 0.12);
+		color: #8a1d1d;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.waterfall-bar,
+		.bar-track span {
+			transition: none;
+		}
+	}
+	@media (max-width: 900px) {
+		.hero-row,
+		.panel-head.split,
+		.bottleneck {
+			display: grid;
+		}
+		.summary-grid,
+		.count-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+		.waterfall-row,
+		.flame-row,
+		.data-row {
+			grid-template-columns: 1fr;
+		}
+		.flame-row.child {
+			padding-left: 0.5rem;
+		}
+	}
+	@media (max-width: 620px) {
+		.summary-grid,
+		.count-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

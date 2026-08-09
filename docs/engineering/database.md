@@ -39,7 +39,7 @@ Stores operational timing telemetry for meaningful workflows and external depend
 - Success/failure and optional HTTP status.
 - Release version and environment.
 - Optional external provider identifier.
-- Sanitized timing spans as JSON.
+- Sanitized timing spans as JSON, including optional relative start offsets and parent-span names for request waterfall rendering.
 - Sanitized metadata flags/counts as JSON.
 - Creation timestamp.
 

@@ -97,7 +97,7 @@ export type CanonicalCatalogSearchLookupResult = {
 		cacheMisses: number;
 		truncatedCandidateSet: boolean;
 	};
-	spans: Array<{ name: string; durationMs: number }>;
+	spans: Array<{ name: string; durationMs: number; startMs?: number }>;
 };
 
 type CatalogResolutionRow = {
@@ -493,13 +493,18 @@ export async function resolveCanonicalCatalogWorksForSearch(
 	inputs: CanonicalCatalogSearchLookupInput[],
 	options: { minConfidence?: number; maxDatabaseCandidates?: number; skipSchemaBackfill?: boolean } = {}
 ): Promise<CanonicalCatalogSearchLookupResult> {
-	const spans: Array<{ name: string; durationMs: number }> = [];
+	const resolverStartedAt = performance.now();
+	const spans: Array<{ name: string; durationMs: number; startMs?: number }> = [];
 	const span = async <T>(name: string, work: () => Promise<T>) => {
 		const startedAt = performance.now();
 		try {
 			return await work();
 		} finally {
-			spans.push({ name, durationMs: Math.round((performance.now() - startedAt) * 10) / 10 });
+			spans.push({
+				name,
+				startMs: Math.round((startedAt - resolverStartedAt) * 10) / 10,
+				durationMs: Math.round((performance.now() - startedAt) * 10) / 10
+			});
 		}
 	};
 	const spanSync = <T>(name: string, work: () => T) => {
@@ -507,7 +512,11 @@ export async function resolveCanonicalCatalogWorksForSearch(
 		try {
 			return work();
 		} finally {
-			spans.push({ name, durationMs: Math.round((performance.now() - startedAt) * 10) / 10 });
+			spans.push({
+				name,
+				startMs: Math.round((startedAt - resolverStartedAt) * 10) / 10,
+				durationMs: Math.round((performance.now() - startedAt) * 10) / 10
+			});
 		}
 	};
 	const metrics = {

@@ -116,7 +116,7 @@ First-party aggregate usage signals used by DogEared admins to improve the reade
 
 ## Performance Analytics
 
-Operational timing telemetry used by DogEared admins to understand production speed and regressions. Performance analytics covers workflow duration, timing spans, route/API percentiles, external provider latency, error rate, slow operations, and release comparisons without storing reader-identifying content or sensitive request payloads.
+Operational timing telemetry used by DogEared admins to understand production speed and regressions. Performance analytics covers workflow duration, timing spans, request waterfalls, route/API percentiles, external provider latency, error rate, slow operations, and release comparisons without storing reader-identifying content or sensitive request payloads.
 
 ## Guided Tip
 

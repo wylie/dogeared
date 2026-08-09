@@ -15,6 +15,9 @@ test("performance telemetry schema stores operational timing without reader payl
 	assert.match(migration, /metadata jsonb not null/);
 	assert.match(migration, /idx_performance_event_operation_created/);
 	assert.match(migration, /idx_performance_event_provider_created/);
+	assert.match(telemetry, /startMs\?: number/);
+	assert.match(telemetry, /parentName\?: string/);
+	assert.match(telemetry, /normalizeOptionalDuration/);
 	assert.match(telemetry, /RAW_RETENTION_DAYS = 45/);
 	assert.match(telemetry, /PERFORMANCE_TELEMETRY_SAMPLE_RATE/);
 	assert.match(telemetry, /if \(!input\.success\) return true/);
@@ -28,6 +31,7 @@ test("performance telemetry schema stores operational timing without reader payl
 
 test("admin performance page is admin-only and exposes percentile-first operations dashboard", () => {
 	const page = read("../src/pages/admin/performance.astro");
+	const detailPage = read("../src/pages/admin/performance/operations/[id].astro");
 	const telemetry = read("../src/lib/performanceTelemetry.ts");
 	const leftHand = read("../src/components/LeftHand.astro");
 
@@ -44,11 +48,22 @@ test("admin performance page is admin-only and exposes percentile-first operatio
 	assert.match(page, /p99/);
 	assert.match(page, /External Services/);
 	assert.match(page, /Recent Slow Operations/);
+	assert.match(page, /\/admin\/performance\/operations\/\$\{row\.id\}/);
+	assert.match(page, /Aggregate p95 span contribution/);
 	assert.match(page, /timeoutDetail/);
 	assert.match(page, /Retries:/);
 	assert.match(page, /Release Comparison/);
 	assert.match(page, /Performance Targets/);
 	assert.match(page, /Performance data will populate/);
+	assert.match(detailPage, /resolveAdminSession\(Astro\.request\)/);
+	assert.match(detailPage, /if \(!admin\.isAdmin\) return Astro\.redirect\("\/"\)/);
+	assert.match(detailPage, /robots="noindex,nofollow"/);
+	assert.match(detailPage, /loadPerformanceOperationDetail/);
+	assert.match(detailPage, /Request Waterfall/);
+	assert.match(detailPage, /Span Breakdown/);
+	assert.match(detailPage, /Diagnostic Counts/);
+	assert.match(detailPage, /Span Table/);
+	assert.match(detailPage, /historical duration-only spans/);
 });
 
 test("admin performance loader computes workflow, route, provider, slow-operation, and release summaries", () => {
@@ -67,11 +82,15 @@ test("admin performance loader computes workflow, route, provider, slow-operatio
 	assert.match(telemetry, /external\.google-books/);
 	assert.match(telemetry, /external\.open-library/);
 	assert.match(telemetry, /cross join lateral jsonb_array_elements\(pe\.spans\)/);
+	assert.match(telemetry, /p50_ms/);
 	assert.match(telemetry, /external_provider/);
 	assert.match(telemetry, /total_ms >= \$\{slowThreshold\}/);
 	assert.match(telemetry, /Provider timeout:/);
 	assert.match(telemetry, /Canonical timeout:/);
 	assert.match(telemetry, /retryCount/);
+	assert.match(telemetry, /loadPerformanceOperationDetail/);
+	assert.match(telemetry, /safePerformanceMetadataItems/);
+	assert.match(telemetry, /hasWaterfallOffsets/);
 	assert.match(telemetry, /release_version/);
 	assert.match(telemetry, /withRuntimeCache\(/);
 });
@@ -92,6 +111,9 @@ test("core workflows record sanitized performance events at meaningful boundarie
 	assert.match(searchApi, /operationName: "search\.books"/);
 	assert.match(searchApi, /operationName: "external\.google-books"/);
 	assert.match(searchApi, /operationName: "external\.open-library"/);
+	assert.match(searchApi, /startMs: Math\.round/);
+	assert.match(searchApi, /parentName/);
+	assert.match(searchApi, /canonical Work matching"/);
 	assert.match(searchApi, /metadata: \{\s*page,\s*pageSize,\s*phase,/s);
 	assert.doesNotMatch(searchApi, /metadata: \{\s*query[,:\s]/);
 

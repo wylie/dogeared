@@ -8,6 +8,9 @@ type Sql = NeonQueryFunction<false, false>;
 export type PerformanceSpanInput = {
 	name: string;
 	durationMs: number;
+	startMs?: number;
+	parentName?: string;
+	status?: string;
 };
 
 export type PerformanceEventInput = {
@@ -55,6 +58,7 @@ export type PerformanceBreakdownRow = {
 	spanName: string;
 	count: number;
 	avg: number;
+	p50: number;
 	p95: number;
 	shareOfTotalP95: number;
 };
@@ -90,6 +94,49 @@ export type ReleaseComparisonRow = {
 	p95: number;
 	previousReleaseP95: number;
 	changePercent: number;
+};
+
+export type PerformanceOperationSpan = {
+	name: string;
+	durationMs: number;
+	startMs: number | null;
+	parentName: string;
+	status: "OK" | "Needs attention" | "Slow";
+	shareOfTotal: number;
+};
+
+export type PerformanceOperationSpanSummary = {
+	name: string;
+	durationMs: number;
+	shareOfTotal: number;
+	calls: number;
+	status: "OK" | "Needs attention" | "Slow";
+	parentName: string;
+};
+
+export type PerformanceMetadataItem = {
+	label: string;
+	value: string;
+};
+
+export type PerformanceOperationDetail = {
+	id: number;
+	createdAt: string;
+	operationName: string;
+	route: string;
+	totalMs: number;
+	success: boolean;
+	httpStatus: number;
+	releaseVersion: string;
+	environment: string;
+	externalProvider: string;
+	dominantSpan: PerformanceOperationSpanSummary | null;
+	timeoutDetail: string;
+	retryCount: number;
+	hasWaterfallOffsets: boolean;
+	spans: PerformanceOperationSpan[];
+	spanSummaries: PerformanceOperationSpanSummary[];
+	metadataItems: PerformanceMetadataItem[];
 };
 
 export type AdminPerformanceAnalytics = {
@@ -164,6 +211,12 @@ function normalizeDuration(value: unknown) {
 	return Math.max(0, Math.round(parsed * 10) / 10);
 }
 
+function normalizeOptionalDuration(value: unknown) {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 0) return null;
+	return Math.round(parsed * 10) / 10;
+}
+
 function normalizeHttpStatus(value: unknown) {
 	const parsed = Math.floor(Number(value || 0));
 	if (!Number.isFinite(parsed)) return 0;
@@ -194,12 +247,32 @@ function normalizeMetadata(source: Record<string, unknown> | undefined) {
 	return out;
 }
 
+function normalizeSpanStatus(value: unknown, durationMs: number, totalMs = 0): PerformanceOperationSpan["status"] {
+	const explicit = normalizeText(value, 40).toLowerCase();
+	if (explicit === "slow") return "Slow";
+	if (explicit === "needs attention" || explicit === "needs-attention") return "Needs attention";
+	if (explicit === "ok" || explicit === "healthy") return "OK";
+	if (totalMs > 0 && durationMs >= totalMs * 0.5 && durationMs >= 500) return "Slow";
+	if (durationMs >= 1000) return "Needs attention";
+	return "OK";
+}
+
 function normalizeSpans(input: PerformanceEventInput["spans"]) {
 	const spans = Array.isArray(input)
-		? input.map((span) => ({
-			name: normalizeOperationName(span.name).replace(/[.:_-]+/g, " "),
-			durationMs: normalizeDuration(span.durationMs)
-		}))
+		? input.map((span) => {
+			const name = normalizeOperationName(span.name).replace(/[.:_-]+/g, " ");
+			const durationMs = normalizeDuration(span.durationMs);
+			const startMs = normalizeOptionalDuration(span.startMs);
+			const parentName = normalizeOperationName(span.parentName).replace(/[.:_-]+/g, " ");
+			const status = normalizeSpanStatus(span.status, durationMs);
+			return {
+				name,
+				durationMs,
+				...(startMs === null ? {} : { startMs }),
+				...(parentName ? { parentName } : {}),
+				status
+			};
+		})
 		: Object.entries(input || {}).map(([name, cumulativeMs]) => ({
 			name: normalizeOperationName(name).replace(/[.:_-]+/g, " "),
 			cumulativeMs: normalizeDuration(cumulativeMs)
@@ -207,7 +280,9 @@ function normalizeSpans(input: PerformanceEventInput["spans"]) {
 			.sort((a, b) => a.cumulativeMs - b.cumulativeMs)
 			.map((span, index, list) => ({
 				name: span.name,
-				durationMs: Math.max(0, normalizeDuration(span.cumulativeMs - (list[index - 1]?.cumulativeMs || 0)))
+				startMs: normalizeDuration(list[index - 1]?.cumulativeMs || 0),
+				durationMs: Math.max(0, normalizeDuration(span.cumulativeMs - (list[index - 1]?.cumulativeMs || 0))),
+				status: normalizeSpanStatus("", Math.max(0, normalizeDuration(span.cumulativeMs - (list[index - 1]?.cumulativeMs || 0))))
 			}));
 	return spans
 		.filter((span) => span.name && span.durationMs >= 0)
@@ -270,6 +345,110 @@ function dominantSpan(spans: unknown): { name: string; durationMs: number } {
 		if (durationMs <= best.durationMs) return best;
 		return { name: normalizeText(span.name, 80), durationMs };
 	}, { name: "", durationMs: 0 });
+}
+
+function normalizeStoredSpans(spans: unknown, totalMs: number): PerformanceOperationSpan[] {
+	const list = Array.isArray(spans) ? spans as Array<Record<string, unknown>> : [];
+	return list
+		.map((span) => {
+			const name = normalizeText(span.name, 80);
+			const durationMs = normalizeDuration(span.durationMs);
+			const startMs = normalizeOptionalDuration(span.startMs);
+			const parentName = normalizeText(span.parentName, 80);
+			return {
+				name,
+				durationMs,
+				startMs,
+				parentName,
+				status: normalizeSpanStatus(span.status, durationMs, totalMs),
+				shareOfTotal: totalMs > 0 ? toPercent((durationMs / totalMs) * 100) : 0
+			};
+		})
+		.filter((span) => span.name && span.durationMs >= 0)
+		.slice(0, 48);
+}
+
+function summarizeStoredSpans(spans: PerformanceOperationSpan[]): PerformanceOperationSpanSummary[] {
+	const byName = new Map<string, PerformanceOperationSpanSummary>();
+	for (const span of spans) {
+		const key = `${span.parentName}::${span.name}`;
+		const existing = byName.get(key);
+		if (existing) {
+			existing.durationMs = normalizeDuration(existing.durationMs + span.durationMs);
+			existing.shareOfTotal = normalizeDuration(existing.shareOfTotal + span.shareOfTotal);
+			existing.calls += 1;
+			if (span.status === "Slow" || existing.status === "Slow") existing.status = "Slow";
+			else if (span.status === "Needs attention" || existing.status === "Needs attention") existing.status = "Needs attention";
+			continue;
+		}
+		byName.set(key, {
+			name: span.name,
+			durationMs: span.durationMs,
+			shareOfTotal: span.shareOfTotal,
+			calls: 1,
+			status: span.status,
+			parentName: span.parentName
+		});
+	}
+	return Array.from(byName.values()).sort((a, b) => b.durationMs - a.durationMs || a.name.localeCompare(b.name));
+}
+
+function safePerformanceMetadataItems(metadata: unknown): PerformanceMetadataItem[] {
+	if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return [];
+	const safeKeys = new Set([
+		"providerTimeoutCount",
+		"providerTimeouts",
+		"localTimeoutCount",
+		"canonicalTimeoutCount",
+		"canonicalCandidateCount",
+		"canonicalResolvedCount",
+		"canonicalDbQueryCount",
+		"canonicalDogEaredCandidateCount",
+		"canonicalComparisonCount",
+		"canonicalCacheHits",
+		"canonicalCacheMisses",
+		"canonicalCandidateSetTruncated",
+		"retryCount",
+		"timeout",
+		"clientAborted",
+		"hasExistingCatalogBook",
+		"databaseQueryCount",
+		"queryCount",
+		"cacheHits",
+		"cacheMisses"
+	]);
+	const items: PerformanceMetadataItem[] = [];
+	for (const [rawKey, rawValue] of Object.entries(metadata as Record<string, unknown>)) {
+		const key = normalizeText(rawKey, 64).replace(/[^a-zA-Z0-9_-]+/g, "");
+		const lower = key.toLowerCase();
+		const countLike = /(?:count|counts|queries|comparisons|candidates|resolved|timeouts|retries|hits|misses)$/.test(lower);
+		if (!safeKeys.has(key) && !countLike) continue;
+		if (typeof rawValue === "number") {
+			items.push({ label: key, value: normalizeDuration(rawValue).toLocaleString() });
+		} else if (typeof rawValue === "boolean") {
+			items.push({ label: key, value: rawValue ? "true" : "false" });
+		} else {
+			const value = normalizeText(rawValue, 80);
+			if (value && !/@/.test(value) && !value.startsWith("/") && !/[{}[\]]/.test(value)) {
+				items.push({ label: key, value });
+			}
+		}
+	}
+	return items.slice(0, 18);
+}
+
+function timeoutDetailFromMetadata(metadata: Record<string, unknown>) {
+	const providerTimeouts = normalizeText(metadata.providerTimeouts, 80);
+	const providerTimeoutCount = toNumber(metadata.providerTimeoutCount);
+	const localTimeoutCount = toNumber(metadata.localTimeoutCount);
+	const canonicalTimeoutCount = toNumber(metadata.canonicalTimeoutCount);
+	return providerTimeouts
+		? `Provider timeout: ${providerTimeouts}`
+		: (canonicalTimeoutCount > 0
+			? `Canonical timeout: ${canonicalTimeoutCount}`
+			: (localTimeoutCount > 0
+				? `Local timeout: ${localTimeoutCount}`
+				: (providerTimeoutCount > 0 ? `Provider timeout: ${providerTimeoutCount}` : "")));
 }
 
 export function normalizePerformancePeriod(value: unknown): PerformancePeriodKey {
@@ -582,6 +761,7 @@ async function loadAdminPerformanceAnalyticsUncached(
 		span_name: string;
 		count: number;
 		avg_ms: number | null;
+		p50_ms: number | null;
 		p95_ms: number | null;
 		total_p95: number | null;
 	}>>`
@@ -607,6 +787,7 @@ async function loadAdminPerformanceAnalyticsUncached(
 			es.span_name,
 			count(*)::int as count,
 			avg(es.span_ms)::numeric as avg_ms,
+			percentile_cont(0.5) within group (order by es.span_ms)::numeric as p50_ms,
 			percentile_cont(0.95) within group (order by es.span_ms)::numeric as p95_ms,
 			max(tp.total_p95)::numeric as total_p95
 		from event_spans es
@@ -625,6 +806,7 @@ async function loadAdminPerformanceAnalyticsUncached(
 			spanName: row.span_name,
 			count: toNumber(row.count),
 			avg: toNumber(row.avg_ms),
+			p50: toNumber(row.p50_ms),
 			p95,
 			shareOfTotalP95: totalP95 > 0 ? toPercent((p95 / totalP95) * 100) : 0
 		};
@@ -695,17 +877,6 @@ async function loadAdminPerformanceAnalyticsUncached(
 		const metadata = row.metadata && typeof row.metadata === "object"
 			? row.metadata as Record<string, unknown>
 			: {};
-		const providerTimeouts = normalizeText(metadata.providerTimeouts, 80);
-		const providerTimeoutCount = toNumber(metadata.providerTimeoutCount);
-		const localTimeoutCount = toNumber(metadata.localTimeoutCount);
-		const canonicalTimeoutCount = toNumber(metadata.canonicalTimeoutCount);
-		const timeoutDetail = providerTimeouts
-			? `Provider timeout: ${providerTimeouts}`
-			: (canonicalTimeoutCount > 0
-				? `Canonical timeout: ${canonicalTimeoutCount}`
-				: (localTimeoutCount > 0
-					? `Local timeout: ${localTimeoutCount}`
-					: (providerTimeoutCount > 0 ? `Provider timeout: ${providerTimeoutCount}` : "")));
 		return {
 			id: Number(row.id || 0),
 			createdAt: row.created_at,
@@ -717,7 +888,7 @@ async function loadAdminPerformanceAnalyticsUncached(
 			releaseVersion: normalizeText(row.release_version, 80),
 			dominantSpan: span.name,
 			dominantSpanMs: span.durationMs,
-			timeoutDetail,
+			timeoutDetail: timeoutDetailFromMetadata(metadata),
 			retryCount: toNumber(metadata.retryCount)
 		};
 	});
@@ -786,4 +957,72 @@ export async function loadAdminPerformanceAnalytics(
 		30_000,
 		() => loadAdminPerformanceAnalyticsUncached(sql, period, sort, slowPage)
 	);
+}
+
+export async function loadPerformanceOperationDetail(
+	sql: Sql,
+	id: unknown
+): Promise<PerformanceOperationDetail | null> {
+	const eventId = Math.floor(Number(id || 0));
+	if (!Number.isFinite(eventId) || eventId <= 0) return null;
+	await ensurePerformanceTelemetrySchema(sql);
+	const rows = await sql<Array<{
+		id: number;
+		created_at: string;
+		operation_name: string;
+		route: string;
+		total_ms: number;
+		success: boolean;
+		http_status: number;
+		release_version: string;
+		environment: string;
+		external_provider: string;
+		spans: unknown;
+		metadata: unknown;
+	}>>`
+		select
+			id,
+			created_at::text as created_at,
+			operation_name,
+			route,
+			total_ms::numeric as total_ms,
+			success,
+			http_status,
+			release_version,
+			environment,
+			external_provider,
+			spans,
+			metadata
+		from performance_event
+		where id = ${eventId}
+		limit 1
+	`;
+	const row = rows[0];
+	if (!row) return null;
+	const totalMs = toNumber(row.total_ms);
+	const metadata = row.metadata && typeof row.metadata === "object"
+		? row.metadata as Record<string, unknown>
+		: {};
+	const spans = normalizeStoredSpans(row.spans, totalMs);
+	const spanSummaries = summarizeStoredSpans(spans);
+	const dominant = spanSummaries[0] || null;
+	return {
+		id: Number(row.id || 0),
+		createdAt: row.created_at,
+		operationName: normalizeText(row.operation_name, 96),
+		route: normalizeRoute(row.route) || normalizeText(row.route, 120),
+		totalMs,
+		success: row.success !== false,
+		httpStatus: normalizeHttpStatus(row.http_status),
+		releaseVersion: normalizeText(row.release_version, 80),
+		environment: normalizeText(row.environment, 40),
+		externalProvider: normalizeText(row.external_provider, 80),
+		dominantSpan: dominant,
+		timeoutDetail: timeoutDetailFromMetadata(metadata),
+		retryCount: toNumber(metadata.retryCount),
+		hasWaterfallOffsets: spans.some((span) => span.startMs !== null),
+		spans,
+		spanSummaries,
+		metadataItems: safePerformanceMetadataItems(metadata)
+	};
 }
