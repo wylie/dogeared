@@ -36,7 +36,7 @@
     "catalog:cleanup": "node --env-file=.env --experimental-strip-types scripts/catalog-cleanup.mjs"
   },
   "dependencies": {
-    "@astrojs/vercel": "^10.0.8",
+    "@astrojs/vercel": "^11.0.5",
     "@floating-ui/dom": "^1.8.0",
     "@neondatabase/serverless": "^1.1.0",
     "astro": "^6.4.7",
