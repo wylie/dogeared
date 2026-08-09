@@ -88,8 +88,8 @@ test("settings import dashboard previews, reports, and resumes imports", () => {
 	assert.equal(source.includes("buildGoodreadsImportPreview"), true);
 	assert.equal(importLib.includes("duplicateExplanations"), true);
 	assert.equal(importLib.includes("estimatedLabel"), true);
-	assert.equal(dataHealth.includes("metadata-review"), true);
-	assert.equal(dataHealth.includes("Missing cover"), true);
+	assert.equal(dataHealth.includes("catalog-metadata"), true);
+	assert.equal(dataHealth.includes("missing_cover"), true);
 	assert.equal(dataHealth.includes("Import Dashboard"), true);
 });
 

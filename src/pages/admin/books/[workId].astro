@@ -41,8 +41,8 @@ if (editorResult.warning) warnings.push(editorResult.warning);
 const editor = editorResult.data;
 const selectedEdition = editor?.editions.find((edition) => edition.id === selectedEditionId) || editor?.editions[0] || null;
 const healthResult = editor
-	? await safeAdminLoad("Catalog editor health", () => loadCatalogMetadataHealth(sql, { q: String(editor.work.id), limit: 200 }), { issues: [], pagination: { limit: 200, offset: 0, total: 0 }, facets: { formats: [], providers: [] }, summary: { totalIssues: 0, critical: 0, needsAttention: 0, optional: 0, missingPageCounts: 0, missingAudiobookDurations: 0, potentialDuplicates: 0, progressBlocking: 0 } })
-	: { data: { issues: [], pagination: { limit: 200, offset: 0, total: 0 }, facets: { formats: [], providers: [] }, summary: { totalIssues: 0, critical: 0, needsAttention: 0, optional: 0, missingPageCounts: 0, missingAudiobookDurations: 0, potentialDuplicates: 0, progressBlocking: 0 } }, warning: "" };
+	? await safeAdminLoad("Catalog editor health", () => loadCatalogMetadataHealth(sql, { q: String(editor.work.id), limit: 200 }), { issues: [], records: [], pagination: { limit: 200, offset: 0, total: 0 }, facets: { formats: [], providers: [] }, summary: { totalIssues: 0, totalRecords: 0, critical: 0, needsAttention: 0, optional: 0, missingPageCounts: 0, missingAudiobookDurations: 0, potentialDuplicates: 0, progressBlocking: 0 } })
+	: { data: { issues: [], records: [], pagination: { limit: 200, offset: 0, total: 0 }, facets: { formats: [], providers: [] }, summary: { totalIssues: 0, totalRecords: 0, critical: 0, needsAttention: 0, optional: 0, missingPageCounts: 0, missingAudiobookDurations: 0, potentialDuplicates: 0, progressBlocking: 0 } }, warning: "" };
 if (healthResult.warning) warnings.push(healthResult.warning);
 const workMetadata = editor?.work.metadata || {};
 const workProvenance = typeof workMetadata.provenance === "object" && workMetadata.provenance !== null ? workMetadata.provenance as Record<string, unknown> : {};
@@ -94,6 +94,7 @@ function issueToField(issue: CatalogHealthIssue): FieldHealth {
 		missing_series_position: "seriesPosition",
 		missing_series_relationship: "seriesId",
 		malformed_title: "workTitle",
+		missing_description: "description",
 		missing_reading_format_metadata: "editionFormat",
 		progress_not_normalizable: "pageCount"
 	} as Record<string, string>)[issue.issueType] || "catalogEditor";
@@ -137,6 +138,11 @@ function issueToField(issue: CatalogHealthIssue): FieldHealth {
 			label: "Work title",
 			helper: "The Work title may include Edition or format text that should live on an Edition instead.",
 			uses: ["Search dedupe", "BookCards", "Series grouping"]
+		},
+		description: {
+			label: "Description",
+			helper: "Description helps administrators and readers understand the canonical Work.",
+			uses: ["Book detail", "Search context", "Catalog QA"]
 		},
 		editionFormat: {
 			label: "Edition format",
@@ -353,9 +359,11 @@ function issueTarget(issue: CatalogHealthIssue) {
 						</fieldset>
 						<fieldset class="field-group">
 							<legend>Description</legend>
-							<label class="field-control">
-								<span>Description</span>
-								<textarea name="description" rows="6">{editor.work.description}</textarea>
+							<label id="field-description" class={fieldClass("description")} data-health-field="description">
+								<span class="field-label">Description {fieldHealth("description") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+								<textarea name="description" rows="6" aria-describedby={fieldHealth("description") ? "help-description why-description" : "why-description"}>{editor.work.description}</textarea>
+								{fieldHealth("description") && <p id="help-description" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("description")!.issue.severity)}: </span>{fieldHealth("description")!.helper}</p>}
+								<p id="why-description" class="why-note"><strong>Used for:</strong> Book detail, search context, catalog QA.</p>
 							</label>
 						</fieldset>
 						<fieldset class="field-group">

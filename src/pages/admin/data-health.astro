@@ -32,10 +32,12 @@ const catalogHealthFilters = {
 };
 const emptyCatalogHealth: CatalogHealthResult = {
 	issues: [],
+	records: [],
 	pagination: { limit: catalogPageSize, offset: 0, total: 0 },
 	facets: { formats: [], providers: [] },
 	summary: {
 		totalIssues: 0,
+		totalRecords: 0,
 		critical: 0,
 		needsAttention: 0,
 		optional: 0,
@@ -126,13 +128,10 @@ const [
 	importHealthResult,
 	duplicateGroupsResult,
 	potentialDuplicateWorksResult,
-	metadataReviewResult,
 	relationshipHealthResult,
 	catalogMetadataHealthResult,
 	canonicalTitleCleanupResult,
-	recentBackfillResult,
-	unresolvedPageCountResult,
-	unresolvedPublisherResult
+	recentBackfillResult
 ] = await Promise.all([
 	safeAdminLoad("Book coverage", () => sql<Array<{
 		total_books: number;
@@ -221,39 +220,6 @@ const [
 		limit 25
 	`, []),
 	safeAdminLoad("Potential duplicate Works", () => loadPotentialDuplicateWorks(sql, 25), []),
-	safeAdminLoad("Metadata review queue", () => sql<Array<{
-		id: number;
-		title: string;
-		primary_author: string;
-		cover_url: string;
-		synopsis: string;
-		page_count: number;
-		series_name: string;
-		updated_at: string;
-	}>>`
-		select
-			b.id,
-			b.title,
-			b.primary_author,
-			coalesce(b.cover_url, '') as cover_url,
-			coalesce(b.synopsis, '') as synopsis,
-			coalesce(b.page_count, 0)::int as page_count,
-			coalesce(s.name, '') as series_name,
-			b.updated_at::text as updated_at
-		from book b
-		left join series_book sb on sb.book_id = b.id
-		left join series s on s.id = sb.series_id
-		where trim(coalesce(b.cover_url, '')) = ''
-			or trim(coalesce(b.primary_author, '')) = ''
-			or trim(coalesce(b.synopsis, '')) = ''
-			or coalesce(b.page_count, 0) <= 0
-			or (
-				(lower(b.title) ~ '(#|book [0-9]|series|trilogy|saga|chronicles)')
-				and trim(coalesce(s.name, '')) = ''
-			)
-		order by b.updated_at desc, b.id desc
-		limit 50
-	`, []),
 	safeAdminLoad("Relationship health", () => sql<Array<{
 		duplicate_works: number;
 		duplicate_editions: number;
@@ -414,50 +380,6 @@ const [
 			(select count(*)::int from book where updated_at >= now() - interval '7 days') as updated_books_7d,
 			(select count(*)::int from author where updated_at >= now() - interval '24 hours') as updated_authors_24h,
 			(select count(*)::int from author where updated_at >= now() - interval '7 days') as updated_authors_7d
-	`, []),
-	safeAdminLoad("Page-count gaps", () => sql<Array<{
-		id: number;
-		title: string;
-		primary_author: string;
-		google_books_id: string;
-		isbn13: string;
-		isbn10: string;
-		updated_at: string;
-	}>>`
-		select
-			id,
-			title,
-			primary_author,
-			coalesce(google_books_id, '') as google_books_id,
-			coalesce(isbn13, '') as isbn13,
-			coalesce(isbn10, '') as isbn10,
-			updated_at::text as updated_at
-		from book
-		where coalesce(page_count, 0) <= 0
-		order by updated_at desc, id desc
-		limit 50
-	`, []),
-	safeAdminLoad("Publisher gaps", () => sql<Array<{
-		id: number;
-		title: string;
-		primary_author: string;
-		google_books_id: string;
-		isbn13: string;
-		isbn10: string;
-		updated_at: string;
-	}>>`
-		select
-			id,
-			title,
-			primary_author,
-			coalesce(google_books_id, '') as google_books_id,
-			coalesce(isbn13, '') as isbn13,
-			coalesce(isbn10, '') as isbn10,
-			updated_at::text as updated_at
-		from book
-		where trim(coalesce(publisher, '')) = ''
-		order by updated_at desc, id desc
-		limit 50
 	`, [])
 ]);
 
@@ -467,7 +389,6 @@ const authorCoverageRows = safeArray(authorCoverageResult.data);
 const importHealthRows = safeArray(importHealthResult.data);
 const duplicateGroupsRows = safeArray(duplicateGroupsResult.data);
 const potentialDuplicateWorksRows = safeArray(potentialDuplicateWorksResult.data);
-const metadataReviewRows = safeArray(metadataReviewResult.data);
 const relationshipHealthRows = safeArray(relationshipHealthResult.data);
 const catalogClampWarnings: string[] = [];
 let catalogMetadataHealth = catalogMetadataHealthResult.data || emptyCatalogHealth;
@@ -483,8 +404,6 @@ if (catalogMetadataHealth.pagination.total > 0 && catalogHealthFilters.offset >=
 }
 const canonicalTitleCleanupRows = safeArray(canonicalTitleCleanupResult.data);
 const recentBackfillRows = safeArray(recentBackfillResult.data);
-const unresolvedPageCountRows = safeArray(unresolvedPageCountResult.data);
-const unresolvedPublisherRows = safeArray(unresolvedPublisherResult.data);
 const adminWarnings = [
 	publisherSchemaResult.warning,
 	bookCoverageResult.warning,
@@ -493,13 +412,10 @@ const adminWarnings = [
 	importHealthResult.warning,
 	duplicateGroupsResult.warning,
 	potentialDuplicateWorksResult.warning,
-	metadataReviewResult.warning,
 	relationshipHealthResult.warning,
 	catalogMetadataHealthResult.warning,
 	canonicalTitleCleanupResult.warning,
 	recentBackfillResult.warning,
-	unresolvedPageCountResult.warning,
-	unresolvedPublisherResult.warning,
 	...catalogClampWarnings
 ].filter(Boolean);
 
@@ -510,26 +426,13 @@ const sectionLinks = [
 	{ id: "import-health", label: "Import Health" },
 	{ id: "potential-duplicates", label: "Work Duplicates" },
 	{ id: "relationship-health", label: "Relationships" },
-	{ id: "metadata-review", label: "Review Queue" },
 	{ id: "canonical-title-cleanup", label: "Titles" },
 	{ id: "duplicates", label: "Duplicates" },
-	{ id: "backfills", label: "Backfills" },
-	{ id: "page-count-gaps", label: "Page Counts" },
-	{ id: "publisher-gaps", label: "Publishers" }
+	{ id: "backfills", label: "Backfills" }
 ];
 
 function countWithPct(count: unknown, total: unknown) {
 	return `${formatNumber(count)} (${percentOf(count, total)}%)`;
-}
-
-function reviewReasons(row: { cover_url?: string; primary_author?: string; synopsis?: string; page_count?: number; series_name?: string; title?: string }) {
-	const reasons: string[] = [];
-	if (!String(row.cover_url || "").trim()) reasons.push("Missing cover");
-	if (!String(row.primary_author || "").trim()) reasons.push("Missing author");
-	if (!String(row.synopsis || "").trim()) reasons.push("Missing description");
-	if (Number(row.page_count || 0) <= 0) reasons.push("Missing page count");
-	if (/(#|book [0-9]|series|trilogy|saga|chronicles)/i.test(String(row.title || "")) && !String(row.series_name || "").trim()) reasons.push("Possible missing series");
-	return reasons;
 }
 
 function catalogSeverityLabel(value: string) {
@@ -622,6 +525,7 @@ const catalogIssueOptions = Array.from(new Set([
 	"missing_reading_format_metadata",
 	"missing_cover",
 	"missing_author",
+	"missing_description",
 	"missing_publication_year",
 	"missing_publisher",
 	"missing_identifiers",
@@ -644,7 +548,7 @@ const catalogProviderOptions = Array.from(new Set([
 const catalogTotalPages = Math.max(1, Math.ceil(catalogMetadataHealth.pagination.total / catalogPageSize));
 const catalogSafePage = Math.max(1, Math.min(catalogCurrentPage, catalogTotalPages));
 const catalogShowingStart = catalogMetadataHealth.pagination.total > 0 ? ((catalogSafePage - 1) * catalogPageSize) + 1 : 0;
-const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catalogShowingStart + catalogMetadataHealth.issues.length - 1);
+const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catalogShowingStart + catalogMetadataHealth.records.length - 1);
 ---
 
 <Layout title="Admin Data Health" sectionLinks={sectionLinks} robots="noindex,nofollow">
@@ -753,7 +657,7 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 			<div class="grid metadata-stats" role="list">
 				<article class="stat">
 					<p>Catalog records needing attention</p>
-					<strong>{formatNumber(catalogMetadataHealth.summary.totalIssues)}</strong>
+					<strong>{formatNumber(catalogMetadataHealth.summary.totalRecords)}</strong>
 				</article>
 				<article class="stat">
 					<p>Critical</p>
@@ -779,7 +683,7 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 			<form class="catalog-health-filters" method="get" action="/admin/data-health">
 				<label>
 					<span>Search Work or Edition</span>
-					<input type="search" name="catalog_q" value={catalogHealthFilters.q} placeholder="Title, author, Work ID, Book ID" />
+					<input type="search" name="catalog_q" value={catalogHealthFilters.q} placeholder="Title, author, Work ID, Edition ID, ISBN" />
 				</label>
 				<label>
 					<span>Issue</span>
@@ -836,28 +740,35 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 			<div class="table-wrap catalog-health-table">
 				<table>
 					<thead>
-						<tr><th>Book</th><th>Issue</th><th>Severity</th><th>Format</th><th>Source</th><th>Updated</th><th>Action</th></tr>
+						<tr><th>Book</th><th>Needs attention</th><th>Severity</th><th>Format</th><th>Source</th><th>Updated</th><th>Action</th></tr>
 					</thead>
 					<tbody>
-						{catalogMetadataHealth.issues.length === 0 ? (
+						{catalogMetadataHealth.records.length === 0 ? (
 							<tr><td colspan="7">No catalog metadata issues matched the current filters.</td></tr>
-						) : catalogMetadataHealth.issues.map((issue) => (
+						) : catalogMetadataHealth.records.map((record) => (
 							<tr>
 								<td>
 									<div class="catalog-book-cell">
-										{issue.coverUrl ? <img src={issue.coverUrl} alt="" loading="lazy" decoding="async" /> : <span class="cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></span>}
+										{record.coverUrl ? <img src={record.coverUrl} alt="" loading="lazy" decoding="async" /> : <span class="cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></span>}
 										<div>
-											<strong>{issue.title}</strong><br />
-											<span class="muted">{issue.author} · Work {issue.workId}{issue.editionId ? ` · Edition ${issue.editionId}` : ""}</span>
+											<strong>{record.title}</strong><br />
+											<span class="muted">{record.author} · Work {record.workId}{record.editionId ? ` · Edition ${record.editionId}` : ""}</span>
 										</div>
 									</div>
 								</td>
-								<td>{issue.issue}</td>
-								<td><span class={`severity-chip ${issue.severity}`}>{catalogSeverityLabel(issue.severity)}</span></td>
-								<td>{issue.format || "unknown"}</td>
-								<td>{issue.source}</td>
-								<td>{formatDate(issue.updatedAt)}</td>
-								<td><a href={`/admin/books/${issue.workId}${issue.editionId ? `?editionId=${issue.editionId}` : ""}`}>Edit catalog data</a></td>
+								<td>
+									<div class="issue-stack">
+										{record.issues.slice(0, 3).map((issue) => (
+											<span>{issue.issue}</span>
+										))}
+										{record.issues.length > 3 && <span class="muted">+{formatNumber(record.issues.length - 3)} more</span>}
+									</div>
+								</td>
+								<td><span class={`severity-chip ${record.severity}`}>{catalogSeverityLabel(record.severity)}</span></td>
+								<td>{record.format || "unknown"}</td>
+								<td>{record.source}</td>
+								<td>{formatDate(record.updatedAt)}</td>
+								<td><a href={`/admin/books/${record.workId}${record.editionId ? `?editionId=${record.editionId}` : ""}`}>Edit catalog data</a></td>
 							</tr>
 						))}
 					</tbody>
@@ -986,34 +897,6 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 			<p class="note">Normalization first attaches known-series metadata, then cleans redundant title suffixes, then merges only high-confidence duplicate Works using the merge path that preserves shelves, ratings, reviews, activity, journal entries, recommendations, editions, and imports.</p>
 		</section>
 
-		<section class="panel" id="metadata-review">
-			<div class="panel-head">
-				<h2>Metadata Review Queue</h2>
-				<p>{formatNumber(metadataReviewRows.length)} books needing quick admin review (up to 50 newest updates).</p>
-			</div>
-			<div class="table-wrap">
-				<table>
-					<thead>
-						<tr><th>Book</th><th>Author</th><th>Needs attention</th><th>Updated</th><th>Review</th></tr>
-					</thead>
-					<tbody>
-						{metadataReviewRows.length === 0 ? (
-							<tr><td colspan="5">No metadata review items detected.</td></tr>
-						) : metadataReviewRows.map((row) => (
-							<tr>
-								<td>{row.title || "Untitled"}</td>
-								<td>{row.primary_author || "Unknown"}</td>
-								<td>{reviewReasons(row).join(", ") || "Metadata check"}</td>
-								<td>{formatDate(row.updated_at)}</td>
-								<td><a href={`/search?q=${encodeURIComponent(row.title || "")}`}>Review</a></td>
-							</tr>
-						))}
-					</tbody>
-				</table>
-			</div>
-			<p class="note">Use this queue after imports to review missing covers, authors, descriptions, series, and page counts without blocking readers from using their shelves.</p>
-		</section>
-
 		<section class="panel" id="canonical-title-cleanup">
 			<div class="panel-head">
 				<h2>Canonical Title Cleanup</h2>
@@ -1103,59 +986,6 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 			</div>
 		</section>
 
-		<section class="panel" id="page-count-gaps">
-			<div class="panel-head">
-				<h2>Page Count Gaps</h2>
-				<p>{formatNumber(unresolvedPageCountRows.length)} unresolved books shown (up to 50 newest updates).</p>
-			</div>
-			<div class="table-wrap">
-				<table>
-					<thead>
-						<tr><th>Book</th><th>Author</th><th>Google Books ID</th><th>ISBN</th><th>Updated</th></tr>
-					</thead>
-					<tbody>
-						{unresolvedPageCountRows.length === 0 ? (
-							<tr><td colspan="5">No page-count gaps detected.</td></tr>
-						) : unresolvedPageCountRows.map((row) => (
-							<tr>
-								<td>{row.title || "Untitled"}</td>
-								<td>{row.primary_author || "Unknown"}</td>
-								<td>{row.google_books_id || "—"}</td>
-								<td>{row.isbn13 || row.isbn10 || "—"}</td>
-								<td>{formatDate(row.updated_at)}</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
-			</div>
-		</section>
-
-		<section class="panel" id="publisher-gaps">
-			<div class="panel-head">
-				<h2>Publisher Gaps</h2>
-				<p>{formatNumber(unresolvedPublisherRows.length)} unresolved books shown (up to 50 newest updates).</p>
-			</div>
-			<div class="table-wrap">
-				<table>
-					<thead>
-						<tr><th>Book</th><th>Author</th><th>Google Books ID</th><th>ISBN</th><th>Updated</th></tr>
-					</thead>
-					<tbody>
-						{unresolvedPublisherRows.length === 0 ? (
-							<tr><td colspan="5">No publisher gaps detected.</td></tr>
-						) : unresolvedPublisherRows.map((row) => (
-							<tr>
-								<td>{row.title || "Untitled"}</td>
-								<td>{row.primary_author || "Unknown"}</td>
-								<td>{row.google_books_id || "—"}</td>
-								<td>{row.isbn13 || row.isbn10 || "—"}</td>
-								<td>{formatDate(row.updated_at)}</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
-			</div>
-		</section>
 	</div>
 </Layout>
 
@@ -1279,6 +1109,15 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 	}
 	.catalog-book-cell strong,
 	.catalog-book-cell .muted {
+		overflow-wrap: anywhere;
+	}
+	.issue-stack {
+		display: grid;
+		gap: 0.22rem;
+		font-size: 0.84rem;
+		line-height: 1.28;
+	}
+	.issue-stack span {
 		overflow-wrap: anywhere;
 	}
 	.catalog-book-cell img,

@@ -19,6 +19,8 @@ test("Data Health exposes format-aware catalog metadata checks and filters", () 
 
 	assert.match(page, /Catalog Metadata/);
 	assert.match(page, /loadCatalogMetadataHealth/);
+	assert.match(page, /catalogMetadataHealth\.records/);
+	assert.match(page, /Needs attention/);
 	assert.match(page, /Pagination/);
 	assert.match(page, /catalog_page/);
 	assert.match(page, /catalogPageHref/);
@@ -30,11 +32,15 @@ test("Data Health exposes format-aware catalog metadata checks and filters", () 
 	assert.match(page, /Missing audiobook duration/);
 	assert.match(page, /Progress-blocking metadata issues/);
 	assert.match(page, /Edit catalog data/);
-	assert.match(page, /\/admin\/books\/\$\{issue\.workId\}/);
+	assert.match(page, /\/admin\/books\/\$\{record\.workId\}/);
+	assert.doesNotMatch(page, /id="metadata-review"/);
+	assert.doesNotMatch(page, /id="page-count-gaps"/);
+	assert.doesNotMatch(page, /id="publisher-gaps"/);
 
 	for (const issueType of [
 		"missing_page_count",
 		"missing_audiobook_duration",
+		"missing_description",
 		"missing_reading_format_metadata",
 		"missing_series_position",
 		"progress_not_normalizable",
@@ -44,6 +50,8 @@ test("Data Health exposes format-aware catalog metadata checks and filters", () 
 		assert.match(lib, new RegExp(issueType));
 	}
 	assert.match(lib, /isAudiobookFormat\(row\.format\)/);
+	assert.match(lib, /aggregateCatalogHealthRecords/);
+	assert.match(lib, /totalRecords/);
 	assert.match(lib, /durationSeconds/);
 	assert.match(migration, /admin_catalog_audit_event/);
 	assert.match(migration, /idx_book_edition_metadata_gin/);

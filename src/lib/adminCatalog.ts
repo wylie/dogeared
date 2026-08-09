@@ -17,10 +17,27 @@ export type CatalogHealthIssue = {
 	source: string;
 	issue: string;
 	updatedAt: string;
+	searchText: string;
+};
+
+export type CatalogHealthRecord = {
+	recordKey: string;
+	severity: CatalogHealthSeverity;
+	workId: number;
+	bookId: number;
+	editionId: number;
+	title: string;
+	author: string;
+	coverUrl: string;
+	format: string;
+	source: string;
+	updatedAt: string;
+	issues: CatalogHealthIssue[];
 };
 
 export type CatalogHealthResult = {
 	issues: CatalogHealthIssue[];
+	records: CatalogHealthRecord[];
 	summary: CatalogHealthSummary;
 	pagination: CatalogHealthPagination;
 	facets: CatalogHealthFacets;
@@ -38,6 +55,7 @@ export type CatalogHealthFilters = {
 
 export type CatalogHealthSummary = {
 	totalIssues: number;
+	totalRecords: number;
 	critical: number;
 	needsAttention: number;
 	optional: number;
@@ -235,12 +253,62 @@ function normalizeHealthIssueType(value: string) {
 
 function issueMatchesFilters(issue: CatalogHealthIssue, filters: CatalogHealthFilters) {
 	const q = normalizeText(filters.q, 160).toLowerCase();
-	if (q && !`${issue.title} ${issue.author} ${issue.workId} ${issue.bookId} ${issue.editionId}`.toLowerCase().includes(q)) return false;
+	if (q && !`${issue.title} ${issue.author} ${issue.workId} ${issue.bookId} ${issue.editionId} ${issue.searchText}`.toLowerCase().includes(q)) return false;
 	if (filters.issueType && filters.issueType !== "all" && issue.issueType !== filters.issueType) return false;
 	if (filters.severity && filters.severity !== "all" && issue.severity !== filters.severity) return false;
 	if (filters.format && filters.format !== "all" && normalizeText(issue.format || "unknown").toLowerCase() !== filters.format) return false;
 	if (filters.provider && filters.provider !== "all" && normalizeText(issue.source || "unknown").toLowerCase() !== filters.provider) return false;
 	return true;
+}
+
+function severityRank(severity: CatalogHealthSeverity) {
+	if (severity === "critical") return 3;
+	if (severity === "needs_attention") return 2;
+	return 1;
+}
+
+function compareSeverity(a: CatalogHealthSeverity, b: CatalogHealthSeverity) {
+	return severityRank(a) - severityRank(b);
+}
+
+function catalogRecordKey(issue: CatalogHealthIssue) {
+	return issue.editionId > 0 ? `edition:${issue.editionId}` : `work:${issue.workId}`;
+}
+
+function aggregateCatalogHealthRecords(issues: CatalogHealthIssue[]) {
+	const records = new Map<string, CatalogHealthRecord>();
+	for (const issue of issues) {
+		const key = catalogRecordKey(issue);
+		const existing = records.get(key);
+		if (!existing) {
+			records.set(key, {
+				recordKey: key,
+				severity: issue.severity,
+				workId: issue.workId,
+				bookId: issue.bookId,
+				editionId: issue.editionId,
+				title: issue.title,
+				author: issue.author,
+				coverUrl: issue.coverUrl,
+				format: issue.format,
+				source: issue.source,
+				updatedAt: issue.updatedAt,
+				issues: [issue]
+			});
+			continue;
+		}
+		existing.issues.push(issue);
+		if (compareSeverity(issue.severity, existing.severity) > 0) existing.severity = issue.severity;
+		if (!existing.coverUrl && issue.coverUrl) existing.coverUrl = issue.coverUrl;
+		if ((!existing.format || existing.format === "unknown") && issue.format) existing.format = issue.format;
+		if ((!existing.source || existing.source === "Existing DogEared data") && issue.source) existing.source = issue.source;
+		if (new Date(issue.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) existing.updatedAt = issue.updatedAt;
+	}
+	return Array.from(records.values()).sort((a, b) => {
+		const severity = compareSeverity(b.severity, a.severity);
+		if (severity !== 0) return severity;
+		return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+	});
 }
 
 export async function ensureAdminCatalogSchema(sql: Sql) {
@@ -273,6 +341,7 @@ type HealthRow = {
 	edition_page_count: number;
 	publisher: string;
 	published_year: number | null;
+	description: string;
 	isbn10: string;
 	isbn13: string;
 	google_books_id: string;
@@ -303,6 +372,7 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 			coalesce(be.page_count, 0)::int as edition_page_count,
 			coalesce(nullif(trim(be.publisher), ''), nullif(trim(b.publisher), ''), '') as publisher,
 			coalesce(be.publication_year, b.published_year) as published_year,
+			coalesce(nullif(trim(bw.description), ''), nullif(trim(b.synopsis), ''), '') as description,
 			coalesce(nullif(trim(be.isbn10), ''), nullif(trim(b.isbn10), ''), '') as isbn10,
 			coalesce(nullif(trim(be.isbn13), ''), nullif(trim(b.isbn13), ''), '') as isbn13,
 			coalesce(nullif(trim(be.google_books_id), ''), nullif(trim(b.google_books_id), ''), '') as google_books_id,
@@ -350,9 +420,15 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 			format: normalizeText(row.format, 80) || "unknown",
 			source,
 			issue,
-			updatedAt: row.updated_at
+			updatedAt: row.updated_at,
+			searchText: [
+				row.isbn10,
+				row.isbn13,
+				row.google_books_id,
+				row.open_library_work_id,
+				row.open_library_edition_id
+			].filter(Boolean).join(" ")
 		};
-		if (!issueMatchesFilters(entry, filters)) return;
 		seen.add(key);
 		issues.push(entry);
 	};
@@ -364,6 +440,7 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 		const isAudio = isAudiobookFormat(row.format);
 		const isLocationBased = isDigitalLocationFormat(row.format);
 		const usefulPageCount = Math.max(Number(row.edition_page_count || 0), Number(row.book_page_count || 0));
+		const workRow = { ...row, edition_id: null };
 		if (!normalizeText(row.format)) pushIssue(row, "missing_reading_format_metadata", "needs_attention", "Missing Edition format metadata");
 		if (isAudio) {
 			if (durationSeconds <= 0) pushIssue(row, "missing_audiobook_duration", row.audio_progress_entries > 0 ? "critical" : "needs_attention", "Missing audiobook duration");
@@ -373,15 +450,16 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 		if (isLocationBased && locationCount <= 0) pushIssue(row, "missing_location_count", "optional", "Missing location count");
 		if (chapterCount <= 0 && /chapter/i.test(String(row.format || ""))) pushIssue(row, "missing_chapter_count", "optional", "Missing chapter count");
 		if (!normalizeText(row.cover_url)) pushIssue(row, "missing_cover", "optional", "Missing cover");
-		if (!normalizeText(row.author) || row.author === "Unknown") pushIssue(row, "missing_author", "needs_attention", "Missing author");
+		if (!normalizeText(row.author) || row.author === "Unknown") pushIssue(workRow, "missing_author", "needs_attention", "Missing author");
+		if (!normalizeText(row.description)) pushIssue(workRow, "missing_description", "optional", "Missing description");
 		if (!Number(row.published_year || 0)) pushIssue(row, "missing_publication_year", "needs_attention", "Missing publication year");
 		if (!normalizeText(row.publisher)) pushIssue(row, "missing_publisher", "needs_attention", "Missing publisher");
 		if (!normalizeText(row.isbn10) && !normalizeText(row.isbn13) && !normalizeText(row.google_books_id) && !normalizeText(row.open_library_work_id) && !normalizeText(row.open_library_edition_id)) {
 			pushIssue(row, "missing_identifiers", "needs_attention", "Missing ISBN or external identifiers");
 		}
-		if (row.series_id && !normalizeText(row.series_position)) pushIssue(row, "missing_series_position", "needs_attention", "Missing Series position");
-		if (/\(.*#?\d+.*\)$|\bbook\s+\d+\b/i.test(row.title) && !row.series_id) pushIssue(row, "missing_series_relationship", "needs_attention", "Possible missing Series relationship");
-		if (/\b(audiobook|hardcover|paperback|kindle edition|ebook)\b/i.test(row.title)) pushIssue(row, "malformed_title", "needs_attention", "Potentially malformed Work title");
+		if (row.series_id && !normalizeText(row.series_position)) pushIssue(workRow, "missing_series_position", "needs_attention", "Missing Series position");
+		if (/\(.*#?\d+.*\)$|\bbook\s+\d+\b/i.test(row.title) && !row.series_id) pushIssue(workRow, "missing_series_relationship", "needs_attention", "Possible missing Series relationship");
+		if (/\b(audiobook|hardcover|paperback|kindle edition|ebook)\b/i.test(row.title)) pushIssue(workRow, "malformed_title", "needs_attention", "Potentially malformed Work title");
 		if (row.progress_entries > 0 && usefulPageCount <= 0 && !isAudio) pushIssue(row, "progress_not_normalizable", "critical", "Progress entries cannot be normalized without page count");
 		if (row.audio_progress_entries > 0 && isAudio && durationSeconds <= 0) pushIssue(row, "progress_not_normalizable", "critical", "Audiobook progress cannot be normalized without duration");
 	}
@@ -420,6 +498,7 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 			edition_page_count: 0,
 			publisher: "",
 			published_year: null,
+			description: "",
 			isbn10: "",
 			isbn13: "",
 			google_books_id: "",
@@ -478,6 +557,7 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 			edition_page_count: 0,
 			publisher: "",
 			published_year: null,
+			description: "",
 			isbn10: "",
 			isbn13: "",
 			google_books_id: "",
@@ -492,22 +572,28 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 			audio_progress_entries: 0
 		}, "potential_duplicate_edition", "critical", "Potential duplicate Edition");
 	}
-	const limitedIssues = issues.slice(offset, offset + limit);
+	const matchingRecordKeys = new Set(issues.filter((issue) => issueMatchesFilters(issue, filters)).map(catalogRecordKey));
+	const filteredIssues = issues.filter((issue) => matchingRecordKeys.has(catalogRecordKey(issue)));
+	const records = aggregateCatalogHealthRecords(filteredIssues);
+	const limitedRecords = records.slice(offset, offset + limit);
+	const limitedIssueKeys = new Set(limitedRecords.map((record) => record.recordKey));
+	const limitedIssues = filteredIssues.filter((issue) => limitedIssueKeys.has(catalogRecordKey(issue)));
 	const summary: CatalogHealthSummary = {
-		totalIssues: issues.length,
-		critical: issues.filter((issue) => issue.severity === "critical").length,
-		needsAttention: issues.filter((issue) => issue.severity === "needs_attention").length,
-		optional: issues.filter((issue) => issue.severity === "optional").length,
-		missingPageCounts: issues.filter((issue) => issue.issueType === "missing_page_count").length,
-		missingAudiobookDurations: issues.filter((issue) => issue.issueType === "missing_audiobook_duration").length,
-		potentialDuplicates: issues.filter((issue) => issue.issueType.includes("duplicate")).length,
-		progressBlocking: issues.filter((issue) => issue.issueType === "progress_not_normalizable" || issue.severity === "critical").length
+		totalIssues: filteredIssues.length,
+		totalRecords: records.length,
+		critical: records.filter((record) => record.severity === "critical").length,
+		needsAttention: records.filter((record) => record.severity === "needs_attention").length,
+		optional: records.filter((record) => record.severity === "optional").length,
+		missingPageCounts: filteredIssues.filter((issue) => issue.issueType === "missing_page_count").length,
+		missingAudiobookDurations: filteredIssues.filter((issue) => issue.issueType === "missing_audiobook_duration").length,
+		potentialDuplicates: filteredIssues.filter((issue) => issue.issueType.includes("duplicate")).length,
+		progressBlocking: filteredIssues.filter((issue) => issue.issueType === "progress_not_normalizable" || issue.severity === "critical").length
 	};
 	const facets: CatalogHealthFacets = {
-		formats: Array.from(new Set(issues.map((issue) => normalizeText(issue.format || "unknown", 80).toLowerCase()).filter(Boolean))).sort(),
-		providers: Array.from(new Set(issues.map((issue) => normalizeText(issue.source || "Existing DogEared data", 80).toLowerCase()).filter(Boolean))).sort()
+		formats: Array.from(new Set(filteredIssues.map((issue) => normalizeText(issue.format || "unknown", 80).toLowerCase()).filter(Boolean))).sort(),
+		providers: Array.from(new Set(filteredIssues.map((issue) => normalizeText(issue.source || "Existing DogEared data", 80).toLowerCase()).filter(Boolean))).sort()
 	};
-	return { issues: limitedIssues, summary, pagination: { limit, offset, total: issues.length }, facets };
+	return { issues: limitedIssues, records: limitedRecords, summary, pagination: { limit, offset, total: records.length }, facets };
 }
 
 export async function countCatalogHealthIssuesForWork(sql: Sql, workId: unknown) {

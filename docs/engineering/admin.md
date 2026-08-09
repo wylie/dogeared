@@ -159,9 +159,7 @@ Shows metadata coverage and gaps:
 - Missing publisher.
 - Books with/without genres.
 - Authors without bio/photo.
-- Format-aware Catalog Metadata issues, including missing page counts, missing audiobook duration, missing location/chapter counts, missing identifiers, missing Series position, malformed Work titles, potential duplicate Works, and progress-blocking normalization gaps.
-
-It also lists unresolved page-count and publisher gaps.
+- Format-aware Catalog Metadata records, including missing page counts, missing descriptions, missing audiobook duration, missing location/chapter counts, missing identifiers, missing Series position, malformed Work titles, potential duplicate Works, and progress-blocking normalization gaps.
 
 ## Catalog Metadata Editor
 
@@ -204,7 +202,9 @@ Safety rules:
 
 Route: `/admin/data-health#catalog-metadata`
 
-The Catalog Metadata queue is server-paginated at 25 records per page and uses the shared `Pagination` component. Search, Issue, Severity, Format, Provider, and page state live in query parameters so admins can refresh, use Back, and return from an editor visit without losing context. Filter and quick-filter changes intentionally omit `catalog_page`, resetting the queue to Page 1.
+The Catalog Metadata queue is the single metadata review table. Raw health checks still run independently, but the page aggregates them into one row per affected Edition when an Edition-specific issue exists, or one row per Work for Work-level issues. Each row shows the cover, title, author, Work ID, Edition ID when available, a compact Needs attention list, the highest-severity issue as the row severity, format, source, updated date, and one Catalog Editor link.
+
+The queue is server-paginated at 25 unique records per page and uses the shared `Pagination` component. Search, Issue, Severity, Format, Provider, and page state live in query parameters so admins can refresh, use Back, and return from an editor visit without losing context. Filter and quick-filter changes intentionally omit `catalog_page`, resetting the queue to Page 1.
 
 ## Import Health
 
@@ -217,20 +217,6 @@ Shows reliability proxies for imports and shelf consistency:
 - Entries without total pages.
 - Finished books without date.
 - Currently Reading entries with zero progress.
-
-## Metadata Review Queue
-
-Route: `/admin/data-health`
-
-Shows books that need quick admin review after imports or metadata backfills:
-
-- Missing cover.
-- Missing author.
-- Missing description.
-- Missing page count.
-- Possible missing series.
-
-The queue links admins back into search for quick catalog inspection. It does not block reader imports.
 
 ## Duplicate Risk
 
