@@ -204,7 +204,8 @@ test("profile progress saves refresh all derived reading UI without reload", () 
 	assert.equal(summaryApiSource.includes('"Cache-Control": "no-store"'), true);
 	assert.equal(summarySource.includes("calculateReadingStreak(readingStreakDateKeys"), true);
 	assert.equal(summarySource.includes("resolveMomentumPrediction"), true);
-	assert.equal(source.includes("loadReaderReadingSummary(sql, bundle.targetUserId)"), true);
+	assert.equal(source.includes("loadReaderReadingSummary(sql, bundle.targetUserId, {"), true);
+	assert.equal(source.includes("ensureSchema: false"), true);
 	assert.equal(source.includes("buildReaderReadingSummary({"), true);
 	assert.equal(apiSource.includes("previousStatus === status && status === \"reading\""), false);
 	assert.equal(apiSource.includes("coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages"), true);

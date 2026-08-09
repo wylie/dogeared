@@ -299,9 +299,11 @@ export async function awardAchievement(
 export async function loadEarnedAchievements(
 	sql: NeonQueryFunction<false, false>,
 	userId: string,
-	options?: { includeHidden?: boolean; limit?: number }
+	options?: { includeHidden?: boolean; limit?: number; ensureSchema?: boolean }
 ) {
-	await ensureAchievementSchema(sql);
+	if (options?.ensureSchema !== false) {
+		await ensureAchievementSchema(sql);
+	}
 	const limit = Math.min(100, Math.max(1, Number(options?.limit || 36) || 36));
 	const rows = await sql<Array<{
 		id: number;

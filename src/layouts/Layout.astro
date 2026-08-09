@@ -14,9 +14,20 @@ import { getNeonSql } from '../lib/neon';
 import { DEFAULT_SOCIAL_IMAGE } from '../lib/metadataAssets';
 import { DEFAULT_ROBOTS_DIRECTIVE, DEFAULT_SOCIAL_IMAGE_ALT, buildPageMetadata, type PageMetadataOgType } from '../lib/pageMetadata';
 import { loadLatestPublishedRelease } from '../lib/releases';
+import { recordPerformanceEventSafe, type PerformanceSpanInput } from '../lib/performanceTelemetry';
 import { withRuntimeCache } from '../lib/runtimeCache';
 import { resolveAppVersion, resolveGitCommit } from '../lib/versionInfo';
 type SectionLink = { id: string; label: string };
+type ResolvedLayoutSession = { userId: string; sessionHash: string } | null;
+type LayoutPerformanceTelemetry = {
+	operationName: string;
+	route: string;
+	startedAt: number;
+	success: boolean;
+	httpStatus: number;
+	spans: PerformanceSpanInput[];
+	metadata?: Record<string, unknown>;
+};
 const {
 	title = "DogEared",
 	sectionLinks = [],
@@ -26,7 +37,9 @@ const {
 	socialImage = DEFAULT_SOCIAL_IMAGE,
 	socialImageAlt = DEFAULT_SOCIAL_IMAGE_ALT,
 	ogType = "website",
-	structuredData = ""
+	structuredData = "",
+	resolvedSession = undefined,
+	performanceTelemetry = null
 } = Astro.props as {
 	title?: string;
 	sectionLinks?: SectionLink[];
@@ -37,7 +50,10 @@ const {
 	socialImageAlt?: string;
 	ogType?: PageMetadataOgType;
 	structuredData?: string;
+	resolvedSession?: ResolvedLayoutSession;
+	performanceTelemetry?: LayoutPerformanceTelemetry | null;
 };
+const layoutSharedStartedAt = performance.now();
 const currentPath = Astro.url.pathname;
 const AUTH_PROMPT_ROUTES = new Set(["/", "/discover", "/search", "/books", "/authors", "/collections", "/related"]);
 const allowsAuthPrompt = (path: string) =>
@@ -48,7 +64,7 @@ const allowsAuthPrompt = (path: string) =>
 	|| path.startsWith("/profile/");
 const fontStylesheetHref = "https://fonts.googleapis.com/css2?family=Copse&family=Outfit:wght@100..900&display=swap";
 const iconStylesheetHref = "https://fonts.googleapis.com/icon?family=Material+Icons&display=swap";
-const session = await resolveUserBySession(Astro.request);
+const session = resolvedSession === undefined ? await resolveUserBySession(Astro.request) : resolvedSession;
 const isAuthenticated = !!session?.userId;
 const allowAuthPrompt = !isAuthenticated && allowsAuthPrompt(currentPath);
 const [
@@ -70,6 +86,12 @@ const [
 		latestRelease: null
 	}))
 ]);
+if (performanceTelemetry) {
+	performanceTelemetry.spans.push({
+		name: "shared navigation/sidebar data",
+		durationMs: performance.now() - layoutSharedStartedAt
+	});
+}
 const { activeAnnouncement, foundingReaderConfig, latestRelease } = layoutGlobalData;
 const isAdmin = !!adminSession.isAdmin;
 const appVersion = resolveAppVersion();
@@ -86,6 +108,17 @@ const metadata = buildPageMetadata({
 	structuredData,
 	site: Astro.site ?? Astro.url
 });
+if (performanceTelemetry) {
+	recordPerformanceEventSafe({
+		operationName: performanceTelemetry.operationName,
+		route: performanceTelemetry.route,
+		totalMs: performance.now() - performanceTelemetry.startedAt,
+		success: performanceTelemetry.success,
+		httpStatus: performanceTelemetry.httpStatus,
+		spans: performanceTelemetry.spans,
+		metadata: performanceTelemetry.metadata
+	});
+}
 import '../assets/global.css';
 ---
 

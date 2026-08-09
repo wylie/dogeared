@@ -59,6 +59,8 @@ Profiles show reader identity, shelf summary, reading goal, shelves, custom shel
 
 Profiles are the "Who am I as a reader?" surface, so the owner experience stays focused on profile card, bio, favorite book/author, concise reading goal summary, shelf summary, currently reading, recent activity, and settings access. Notifications live in the dedicated notification center.
 
+Profile rendering loads privacy-critical profile data first, then runs independent shelf/activity/goal/achievement/review/navigation reads concurrently where correctness allows. Profile GET requests reuse request-scoped session data and avoid blocking on schema/index setup that is not required to render an already-deployed database. Admin Performance records `page.profile` spans for authentication/session, user/profile lookup, follower/following counts, shelf summary, current reads, momentum/streak, recent activity, finished books, reading goal, reviews/preparation, achievements, viewer shelf state, custom shelves, favorite links, and shared navigation/sidebar data.
+
 Limitations: Private profiles are hidden from non-owners. Private journal entries are intentionally not shown on profiles.
 
 ### Profile Editing
@@ -707,7 +709,7 @@ Status: Beta
 
 Admins can review operational performance telemetry at `/admin/performance`: request volume, p50/p75/p95/p99 latency, error rate, slow-operation count, core workflow cards, route/API performance, timing-span breakdowns, external provider latency, recent slow operations, release comparisons, and workflow-specific performance targets.
 
-Recorded operations use stable names such as `search.books`, `progress.save`, `shelf.mutate`, `page.profile`, `page.reading-life`, `page.search`, `page.book-detail`, `page.author-detail`, `page.discover`, `external.google-books`, and `external.open-library`. Timing spans use the same terminology as local development diagnostics, such as local catalog, external providers, canonical resolution, progress mutation, milestone work, page bundle loading, and viewer-state loading.
+Recorded operations use stable names such as `search.books`, `progress.save`, `shelf.mutate`, `page.profile`, `page.reading-life`, `page.search`, `page.book-detail`, `page.author-detail`, `page.discover`, `external.google-books`, and `external.open-library`. Timing spans use the same terminology as local development diagnostics, such as local catalog, external providers, canonical resolution, progress mutation, milestone work, Profile user/profile lookup, follower/following counts, shelf summary, current reads, recent activity, finished books, reading goal, shared navigation/sidebar loading, and viewer-state loading.
 
 The telemetry path is fire-and-forget from measured workflows, samples normal successes through `PERFORMANCE_TELEMETRY_SAMPLE_RATE` when configured, and always keeps errors and unusually slow operations. Raw events are retained for 45 days; longer-term performance review should rely on aggregates and release comparisons rather than permanent raw request logs.
 

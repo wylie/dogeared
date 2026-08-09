@@ -204,52 +204,65 @@ export async function ensureReadingProgressEventSchema(sql: ReturnType<typeof im
 export async function loadReaderReadingSummary(
 	sql: ReturnType<typeof import("./neon.ts").getNeonSql>,
 	userId: string,
-	options: { now?: Date } = {}
+	options: { now?: Date; ensureSchema?: boolean; onTiming?: (name: string, durationMs: number) => void } = {}
 ): Promise<ReaderReadingSummary> {
-	await ensureReadingProgressEventSchema(sql);
+	const time = async <T>(name: string, work: () => Promise<T>) => {
+		const startedAt = performance.now();
+		try {
+			return await work();
+		} finally {
+			options.onTiming?.(name, performance.now() - startedAt);
+		}
+	};
+	if (options.ensureSchema !== false) {
+		await time("reading progress schema", () => ensureReadingProgressEventSchema(sql));
+	}
 	const [readingRows, progressDateRows] = await Promise.all([
-		sql<CurrentBookRow[]>`
-			select
-				b.id as book_id,
-				b.title,
-				b.primary_author,
-				b.author_id,
-				b.cover_url,
-				b.language,
-				b.isbn10,
-				b.isbn13,
-				b.google_books_id,
-				ub.current_page,
-				coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages,
-				coalesce(nullif(trim(ub.preferred_progress_type), ''), 'page') as preferred_progress_type,
-				ub.updated_at::text as updated_at,
-				coalesce(ub.first_added_at::text, ub.updated_at::text) as first_added_at,
-				coalesce(pe.progress_updates, 0)::int as progress_updates,
-				(
-					select coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}')
-					from book_genre bg where bg.book_id = b.id
-				) as genres
-			from user_book ub
-			join book b on b.id = ub.book_id
-			left join lateral (
-				select count(*)::int as progress_updates
-				from user_reading_progress_event pe
-				where pe.user_id = ub.user_id
-					and pe.book_id = ub.book_id
-			) pe on true
-			where ub.user_id = ${userId}::uuid
-				and ub.status = 'reading'
-			order by ub.updated_at desc
-			limit 500
-		`,
-		sql<ProgressDateRow[]>`
-			select distinct recorded_at::date::text as activity_day
-			from user_reading_progress_event
-			where user_id = ${userId}::uuid
-			order by activity_day desc
-			limit 120
-		`
+		time("currently reading", () => sql<CurrentBookRow[]>`
+				select
+					b.id as book_id,
+					b.title,
+					b.primary_author,
+					b.author_id,
+					b.cover_url,
+					b.language,
+					b.isbn10,
+					b.isbn13,
+					b.google_books_id,
+					ub.current_page,
+					coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages,
+					coalesce(nullif(trim(ub.preferred_progress_type), ''), 'page') as preferred_progress_type,
+					ub.updated_at::text as updated_at,
+					coalesce(ub.first_added_at::text, ub.updated_at::text) as first_added_at,
+					coalesce(pe.progress_updates, 0)::int as progress_updates,
+					(
+						select coalesce(array_agg(distinct bg.genre_name order by bg.genre_name) filter (where trim(coalesce(bg.genre_name, '')) <> ''), '{}')
+						from book_genre bg where bg.book_id = b.id
+					) as genres
+				from user_book ub
+				join book b on b.id = ub.book_id
+				left join lateral (
+					select count(*)::int as progress_updates
+					from user_reading_progress_event pe
+					where pe.user_id = ub.user_id
+						and pe.book_id = ub.book_id
+				) pe on true
+				where ub.user_id = ${userId}::uuid
+					and ub.status = 'reading'
+				order by ub.updated_at desc
+				limit 500
+			`
+		),
+		time("momentum/streak", () => sql<ProgressDateRow[]>`
+				select distinct recorded_at::date::text as activity_day
+				from user_reading_progress_event
+				where user_id = ${userId}::uuid
+				order by activity_day desc
+				limit 120
+			`
+		)
 	]);
+	const buildStartedAt = performance.now();
 	const currentlyReading = readingRows.map((row) => ({
 		bookId: toPositiveInt(row.book_id),
 		title: String(row.title || "").trim(),
@@ -269,9 +282,11 @@ export async function loadReaderReadingSummary(
 		progressUpdates: toPositiveInt(row.progress_updates),
 		genres: Array.isArray(row.genres) ? row.genres.map((genre) => String(genre || "").trim()).filter(Boolean) : []
 	}));
-	return buildReaderReadingSummary({
+	const summary = buildReaderReadingSummary({
 		currentlyReading,
 		progressDateKeys: progressDateRows.map((row) => String(row.activity_day || "").trim()).filter(Boolean),
 		now: options.now
 	});
+	options.onTiming?.("rendering preparation", performance.now() - buildStartedAt);
+	return summary;
 }

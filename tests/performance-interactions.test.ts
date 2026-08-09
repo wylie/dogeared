@@ -112,11 +112,14 @@ test("page navigation and route rendering avoid avoidable blocking work", () => 
 	assert.match(authorDetail, /const viewerStatusPromise = viewerUserId && bookIds\.length > 0/);
 	assert.match(authorDetail, /const externalBooksPromise = authorName/);
 	assert.match(authorDetail, /await Promise\.all\(\[\s*authorCountsPromise,\s*viewerStatusPromise,\s*openLibraryBioPromise,\s*loadCollectionsForAuthor/s);
-	assert.match(profile, /const favoriteBookHrefPromise = \(async \(\) =>/);
-	assert.match(profile, /const favoriteAuthorHrefPromise = \(async \(\) =>/);
-	assert.match(profile, /ensureReviewSchema\(sql\)\.catch\(\(\) => undefined\)/);
+	assert.match(profile, /const favoriteBookHrefPromise = timePagePerf\("favorite book link", async \(\) =>/);
+	assert.match(profile, /const favoriteAuthorHrefPromise = timePagePerf\("favorite author link", async \(\) =>/);
+	assert.doesNotMatch(profile, /ensureReviewSchema\(sql\)\.catch\(\(\) => undefined\)/);
 	assert.match(profile, /const customShelfSchemaReady = isOwnerViewer/);
-	assert.match(profile, /await ensureProfileRenderIndexes\(sql\)\.catch\(\(\) => undefined\)/);
+	assert.doesNotMatch(profile, /await ensureProfileRenderIndexes\(sql\)\.catch\(\(\) => undefined\)/);
+	assert.match(profile, /ensureSchema: false/);
+	assert.match(profile, /resolvedSession=\{session\}/);
+	assert.match(profile, /performanceTelemetry=\{profilePerformanceTelemetry\}/);
 	assert.match(profile, /const WANT_TO_READ_RENDER_WINDOW = PAGE_SIZE \* 3/);
 	assert.match(profile, /limit \$\{WANT_TO_READ_RENDER_WINDOW\}/);
 	assert.match(profile, /offset \$\{wantToReadOffset\}/);

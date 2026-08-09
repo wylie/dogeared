@@ -112,6 +112,9 @@ test("core workflows record sanitized performance events at meaningful boundarie
 	] as const) {
 		assert.match(source, new RegExp(`operationName: "${operation.replace(".", "\\.")}"`));
 		assert.match(source, /route: "\//);
-		assert.match(source, /spans: pagePerfStages/);
+		assert.match(source, /spans: pagePerf(?:Stages|Spans)/);
 	}
+	assert.match(profilePage, /timePagePerf\("authentication\/session"/);
+	assert.match(profilePage, /onTiming: recordPagePerfSpan/);
+	assert.match(profilePage, /performanceTelemetry=\{profilePerformanceTelemetry\}/);
 });

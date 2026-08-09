@@ -19,7 +19,6 @@ import { ensureCustomShelfSchema } from "../../lib/customShelves";
 import { filterCanonicalFinishedBooksForYear, loadFinishedBooksForReader } from "../../lib/finishedBooks";
 import { readingGoalYear, resolveReadingGoalProgress } from "../../lib/readingGoal";
 import { buildBreadcrumbList, toAbsoluteUrl } from "../../lib/seo";
-import { ensureReviewSchema } from "../../lib/bookReviews";
 import { createNotification } from "../../lib/notifications";
 import {
 	buildReaderReadingSummary,
@@ -27,19 +26,26 @@ import {
 	type ReadingSummaryMomentumBook
 } from "../../lib/readingSummary";
 import type { ProgressInputMode } from "../../lib/readingProgress";
-import { recordPerformanceEventSafe } from "../../lib/performanceTelemetry";
-import { ensureProfileRenderIndexes } from "../../lib/profileRenderIndexes";
+import type { PerformanceSpanInput } from "../../lib/performanceTelemetry";
 
 export const prerender = false;
 
 const pagePerfStartedAt = performance.now();
-const pagePerfStages: Record<string, number> = {};
-const markPagePerfStage = (stage: string) => {
-	pagePerfStages[stage] = Math.round((performance.now() - pagePerfStartedAt) * 10) / 10;
+const pagePerfSpans: PerformanceSpanInput[] = [];
+const recordPagePerfSpan = (name: string, durationMs: number) => {
+	const normalizedDuration = Math.max(0, Math.round(durationMs * 10) / 10);
+	pagePerfSpans.push({ name, durationMs: normalizedDuration });
+};
+const timePagePerf = async <T,>(name: string, work: () => Promise<T>) => {
+	const startedAt = performance.now();
+	try {
+		return await work();
+	} finally {
+		recordPagePerfSpan(name, performance.now() - startedAt);
+	}
 };
 const requestedUsername = String(Astro.params.username || "").trim().toLowerCase();
-const session = await resolveUserBySession(Astro.request);
-markPagePerfStage("session_loaded");
+const session = await timePagePerf("authentication/session", () => resolveUserBySession(Astro.request));
 const viewerUserId = String(session?.userId || "");
 const isAuthenticated = !!viewerUserId;
 const editMode = String(Astro.url.searchParams.get("edit") || "").trim() === "1";
@@ -371,8 +377,11 @@ const wantToReadOffset = (wantToReadPage - 1) * PAGE_SIZE;
 const reviewSort = String(Astro.url.searchParams.get("review_sort") || "newest").trim();
 const reviewFilter = String(Astro.url.searchParams.get("review_filter") || "all").trim();
 
-const bundle = await resolvePublicProfileBundle({ username: requestedUsername, viewerUserId });
-markPagePerfStage("profile_bundle_loaded");
+const bundle = await resolvePublicProfileBundle({
+	username: requestedUsername,
+	viewerUserId,
+	onTiming: recordPagePerfSpan
+});
 if (bundle.status === "not_found") notFound = true;
 if (bundle.status === "private") privateProfile = true;
 if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
@@ -380,7 +389,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 	profile = bundle.profile;
 	canViewActivity = bundle.canViewActivity;
 	isOwnerViewer = !!viewerUserId && viewerUserId === bundle.targetUserId;
-	const favoriteBookHrefPromise = (async () => {
+	const favoriteBookHrefPromise = timePagePerf("favorite book link", async () => {
 		if (!profile.favoriteBook) return "";
 		const favoriteRaw = String(profile.favoriteBook || "").trim();
 		let favoriteTitle = favoriteRaw;
@@ -406,8 +415,8 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		return favoriteTitle
 			? `/book?title=${encodeURIComponent(favoriteTitle)}${favoriteAuthor ? `&author=${encodeURIComponent(favoriteAuthor)}` : ""}`
 			: "";
-	})().catch(() => "");
-	const favoriteAuthorHrefPromise = (async () => {
+	}).catch(() => "");
+	const favoriteAuthorHrefPromise = timePagePerf("favorite author link", async () => {
 		if (!profile.favoriteAuthor) return "";
 		const favoriteAuthorMatch = await sql<Array<{ id: number }>>`
 			select a.id
@@ -418,17 +427,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		`;
 		const favoriteAuthorId = Number(favoriteAuthorMatch[0]?.id || 0);
 		return authorHref(profile.favoriteAuthor, favoriteAuthorId);
-	})().catch(() => "");
-	const [
-		loadedFavoriteBookHref,
-		loadedFavoriteAuthorHref
-	] = await Promise.all([
-		favoriteBookHrefPromise,
-		favoriteAuthorHrefPromise,
-		ensureReviewSchema(sql).catch(() => undefined)
-	]);
-	favoriteBookHref = loadedFavoriteBookHref;
-	favoriteAuthorHref = loadedFavoriteAuthorHref;
+	}).catch(() => "");
 	targetProfileData = bundle.profileData;
 	if (isOwnerViewer) ownerProfileData = targetProfileData;
 	showAchievementsPublic = resolveAchievementVisibilitySetting(targetProfileData);
@@ -442,16 +441,39 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 	const customShelfSchemaReady = isOwnerViewer
 		? ensureCustomShelfSchema(sql).catch(() => null)
 		: Promise.resolve(null);
-	await ensureProfileRenderIndexes(sql).catch(() => undefined);
-	const [summary, updates, readerReadingSummary, achievementRows, wantToReadRows, finishedRows, customShelfRows, customShelfBookRows] = await Promise.all([
-		resolvePublicShelfSummary(bundle.targetUserId),
-		bundle.canViewActivity ? resolvePublicRecentActivity(bundle.targetUserId, 500, viewerUserId) : Promise.resolve([]),
-		bundle.canViewActivity ? loadReaderReadingSummary(sql, bundle.targetUserId) : Promise.resolve(emptyReadingSummary),
-		(isOwnerViewer || showAchievementsPublic)
-			? loadEarnedAchievements(sql, bundle.targetUserId, { includeHidden: isOwnerViewer, limit: 48 })
+	const [
+		loadedFavoriteBookHref,
+		loadedFavoriteAuthorHref,
+		summary,
+		updates,
+		readerReadingSummary,
+		achievementRows,
+		wantToReadRows,
+		finishedRows,
+		customShelfRows,
+		customShelfBookRows
+	] = await Promise.all([
+		favoriteBookHrefPromise,
+		favoriteAuthorHrefPromise,
+		timePagePerf("shelf summary", () => resolvePublicShelfSummary(bundle.targetUserId)),
+		bundle.canViewActivity
+			? timePagePerf("recent activity", () => resolvePublicRecentActivity(bundle.targetUserId, 500, viewerUserId))
 			: Promise.resolve([]),
 		bundle.canViewActivity
-				? sql<Array<{
+			? loadReaderReadingSummary(sql, bundle.targetUserId, {
+				ensureSchema: false,
+				onTiming: recordPagePerfSpan
+			})
+			: Promise.resolve(emptyReadingSummary),
+		(isOwnerViewer || showAchievementsPublic)
+			? timePagePerf("achievements", () => loadEarnedAchievements(sql, bundle.targetUserId, {
+				includeHidden: isOwnerViewer,
+				limit: 48,
+				ensureSchema: false
+			}))
+			: Promise.resolve([]),
+		bundle.canViewActivity
+				? timePagePerf("want to read", () => sql<Array<{
 					book_id: number;
 					title: string;
 					primary_author: string;
@@ -484,13 +506,13 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 				order by ub.updated_at desc
 				limit ${WANT_TO_READ_RENDER_WINDOW}
 				offset ${wantToReadOffset}
-			`
+			`)
 			: Promise.resolve([]),
 		bundle.canViewActivity
-			? loadFinishedBooksForReader(sql, bundle.targetUserId)
+			? timePagePerf("finished books", () => loadFinishedBooksForReader(sql, bundle.targetUserId))
 			: Promise.resolve([]),
 		isOwnerViewer
-			? (async () => {
+			? timePagePerf("custom shelves", async () => {
 				try {
 					await customShelfSchemaReady;
 					return sql<Array<{ id: number; name: string; slug: string; icon: string; position: number; book_count: number }>>`
@@ -512,10 +534,10 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 				} catch {
 					return [];
 				}
-			})()
+			})
 			: Promise.resolve([]),
 		isOwnerViewer
-			? (async () => {
+			? timePagePerf("custom shelf books", async () => {
 				try {
 					await customShelfSchemaReady;
 					return sql<Array<{
@@ -561,9 +583,11 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 				} catch {
 					return [];
 				}
-			})()
+			})
 			: Promise.resolve([])
 	]);
+	favoriteBookHref = loadedFavoriteBookHref;
+	favoriteAuthorHref = loadedFavoriteAuthorHref;
 	shelfStats = summary;
 	recentActivity = updates;
 	currentlyReading = readerReadingSummary.currentlyReading;
@@ -624,6 +648,10 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		})
 		.slice(0, 24);
 	readingStreakDateKeys = isOwnerViewer ? readerReadingSummary.readingStreakDateKeys : [];
+	momentumBooks = readerReadingSummary.momentumBooks;
+	momentumScore = readerReadingSummary.momentumScore;
+	momentumStreakDays = readerReadingSummary.readingStreakDays;
+	momentumNextAction = readerReadingSummary.momentumNextAction;
 	customShelves = customShelfRows.map((row) => ({
 		id: Math.max(0, Number(row.id || 0) || 0),
 		name: String(row.name || "").trim(),
@@ -701,19 +729,19 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			...customShelfBookRows.map((item) => Number(item.book_id || 0))
 		].filter((value) => value > 0)));
 		if (bookIds.length > 0) {
-			const rows = await sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished" }>>`
-				select book_id, status
-				from user_book
-				where user_id = ${viewerUserId}::uuid
-					and book_id = any(${bookIds}::bigint[])
-			`;
+			const rows = await timePagePerf("viewer shelf state", () => sql<Array<{ book_id: number; status: "want_to_read" | "reading" | "finished" }>>`
+					select book_id, status
+					from user_book
+					where user_id = ${viewerUserId}::uuid
+						and book_id = any(${bookIds}::bigint[])
+				`
+			);
 			viewerStatusByBookId = new Map(
 				rows.map((row) => [Number(row.book_id || 0), row.status])
 			);
 		}
 	}
 }
-markPagePerfStage("profile_sections_loaded");
 
 function activityHeading(eventType: string) {
 	const type = String(eventType || "").trim().toLowerCase();
@@ -898,6 +926,7 @@ const pagedWantToRead = paginateWindow(wantToReadBooks, wantToReadPage, PAGE_SIZ
 const pagedFinished = paginate(finishedBooks, finishedPage, PAGE_SIZE);
 const profileAchievementPreview = achievements.slice(0, PROFILE_ACHIEVEMENT_PREVIEW_COUNT);
 const profileAchievementMore = achievements.slice(PROFILE_ACHIEVEMENT_PREVIEW_COUNT);
+const readingGoalStartedAt = performance.now();
 const currentGoalYear = readingGoalYear();
 const booksCompletedThisYear = filterCanonicalFinishedBooksForYear(finishedBooks, currentGoalYear)
 	.sort((a, b) => finishedDateTimestamp(b.finishedDate) - finishedDateTimestamp(a.finishedDate));
@@ -905,6 +934,7 @@ const readingGoal = resolveReadingGoalProgress({
 	goal: profile.readingGoal,
 	completed: booksCompletedThisYear.length
 });
+recordPagePerfSpan("reading goal", performance.now() - readingGoalStartedAt);
 const shelfSectionOrderJson = JSON.stringify(
 	shelfSectionOrderKeys.length > 0
 		? shelfSectionOrderKeys
@@ -939,23 +969,15 @@ const profileBreadcrumbStructuredData = JSON.stringify(buildBreadcrumbList([
 const profileStructuredDataPayload = profileStructuredData
 	? JSON.stringify([JSON.parse(profileStructuredData), JSON.parse(profileBreadcrumbStructuredData)])
 	: "";
-const profileReadingSummary = buildReaderReadingSummary({
-	currentlyReading,
-	progressDateKeys: readingStreakDateKeys
-});
-momentumBooks = profileReadingSummary.momentumBooks;
-momentumScore = profileReadingSummary.momentumScore;
-momentumStreakDays = profileReadingSummary.readingStreakDays;
-momentumNextAction = profileReadingSummary.momentumNextAction;
 const momentumByBookId = new Map(momentumBooks.map((item) => [item.bookId, item]));
 
-recordPerformanceEventSafe({
+const profilePerformanceTelemetry = {
 	operationName: "page.profile",
 	route: "/profile/[username]",
-	totalMs: performance.now() - pagePerfStartedAt,
+	startedAt: pagePerfStartedAt,
 	success: !notFound && !privateProfile,
 	httpStatus: notFound ? 404 : privateProfile ? 403 : 200,
-	spans: pagePerfStages,
+	spans: pagePerfSpans,
 	metadata: {
 		authenticated: isAuthenticated,
 		isOwnerViewer,
@@ -968,7 +990,7 @@ recordPerformanceEventSafe({
 		customShelfCount: customShelves.length,
 		achievementCount: achievements.length
 	}
-});
+};
 ---
 
 <Layout
@@ -978,6 +1000,8 @@ recordPerformanceEventSafe({
 	canonicalUrl={profileCanonicalUrl}
 	robots={profileRobots}
 	structuredData={profileStructuredDataPayload}
+	resolvedSession={session}
+	performanceTelemetry={profilePerformanceTelemetry}
 >
 	<div
 		slot="right"
