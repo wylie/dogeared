@@ -1,7 +1,47 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { formatDuration, isAudiobookFormat, parseDurationToSeconds } from "../src/lib/adminCatalog.ts";
+import { formatDuration, isAudiobookFormat, loadCatalogMetadataHealth, parseDurationToSeconds } from "../src/lib/adminCatalog.ts";
+
+function makeHealthRow(overrides: Record<string, unknown> = {}) {
+	return {
+		work_id: 412,
+		book_id: 412,
+		edition_id: 412,
+		title: "Infinity Alchemist (Book 1)",
+		author: "Kacen Callender",
+		cover_url: "https://example.com/cover.jpg",
+		format: "hardcover",
+		book_page_count: 320,
+		edition_page_count: 320,
+		publisher: "Example Press",
+		published_year: 2024,
+		description: "A catalog fixture.",
+		isbn10: "",
+		isbn13: "9780000000001",
+		google_books_id: "",
+		open_library_work_id: "",
+		open_library_edition_id: "",
+		series_id: null,
+		series_position: "",
+		metadata: {},
+		updated_at: "2026-08-09T12:00:00.000Z",
+		progress_entries: 0,
+		percent_progress_entries: 0,
+		audio_progress_entries: 0,
+		...overrides
+	};
+}
+
+function createCatalogHealthSql(rows: Array<Record<string, unknown>>) {
+	let call = 0;
+	const sql = async () => {
+		call += 1;
+		if (call === 1) return rows;
+		return [];
+	};
+	return sql as any;
+}
 
 test("admin catalog duration helpers store audiobook length as seconds", () => {
 	assert.equal(parseDurationToSeconds("11 hr 24 min"), 41040);
@@ -57,6 +97,135 @@ test("Data Health exposes format-aware catalog metadata checks and filters", () 
 	assert.match(lib, /durationSeconds/);
 	assert.match(migration, /admin_catalog_audit_event/);
 	assert.match(migration, /idx_book_edition_metadata_gin/);
+});
+
+test("Catalog Review Queue aggregates mixed Work and Edition issues into one review target", async () => {
+	const result = await loadCatalogMetadataHealth(createCatalogHealthSql([
+		makeHealthRow({
+			work_id: 412,
+			book_id: 412,
+			edition_id: 412,
+			title: "Infinity Alchemist (Book 1)",
+			format: "",
+			publisher: ""
+		}),
+		makeHealthRow({
+			work_id: 419,
+			book_id: 419,
+			edition_id: 418,
+			title: "The Assassin's Blade (Book 0)",
+			format: ""
+		})
+	]), { limit: 25 });
+
+	assert.equal(result.pagination.total, 2);
+	assert.equal(result.records.length, 2);
+	const infinity = result.records.find((record) => record.workId === 412 && record.editionId === 412);
+	assert.ok(infinity);
+	assert.equal(infinity.issues.length, 3);
+	assert.deepEqual(infinity.issues.map((issue) => issue.issueType).sort(), [
+		"missing_publisher",
+		"missing_reading_format_metadata",
+		"missing_series_relationship"
+	]);
+	assert.equal(infinity.issues.find((issue) => issue.issueType === "missing_series_relationship")?.scope, "work");
+
+	const assassinsBlade = result.records.find((record) => record.workId === 419 && record.editionId === 418);
+	assert.ok(assassinsBlade);
+	assert.equal(assassinsBlade.issues.length, 2);
+	assert.deepEqual(assassinsBlade.issues.map((issue) => issue.issueType).sort(), [
+		"missing_reading_format_metadata",
+		"missing_series_relationship"
+	]);
+});
+
+test("Catalog Review Queue keeps Work-only and Edition-only review targets distinct without duplicating rows", async () => {
+	const result = await loadCatalogMetadataHealth(createCatalogHealthSql([
+		makeHealthRow({
+			work_id: 501,
+			book_id: 501,
+			edition_id: 601,
+			title: "Shared Work",
+			description: ""
+		}),
+		makeHealthRow({
+			work_id: 501,
+			book_id: 501,
+			edition_id: 602,
+			title: "Shared Work",
+			description: ""
+		}),
+		makeHealthRow({
+			work_id: 502,
+			book_id: 502,
+			edition_id: 603,
+			title: "Edition Metadata Only",
+			format: ""
+		}),
+		makeHealthRow({
+			work_id: 503,
+			book_id: 503,
+			edition_id: null,
+			title: "Work Only Book 2",
+			format: "paperback"
+		})
+	]), { limit: 25 });
+
+	assert.equal(result.pagination.total, 3);
+	const sharedWork = result.records.find((record) => record.workId === 501);
+	assert.ok(sharedWork);
+	assert.equal(sharedWork.issues.length, 1);
+	assert.equal(sharedWork.issues[0].issueType, "missing_description");
+	assert.equal(sharedWork.issues[0].scope, "work");
+
+	const editionOnly = result.records.find((record) => record.workId === 502);
+	assert.ok(editionOnly);
+	assert.equal(editionOnly.editionId, 603);
+	assert.deepEqual(editionOnly.issues.map((issue) => issue.issueType), ["missing_reading_format_metadata"]);
+
+	const workOnly = result.records.find((record) => record.workId === 503);
+	assert.ok(workOnly);
+	assert.equal(workOnly.editionId, 0);
+	assert.deepEqual(workOnly.issues.map((issue) => issue.issueType), ["missing_series_relationship"]);
+});
+
+test("Catalog Review Queue filters and paginates unique review targets after aggregation", async () => {
+	const rows = [
+		makeHealthRow({
+			work_id: 412,
+			book_id: 412,
+			edition_id: 412,
+			title: "Infinity Alchemist (Book 1)",
+			format: "",
+			publisher: ""
+		})
+	];
+	for (let index = 0; index < 12; index += 1) {
+		rows.push(makeHealthRow({
+			work_id: 700 + index,
+			book_id: 700 + index,
+			edition_id: 800 + index,
+			title: `Edition Gap ${index + 1}`,
+			format: ""
+		}));
+	}
+
+	const filtered = await loadCatalogMetadataHealth(createCatalogHealthSql(rows), {
+		issueType: "missing_series_relationship",
+		limit: 25
+	});
+	assert.equal(filtered.pagination.total, 1);
+	assert.equal(filtered.records.length, 1);
+	assert.equal(filtered.records[0].workId, 412);
+	assert.equal(filtered.records[0].issues.length, 3);
+
+	const paged = await loadCatalogMetadataHealth(createCatalogHealthSql(rows), {
+		limit: 10,
+		offset: 10
+	});
+	assert.equal(paged.pagination.total, 13);
+	assert.equal(paged.records.length, 3);
+	assert.equal(new Set(paged.records.map((record) => record.recordKey)).size, paged.records.length);
 });
 
 test("admin catalog editor separates Work and Edition metadata and records audit history", () => {

@@ -7,6 +7,7 @@ export type CatalogHealthSeverity = "critical" | "needs_attention" | "optional";
 export type CatalogHealthIssue = {
 	issueType: string;
 	severity: CatalogHealthSeverity;
+	scope: "work" | "edition";
 	workId: number;
 	bookId: number;
 	editionId: number;
@@ -272,7 +273,12 @@ function compareSeverity(a: CatalogHealthSeverity, b: CatalogHealthSeverity) {
 }
 
 function catalogRecordKey(issue: CatalogHealthIssue) {
-	return issue.editionId > 0 ? `edition:${issue.editionId}` : `work:${issue.workId}`;
+	return issue.editionId > 0 ? `work:${issue.workId}:edition:${issue.editionId}` : `work:${issue.workId}`;
+}
+
+function catalogIssueDedupeKey(issueType: string, row: HealthRow, scope: CatalogHealthIssue["scope"]) {
+	if (scope === "work") return `${issueType}:work:${row.work_id}`;
+	return `${issueType}:work:${row.work_id}:book:${row.book_id}:edition:${row.edition_id || 0}`;
 }
 
 function aggregateCatalogHealthRecords(issues: CatalogHealthIssue[]) {
@@ -398,19 +404,21 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 			where ub.book_id = b.id
 		) progress on true
 		where b.updated_at > now() - interval '5 years'
-		order by greatest(b.updated_at, coalesce(be.updated_at, b.updated_at), coalesce(bw.updated_at, b.updated_at)) desc
+		order by greatest(b.updated_at, coalesce(be.updated_at, b.updated_at), coalesce(bw.updated_at, b.updated_at)) desc,
+			coalesce(be.id, 0) asc
 		limit 600
 	`;
 	const issues: CatalogHealthIssue[] = [];
 	const seen = new Set<string>();
-	const pushIssue = (row: HealthRow, issueType: string, severity: CatalogHealthSeverity, issue: string) => {
+	const pushIssue = (row: HealthRow, issueType: string, severity: CatalogHealthSeverity, issue: string, scope: CatalogHealthIssue["scope"] = "edition") => {
 		const normalizedType = normalizeHealthIssueType(issueType);
-		const key = `${normalizedType}:${row.work_id}:${row.book_id}:${row.edition_id || 0}`;
+		const key = catalogIssueDedupeKey(normalizedType, row, scope);
 		if (seen.has(key)) return;
 		const source = extractProvider(readMetadataObject(row.metadata), row.google_books_id ? "Google Books" : row.open_library_edition_id ? "Open Library" : "Existing DogEared data");
 		const entry: CatalogHealthIssue = {
 			issueType: normalizedType,
 			severity,
+			scope,
 			workId: Number(row.work_id || 0),
 			bookId: Number(row.book_id || 0),
 			editionId: Number(row.edition_id || 0),
@@ -440,7 +448,6 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 		const isAudio = isAudiobookFormat(row.format);
 		const isLocationBased = isDigitalLocationFormat(row.format);
 		const usefulPageCount = Math.max(Number(row.edition_page_count || 0), Number(row.book_page_count || 0));
-		const workRow = { ...row, edition_id: null };
 		if (!normalizeText(row.format)) pushIssue(row, "missing_reading_format_metadata", "needs_attention", "Missing Edition format metadata");
 		if (isAudio) {
 			if (durationSeconds <= 0) pushIssue(row, "missing_audiobook_duration", row.audio_progress_entries > 0 ? "critical" : "needs_attention", "Missing audiobook duration");
@@ -450,16 +457,16 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 		if (isLocationBased && locationCount <= 0) pushIssue(row, "missing_location_count", "optional", "Missing location count");
 		if (chapterCount <= 0 && /chapter/i.test(String(row.format || ""))) pushIssue(row, "missing_chapter_count", "optional", "Missing chapter count");
 		if (!normalizeText(row.cover_url)) pushIssue(row, "missing_cover", "optional", "Missing cover");
-		if (!normalizeText(row.author) || row.author === "Unknown") pushIssue(workRow, "missing_author", "needs_attention", "Missing author");
-		if (!normalizeText(row.description)) pushIssue(workRow, "missing_description", "optional", "Missing description");
+		if (!normalizeText(row.author) || row.author === "Unknown") pushIssue(row, "missing_author", "needs_attention", "Missing author", "work");
+		if (!normalizeText(row.description)) pushIssue(row, "missing_description", "optional", "Missing description", "work");
 		if (!Number(row.published_year || 0)) pushIssue(row, "missing_publication_year", "needs_attention", "Missing publication year");
 		if (!normalizeText(row.publisher)) pushIssue(row, "missing_publisher", "needs_attention", "Missing publisher");
 		if (!normalizeText(row.isbn10) && !normalizeText(row.isbn13) && !normalizeText(row.google_books_id) && !normalizeText(row.open_library_work_id) && !normalizeText(row.open_library_edition_id)) {
 			pushIssue(row, "missing_identifiers", "needs_attention", "Missing ISBN or external identifiers");
 		}
-		if (row.series_id && !normalizeText(row.series_position)) pushIssue(workRow, "missing_series_position", "needs_attention", "Missing Series position");
-		if (/\(.*#?\d+.*\)$|\bbook\s+\d+\b/i.test(row.title) && !row.series_id) pushIssue(workRow, "missing_series_relationship", "needs_attention", "Possible missing Series relationship");
-		if (/\b(audiobook|hardcover|paperback|kindle edition|ebook)\b/i.test(row.title)) pushIssue(workRow, "malformed_title", "needs_attention", "Potentially malformed Work title");
+		if (row.series_id && !normalizeText(row.series_position)) pushIssue(row, "missing_series_position", "needs_attention", "Missing Series position", "work");
+		if (/\(.*#?\d+.*\)$|\bbook\s+\d+\b/i.test(row.title) && !row.series_id) pushIssue(row, "missing_series_relationship", "needs_attention", "Possible missing Series relationship", "work");
+		if (/\b(audiobook|hardcover|paperback|kindle edition|ebook)\b/i.test(row.title)) pushIssue(row, "malformed_title", "needs_attention", "Potentially malformed Work title", "work");
 		if (row.progress_entries > 0 && usefulPageCount <= 0 && !isAudio) pushIssue(row, "progress_not_normalizable", "critical", "Progress entries cannot be normalized without page count");
 		if (row.audio_progress_entries > 0 && isAudio && durationSeconds <= 0) pushIssue(row, "progress_not_normalizable", "critical", "Audiobook progress cannot be normalized without duration");
 	}
@@ -511,7 +518,7 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 			progress_entries: 0,
 			percent_progress_entries: 0,
 			audio_progress_entries: 0
-		}, "potential_duplicate_work", "critical", "Potential duplicate Work");
+		}, "potential_duplicate_work", "critical", "Potential duplicate Work", "work");
 	}
 	const duplicateEditionRows = await sql<Array<{
 		work_id: number;
