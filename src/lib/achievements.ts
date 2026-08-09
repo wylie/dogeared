@@ -86,6 +86,7 @@ export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
 ];
 
 const definitionByKey = new Map(ACHIEVEMENT_DEFINITIONS.map((definition) => [definition.key, definition]));
+let achievementSchemaReady: Promise<void> | null = null;
 
 function cleanText(value: unknown, max = 240) {
 	return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -129,95 +130,105 @@ export function resolveAchievementVisibilitySetting(profileData: unknown) {
 }
 
 export async function ensureAchievementSchema(sql: NeonQueryFunction<false, false>) {
-	await sql`
-		create table if not exists achievement_definition (
-			key text primary key,
-			type text not null,
-			title text not null,
-			description text not null,
-			icon_identifier text not null,
-			accent_color_token text not null,
-			criteria jsonb not null default '{}'::jsonb,
-			repeatable boolean not null default false,
-			related_behavior text not null default '',
-			created_at timestamptz not null default now(),
-			updated_at timestamptz not null default now()
-		)
-	`;
-	await sql`
-		create table if not exists user_achievement (
-			id bigserial primary key,
-			user_id uuid not null references app_user(id) on delete cascade,
-			definition_key text not null references achievement_definition(key) on delete restrict,
-			earned_at timestamptz not null default now(),
-			related_book_id bigint references book(id) on delete set null,
-			related_series_id bigint references series(id) on delete set null,
-			scope_key text not null default '',
-			visibility text not null default 'public',
-			metadata jsonb not null default '{}'::jsonb
-		)
-	`;
-	await sql`alter table user_achievement add column if not exists related_book_id bigint references book(id) on delete set null`;
-	await sql`alter table user_achievement add column if not exists related_series_id bigint references series(id) on delete set null`;
-	await sql`alter table user_achievement add column if not exists scope_key text not null default ''`;
-	await sql`alter table user_achievement add column if not exists visibility text not null default 'public'`;
-	await sql`alter table user_achievement add column if not exists metadata jsonb not null default '{}'::jsonb`;
-	await sql`
-		do $$
-		begin
-			if exists (
-				select 1
-				from pg_indexes
-				where schemaname = current_schema()
-					and indexname = 'idx_user_achievement_unique_scope'
-					and indexdef not like '%scope_key%'
-			) then
-				execute 'drop index idx_user_achievement_unique_scope';
-			end if;
-		end $$;
-	`;
-	await sql`
-		create unique index if not exists idx_user_achievement_unique_scope
-		on user_achievement(user_id, definition_key, coalesce(related_series_id, 0), coalesce(related_book_id, 0), scope_key)
-	`;
-	await sql`create index if not exists idx_user_achievement_user_earned on user_achievement(user_id, earned_at desc)`;
-	await sql`create index if not exists idx_user_achievement_definition on user_achievement(definition_key, earned_at desc)`;
+	if (!achievementSchemaReady) {
+		achievementSchemaReady = (async () => {
+			await sql`
+				create table if not exists achievement_definition (
+					key text primary key,
+					type text not null,
+					title text not null,
+					description text not null,
+					icon_identifier text not null,
+					accent_color_token text not null,
+					criteria jsonb not null default '{}'::jsonb,
+					repeatable boolean not null default false,
+					related_behavior text not null default '',
+					created_at timestamptz not null default now(),
+					updated_at timestamptz not null default now()
+				)
+			`;
+			await sql`
+				create table if not exists user_achievement (
+					id bigserial primary key,
+					user_id uuid not null references app_user(id) on delete cascade,
+					definition_key text not null references achievement_definition(key) on delete restrict,
+					earned_at timestamptz not null default now(),
+					related_book_id bigint references book(id) on delete set null,
+					related_series_id bigint references series(id) on delete set null,
+					scope_key text not null default '',
+					visibility text not null default 'public',
+					metadata jsonb not null default '{}'::jsonb
+				)
+			`;
+			await sql`alter table user_achievement add column if not exists related_book_id bigint references book(id) on delete set null`;
+			await sql`alter table user_achievement add column if not exists related_series_id bigint references series(id) on delete set null`;
+			await sql`alter table user_achievement add column if not exists scope_key text not null default ''`;
+			await sql`alter table user_achievement add column if not exists visibility text not null default 'public'`;
+			await sql`alter table user_achievement add column if not exists metadata jsonb not null default '{}'::jsonb`;
+			await sql`
+				do $$
+				begin
+					if exists (
+						select 1
+						from pg_indexes
+						where schemaname = current_schema()
+							and indexname = 'idx_user_achievement_unique_scope'
+							and indexdef not like '%scope_key%'
+					) then
+						execute 'drop index idx_user_achievement_unique_scope';
+					end if;
+				end $$
+			`;
+			await sql`
+				create unique index if not exists idx_user_achievement_unique_scope
+				on user_achievement(user_id, definition_key, coalesce(related_series_id, 0), coalesce(related_book_id, 0), scope_key)
+			`;
+			await sql`create index if not exists idx_user_achievement_user_earned on user_achievement(user_id, earned_at desc)`;
+			await sql`create index if not exists idx_user_achievement_definition on user_achievement(definition_key, earned_at desc)`;
 
-	for (const definition of ACHIEVEMENT_DEFINITIONS) {
-		await sql`
-			insert into achievement_definition (
-				key,
-				type,
-				title,
-				description,
-				icon_identifier,
-				accent_color_token,
-				criteria,
-				repeatable,
-				related_behavior
-			)
-			values (
-				${definition.key},
-				${definition.type},
-				${definition.title},
-				${definition.description},
-				${definition.iconIdentifier},
-				${definition.accentColorToken},
-				${JSON.stringify(definition.criteria)}::jsonb,
-				${definition.repeatable},
-				${definition.relatedBehavior || ""}
-			)
-			on conflict (key) do update set
-				type = excluded.type,
-				title = excluded.title,
-				description = excluded.description,
-				icon_identifier = excluded.icon_identifier,
-				accent_color_token = excluded.accent_color_token,
-				criteria = excluded.criteria,
-				repeatable = excluded.repeatable,
-				related_behavior = excluded.related_behavior,
-				updated_at = now()
-		`;
+			for (const definition of ACHIEVEMENT_DEFINITIONS) {
+				await sql`
+					insert into achievement_definition (
+						key,
+						type,
+						title,
+						description,
+						icon_identifier,
+						accent_color_token,
+						criteria,
+						repeatable,
+						related_behavior
+					)
+					values (
+						${definition.key},
+						${definition.type},
+						${definition.title},
+						${definition.description},
+						${definition.iconIdentifier},
+						${definition.accentColorToken},
+						${JSON.stringify(definition.criteria)}::jsonb,
+						${definition.repeatable},
+						${definition.relatedBehavior || ""}
+					)
+					on conflict (key) do update set
+						type = excluded.type,
+						title = excluded.title,
+						description = excluded.description,
+						icon_identifier = excluded.icon_identifier,
+						accent_color_token = excluded.accent_color_token,
+						criteria = excluded.criteria,
+						repeatable = excluded.repeatable,
+						related_behavior = excluded.related_behavior,
+						updated_at = now()
+				`;
+			}
+		})();
+	}
+	try {
+		await achievementSchemaReady;
+	} catch (error) {
+		achievementSchemaReady = null;
+		throw error;
 	}
 }
 

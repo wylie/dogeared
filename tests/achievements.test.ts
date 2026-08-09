@@ -43,6 +43,7 @@ test("achievement persistence prevents duplicate scoped awards", () => {
 	assert.equal(source.includes("create table if not exists user_achievement"), true);
 	assert.equal(source.includes("scope_key text not null default ''"), true);
 	assert.equal(source.includes("idx_user_achievement_unique_scope"), true);
+	assert.equal(source.includes("achievementSchemaReady"), true);
 	assert.equal(source.includes("on conflict do nothing"), true);
 	assert.equal(source.includes("export async function awardAchievement"), true);
 	assert.equal(source.includes("export async function loadEarnedAchievements"), true);
@@ -67,6 +68,7 @@ test("profiles, notifications, and settings expose collectible achievement badge
 	const settings = readFileSync("src/pages/settings.astro", "utf8");
 	const api = readFileSync("src/pages/api/account/preferences.ts", "utf8");
 	assert.equal(profile.includes("loadEarnedAchievements"), true);
+	assert.doesNotMatch(profile, /loadEarnedAchievements\([^)]*ensureSchema:\s*false/s);
 	assert.equal(profile.includes('id="achievements"'), true);
 	assert.equal(profile.includes("profile-achievement-row"), true);
 	assert.equal(profile.includes("profile-achievements-more"), true);
@@ -74,6 +76,8 @@ test("profiles, notifications, and settings expose collectible achievement badge
 	assert.equal(profile.includes("achievement-popover"), true);
 	assert.equal(profile.includes("achievement-art achievement-art-large"), true);
 	assert.equal(profile.includes("achievementAnchor"), true);
+	assert.equal(profile.includes("border-radius: var(--radius-pill);"), true);
+	assert.equal(profile.includes("overflow-x: auto"), false);
 	assert.equal(notifications.includes("achievement-art achievement-art-small"), true);
 	assert.equal(globalCss.includes(".achievement-art"), true);
 	assert.equal(globalCss.includes("--achievement-yearly-goal"), true);
