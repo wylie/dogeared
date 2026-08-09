@@ -106,6 +106,7 @@ test("core workflows record sanitized performance events at meaningful boundarie
 	const discoverPage = read("../src/pages/discover.astro");
 	const readingLifePage = read("../src/pages/reading-life.astro");
 	const navigationTelemetry = read("../src/pages/api/performance/navigation.ts");
+	const layout = read("../src/layouts/Layout.astro");
 
 	assert.match(searchApi, /recordPerformanceEventSafe/);
 	assert.match(searchApi, /operationName: "search\.books"/);
@@ -140,7 +141,12 @@ test("core workflows record sanitized performance events at meaningful boundarie
 	}
 	assert.match(profilePage, /timePagePerf\("authentication\/session"/);
 	assert.match(profilePage, /onTiming: recordPagePerfSpan/);
+	assert.match(profilePage, /startMs/);
+	assert.match(profilePage, /recordPagePerfSpan\("finished-this-year books"/);
+	assert.match(profilePage, /recordPagePerfSpan\("reviews"/);
+	assert.match(profilePage, /recordPagePerfSpan\("DNF"/);
 	assert.match(profilePage, /performanceTelemetry=\{profilePerformanceTelemetry\}/);
+	assert.match(layout, /name: "notification count"/);
 	assert.match(navigationTelemetry, /operationName: "navigation\.feedback"/);
 	assert.match(navigationTelemetry, /normalizeRoute/);
 	assert.doesNotMatch(navigationTelemetry, /searchParams/);

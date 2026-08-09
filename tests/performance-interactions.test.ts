@@ -97,6 +97,7 @@ test("page navigation and route rendering avoid avoidable blocking work", () => 
 	const bookDetail = read("../src/pages/book.astro");
 	const profile = read("../src/pages/profile/[username].astro");
 	const profileIndexes = read("../src/lib/profileRenderIndexes.ts");
+	const publicProfile = read("../src/lib/publicProfile.ts");
 	const journal = read("../src/lib/readingJournal.ts");
 	const notifications = read("../src/lib/notifications.ts");
 	const feed = read("../src/lib/feed.ts");
@@ -124,8 +125,12 @@ test("page navigation and route rendering avoid avoidable blocking work", () => 
 	assert.match(authorDetail, /const viewerStatusPromise = viewerUserId && bookIds\.length > 0/);
 	assert.match(authorDetail, /const externalBooksPromise = authorName/);
 	assert.match(authorDetail, /await Promise\.all\(\[\s*authorCountsPromise,\s*viewerStatusPromise,\s*openLibraryBioPromise,\s*loadCollectionsForAuthor/s);
-	assert.match(profile, /const favoriteBookHrefPromise = timePagePerf\("favorite book link", async \(\) =>/);
-	assert.match(profile, /const favoriteAuthorHrefPromise = timePagePerf\("favorite author link", async \(\) =>/);
+	assert.match(profile, /const favoriteBookStartedAt = performance\.now\(\)/);
+	assert.match(profile, /recordPagePerfSpan\("favorite book link"/);
+	assert.match(profile, /const favoriteAuthorStartedAt = performance\.now\(\)/);
+	assert.match(profile, /favoriteAuthorHref = profile\.favoriteAuthor \? authorHref\(profile\.favoriteAuthor\) : ""/);
+	assert.doesNotMatch(profile, /favoriteBookHrefPromise/);
+	assert.doesNotMatch(profile, /favoriteAuthorHrefPromise/);
 	assert.doesNotMatch(profile, /ensureReviewSchema\(sql\)\.catch\(\(\) => undefined\)/);
 	assert.match(profile, /const customShelfSchemaReady = isOwnerViewer/);
 	assert.doesNotMatch(profile, /await ensureProfileRenderIndexes\(sql\)\.catch\(\(\) => undefined\)/);
@@ -133,6 +138,12 @@ test("page navigation and route rendering avoid avoidable blocking work", () => 
 	assert.match(profile, /resolvedSession=\{session\}/);
 	assert.match(profile, /performanceTelemetry=\{profilePerformanceTelemetry\}/);
 	assert.match(profile, /const WANT_TO_READ_RENDER_WINDOW = PAGE_SIZE \* 3/);
+	assert.match(profile, /const RECENT_ACTIVITY_RENDER_LIMIT = Math\.min\(25, Math\.max\(PAGE_SIZE, recentPage \* PAGE_SIZE\)\)/);
+	assert.match(profile, /currentBookLimit: CURRENTLY_READING_RENDER_LIMIT/);
+	assert.match(publicProfile, /followers_count/);
+	assert.match(publicProfile, /following_count/);
+	assert.match(publicProfile, /is_viewer_following/);
+	assert.doesNotMatch(publicProfile, /Promise\.all\(\[\s*sql<Array<\{ count: number \}>>/s);
 	assert.match(profile, /limit \$\{WANT_TO_READ_RENDER_WINDOW\}/);
 	assert.match(profile, /offset \$\{wantToReadOffset\}/);
 	assert.match(profile, /paginateWindow\(wantToReadBooks, wantToReadPage, PAGE_SIZE, shelfStats\.wantToRead\)/);

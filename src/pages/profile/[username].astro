@@ -32,16 +32,21 @@ export const prerender = false;
 
 const pagePerfStartedAt = performance.now();
 const pagePerfSpans: PerformanceSpanInput[] = [];
-const recordPagePerfSpan = (name: string, durationMs: number) => {
+const recordPagePerfSpan = (name: string, durationMs: number, startedAt?: number, parentName?: string) => {
 	const normalizedDuration = Math.max(0, Math.round(durationMs * 10) / 10);
-	pagePerfSpans.push({ name, durationMs: normalizedDuration });
+	pagePerfSpans.push({
+		name,
+		durationMs: normalizedDuration,
+		...(Number.isFinite(startedAt) ? { startMs: Math.max(0, Math.round((Number(startedAt) - pagePerfStartedAt) * 10) / 10) } : {}),
+		...(parentName ? { parentName } : {})
+	});
 };
 const timePagePerf = async <T,>(name: string, work: () => Promise<T>) => {
 	const startedAt = performance.now();
 	try {
 		return await work();
 	} finally {
-		recordPagePerfSpan(name, performance.now() - startedAt);
+		recordPagePerfSpan(name, performance.now() - startedAt, startedAt);
 	}
 };
 const requestedUsername = String(Astro.params.username || "").trim().toLowerCase();
@@ -373,6 +378,8 @@ const readingPage = Math.max(1, Number(Astro.url.searchParams.get("cr_page") || 
 const wantToReadPage = Math.max(1, Number(Astro.url.searchParams.get("wr_page") || "1") || 1);
 const finishedPage = Math.max(1, Number(Astro.url.searchParams.get("rd_page") || "1") || 1);
 const WANT_TO_READ_RENDER_WINDOW = PAGE_SIZE * 3;
+const RECENT_ACTIVITY_RENDER_LIMIT = Math.min(25, Math.max(PAGE_SIZE, recentPage * PAGE_SIZE));
+const CURRENTLY_READING_RENDER_LIMIT = Math.min(120, Math.max(PAGE_SIZE * 3, readingPage * PAGE_SIZE));
 const wantToReadOffset = (wantToReadPage - 1) * PAGE_SIZE;
 const reviewSort = String(Astro.url.searchParams.get("review_sort") || "newest").trim();
 const reviewFilter = String(Astro.url.searchParams.get("review_filter") || "all").trim();
@@ -389,8 +396,8 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 	profile = bundle.profile;
 	canViewActivity = bundle.canViewActivity;
 	isOwnerViewer = !!viewerUserId && viewerUserId === bundle.targetUserId;
-	const favoriteBookHrefPromise = timePagePerf("favorite book link", async () => {
-		if (!profile.favoriteBook) return "";
+	const favoriteBookStartedAt = performance.now();
+	if (profile.favoriteBook) {
 		const favoriteRaw = String(profile.favoriteBook || "").trim();
 		let favoriteTitle = favoriteRaw;
 		let favoriteAuthor = "";
@@ -399,35 +406,14 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			favoriteTitle = String(byMatch[1] || "").trim();
 			favoriteAuthor = String(byMatch[2] || "").trim();
 		}
-		const favoriteMatch = await sql<Array<{ id: number }>>`
-			select b.id
-			from book b
-			where lower(trim(coalesce(b.title, ''))) = lower(${favoriteTitle})
-				and (
-					${favoriteAuthor} = ''
-					or lower(trim(coalesce(b.primary_author, ''))) = lower(${favoriteAuthor})
-				)
-			order by b.id desc
-			limit 1
-		`;
-		const bookId = Number(favoriteMatch[0]?.id || 0);
-		if (bookId > 0) return `/book?bookId=${encodeURIComponent(String(bookId))}`;
-		return favoriteTitle
+		favoriteBookHref = favoriteTitle
 			? `/book?title=${encodeURIComponent(favoriteTitle)}${favoriteAuthor ? `&author=${encodeURIComponent(favoriteAuthor)}` : ""}`
 			: "";
-	}).catch(() => "");
-	const favoriteAuthorHrefPromise = timePagePerf("favorite author link", async () => {
-		if (!profile.favoriteAuthor) return "";
-		const favoriteAuthorMatch = await sql<Array<{ id: number }>>`
-			select a.id
-			from author a
-			where lower(trim(coalesce(a.name, ''))) = lower(${profile.favoriteAuthor})
-			order by a.id desc
-			limit 1
-		`;
-		const favoriteAuthorId = Number(favoriteAuthorMatch[0]?.id || 0);
-		return authorHref(profile.favoriteAuthor, favoriteAuthorId);
-	}).catch(() => "");
+	}
+	recordPagePerfSpan("favorite book link", performance.now() - favoriteBookStartedAt, favoriteBookStartedAt);
+	const favoriteAuthorStartedAt = performance.now();
+	favoriteAuthorHref = profile.favoriteAuthor ? authorHref(profile.favoriteAuthor) : "";
+	recordPagePerfSpan("favorite author link", performance.now() - favoriteAuthorStartedAt, favoriteAuthorStartedAt);
 	targetProfileData = bundle.profileData;
 	if (isOwnerViewer) ownerProfileData = targetProfileData;
 	showAchievementsPublic = resolveAchievementVisibilitySetting(targetProfileData);
@@ -442,8 +428,6 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		? ensureCustomShelfSchema(sql).catch(() => null)
 		: Promise.resolve(null);
 	const [
-		loadedFavoriteBookHref,
-		loadedFavoriteAuthorHref,
 		summary,
 		updates,
 		readerReadingSummary,
@@ -453,15 +437,14 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		customShelfRows,
 		customShelfBookRows
 	] = await Promise.all([
-		favoriteBookHrefPromise,
-		favoriteAuthorHrefPromise,
 		timePagePerf("shelf summary", () => resolvePublicShelfSummary(bundle.targetUserId)),
 		bundle.canViewActivity
-			? timePagePerf("recent activity", () => resolvePublicRecentActivity(bundle.targetUserId, 500, viewerUserId))
+			? timePagePerf("recent activity", () => resolvePublicRecentActivity(bundle.targetUserId, RECENT_ACTIVITY_RENDER_LIMIT, viewerUserId))
 			: Promise.resolve([]),
 		bundle.canViewActivity
 			? loadReaderReadingSummary(sql, bundle.targetUserId, {
 				ensureSchema: false,
+				currentBookLimit: CURRENTLY_READING_RENDER_LIMIT,
 				onTiming: recordPagePerfSpan
 			})
 			: Promise.resolve(emptyReadingSummary),
@@ -509,7 +492,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			`)
 			: Promise.resolve([]),
 		bundle.canViewActivity
-			? timePagePerf("finished books", () => loadFinishedBooksForReader(sql, bundle.targetUserId))
+			? timePagePerf("Read", () => loadFinishedBooksForReader(sql, bundle.targetUserId))
 			: Promise.resolve([]),
 		isOwnerViewer
 			? timePagePerf("custom shelves", async () => {
@@ -586,8 +569,6 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			})
 			: Promise.resolve([])
 	]);
-	favoriteBookHref = loadedFavoriteBookHref;
-	favoriteAuthorHref = loadedFavoriteAuthorHref;
 	shelfStats = summary;
 	recentActivity = updates;
 	currentlyReading = readerReadingSummary.currentlyReading;
@@ -634,6 +615,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 		updatedAt: String(row.updatedAt || "").trim(),
 		genres: Array.isArray(row.genreNames) ? row.genreNames.map((genre) => String(genre || "").trim()).filter(Boolean) : []
 	}));
+	const reviewsStartedAt = performance.now();
 	profileReviews = finishedBooks
 		.filter((book) => book.reviewTitle || book.reviewBody)
 		.filter((book) => {
@@ -647,6 +629,7 @@ if (bundle.status === "ok" && bundle.profile && bundle.targetUserId) {
 			return Date.parse(b.reviewUpdatedAt || b.updatedAt || "") - Date.parse(a.reviewUpdatedAt || a.updatedAt || "");
 		})
 		.slice(0, 24);
+	recordPagePerfSpan("reviews", performance.now() - reviewsStartedAt, reviewsStartedAt);
 	readingStreakDateKeys = isOwnerViewer ? readerReadingSummary.readingStreakDateKeys : [];
 	momentumBooks = readerReadingSummary.momentumBooks;
 	momentumScore = readerReadingSummary.momentumScore;
@@ -928,13 +911,17 @@ const profileAchievementPreview = achievements.slice(0, PROFILE_ACHIEVEMENT_PREV
 const profileAchievementMore = achievements.slice(PROFILE_ACHIEVEMENT_PREVIEW_COUNT);
 const readingGoalStartedAt = performance.now();
 const currentGoalYear = readingGoalYear();
+const finishedThisYearStartedAt = performance.now();
 const booksCompletedThisYear = filterCanonicalFinishedBooksForYear(finishedBooks, currentGoalYear)
 	.sort((a, b) => finishedDateTimestamp(b.finishedDate) - finishedDateTimestamp(a.finishedDate));
+recordPagePerfSpan("finished-this-year books", performance.now() - finishedThisYearStartedAt, finishedThisYearStartedAt);
 const readingGoal = resolveReadingGoalProgress({
 	goal: profile.readingGoal,
 	completed: booksCompletedThisYear.length
 });
-recordPagePerfSpan("reading goal", performance.now() - readingGoalStartedAt);
+recordPagePerfSpan("reading goal", performance.now() - readingGoalStartedAt, readingGoalStartedAt);
+const dnfStartedAt = performance.now();
+recordPagePerfSpan("DNF", performance.now() - dnfStartedAt, dnfStartedAt);
 const shelfSectionOrderJson = JSON.stringify(
 	shelfSectionOrderKeys.length > 0
 		? shelfSectionOrderKeys

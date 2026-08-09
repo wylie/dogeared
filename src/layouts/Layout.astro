@@ -89,7 +89,14 @@ const [
 if (performanceTelemetry) {
 	performanceTelemetry.spans.push({
 		name: "shared navigation/sidebar data",
-		durationMs: performance.now() - layoutSharedStartedAt
+		durationMs: performance.now() - layoutSharedStartedAt,
+		startMs: Math.max(0, layoutSharedStartedAt - performanceTelemetry.startedAt)
+	});
+	performanceTelemetry.spans.push({
+		name: "notification count",
+		durationMs: 0,
+		startMs: Math.max(0, performance.now() - performanceTelemetry.startedAt),
+		parentName: "shared navigation/sidebar data"
 	});
 }
 const { activeAnnouncement, foundingReaderConfig, latestRelease } = layoutGlobalData;

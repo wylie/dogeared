@@ -66,14 +66,14 @@ export type PublicProfileBundle = {
 export async function resolvePublicProfileBundle(input: {
 	username: string;
 	viewerUserId: string;
-	onTiming?: (name: string, durationMs: number) => void;
+	onTiming?: (name: string, durationMs: number, startedAt?: number) => void;
 }): Promise<PublicProfileBundle> {
 	const time = async <T>(name: string, work: () => Promise<T>) => {
 		const startedAt = performance.now();
 		try {
 			return await work();
 		} finally {
-			input.onTiming?.(name, performance.now() - startedAt);
+			input.onTiming?.(name, performance.now() - startedAt, startedAt);
 		}
 	};
 	const requestedUsername = normalizeText(input.username).toLowerCase();
@@ -92,7 +92,7 @@ export async function resolvePublicProfileBundle(input: {
 	}
 
 	const sql = getNeonSql();
-	const users = await time("user/profile lookup", () => sql<Array<{ id: string; username: string | null; profile_data: unknown }>>`
+	const users = await time("profile identity", () => sql<Array<{ id: string; username: string | null; profile_data: unknown }>>`
 			select id::text as id, username, profile_data
 			from app_user
 			where lower(coalesce(username, '')) = ${requestedUsername}
@@ -135,35 +135,38 @@ export async function resolvePublicProfileBundle(input: {
 	let followingCount = 0;
 	let isViewerFollowing = false;
 	try {
-		const [followersRows, followingRows, relationshipRows] = await time("follower/following counts", () => Promise.all([
-				sql<Array<{ count: number }>>`
-					select count(*)::int as count
-					from user_follow
-					join app_user au on au.id = user_follow.follower_user_id
-					where followed_user_id = ${user.id}::uuid
-						${publicReaderAccountFilterSql(sql)}
-				`,
-				sql<Array<{ count: number }>>`
-					select count(*)::int as count
-					from user_follow
-					join app_user au on au.id = user_follow.followed_user_id
-					where follower_user_id = ${user.id}::uuid
-						${publicReaderAccountFilterSql(sql)}
-				`,
-				input.viewerUserId
-					? sql<Array<{ exists: number }>>`
-						select 1::int as exists
-						from user_follow
-						where follower_user_id = ${input.viewerUserId}::uuid
-							and followed_user_id = ${user.id}::uuid
-						limit 1
-					`
-					: Promise.resolve([])
-			])
+		const viewerUserId = normalizeText(input.viewerUserId) || "00000000-0000-0000-0000-000000000000";
+		const [counts] = await time("follower/following counts", () => sql<Array<{
+				followers_count: number;
+				following_count: number;
+				is_viewer_following: boolean;
+			}>>`
+				select
+					(
+						select count(*)::int
+						from user_follow uf
+						join app_user au on au.id = uf.follower_user_id
+						where uf.followed_user_id = ${user.id}::uuid
+							${publicReaderAccountFilterSql(sql)}
+					) as followers_count,
+					(
+						select count(*)::int
+						from user_follow uf
+						join app_user au on au.id = uf.followed_user_id
+						where uf.follower_user_id = ${user.id}::uuid
+							${publicReaderAccountFilterSql(sql)}
+					) as following_count,
+					exists (
+						select 1
+						from user_follow uf
+						where uf.follower_user_id = ${viewerUserId}::uuid
+							and uf.followed_user_id = ${user.id}::uuid
+					) as is_viewer_following
+			`
 		);
-		followersCount = Number(followersRows[0]?.count || 0);
-		followingCount = Number(followingRows[0]?.count || 0);
-		isViewerFollowing = Number(relationshipRows[0]?.exists || 0) > 0;
+		followersCount = Number(counts?.followers_count || 0);
+		followingCount = Number(counts?.following_count || 0);
+		isViewerFollowing = !!counts?.is_viewer_following;
 	} catch {
 		followersCount = 0;
 		followingCount = 0;

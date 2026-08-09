@@ -204,19 +204,20 @@ export async function ensureReadingProgressEventSchema(sql: ReturnType<typeof im
 export async function loadReaderReadingSummary(
 	sql: ReturnType<typeof import("./neon.ts").getNeonSql>,
 	userId: string,
-	options: { now?: Date; ensureSchema?: boolean; onTiming?: (name: string, durationMs: number) => void } = {}
+	options: { now?: Date; ensureSchema?: boolean; currentBookLimit?: number; onTiming?: (name: string, durationMs: number, startedAt?: number) => void } = {}
 ): Promise<ReaderReadingSummary> {
 	const time = async <T>(name: string, work: () => Promise<T>) => {
 		const startedAt = performance.now();
 		try {
 			return await work();
 		} finally {
-			options.onTiming?.(name, performance.now() - startedAt);
+			options.onTiming?.(name, performance.now() - startedAt, startedAt);
 		}
 	};
 	if (options.ensureSchema !== false) {
 		await time("reading progress schema", () => ensureReadingProgressEventSchema(sql));
 	}
+	const currentBookLimit = Math.max(1, Math.min(500, Math.floor(Number(options.currentBookLimit || 500) || 500)));
 	const [readingRows, progressDateRows] = await Promise.all([
 		time("currently reading", () => sql<CurrentBookRow[]>`
 				select
@@ -250,7 +251,7 @@ export async function loadReaderReadingSummary(
 				where ub.user_id = ${userId}::uuid
 					and ub.status = 'reading'
 				order by ub.updated_at desc
-				limit 500
+				limit ${currentBookLimit}
 			`
 		),
 		time("momentum/streak", () => sql<ProgressDateRow[]>`
@@ -287,6 +288,6 @@ export async function loadReaderReadingSummary(
 		progressDateKeys: progressDateRows.map((row) => String(row.activity_day || "").trim()).filter(Boolean),
 		now: options.now
 	});
-	options.onTiming?.("rendering preparation", performance.now() - buildStartedAt);
+	options.onTiming?.("rendering preparation", performance.now() - buildStartedAt, buildStartedAt);
 	return summary;
 }
