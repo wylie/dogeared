@@ -470,12 +470,15 @@ recordPerformanceEventSafe({
 										: 0;
 									return (
 										<li>
-											<a href={bookHref(book.id)}>
-												{book.coverUrl ? <img src={book.coverUrl} alt="" loading="lazy" /> : <span class="cover-placeholder" aria-hidden="true">menu_book</span>}
-												<span>
-													<strong>{book.title}</strong>
-													<small>{book.author}{progress > 0 ? ` · ${progress}%` : ""}</small>
-												</span>
+											<a href={bookHref(book.id)} aria-label={`${book.title} by ${book.author}${progress > 0 ? `, ${progress}% read` : ""}`}>
+												<div class="current-book-main">
+													{book.coverUrl ? <img src={book.coverUrl} alt="" loading="lazy" /> : <span class="cover-placeholder" aria-hidden="true">menu_book</span>}
+													<span class="current-book-text">
+														<strong title={book.title}>{book.title}</strong>
+														<small title={book.author}>{book.author}</small>
+													</span>
+												</div>
+												<span class="current-book-progress">{progress > 0 ? `${progress}% read` : "Progress forming"}</span>
 											</a>
 										</li>
 									);
@@ -980,19 +983,65 @@ recordPerformanceEventSafe({
 	.current-books ul {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+		grid-auto-rows: 9.4rem;
 		gap: 0.6rem;
 	}
+	.current-books li {
+		min-width: 0;
+	}
 	.current-books a {
-		display: grid;
-		grid-template-columns: 44px minmax(0, 1fr);
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
 		gap: 0.65rem;
-		align-items: center;
+		height: 100%;
+		min-height: 9.4rem;
+		min-width: 0;
 		color: inherit;
 		text-decoration: none;
 		background: rgba(255, 255, 255, 0.7);
 		border: var(--border-subtle);
 		border-radius: var(--radius-sm);
-		padding: 0.5rem;
+		padding: 0.62rem;
+		overflow: hidden;
+	}
+	.current-book-main {
+		display: grid;
+		grid-template-columns: 44px minmax(0, 1fr);
+		gap: 0.65rem;
+		align-items: start;
+		min-width: 0;
+	}
+	.current-book-text {
+		display: block;
+		min-width: 0;
+	}
+	.current-book-text strong {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		overflow: hidden;
+		color: var(--color-text);
+		font-size: 0.98rem;
+		line-height: 1.2;
+		overflow-wrap: anywhere;
+	}
+	.current-book-text small {
+		display: block;
+		margin-top: 0.28rem;
+		overflow: hidden;
+		color: var(--color-text-muted);
+		font-size: 0.86rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.current-book-progress {
+		display: block;
+		margin-top: auto;
+		color: var(--color-primary);
+		font-size: 0.84rem;
+		font-weight: 800;
+		line-height: 1.25;
 	}
 	.current-books img,
 	.timeline-cover img,
@@ -1002,6 +1051,10 @@ recordPerformanceEventSafe({
 		border-radius: 6px;
 		object-fit: cover;
 		background: var(--color-chip-topic);
+	}
+	.current-books img,
+	.current-books .cover-placeholder {
+		height: 66px;
 	}
 	.cover-placeholder {
 		display: inline-flex;
@@ -1053,6 +1106,7 @@ recordPerformanceEventSafe({
 	.timeline-cover img,
 	.timeline-cover .cover-placeholder {
 		width: 56px;
+		height: 84px;
 	}
 	.timeline-date,
 	.meta,

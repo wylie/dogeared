@@ -319,6 +319,24 @@ test("Reading Calendar days expose accessible summaries and anchored tooltip beh
 	assert.match(source, /activeCalendarDay\.removeAttribute\("aria-describedby"\)/);
 });
 
+test("My Reading Life current book cards keep equal row heights", () => {
+	const source = readFileSync("src/pages/reading-life.astro", "utf8");
+
+	assert.match(source, /class="current-books"/);
+	assert.match(source, /grid-auto-rows: 9\.4rem/);
+	assert.match(source, /display: flex;\s+flex-direction: column;\s+justify-content: space-between/);
+	assert.match(source, /class="current-book-main"/);
+	assert.match(source, /class="current-book-text"/);
+	assert.match(source, /-webkit-line-clamp: 2/);
+	assert.match(source, /text-overflow: ellipsis/);
+	assert.match(source, /class="current-book-progress"/);
+	assert.match(source, /margin-top: auto/);
+	assert.match(source, /height: 66px/);
+	assert.match(source, /title=\{book\.title\}/);
+	assert.match(source, /title=\{book\.author\}/);
+	assert.match(source, /aria-label=\{`\$\{book\.title\} by \$\{book\.author\}/);
+});
+
 test("Reading Timeline author links use canonical author slugs, not numeric author ids", () => {
 	const source = readFileSync("src/pages/reading-life.astro", "utf8");
 
