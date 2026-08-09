@@ -179,6 +179,8 @@ import '../assets/global.css';
 					</slot>
 				</div>
 				<main id="main-content" class="column content-column" tabindex="-1">
+					<div id="route-loading-announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+					<div id="route-transition-skeleton" class="route-transition-skeleton" hidden aria-hidden="true"></div>
 					{activeAnnouncement ? (
 						<section
 							class="announcement-banner"
@@ -205,21 +207,286 @@ import '../assets/global.css';
 			<script is:inline>
 				(() => {
 					let navigationTimer = 0;
+					let skeletonTimer = 0;
+					let slowNavigationTimer = 0;
+					let pendingPath = "";
+					let activeNavigation = null;
 					const root = document.documentElement;
-					const start = () => {
+					const progressDelayMs = 75;
+					const skeletonDelayMs = 140;
+					const slowNavigationMs = 15000;
+					const mainContent = () => document.getElementById("main-content");
+					const skeletonRoot = () => document.getElementById("route-transition-skeleton");
+					const announcer = () => document.getElementById("route-loading-announcer");
+					const escapeHtml = (value) => String(value || "")
+						.replace(/&/g, "&amp;")
+						.replace(/</g, "&lt;")
+						.replace(/>/g, "&gt;")
+						.replace(/"/g, "&quot;")
+						.replace(/'/g, "&#39;");
+					const pathFromUrl = (value) => {
+						try {
+							return new URL(String(value || ""), window.location.href).pathname;
+						} catch {
+							return "";
+						}
+					};
+					const pathFromEvent = (event) => {
+						const rawTo = event?.to || event?.detail?.to || event?.detail?.url || "";
+						return pathFromUrl(rawTo) || pendingPath || window.location.pathname;
+					};
+					const routePattern = (path) => {
+						const cleanPath = pathFromUrl(path) || String(path || window.location.pathname).split("?")[0] || "/";
+						if (cleanPath === "/search") return "/search";
+						if (cleanPath === "/reading-life") return "/reading-life";
+						if (cleanPath === "/journal") return "/journal";
+						if (cleanPath === "/discover") return "/discover";
+						if (cleanPath === "/following") return "/following";
+						if (cleanPath === "/notifications") return "/notifications";
+						if (cleanPath === "/settings") return "/settings";
+						if (cleanPath === "/books") return "/books";
+						if (cleanPath === "/authors") return "/authors";
+						if (cleanPath === "/book") return "/book";
+						if (cleanPath.startsWith("/author/")) return "/author/[slug]";
+						if (cleanPath.startsWith("/profile/")) return "/profile/[username]";
+						if (cleanPath.startsWith("/admin/")) return "/admin/[section]";
+						return cleanPath.length <= 80 ? cleanPath : cleanPath.slice(0, 80);
+					};
+					const pageLabel = (path) => {
+						const route = routePattern(path);
+						if (route === "/search") return "Search";
+						if (route === "/reading-life") return "My Reading Life";
+						if (route === "/journal") return "Reading Journal";
+						if (route === "/discover") return "Discover";
+						if (route === "/following") return "Following";
+						if (route === "/notifications") return "Notifications";
+						if (route === "/settings") return "Settings";
+						if (route === "/books") return "Books";
+						if (route === "/authors") return "Authors";
+						if (route === "/book") return "Book Detail";
+						if (route === "/author/[slug]") return "Author Detail";
+						if (route === "/profile/[username]") return "Profile";
+						if (route === "/admin/[section]") return "Admin";
+						return "Page";
+					};
+					const skeletonLine = (width = "100%") => `<span class="route-skeleton-line" style="--skeleton-width:${escapeHtml(width)}"></span>`;
+					const skeletonStat = () => `<div class="route-skeleton-stat">${skeletonLine("46%")}${skeletonLine("74%")}</div>`;
+					const skeletonCover = () => `<div class="route-skeleton-cover"></div>`;
+					const skeletonBookCard = () => `
+						<li class="route-skeleton-book-card">
+							${skeletonCover()}
+							<div class="route-skeleton-card-copy">
+								${skeletonLine("78%")}
+								${skeletonLine("48%")}
+								${skeletonLine("92%")}
+								${skeletonLine("66%")}
+							</div>
+						</li>
+					`;
+					const skeletonActivityRow = () => `
+						<li class="route-skeleton-activity-row">
+							<span class="route-skeleton-dot"></span>
+							<div>${skeletonLine("70%")}${skeletonLine("38%")}</div>
+						</li>
+					`;
+					const skeletonHeader = (label) => `
+						<div class="route-skeleton-header">
+							<div>
+								<span class="route-skeleton-eyebrow">${escapeHtml(label)}</span>
+								${skeletonLine("54%")}
+								${skeletonLine("72%")}
+							</div>
+						</div>
+					`;
+					const buildRouteSkeleton = (path) => {
+						const route = routePattern(path);
+						const label = pageLabel(path);
+						if (route === "/search") {
+							return `<section class="route-skeleton-shell route-skeleton-search" aria-label="Loading ${escapeHtml(label)}">
+								${skeletonHeader(label)}
+								<div class="route-skeleton-search-box">${skeletonLine("62%")}</div>
+								<ul class="route-skeleton-book-grid">${skeletonBookCard()}${skeletonBookCard()}${skeletonBookCard()}${skeletonBookCard()}</ul>
+							</section>`;
+						}
+						if (route === "/book") {
+							return `<section class="route-skeleton-shell route-skeleton-detail" aria-label="Loading ${escapeHtml(label)}">
+								<div class="route-skeleton-detail-head">${skeletonCover()}<div>${skeletonLine("48%")}${skeletonLine("34%")}${skeletonLine("82%")}${skeletonLine("72%")}</div></div>
+								<div class="route-skeleton-section">${skeletonLine("26%")}${skeletonLine("100%")}${skeletonLine("94%")}${skeletonLine("64%")}</div>
+							</section>`;
+						}
+						if (route === "/author/[slug]") {
+							return `<section class="route-skeleton-shell route-skeleton-author" aria-label="Loading ${escapeHtml(label)}">
+								<div class="route-skeleton-profile-head"><span class="route-skeleton-avatar"></span><div>${skeletonLine("44%")}${skeletonLine("74%")}${skeletonLine("58%")}</div></div>
+								<ul class="route-skeleton-book-grid">${skeletonBookCard()}${skeletonBookCard()}${skeletonBookCard()}${skeletonBookCard()}</ul>
+							</section>`;
+						}
+						if (route === "/profile/[username]") {
+							return `<section class="route-skeleton-shell route-skeleton-profile" aria-label="Loading ${escapeHtml(label)}">
+								<div class="route-skeleton-profile-head"><span class="route-skeleton-avatar"></span><div>${skeletonLine("36%")}${skeletonLine("66%")}${skeletonLine("52%")}</div></div>
+								<div class="route-skeleton-stats">${skeletonStat()}${skeletonStat()}${skeletonStat()}</div>
+								<ul class="route-skeleton-book-grid">${skeletonBookCard()}${skeletonBookCard()}</ul>
+								<ul class="route-skeleton-activity">${skeletonActivityRow()}${skeletonActivityRow()}</ul>
+							</section>`;
+						}
+						if (route === "/reading-life") {
+							return `<section class="route-skeleton-shell route-skeleton-reading-life" aria-label="Loading ${escapeHtml(label)}">
+								${skeletonHeader(label)}
+								<div class="route-skeleton-stats">${skeletonStat()}${skeletonStat()}${skeletonStat()}${skeletonStat()}</div>
+								<div class="route-skeleton-chart">${skeletonLine("82%")}${skeletonLine("68%")}${skeletonLine("74%")}</div>
+							</section>`;
+						}
+						if (route === "/discover" || route === "/books") {
+							return `<section class="route-skeleton-shell route-skeleton-discover" aria-label="Loading ${escapeHtml(label)}">
+								${skeletonHeader(label)}
+								<ul class="route-skeleton-book-grid">${skeletonBookCard()}${skeletonBookCard()}${skeletonBookCard()}${skeletonBookCard()}</ul>
+							</section>`;
+						}
+						if (route === "/following" || route === "/notifications" || route === "/journal") {
+							return `<section class="route-skeleton-shell route-skeleton-list" aria-label="Loading ${escapeHtml(label)}">
+								${skeletonHeader(label)}
+								<ul class="route-skeleton-activity">${skeletonActivityRow()}${skeletonActivityRow()}${skeletonActivityRow()}${skeletonActivityRow()}</ul>
+							</section>`;
+						}
+						return `<section class="route-skeleton-shell" aria-label="Loading ${escapeHtml(label)}">
+							${skeletonHeader(label)}
+							<div class="route-skeleton-section">${skeletonLine("100%")}${skeletonLine("92%")}${skeletonLine("76%")}</div>
+						</section>`;
+					};
+					const sendNavigationTelemetry = (navigation, success, reason) => {
+						if (!navigation || navigation.sent) return;
+						navigation.sent = true;
+						const totalMs = Math.max(1, Math.round(performance.now() - navigation.startedAt));
+						const skeletonVisibleMs = navigation.skeletonVisibleAt ? Math.max(1, Math.round(navigation.skeletonVisibleAt - navigation.startedAt)) : 0;
+						const spans = [
+							{ name: "navigation start to content swap", durationMs: totalMs }
+						];
+						if (skeletonVisibleMs > 0) {
+							spans.unshift({ name: "navigation start to skeleton visible", durationMs: skeletonVisibleMs });
+						}
+						const body = JSON.stringify({
+							route: navigation.route,
+							totalMs,
+							success,
+							spans,
+							metadata: {
+								feedbackShown: skeletonVisibleMs > 0,
+								skeletonVisibleMs,
+								reason: String(reason || (success ? "complete" : "interrupted")).slice(0, 40)
+							}
+						});
+						try {
+							if (navigator.sendBeacon) {
+								const blob = new Blob([body], { type: "application/json" });
+								if (navigator.sendBeacon("/api/performance/navigation", blob)) return;
+							}
+							fetch("/api/performance/navigation", {
+								method: "POST",
+								headers: { "Content-Type": "application/json" },
+								credentials: "same-origin",
+								keepalive: true,
+								body
+							}).catch(() => {});
+						} catch {
+							// Operational feedback telemetry must never affect navigation.
+						}
+					};
+					const showSkeleton = () => {
+						if (!activeNavigation) return;
+						const shell = skeletonRoot();
+						const main = mainContent();
+						if (!(shell instanceof HTMLElement) || !(main instanceof HTMLElement)) return;
+						shell.innerHTML = buildRouteSkeleton(activeNavigation.path);
+						shell.hidden = false;
+						shell.setAttribute("aria-hidden", "false");
+						activeNavigation.skeletonVisibleAt = performance.now();
+						main.setAttribute("aria-busy", "true");
+						root.classList.add("is-route-skeleton-visible");
+						const live = announcer();
+						if (live instanceof HTMLElement) live.textContent = `Loading ${pageLabel(activeNavigation.path)}...`;
+					};
+					const showSlowState = () => {
+						if (!activeNavigation?.skeletonVisibleAt) return;
+						const shell = skeletonRoot();
+						if (shell instanceof HTMLElement) {
+							shell.innerHTML = `<section class="route-skeleton-shell route-skeleton-error" role="status">${skeletonHeader(pageLabel(activeNavigation.path))}<p>This page is taking longer than expected. DogEared will keep trying.</p></section>`;
+						}
+						const live = announcer();
+						if (live instanceof HTMLElement) live.textContent = `${pageLabel(activeNavigation.path)} is taking longer than expected.`;
+					};
+					const start = (path) => {
+						if (activeNavigation && !activeNavigation.sent) {
+							sendNavigationTelemetry(activeNavigation, false, "superseded");
+						}
+						const targetPath = pathFromUrl(path) || window.location.pathname;
+						activeNavigation = {
+							path: targetPath,
+							route: routePattern(targetPath),
+							startedAt: performance.now(),
+							skeletonVisibleAt: 0,
+							sent: false
+						};
 						window.clearTimeout(navigationTimer);
+						window.clearTimeout(skeletonTimer);
+						window.clearTimeout(slowNavigationTimer);
 						navigationTimer = window.setTimeout(() => {
 							root.classList.add("is-navigating");
-						}, 90);
+						}, progressDelayMs);
+						skeletonTimer = window.setTimeout(showSkeleton, skeletonDelayMs);
+						slowNavigationTimer = window.setTimeout(showSlowState, slowNavigationMs);
 					};
-					const stop = () => {
+					const stop = (success = true, reason = "complete") => {
 						window.clearTimeout(navigationTimer);
+						window.clearTimeout(skeletonTimer);
+						window.clearTimeout(slowNavigationTimer);
 						root.classList.remove("is-navigating");
+						root.classList.remove("is-route-skeleton-visible");
+						const shell = skeletonRoot();
+						if (shell instanceof HTMLElement) {
+							shell.hidden = true;
+							shell.setAttribute("aria-hidden", "true");
+							shell.innerHTML = "";
+						}
+						const main = mainContent();
+						if (main instanceof HTMLElement) main.removeAttribute("aria-busy");
+						const live = announcer();
+						if (live instanceof HTMLElement) live.textContent = "";
+						if (activeNavigation) sendNavigationTelemetry(activeNavigation, success, reason);
+						activeNavigation = null;
+						pendingPath = "";
 					};
-					document.addEventListener("astro:before-preparation", start);
-					document.addEventListener("astro:after-swap", stop);
-					document.addEventListener("astro:page-load", stop);
-					window.addEventListener("pageshow", stop);
+					const eligibleLinkPath = (event) => {
+						if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return "";
+						const target = event.target instanceof Element ? event.target : null;
+						const link = target?.closest("a[href]");
+						if (!(link instanceof HTMLAnchorElement)) return "";
+						if (link.target || link.download || link.hasAttribute("data-no-route-skeleton")) return "";
+						const url = new URL(link.href, window.location.href);
+						if (url.origin !== window.location.origin) return "";
+						if (url.pathname === window.location.pathname && url.search === window.location.search && url.hash) return "";
+						return url.pathname;
+					};
+					document.addEventListener("click", (event) => {
+						const path = eligibleLinkPath(event);
+						if (!path) return;
+						pendingPath = path;
+						start(path);
+					}, true);
+					document.addEventListener("submit", (event) => {
+						const form = event.target instanceof HTMLFormElement ? event.target : null;
+						if (!form || form.method.toLowerCase() !== "get") return;
+						const action = form.action || window.location.href;
+						const url = new URL(action, window.location.href);
+						if (url.origin !== window.location.origin) return;
+						pendingPath = url.pathname;
+						start(url.pathname);
+					}, true);
+					document.addEventListener("astro:before-preparation", (event) => {
+						const path = pathFromEvent(event);
+						if (!activeNavigation || routePattern(path) !== activeNavigation.route) start(path);
+					});
+					document.addEventListener("astro:after-swap", () => stop(true, "swap"));
+					document.addEventListener("astro:page-load", () => stop(true, "page-load"));
+					window.addEventListener("pageshow", () => stop(true, "pageshow"));
 				})();
 			</script>
 			<script define:vars={{ currentPath }}>
@@ -387,6 +654,156 @@ import '../assets/global.css';
 	.content-column {
 		padding-top: clamp(1rem, 2.1vw, 2rem);
 		padding-bottom: 2.5rem;
+		position: relative;
+	}
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+	.route-transition-skeleton {
+		position: absolute;
+		inset: clamp(0.5rem, 1.1vw, 1rem);
+		z-index: 80;
+		pointer-events: none;
+	}
+	.route-transition-skeleton[hidden] {
+		display: none;
+	}
+	.route-skeleton-shell {
+		display: grid;
+		gap: 0.85rem;
+		min-height: min(680px, calc(100vh - 3rem));
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: rgba(255, 252, 246, 0.96);
+		box-shadow: var(--shadow-sm);
+		padding: clamp(0.85rem, 1.8vw, 1.3rem);
+		backdrop-filter: blur(2px);
+	}
+	.route-skeleton-header,
+	.route-skeleton-section,
+	.route-skeleton-search-box,
+	.route-skeleton-chart,
+	.route-skeleton-stat,
+	.route-skeleton-book-card,
+	.route-skeleton-activity-row {
+		border: var(--border-subtle);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.72);
+	}
+	.route-skeleton-header,
+	.route-skeleton-section,
+	.route-skeleton-search-box,
+	.route-skeleton-chart {
+		padding: 0.9rem;
+	}
+	.route-skeleton-eyebrow {
+		display: inline-flex;
+		margin-bottom: 0.55rem;
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+		font-weight: 800;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+	.route-skeleton-line,
+	.route-skeleton-cover,
+	.route-skeleton-avatar,
+	.route-skeleton-dot {
+		display: block;
+		background: linear-gradient(90deg, rgba(87, 117, 144, 0.13), rgba(247, 181, 56, 0.18), rgba(87, 117, 144, 0.13));
+		background-size: 220% 100%;
+		animation: dogeared-skeleton-pulse 1.8s ease-in-out infinite;
+	}
+	.route-skeleton-line {
+		width: var(--skeleton-width, 100%);
+		max-width: 100%;
+		height: 0.78rem;
+		border-radius: 999px;
+		margin: 0.35rem 0;
+	}
+	.route-skeleton-cover {
+		aspect-ratio: 2 / 3;
+		width: 84px;
+		border-radius: var(--radius-sm);
+	}
+	.route-skeleton-avatar {
+		width: 72px;
+		height: 72px;
+		border-radius: 50%;
+	}
+	.route-skeleton-dot {
+		width: 34px;
+		height: 34px;
+		border-radius: 50%;
+	}
+	.route-skeleton-stats {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.65rem;
+	}
+	.route-skeleton-stat {
+		min-height: 72px;
+		padding: 0.75rem;
+	}
+	.route-skeleton-book-grid,
+	.route-skeleton-activity {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.75rem;
+	}
+	.route-skeleton-book-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.route-skeleton-book-card {
+		display: grid;
+		grid-template-columns: 84px minmax(0, 1fr);
+		gap: 0.7rem;
+		min-height: 154px;
+		padding: 0.7rem;
+	}
+	.route-skeleton-card-copy {
+		align-self: start;
+		min-width: 0;
+	}
+	.route-skeleton-profile-head,
+	.route-skeleton-detail-head {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 0.85rem;
+		align-items: start;
+	}
+	.route-skeleton-activity-row {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		gap: 0.75rem;
+		align-items: center;
+		padding: 0.75rem;
+	}
+	.route-skeleton-error p {
+		margin: 0;
+		color: var(--color-text-muted);
+	}
+	@keyframes dogeared-skeleton-pulse {
+		0% { background-position: 0% 50%; }
+		100% { background-position: -220% 50%; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.route-skeleton-line,
+		.route-skeleton-cover,
+		.route-skeleton-avatar,
+		.route-skeleton-dot {
+			animation: none;
+		}
 	}
 	.announcement-banner {
 		display: flex;
@@ -463,6 +880,16 @@ import '../assets/global.css';
 			padding-top: 1.15rem;
 			padding-inline: 0.65rem;
 			padding-bottom: 1.5rem;
+		}
+		.route-transition-skeleton {
+			inset: 0.6rem 0.65rem;
+		}
+		.route-skeleton-shell {
+			min-height: min(620px, calc(100vh - 2rem));
+		}
+		.route-skeleton-stats,
+		.route-skeleton-book-grid {
+			grid-template-columns: 1fr;
 		}
 		.container > .column:first-child {
 			position: sticky;

@@ -118,6 +118,7 @@ const CORE_WORKFLOWS = [
 	{ key: "progress", label: "Save Progress", operations: ["progress.save"], targetMs: 750, slowMs: 1500 },
 	{ key: "shelf", label: "Shelf Mutations", operations: ["shelf.mutate"], targetMs: 1200, slowMs: 2500 },
 	{ key: "page", label: "Page Rendering", operations: ["page.profile", "page.reading-life", "page.search", "page.book-detail", "page.author-detail", "page.discover"], targetMs: 1600, slowMs: 3000 },
+	{ key: "navigation", label: "Navigation Feedback", operations: ["navigation.feedback"], targetMs: 120, slowMs: 300 },
 	{ key: "external", label: "External Book APIs", operations: ["external.google-books", "external.open-library"], targetMs: 1200, slowMs: 2500 }
 ];
 
@@ -131,6 +132,7 @@ const OPERATION_LABELS = new Map<string, string>([
 	["page.book-detail", "Book Detail"],
 	["page.author-detail", "Author Detail"],
 	["page.discover", "Discover"],
+	["navigation.feedback", "Navigation Feedback"],
 	["external.google-books", "Google Books"],
 	["external.open-library", "Open Library"]
 ]);
@@ -455,6 +457,7 @@ async function loadAdminPerformanceAnalyticsUncached(
 					when operation_name = 'progress.save' then 'progress'
 					when operation_name = 'shelf.mutate' then 'shelf'
 					when operation_name like 'page.%' then 'page'
+					when operation_name = 'navigation.feedback' then 'navigation'
 					when operation_name like 'external.%' then 'external'
 					else 'other'
 				end as workflow_key,
@@ -469,6 +472,7 @@ async function loadAdminPerformanceAnalyticsUncached(
 					when operation_name = 'progress.save' then 'progress'
 					when operation_name = 'shelf.mutate' then 'shelf'
 					when operation_name like 'page.%' then 'page'
+					when operation_name = 'navigation.feedback' then 'navigation'
 					when operation_name like 'external.%' then 'external'
 					else 'other'
 				end as workflow_key,
@@ -731,7 +735,7 @@ async function loadAdminPerformanceAnalyticsUncached(
 			percentile_cont(0.95) within group (order by total_ms)::numeric as p95
 		from performance_event
 		where created_at >= now() - interval '30 days'
-			and operation_name in ('search.books', 'progress.save', 'shelf.mutate', 'page.profile', 'page.reading-life', 'page.search', 'page.book-detail', 'page.author-detail', 'page.discover')
+			and operation_name in ('search.books', 'progress.save', 'shelf.mutate', 'page.profile', 'page.reading-life', 'page.search', 'page.book-detail', 'page.author-detail', 'page.discover', 'navigation.feedback')
 		group by coalesce(nullif(release_version, ''), 'unknown'), operation_name
 		order by max(created_at) desc, release_version desc, operation_name asc
 		limit 60

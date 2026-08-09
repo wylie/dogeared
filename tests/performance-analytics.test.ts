@@ -63,6 +63,7 @@ test("admin performance loader computes workflow, route, provider, slow-operatio
 	assert.match(telemetry, /shelf\.mutate/);
 	assert.match(telemetry, /page\.profile/);
 	assert.match(telemetry, /page\.book-detail/);
+	assert.match(telemetry, /navigation\.feedback/);
 	assert.match(telemetry, /external\.google-books/);
 	assert.match(telemetry, /external\.open-library/);
 	assert.match(telemetry, /cross join lateral jsonb_array_elements\(pe\.spans\)/);
@@ -85,6 +86,7 @@ test("core workflows record sanitized performance events at meaningful boundarie
 	const authorPage = read("../src/pages/author/[slug].astro");
 	const discoverPage = read("../src/pages/discover.astro");
 	const readingLifePage = read("../src/pages/reading-life.astro");
+	const navigationTelemetry = read("../src/pages/api/performance/navigation.ts");
 
 	assert.match(searchApi, /recordPerformanceEventSafe/);
 	assert.match(searchApi, /operationName: "search\.books"/);
@@ -117,4 +119,7 @@ test("core workflows record sanitized performance events at meaningful boundarie
 	assert.match(profilePage, /timePagePerf\("authentication\/session"/);
 	assert.match(profilePage, /onTiming: recordPagePerfSpan/);
 	assert.match(profilePage, /performanceTelemetry=\{profilePerformanceTelemetry\}/);
+	assert.match(navigationTelemetry, /operationName: "navigation\.feedback"/);
+	assert.match(navigationTelemetry, /normalizeRoute/);
+	assert.doesNotMatch(navigationTelemetry, /searchParams/);
 });

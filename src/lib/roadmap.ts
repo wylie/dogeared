@@ -28,8 +28,8 @@ export const ROADMAP_ITEMS: RoadmapItem[] = [
 	},
 	{
 		title: "Stability and polish",
-		description: "Keep common reading actions fast, accessible, and predictable across devices.",
-		why: "Trust comes from small details working every time: shelves, progress, search, feedback, and import recovery.",
+		description: "Keep common reading actions and page changes fast, accessible, and predictable across devices.",
+		why: "Trust comes from small details working every time: shelves, progress, search, navigation feedback, and import recovery.",
 		category: "now"
 	},
 	{

@@ -709,11 +709,13 @@ Status: Beta
 
 Admins can review operational performance telemetry at `/admin/performance`: request volume, p50/p75/p95/p99 latency, error rate, slow-operation count, core workflow cards, route/API performance, timing-span breakdowns, external provider latency, recent slow operations, release comparisons, and workflow-specific performance targets.
 
-Recorded operations use stable names such as `search.books`, `progress.save`, `shelf.mutate`, `page.profile`, `page.reading-life`, `page.search`, `page.book-detail`, `page.author-detail`, `page.discover`, `external.google-books`, and `external.open-library`. Timing spans use the same terminology as local development diagnostics, such as local catalog, external providers, canonical resolution, progress mutation, milestone work, Profile user/profile lookup, follower/following counts, shelf summary, current reads, recent activity, finished books, reading goal, shared navigation/sidebar loading, and viewer-state loading.
+Recorded operations use stable names such as `search.books`, `progress.save`, `shelf.mutate`, `page.profile`, `page.reading-life`, `page.search`, `page.book-detail`, `page.author-detail`, `page.discover`, `navigation.feedback`, `external.google-books`, and `external.open-library`. Timing spans use the same terminology as local development diagnostics, such as local catalog, external providers, canonical resolution, progress mutation, milestone work, Profile user/profile lookup, follower/following counts, shelf summary, current reads, recent activity, finished books, reading goal, shared navigation/sidebar loading, viewer-state loading, and navigation start to skeleton/content swap.
 
 The telemetry path is fire-and-forget from measured workflows, samples normal successes through `PERFORMANCE_TELEMETRY_SAMPLE_RATE` when configured, and always keeps errors and unusually slow operations. Raw events are retained for 45 days; longer-term performance review should rely on aggregates and release comparisons rather than permanent raw request logs.
 
 Privacy decisions: performance analytics measures operations, not readers. Events must not store search query text, book titles, journal content, emails, usernames, profile content, authorization data, database credentials, raw SQL, or sensitive request payloads. Shelf state remains current-user render data and is not cached as shared public telemetry.
+
+Navigation feedback is measured separately from server render time through `navigation.feedback`. Client-side navigation telemetry records sanitized route patterns, whether a delayed skeleton was shown, navigation start to skeleton visible, and navigation start to content swap. It must not include query strings, usernames, search text, book titles, or form payloads.
 
 Limitations: The dashboard depends on measured production traffic. Empty periods show explanatory empty states instead of misleading zero-valued health claims.
 

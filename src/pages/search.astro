@@ -620,6 +620,63 @@ recordPerformanceEventSafe({
 		background: #fff;
 		border-color: var(--color-border);
 	}
+	#search-results .search-result-skeleton {
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.72);
+		padding: 0.68rem;
+		position: relative;
+		display: grid;
+		grid-template-columns: 84px minmax(0, 1fr);
+		gap: 0.68rem;
+		min-width: 0;
+		min-height: 154px;
+	}
+	#search-results .search-skeleton-cover,
+	#search-results .search-skeleton-line {
+		display: block;
+		background: linear-gradient(90deg, rgba(87, 117, 144, 0.13), rgba(247, 181, 56, 0.18), rgba(87, 117, 144, 0.13));
+		background-size: 220% 100%;
+		animation: search-result-skeleton-pulse 1.8s ease-in-out infinite;
+	}
+	#search-results .search-skeleton-cover {
+		width: 84px;
+		aspect-ratio: 2 / 3;
+		border-radius: var(--radius-sm);
+	}
+	#search-results .search-skeleton-copy {
+		display: grid;
+		align-content: start;
+		gap: 0.48rem;
+		min-width: 0;
+	}
+	#search-results .search-skeleton-line {
+		height: 0.75rem;
+		border-radius: 999px;
+	}
+	#search-results .search-skeleton-line.title {
+		width: 78%;
+		height: 0.95rem;
+	}
+	#search-results .search-skeleton-line.author {
+		width: 48%;
+	}
+	#search-results .search-skeleton-line.meta {
+		width: 64%;
+	}
+	#search-results .search-skeleton-line.description {
+		width: 92%;
+	}
+	@keyframes search-result-skeleton-pulse {
+		0% { background-position: 0% 50%; }
+		100% { background-position: -220% 50%; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		#search-results .search-skeleton-cover,
+		#search-results .search-skeleton-line {
+			animation: none;
+		}
+	}
 	#search-results .progressive-book-card .progressive-shelf-dropdown {
 		position: absolute;
 		top: 0.6rem;
@@ -1267,6 +1324,31 @@ recordPerformanceEventSafe({
 		progressiveStatus.hidden = hidden;
 	}
 
+	function renderExternalSearchSkeletons() {
+		return Array.from({ length: 4 }, (_, index) => `
+			<li class="search-result-skeleton" data-search-skeleton="${index}" aria-hidden="true">
+				<span class="search-skeleton-cover"></span>
+				<span class="search-skeleton-copy">
+					<span class="search-skeleton-line title"></span>
+					<span class="search-skeleton-line author"></span>
+					<span class="search-skeleton-line meta"></span>
+					<span class="search-skeleton-line description"></span>
+				</span>
+			</li>
+		`).join("");
+	}
+
+	function showExternalSearchSkeletons() {
+		if (!(searchResultsRoot instanceof HTMLElement)) return;
+		if (searchResultsRoot.querySelector("[data-search-skeleton]")) return;
+		searchResultsRoot.insertAdjacentHTML("beforeend", renderExternalSearchSkeletons());
+	}
+
+	function hideExternalSearchSkeletons() {
+		if (!(searchResultsRoot instanceof HTMLElement)) return;
+		searchResultsRoot.querySelectorAll("[data-search-skeleton]").forEach((node) => node.remove());
+	}
+
 	async function loadProgressiveExternalResults() {
 		const queryText = String(searchPage?.dataset.query || "").trim();
 		if (!queryText || !(searchResultsRoot instanceof HTMLElement)) return;
@@ -1288,6 +1370,7 @@ recordPerformanceEventSafe({
 		];
 		let appendedTotal = 0;
 		let providerFailures = 0;
+		let externalSkeletonTimer = window.setTimeout(showExternalSearchSkeletons, 140);
 		await Promise.all(providers.map(async (provider) => {
 			const providerParams = new URLSearchParams(params);
 			providerParams.set("provider", provider.id);
@@ -1312,6 +1395,8 @@ recordPerformanceEventSafe({
 				if (requestId === externalSearchRequestId) providerFailures += 1;
 			}
 		}));
+		window.clearTimeout(externalSkeletonTimer);
+		hideExternalSearchSkeletons();
 		if (requestId !== externalSearchRequestId) return;
 		const totalCards = searchResultsRoot.querySelectorAll("[data-search-result-key]").length;
 		if (emptySearchState instanceof HTMLElement) {
@@ -1365,6 +1450,7 @@ recordPerformanceEventSafe({
 	document.querySelector("[data-search-form]")?.addEventListener("submit", () => {
 		externalSearchController?.abort();
 		externalSearchRequestId += 1;
+		hideExternalSearchSkeletons();
 	});
 
 	document.getElementById("left-hand-search")?.addEventListener("input", (event) => {
@@ -1372,6 +1458,7 @@ recordPerformanceEventSafe({
 		if (nextQuery && nextQuery !== String(searchPage?.dataset.query || "").trim()) {
 			externalSearchController?.abort();
 			externalSearchRequestId += 1;
+			hideExternalSearchSkeletons();
 		}
 	});
 

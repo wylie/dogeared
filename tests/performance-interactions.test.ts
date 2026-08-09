@@ -65,6 +65,9 @@ test("search page parallelizes result decoration and preserves duplicate-submit 
 	assert.match(searchPage, /mode: "external"/);
 	assert.match(searchPage, /providerParams\.set\("provider", provider\.id\)/);
 	assert.match(searchPage, /Promise\.all\(providers\.map/);
+	assert.match(searchPage, /showExternalSearchSkeletons/);
+	assert.match(searchPage, /hideExternalSearchSkeletons/);
+	assert.match(searchPage, /data-search-skeleton/);
 	assert.match(searchPage, /appendExternalResults/);
 	assert.match(searchPage, /const \[summaryRows, statusRows\] = await Promise\.all\(\[summaryRowsPromise, statusRowsPromise\]\)/);
 	assert.match(leftHand, /leftHandSearchForm\.dataset\.searching === "true"/);
@@ -100,6 +103,12 @@ test("page navigation and route rendering avoid avoidable blocking work", () => 
 	assert.match(layout, /<ClientRouter \/>/);
 	assert.match(layout, /astro:before-preparation/);
 	assert.match(layout, /class="navigation-progress"/);
+	assert.match(layout, /id="route-transition-skeleton"/);
+	assert.match(layout, /route-skeleton-book-card/);
+	assert.match(layout, /navigation start to skeleton visible/);
+	assert.match(layout, /\/api\/performance\/navigation/);
+	assert.match(layout, /aria-busy/);
+	assert.match(layout, /prefers-reduced-motion: reduce/);
 	assert.match(authors, /select count\(\*\)::int as total/);
 	assert.match(authors, /limit \$\{pageSize\}/);
 	assert.match(authors, /offset \$\{offset\}/);

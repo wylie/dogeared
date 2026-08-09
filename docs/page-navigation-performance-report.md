@@ -4,6 +4,38 @@ Date: 2026-08-08
 
 Scope: Shared layout, internal navigation, and representative SSR routes. Search, shelf mutations, and reading-progress saves are covered by their own reports.
 
+## 2026-08-08 Route Skeleton and Feedback Pass
+
+Production Admin Performance showed Profile and detail routes still take long enough that click-to-response perception matters even when the backend is correct. The most recent sampled route render telemetry before this pass was:
+
+| Operation | Count | p50 | p95 |
+| --- | ---: | ---: | ---: |
+| `page.profile` | 45 | 1029 ms | 1785 ms |
+| `page.author-detail` | 26 | 457 ms | 1638 ms |
+| `page.book-detail` | 25 | 236 ms | 1275 ms |
+| `page.discover` | 12 | 113 ms | 271 ms |
+| `page.reading-life` | 1 | 2 ms | 2 ms |
+
+Changes in this pass:
+
+- The shared layout starts route feedback on same-origin link clicks and GET form submits, then synchronizes with Astro client-router lifecycle events.
+- The top navigation progress indicator appears after 75 ms for slow swaps; route-level skeletons appear after 140 ms to avoid flashes on fast navigations.
+- Destination-shaped skeletons cover Search, Profile, My Reading Life, Book Detail, Author Detail, Discover/Books, Following, Notifications, Journal, and generic pages while keeping the persistent shell visible.
+- Skeletons set `aria-busy` on `main`, announce loading through a polite live region, and disable animation for reduced-motion readers.
+- Slow swaps replace the skeleton with a stable "taking longer than expected" state after 15 seconds instead of leaving an indefinite blank placeholder.
+- Search now appends delayed skeleton BookCard placeholders only for the asynchronous external-provider phase; local DogEared results still render first and stale provider work still aborts/clears placeholders.
+- Admin Performance now records `navigation.feedback` with sanitized route patterns and spans for "navigation start to skeleton visible" and "navigation start to content swap."
+
+Targets for the next production review:
+
+| Metric | Target |
+| --- | ---: |
+| Navigation start -> visible feedback | <= 120 ms p95 |
+| Navigation start -> route skeleton visible, when needed | <= 200 ms p95 |
+| Navigation start -> content swap | Track by route, not a single global target |
+
+Measurement note: this pass changes perceived latency and adds production telemetry for it. Backend route-render targets remain owned by the SSR optimization work below; skeletons must not be treated as a substitute for making slow routes faster.
+
 ## 2026-08-08 Telemetry-Guided Page Render Pass
 
 Admin Performance showed recent page telemetry near the 900 ms range before this pass, with `page.book-detail` at 910 ms and `page.profile` at 780 ms in the sampled last-24-hour data. The dominant spans were Book Detail catalog related/related-content loads and Profile section loading.
