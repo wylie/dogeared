@@ -33,7 +33,10 @@ export const prerender = false;
 
 const pagePerfStartedAt = performance.now();
 const pagePerfSpans: PerformanceSpanInput[] = [];
-const readingFormatSelectOptions = readingFormatOptions(true);
+const readingFormatSelectOptions = [
+	{ value: "unknown", label: "Choose reading format…", icon: "", isPlaceholder: true },
+	...readingFormatOptions(false).map((format) => ({ ...format, isPlaceholder: false }))
+];
 const recordPagePerfSpan = (name: string, durationMs: number, startedAt?: number, parentName?: string) => {
 	const normalizedDuration = Math.max(0, Math.round(durationMs * 10) / 10);
 	pagePerfSpans.push({
@@ -1825,7 +1828,12 @@ const profilePerformanceTelemetry = {
 															<span>Reading format</span>
 															<select class="progress-inline-format" aria-label="Reading format">
 																{readingFormatSelectOptions.map((format) => (
-																	<option value={format.value} selected={(item.readingFormat || "unknown") === format.value}>{format.label}</option>
+																	<option
+																		value={format.value}
+																		selected={(item.readingFormat || "unknown") === format.value}
+																		disabled={format.isPlaceholder}
+																		hidden={format.isPlaceholder}
+																	>{format.label}</option>
 																))}
 															</select>
 														</label>

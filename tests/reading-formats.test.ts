@@ -54,10 +54,30 @@ test("Profile progress controls edit reading format without changing progress be
 	const profile = readFileSync("src/pages/profile/[username].astro", "utf8");
 
 	assert.match(profile, /<select class="progress-inline-format" aria-label="Reading format">/);
+	assert.match(profile, /label: "Choose reading format…"/);
+	assert.match(profile, /readingFormatOptions\(false\)/);
+	assert.match(profile, /disabled=\{format\.isPlaceholder\}/);
+	assert.match(profile, /hidden=\{format\.isPlaceholder\}/);
+	assert.doesNotMatch(profile, /label: "Unknown"/);
 	assert.match(profile, /const readingFormat = readingFormatInput instanceof HTMLSelectElement[\s\S]+normalizeReadingFormat\(readingFormatInput\.value\)/);
 	assert.match(profile, /preferredProgressType: progressType,\s+readingFormat/);
 	assert.match(profile, /updateReadingFormatUi\(card, nextReadingFormat\)/);
 	assert.match(profile, /data-reading-format=\{item\.readingFormat \|\| "unknown"\}/);
+});
+
+test("Profile reading format placeholder is not a selectable saved format", () => {
+	const profile = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const optionSource = profile.slice(
+		profile.indexOf("{readingFormatSelectOptions.map"),
+		profile.indexOf("</select>", profile.indexOf("{readingFormatSelectOptions.map"))
+	);
+
+	assert.match(optionSource, /value=\{format\.value\}/);
+	assert.match(optionSource, /selected=\{\(item\.readingFormat \|\| "unknown"\) === format\.value\}/);
+	assert.match(optionSource, /disabled=\{format\.isPlaceholder\}/);
+	assert.match(optionSource, /hidden=\{format\.isPlaceholder\}/);
+	assert.match(profile, /value: "unknown", label: "Choose reading format…", icon: "", isPlaceholder: true/);
+	assert.match(profile, /readingFormatOptions\(false\)\.map\(\(format\) => \(\{ \.\.\.format, isPlaceholder: false \}\)\)/);
 });
 
 test("My Reading Life displays and filters reading format history", () => {
