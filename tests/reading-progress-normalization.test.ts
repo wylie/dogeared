@@ -126,6 +126,16 @@ test("profile progress save never exposes internal invalid labels", () => {
 	assert.doesNotMatch(profile, /progressSave\.textContent = "Retry"/);
 });
 
+test("profile progress feedback collapses when no message is visible", () => {
+	const profile = readFileSync("src/pages/profile/[username].astro", "utf8");
+	const feedbackStyle = profile.match(/\.progress-inline-feedback\s*\{(?<body>[^}]+)\}/)?.groups?.body || "";
+	const hiddenFeedbackStyle = profile.match(/\.progress-inline-feedback\[hidden\]\s*\{(?<body>[^}]+)\}/)?.groups?.body || "";
+
+	assert.doesNotMatch(feedbackStyle, /min-height\s*:/);
+	assert.match(hiddenFeedbackStyle, /display\s*:\s*none/);
+	assert.doesNotMatch(hiddenFeedbackStyle, /visibility\s*:\s*hidden/);
+});
+
 test("profile progress updater uses shared canonical progress normalization", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	assert.equal(source.includes('import { normalizeProgressUpdateInput } from "../../lib/readingProgress.ts";'), true);
