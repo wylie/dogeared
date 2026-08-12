@@ -728,6 +728,7 @@ export function buildReadingLifeSummary(input: {
 	finishedBooks: ReadingLifeFinishedBook[];
 	currentBooks: ReadingLifeCurrentBook[];
 	progressEvents: ReadingLifeProgressEvent[];
+	streakCreditDates?: string[];
 	annualGoal?: unknown;
 	now?: Date;
 }): ReadingLifeSummary {
@@ -747,7 +748,8 @@ export function buildReadingLifeSummary(input: {
 	const thisYearAuthorInsights = buildAuthorInsights(thisYearBooks);
 	const activityDates = [
 		...input.progressEvents.map((event) => event.date),
-		...timeline.map((book) => book.dateKey)
+		...timeline.map((book) => book.dateKey),
+		...(Array.isArray(input.streakCreditDates) ? input.streakCreditDates : [])
 	];
 	const overview: ReadingLifeOverview = {
 		booksCompletedThisYear: thisYearBooks.length,

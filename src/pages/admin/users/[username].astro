@@ -4,6 +4,14 @@ import { resolveAdminSession } from "../../../lib/admin";
 import { getNeonSql } from "../../../lib/neon";
 import { deleteAdminUser, loadAdminUserDetail } from "../../../lib/adminData";
 import { formatDate, formatNumber, safeAdminLoad } from "../../../lib/adminFormatting";
+import { createReadingMilestoneNotifications } from "../../../lib/notifications";
+import {
+	addStreakCreditsForRange,
+	loadAdminStreakRepairData,
+	planStreakCreditRange,
+	removeStreakCredit,
+	type AdminStreakRepairData
+} from "../../../lib/readingStreakCredits";
 
 export const prerender = false;
 
@@ -16,6 +24,8 @@ let userResult = await safeAdminLoad("Admin user detail", () => loadAdminUserDet
 let user = userResult.data;
 let deleteMessage = "";
 let deleteError = false;
+let streakMessage = "";
+let streakError = false;
 
 if (Astro.request.method === "POST") {
 	try {
@@ -23,8 +33,39 @@ if (Astro.request.method === "POST") {
 		const intent = String(form.get("intent") || "").trim();
 		const confirmUsername = String(form.get("confirmUsername") || "").trim().replace(/^@+/, "");
 		if (!user?.id) {
-			deleteMessage = "User not found.";
-			deleteError = true;
+			if (intent === "add-streak-credits" || intent === "remove-streak-credit") {
+				streakMessage = "User not found.";
+				streakError = true;
+			} else {
+				deleteMessage = "User not found.";
+				deleteError = true;
+			}
+		} else if (intent === "add-streak-credits") {
+			const result = await addStreakCreditsForRange(sql, {
+				userId: user.id,
+				adminUserId: admin.userId,
+				startDate: form.get("startDate"),
+				endDate: form.get("endDate"),
+				reason: form.get("reason")
+			});
+			streakMessage = result.plan
+				? `${result.message} ${result.plan.selectedDates.length} dates selected; ${result.plan.readingActivityDates.length} already contain reading activity; ${result.plan.datesRequiringCredit.length} required credits.`
+				: result.message;
+			streakError = !result.ok;
+			if (result.ok && result.created > 0) {
+				await createReadingMilestoneNotifications(sql, user.id, { checkStreak: true });
+			}
+			userResult = await safeAdminLoad("Admin user detail", () => loadAdminUserDetail(sql, username), null);
+			user = userResult.data;
+		} else if (intent === "remove-streak-credit") {
+			const result = await removeStreakCredit(sql, {
+				userId: user.id,
+				creditId: form.get("creditId")
+			});
+			streakMessage = result.message;
+			streakError = !result.ok;
+			userResult = await safeAdminLoad("Admin user detail", () => loadAdminUserDetail(sql, username), null);
+			user = userResult.data;
 		} else if (intent !== "delete-user") {
 			deleteMessage = "Invalid admin action.";
 			deleteError = true;
@@ -43,15 +84,39 @@ if (Astro.request.method === "POST") {
 		if (import.meta.env.DEV) {
 			console.warn("[admin.user-detail.post.failed]", error instanceof Error ? error.message : error);
 		}
-		deleteMessage = "User action could not be completed.";
-		deleteError = true;
+		streakMessage = "User action could not be completed.";
+		streakError = true;
 	}
 }
+
+const streakRepairResult = user?.id
+	? await safeAdminLoad<AdminStreakRepairData>("Reading streak repair", () => loadAdminStreakRepairData(sql, user.id), {
+		currentStreakDays: 0,
+		qualifyingDateKeys: [],
+		readingActivityDateKeys: [],
+		streakCreditDateKeys: [],
+		gaps: [],
+		recentDays: [],
+		credits: []
+	})
+	: { data: null, warning: "" };
+const streakRepair = streakRepairResult.data;
+const defaultEndDate = new Date().toISOString().slice(0, 10);
+const defaultStartDate = streakRepair?.gaps[0] || defaultEndDate;
+const defaultPlan = streakRepair
+	? planStreakCreditRange({
+		startDate: defaultStartDate,
+		endDate: defaultEndDate,
+		readingDateKeys: streakRepair.readingActivityDateKeys,
+		creditDateKeys: streakRepair.streakCreditDateKeys
+	})
+	: null;
 
 const sectionLinks = [
 	{ id: "overview", label: "Overview" },
 	{ id: "account", label: "Account" },
 	{ id: "counts", label: "Counts" },
+	{ id: "streak-repair", label: "Streak Repair" },
 	{ id: "delete-user", label: "Delete User" }
 ];
 
@@ -104,6 +169,105 @@ const isSelf = !!user?.id && user.id === admin.userId;
 					</div>
 				</section>
 
+				<section class="panel" id="streak-repair">
+					<div class="panel-head">
+						<h2>Reading Streak Repair</h2>
+						<p>Admin-only streak credits repair calendar continuity without creating page progress, reading volume, books read, or finish events.</p>
+					</div>
+					{streakRepairResult.warning && <p class="admin-message error" role="status">{streakRepairResult.warning}</p>}
+					{streakMessage && <p class={`admin-message${streakError ? " error" : ""}`} role="status">{streakMessage}</p>}
+					{streakRepair && (
+						<>
+							<div class="grid stats-grid">
+								<article class="stat"><p>Current streak</p><strong>{formatNumber(streakRepair.currentStreakDays)} days</strong></article>
+								<article class="stat"><p>Real reading dates</p><strong>{formatNumber(streakRepair.readingActivityDateKeys.length)}</strong></article>
+								<article class="stat"><p>Streak credits</p><strong>{formatNumber(streakRepair.streakCreditDateKeys.length)}</strong></article>
+								<article class="stat"><p>Nearest gaps</p><strong>{formatNumber(streakRepair.gaps.length)}</strong></article>
+							</div>
+
+							<div class="streak-repair-grid">
+								<div class="repair-box">
+									<h3>Add streak credits</h3>
+									<p>Only dates without genuine reading activity or an existing credit will receive credits.</p>
+									{defaultPlan && (
+										<p class="repair-plan">
+											Default range: {formatNumber(defaultPlan.selectedDates.length)} dates selected,
+											{" "}{formatNumber(defaultPlan.readingActivityDates.length)} already contain reading activity,
+											{" "}{formatNumber(defaultPlan.datesRequiringCredit.length)} require credits.
+										</p>
+									)}
+									<form method="post" class="repair-form">
+										<input type="hidden" name="intent" value="add-streak-credits" />
+										<label for="startDate">Start date</label>
+										<input id="startDate" name="startDate" type="date" value={defaultStartDate} required />
+										<label for="endDate">End date</label>
+										<input id="endDate" name="endDate" type="date" value={defaultEndDate} required />
+										<label for="reason">Reason</label>
+										<select id="reason" name="reason" required>
+											<option value="Streak restoration">Streak restoration</option>
+											<option value="Missing historical reading data">Missing historical reading data</option>
+											<option value="Migration repair">Migration repair</option>
+											<option value="Timezone correction">Timezone correction</option>
+											<option value="Manual admin adjustment">Manual admin adjustment</option>
+										</select>
+										<button type="submit" class="primary-button">Add Missing Credits</button>
+									</form>
+								</div>
+
+								<div class="repair-box">
+									<h3>Recent streak dates</h3>
+									<ul class="streak-day-list" aria-label="Recent streak repair dates">
+										{streakRepair.recentDays.slice(0, 18).map((day) => (
+											<li class={`streak-day streak-day-${day.status}`}>
+												<span>{day.date}</span>
+												<strong>
+													{day.status === "both"
+														? "Reading activity + credit"
+														: day.status === "reading"
+															? "Reading activity"
+															: day.status === "credit"
+																? "Streak credit"
+																: "Gap"}
+												</strong>
+											</li>
+										))}
+									</ul>
+								</div>
+							</div>
+
+							<div class="repair-box credit-list-box">
+								<h3>Existing streak credits</h3>
+								{streakRepair.credits.length === 0 ? (
+									<p>No streak credits have been added for this reader.</p>
+								) : (
+									<table class="admin-table">
+										<thead>
+											<tr><th>Date credited</th><th>Reason</th><th>Created</th><th>Admin</th><th>Action</th></tr>
+										</thead>
+										<tbody>
+											{streakRepair.credits.map((credit) => (
+												<tr>
+													<td>{credit.date}</td>
+													<td>{credit.reason || "No reason recorded"}</td>
+													<td>{formatDate(credit.createdAt)}</td>
+													<td>{credit.createdByUsername ? `@${credit.createdByUsername}` : "Unknown admin"}</td>
+													<td>
+														<form method="post" class="inline-form">
+															<input type="hidden" name="intent" value="remove-streak-credit" />
+															<input type="hidden" name="creditId" value={String(credit.id)} />
+															<button type="submit" class="secondary-button">Remove Credit</button>
+														</form>
+													</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								)}
+							</div>
+						</>
+					)}
+				</section>
+
 				<section class="panel danger-panel" id="delete-user">
 					<div class="panel-head">
 						<h2>Delete User</h2>
@@ -133,6 +297,13 @@ const isSelf = !!user?.id && user.id === admin.userId;
 			event.preventDefault();
 		}
 	});
+	for (const form of document.querySelectorAll(".inline-form")) {
+		form.addEventListener("submit", (event) => {
+			if (!window.confirm("Remove this streak credit? The reader's calculated streak may change immediately.")) {
+				event.preventDefault();
+			}
+		});
+	}
 </script>
 
 <style>
@@ -154,6 +325,57 @@ const isSelf = !!user?.id && user.id === admin.userId;
 	.detail-grid p { margin: 0; display: grid; gap: 0.15rem; }
 	.detail-grid strong { color: #4b5563; font-size: 0.82rem; }
 	.detail-grid span { overflow-wrap: anywhere; }
+	.streak-repair-grid { display: grid; grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr); gap: 0.75rem; margin-top: 0.8rem; }
+	.repair-box { border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.58); padding: 0.75rem; }
+	.repair-box h3 { margin: 0; font-size: 1rem; }
+	.repair-box p { margin: 0.3rem 0 0; color: #575757; font-size: 0.88rem; line-height: 1.4; }
+	.repair-plan { font-weight: 700; color: var(--color-text); }
+	.repair-form { display: grid; gap: 0.42rem; margin-top: 0.65rem; }
+	.repair-form label { font-weight: 700; color: #3f3f3f; font-size: 0.84rem; }
+	.repair-form input,
+	.repair-form select {
+		height: 38px;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: #fff;
+		padding: 0 0.65rem;
+		font: inherit;
+		box-sizing: border-box;
+	}
+	.primary-button,
+	.secondary-button {
+		border-radius: 8px;
+		min-height: 38px;
+		padding: 0 0.85rem;
+		font: inherit;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.primary-button {
+		justify-self: start;
+		border: none;
+		background: var(--color-primary);
+		color: #fff;
+	}
+	.secondary-button {
+		border: var(--border-subtle);
+		background: #edf4f7;
+		color: var(--color-nav);
+	}
+	.streak-day-list { list-style: none; display: grid; gap: 0.35rem; margin: 0.65rem 0 0; padding: 0; }
+	.streak-day { display: flex; justify-content: space-between; gap: 0.5rem; border: var(--border-subtle); border-radius: var(--radius-sm); background: #fff; padding: 0.38rem 0.5rem; font-size: 0.85rem; }
+	.streak-day span { font-variant-numeric: tabular-nums; }
+	.streak-day strong { font-size: 0.8rem; text-align: right; }
+	.streak-day-reading strong,
+	.streak-day-both strong { color: var(--color-primary); }
+	.streak-day-credit strong { color: #7c4a03; }
+	.streak-day-gap strong { color: #991b1b; }
+	.credit-list-box { margin-top: 0.75rem; overflow-x: auto; }
+	.admin-table { width: 100%; border-collapse: collapse; margin-top: 0.65rem; font-size: 0.88rem; }
+	.admin-table th,
+	.admin-table td { border-bottom: var(--border-subtle); padding: 0.48rem; text-align: left; vertical-align: top; }
+	.admin-table th { color: #4b5563; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.02em; }
+	.inline-form { margin: 0; }
 	.danger-panel { border-color: rgba(153, 27, 27, 0.26); }
 	.admin-message {
 		margin: 0.7rem 0 0;
@@ -188,6 +410,7 @@ const isSelf = !!user?.id && user.id === admin.userId;
 	@media (max-width: 760px) {
 		.stats-grid,
 		.detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+		.streak-repair-grid { grid-template-columns: 1fr; }
 	}
 
 	@media (max-width: 520px) {

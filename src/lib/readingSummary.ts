@@ -262,9 +262,23 @@ export async function loadReaderReadingSummary(
 			`
 		),
 		time("momentum/streak", () => sql<ProgressDateRow[]>`
-				select distinct recorded_at::date::text as activity_day
-				from user_reading_progress_event
-				where user_id = ${userId}::uuid
+				with days as (
+					select distinct recorded_at::date as day
+					from user_reading_progress_event
+					where user_id = ${userId}::uuid
+					union
+					select distinct finished_date as day
+					from user_book
+					where user_id = ${userId}::uuid
+						and status = 'finished'
+						and finished_date is not null
+					union
+					select distinct credit_date as day
+					from reader_streak_credit
+					where user_id = ${userId}::uuid
+				)
+				select day::text as activity_day
+				from days
 				order by activity_day desc
 				limit 120
 			`

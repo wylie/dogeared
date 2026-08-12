@@ -208,6 +208,8 @@ The same definition powers profile badges, notification icon and accent treatmen
 
 Achievement notifications are created only after the server verifies eligibility, persists the earned achievement, and links the notification metadata to the achievement definition and earned row. Notification Open actions deep-link to the profile header Achievements row and highlight the earned badge. Deleting a notification does not delete the achievement.
 
+Reading streak achievements use the canonical credit-aware streak calculation. Real progress and finished-book dates count as genuine reading activity; administrative streak credits can repair continuity and participate in streak badges without creating reading-progress events, reading volume, books read, or finish events. Existing earned achievements are scoped uniquely, so repair checks do not create duplicate badge rows or duplicate achievement notifications.
+
 Profile badges use shared Material icon identifiers, achievement color tokens from DogEared's palette, and a reusable rounded stamp artwork treatment inspired by library stickers, bookplates, field notes, and passport stamps. Streak badges progress from greens through oranges into gold with tier-specific reading-rhythm icons. Series completion uses literary blues, and yearly reading goals use purple. Badges appear as collectible mini stickers near the bottom of the main profile header card, after identity, biography, details, and favorite genres. The header shows a limited preview with a compact more control for additional badges. Badge details show larger artwork, description, earned date, related Series or Work, and how the badge can be earned without exposing private reading-session history or incomplete progress.
 
 Readers can show or hide all achievements on their public profile from Settings. Earned achievements default to public unless the reader hides the section. Historical backfill is handled by `npm run backfill:achievements`, which defaults to dry run, reports eligible users, proposed awards, existing conflicts, and only writes rows with `-- --apply`.
@@ -242,7 +244,7 @@ Profile Currently Reading uses a supportive momentum model based on current page
 
 ### Reading Streak
 
-Profiles and metrics calculate reading streaks from recent reading/progress dates. The streak is a gentle continuity signal, not a leaderboard.
+Profiles and metrics calculate reading streaks from recent reading/progress dates, finished-book dates, and explicit administrative streak credits. A `reader_streak_credit` row means a calendar day should count for streak continuity only. It contributes zero pages, zero page equivalents, zero progress updates, zero audiobook minutes, zero books progressed, and zero finish events, so Reading Activity and Daily Reading Volume do not show fabricated bars. Admins can review and repair streak continuity from Admin -> Users -> reader, where each recent day is labeled as Reading activity, Streak credit, Reading activity + credit, or Gap; range repair creates credits only for missing dates and stores the admin, date, reason, and timestamp. The reader-facing Profile simply shows the corrected streak without exposing administrative repair details.
 
 ### Reading Goal
 

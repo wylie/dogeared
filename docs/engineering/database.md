@@ -400,6 +400,25 @@ Relationships:
 - Used by profile momentum/streak, metrics, reading format summaries, and My Reading Life calendar/streak summaries.
 - Progress belongs to the Work. Edition page counts or catalog format metadata may influence calculations, but changing editions should not lose progress. Reader-chosen reading format belongs to `user_book`.
 
+## Reading Streak Credits
+
+Entity: `reader_streak_credit`
+
+Administrative streak credits repair streak continuity without fabricating reader activity. Each row stores:
+
+- Reader (`user_id`).
+- Credited calendar date (`credit_date`).
+- Short audit reason.
+- Created timestamp.
+- Admin who created the credit (`created_by_admin`).
+
+Constraints and behavior:
+
+- One credit per reader per calendar date.
+- Credits count only for reading-streak continuity and streak achievements.
+- Credits do not create `user_reading_progress_event` rows and do not contribute pages, page equivalents, progress-update counts, books read, finished-book counts, Reading Activity bars, or Daily Reading Volume.
+- Admin user deletion removes credits created for or by the deleted account.
+
 ## My Reading Life And Timeline Data
 
 My Reading Life does not introduce a new persistence table. It derives its summaries from existing entities:
@@ -407,6 +426,7 @@ My Reading Life does not introduce a new persistence table. It derives its summa
 - `user_book` for finished books, current books, ratings, pages, finished dates, and reflections.
 - `user_book.reading_format` for Physical, Ebook, Audiobook, and Unknown reading-format history.
 - `user_reading_progress_event` for reading activity dates and page movement.
+- `reader_streak_credit` for streak continuity only, never for reading volume.
 - `book_work`, representative `book`, `book_edition`, `author`, `book_genre`, and `series_book`/`series` for catalog, author, genre, edition, and series context.
 - `app_user.profile_data.readingGoal` for annual goal progress.
 

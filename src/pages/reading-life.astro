@@ -44,6 +44,10 @@ type RawProgressRow = {
 	reading_format: string;
 };
 
+type RawStreakCreditRow = {
+	credit_date: string;
+};
+
 function formatDate(value: string) {
 	if (!value) return "Date unavailable";
 	const date = new Date(`${value}T00:00:00Z`);
@@ -188,6 +192,17 @@ async function ensureReadingLifeSchema(sql: ReturnType<typeof getNeonSql>) {
 					page_delta int not null default 0,
 					recorded_at timestamptz not null default now()
 				)
+			`,
+			sql`
+				create table if not exists reader_streak_credit (
+					id bigserial primary key,
+					user_id uuid not null references app_user(id) on delete cascade,
+					credit_date date not null,
+					reason text not null default '',
+					created_at timestamptz not null default now(),
+					created_by_admin uuid references app_user(id) on delete set null,
+					unique (user_id, credit_date)
+				)
 			`
 		]).then(() => undefined);
 	}
@@ -219,6 +234,7 @@ const sectionLinks = [
 let finishedBooks: ReadingLifeFinishedBook[] = [];
 let currentBooks: ReadingLifeCurrentBook[] = [];
 let progressEvents: ReadingLifeProgressEvent[] = [];
+let streakCreditDates: string[] = [];
 let annualGoal = "";
 let loadError = "";
 
@@ -227,7 +243,7 @@ if (viewerUserId) {
 		const sql = getNeonSql();
 		await ensureReadingLifeSchema(sql);
 		markPagePerfStage("schema_ready");
-		const [profileRows, finishedRows, currentRows, progressRows] = await Promise.all([
+		const [profileRows, finishedRows, currentRows, progressRows, streakCreditRows] = await Promise.all([
 			sql<Array<{ profile_data: unknown }>>`
 				select profile_data
 				from app_user
@@ -267,6 +283,12 @@ if (viewerUserId) {
 				left join user_book ub on ub.user_id = pe.user_id and ub.book_id = pe.book_id
 				where pe.user_id = ${viewerUserId}::uuid
 				order by pe.recorded_at desc
+			`,
+			sql<RawStreakCreditRow[]>`
+				select credit_date::text as credit_date
+				from reader_streak_credit
+				where user_id = ${viewerUserId}::uuid
+				order by credit_date desc
 			`
 		]);
 
@@ -294,6 +316,7 @@ if (viewerUserId) {
 			pageDelta: Number(row.page_delta || 0),
 			readingFormat: normalizeReadingFormat(row.reading_format)
 		}));
+		streakCreditDates = streakCreditRows.map((row) => String(row.credit_date || "").trim()).filter(Boolean);
 		markPagePerfStage("reading_life_loaded");
 	} catch (error) {
 		loadError = error instanceof Error ? error.message : "Unable to load your reading life.";
@@ -306,6 +329,7 @@ const readingLife = buildReadingLifeSummary({
 	finishedBooks,
 	currentBooks,
 	progressEvents,
+	streakCreditDates,
 	annualGoal,
 	now
 });

@@ -218,6 +218,19 @@ export async function ensureAdminSupportSchema(sql: NeonQueryFunction<false, fal
 		)
 	`;
 	await sql`
+		create table if not exists reader_streak_credit (
+			id bigserial primary key,
+			user_id uuid not null references app_user(id) on delete cascade,
+			credit_date date not null,
+			reason text not null default '',
+			created_at timestamptz not null default now(),
+			created_by_admin uuid references app_user(id) on delete set null,
+			unique (user_id, credit_date)
+		)
+	`;
+	await sql`create index if not exists idx_reader_streak_credit_user_date on reader_streak_credit(user_id, credit_date desc)`;
+	await sql`create index if not exists idx_reader_streak_credit_admin_created on reader_streak_credit(created_by_admin, created_at desc)`;
+	await sql`
 		create table if not exists feedback_submission_event (
 			id bigserial primary key,
 			user_id uuid references app_user(id) on delete set null,
@@ -867,6 +880,7 @@ export async function deleteAdminUser(sql: NeonQueryFunction<false, false>, targ
 			tx`delete from auth_magic_link where user_id = ${targetId}::uuid`,
 			tx`delete from auth_session where user_id = ${targetId}::uuid`,
 			tx`delete from user_reading_progress_event where user_id = ${targetId}::uuid`,
+			tx`delete from reader_streak_credit where user_id = ${targetId}::uuid or created_by_admin = ${targetId}::uuid`,
 			tx`delete from user_custom_shelf_book where user_id = ${targetId}::uuid`,
 			tx`delete from user_custom_shelf where user_id = ${targetId}::uuid`,
 			tx`delete from user_follow where follower_user_id = ${targetId}::uuid or followed_user_id = ${targetId}::uuid`,

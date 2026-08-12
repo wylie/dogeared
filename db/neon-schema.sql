@@ -243,6 +243,16 @@ create table if not exists user_book (
 	primary key (user_id, book_id)
 );
 
+create table if not exists reader_streak_credit (
+	id bigserial primary key,
+	user_id uuid not null references app_user(id) on delete cascade,
+	credit_date date not null,
+	reason text not null default '',
+	created_at timestamptz not null default now(),
+	created_by_admin uuid references app_user(id) on delete set null,
+	unique (user_id, credit_date)
+);
+
 create table if not exists user_recommendation_feedback (
 	user_id uuid not null references app_user(id) on delete cascade,
 	book_id bigint not null references book(id) on delete cascade,
@@ -327,6 +337,8 @@ create index if not exists idx_user_activity_user_created on user_activity(user_
 create index if not exists idx_user_book_status_updated on user_book(status, updated_at desc);
 create index if not exists idx_user_book_book on user_book(book_id);
 create index if not exists idx_user_book_edition on user_book(edition_id) where edition_id is not null;
+create index if not exists idx_reader_streak_credit_user_date on reader_streak_credit(user_id, credit_date desc);
+create index if not exists idx_reader_streak_credit_admin_created on reader_streak_credit(created_by_admin, created_at desc);
 create index if not exists idx_reading_journal_user_updated on reading_journal_entry(user_id, updated_at desc);
 create index if not exists idx_reading_journal_book on reading_journal_entry(book_id);
 create index if not exists idx_reading_journal_visibility on reading_journal_entry(visibility);

@@ -87,6 +87,8 @@ Readers earn persistent achievement badges for meaningful, non-competitive readi
 
 Each achievement comes from the shared achievement-definition registry, which owns the key, type, title, description, icon identifier, accent color token, criteria, repeatability, and related Series or Work behavior. The same definition powers the profile badge, badge detail popover, notification icon, notification accent, notification title, notification description, and historical backfill. Earned achievements include an optional repeat scope key for badges such as yearly goals. Badge visuals use reusable rounded stamp artwork: streak tiers move from greens through oranges into gold with distinct icons, series completion uses blues, and yearly goals use purple. Badge details explain how the achievement can be earned without exposing private journal entries, exact reading-session history, or incomplete progress.
 
+Reading streak achievements honor explicit administrative streak credits from the same canonical streak calculation used by Profile and My Reading Life. Credits can restore continuity for a calendar day but never create page progress, reading volume, finish events, or books-read statistics.
+
 Limitations: Current controls support showing all earned achievements or hiding all achievements publicly. Per-badge visibility is stored in the earned achievement model for future use but is not yet exposed as a separate profile control.
 
 ### Followers Page
@@ -331,7 +333,9 @@ Status: Complete
 
 Profiles and metrics show a reading streak based on recent reading/progress dates.
 
-Limitations: Streak calculation depends on recorded updates and visible shelf state.
+Admin -> Users -> reader includes a Reading Streak Repair tool. It shows the current calculated streak, recent qualifying days, gaps, and existing credits; admins can add credits across a date range or remove a credit. Range repair creates credits only for dates without genuine reading activity or an existing credit, and stores the reason, admin, and timestamp for auditability.
+
+Limitations: Public profile and Reading Life surfaces show the corrected streak but do not expose which dates were administrative credits.
 
 ### Annual Reading Goal
 

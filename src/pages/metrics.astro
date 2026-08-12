@@ -544,6 +544,18 @@ try {
 		)
 	`;
 	await sql`create index if not exists idx_progress_event_user_recorded_at on user_reading_progress_event(user_id, recorded_at desc)`;
+	await sql`
+		create table if not exists reader_streak_credit (
+			id bigserial primary key,
+			user_id uuid not null references app_user(id) on delete cascade,
+			credit_date date not null,
+			reason text not null default '',
+			created_at timestamptz not null default now(),
+			created_by_admin uuid references app_user(id) on delete set null,
+			unique (user_id, credit_date)
+		)
+	`;
+	await sql`create index if not exists idx_reader_streak_credit_user_date on reader_streak_credit(user_id, credit_date desc)`;
 	const [summaryRows, statusRows, topLocationRows, authorRows, genreRows, locationRows, factsRows, myRows, communityRows, topReadingRows, streakRows, finishSpeedRows, genreShiftRows, topicExploreRows, ratingRows, tasteRows, communityAdvancedRows] = await Promise.all([
 		sql<Array<{ total_users: number; total_shelved_books: number; distinct_books: number; tracked_genres: number; tracked_topics: number; active_locations: number }>>`
 			with valid_users as (
@@ -814,6 +826,18 @@ try {
 				where ${viewerUserId}::text <> ''
 					and ub.user_id = ${viewerUserId || null}::uuid
 					and coalesce(ub.current_page, 0) > 0
+				union
+				select distinct ub.finished_date as day
+				from user_book ub
+				where ${viewerUserId}::text <> ''
+					and ub.user_id = ${viewerUserId || null}::uuid
+					and ub.status = 'finished'
+					and ub.finished_date is not null
+				union
+				select distinct rsc.credit_date as day
+				from reader_streak_credit rsc
+				where ${viewerUserId}::text <> ''
+					and rsc.user_id = ${viewerUserId || null}::uuid
 			), anchor as (
 				select max(day) as last_day
 				from activity_days

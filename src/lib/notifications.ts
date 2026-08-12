@@ -6,6 +6,7 @@ import {
 	getReadingStreakAchievementDefinition,
 	renderAchievementTitle
 } from "./achievements";
+import { calculateCurrentReadingStreakFromSql } from "./readingStreakCredits.ts";
 
 export type NotificationCategory = "community" | "reading" | "discovery" | "milestones" | "system";
 
@@ -701,27 +702,7 @@ export async function createReadingMilestoneNotifications(
 		}
 	}
 	if (input.checkStreak !== false) {
-		const streakRows = await sql<Array<{ streak_days: number }>>`
-			with days as (
-				select distinct recorded_at::date as day
-				from user_reading_progress_event
-				where user_id = ${userId}::uuid
-					and recorded_at >= now() - interval '400 days'
-			),
-			numbered as (
-				select day, day - (row_number() over (order by day))::int as grp
-				from days
-			)
-			select count(*)::int as streak_days
-			from numbered
-			where grp = (
-				select grp
-				from numbered
-				order by day desc
-				limit 1
-			)
-		`;
-		const streak = normalizePositiveInt(streakRows[0]?.streak_days);
+		const streak = normalizePositiveInt(await calculateCurrentReadingStreakFromSql(sql, userId));
 		const streakDefinition = getReadingStreakAchievementDefinition(streak);
 		if (streakDefinition) {
 			const award = await awardAchievement(sql, {

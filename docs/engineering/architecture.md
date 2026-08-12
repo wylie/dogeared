@@ -166,6 +166,10 @@ Coach marks must stay visually attached to the component they explain. `GuidedTi
 
 To add a tip, add a canonical ID in `src/lib/guidedTour.ts`, add the tip definition in `GuidedTip.astro` with an anchor selector, and include tests for the new ID and trigger rule. The API stores progress under `app_user.profile_data.settings.guidedTour`, so adding a tip does not require a new table.
 
+## Reading Streak Repair
+
+Streak repair lives in `src/lib/readingStreakCredits`, `reader_streak_credit`, and the Admin user-detail page. The helper owns schema readiness, date normalization, range planning, credit insertion/removal, admin repair summaries, and credit-aware streak date merging. Profile, My Reading Life, metrics, and achievement milestone checks include credits when calculating streak continuity. Reading Activity and Daily Reading Volume intentionally do not consume credits, so no synthetic page movement, page equivalents, progress updates, books read, or finishes are created.
+
 ## Persistence
 
 Baseline schema is in `db/neon-schema.sql`, migrations are in `db/migrations/`, and newer support tables are also created lazily in API/helper code. The product currently uses Neon Postgres directly through `@neondatabase/serverless`.
