@@ -103,12 +103,15 @@ test("streak credits are explicit admin data and participate in achievements", (
 	const schema = readFileSync("db/neon-schema.sql", "utf8");
 	const helper = readFileSync("src/lib/readingStreakCredits.ts", "utf8");
 	const notifications = readFileSync("src/lib/notifications.ts", "utf8");
+	const readingSummary = readFileSync("src/lib/readingSummary.ts", "utf8");
 	const adminPage = readFileSync("src/pages/admin/users/[username].astro", "utf8");
 
 	assert.match(migration, /create table if not exists reader_streak_credit/);
 	assert.match(schema, /create table if not exists reader_streak_credit/);
 	assert.match(schema, /unique \(user_id, credit_date\)/);
 	assert.match(helper, /created_by_admin uuid references app_user/);
+	assert.match(readingSummary, /ensureStreakCreditSchema/);
+	assert.match(readingSummary, /select distinct credit_date as day\s+from reader_streak_credit/);
 	assert.match(notifications, /calculateCurrentReadingStreakFromSql/);
 	assert.doesNotMatch(notifications, /from user_reading_progress_event[\s\S]+numbered[\s\S]+streak_days/);
 	assert.match(adminPage, /resolveAdminSession\(Astro\.request\)/);

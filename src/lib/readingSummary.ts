@@ -2,6 +2,7 @@ import { resolveMomentumPrediction } from "./momentumPrediction.ts";
 import { calculateReadingStreak } from "./readingLife.ts";
 import { normalizeProgressInputMode, type ProgressInputMode } from "./readingProgress.ts";
 import { normalizeReadingFormat, type ReadingFormat } from "./readingFormats.ts";
+import { ensureStreakCreditSchema } from "./readingStreakCredits.ts";
 
 export type ReadingSummaryCurrentBook = {
 	bookId: number;
@@ -222,6 +223,7 @@ export async function loadReaderReadingSummary(
 	};
 	if (options.ensureSchema !== false) {
 		await time("reading progress schema", () => ensureReadingProgressEventSchema(sql));
+		await time("streak credit schema", () => ensureStreakCreditSchema(sql));
 	}
 	const currentBookLimit = Math.max(1, Math.min(500, Math.floor(Number(options.currentBookLimit || 500) || 500)));
 	const [readingRows, progressDateRows] = await Promise.all([
