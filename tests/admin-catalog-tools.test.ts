@@ -243,8 +243,16 @@ test("admin catalog editor unifies book repair while preserving Work and Edition
 	assert.match(editor, /name="editionMode"/);
 	assert.match(editor, /data-series-search/);
 	assert.match(editor, /data-series-results/);
+	assert.match(editor, /data-series-option/);
+	assert.match(editor, /data-series-selected/);
+	assert.match(editor, /series-position-field/);
+	assert.doesNotMatch(editor, /list="series-options"/);
 	assert.match(editor, /data-cover-file/);
 	assert.match(editor, /data-cover-upload-trigger/);
+	assert.match(editor, /data-cover-layer-note/);
+	assert.match(editor, /Remove Edition cover/);
+	assert.match(editor, /Edition cover URL/);
+	assert.match(editor, /Work fallback cover URL/);
 	assert.match(editor, /Use image URL instead/);
 	assert.match(editor, /catalog-save-bar/);
 	assert.match(editor, /data-discard-changes/);
@@ -261,6 +269,7 @@ test("admin catalog editor unifies book repair while preserving Work and Edition
 	assert.match(lib, /manuallyCurated/);
 	assert.match(lib, /Admin upload/);
 	assert.match(lib, /resolveCatalogEditorSeriesId/);
+	assert.match(lib, /normalizeText\(formData\.get\("seriesCreateName"\), 160\)/);
 	assert.match(lib, /admin_catalog_audit_event/);
 	assert.match(lib, /Audiobook duration must be a positive duration/);
 	assert.match(lib, /ISBN-10 must contain 10 ISBN characters/);
@@ -309,6 +318,9 @@ test("admin catalog editor surfaces Data Health issues next to relevant fields",
 	assert.match(editor, /The title suggests this book belongs to a Series/);
 	assert.match(editor, /cover-preview/);
 	assert.match(editor, /Upload new cover/);
+	assert.match(editor, /Choose a JPEG, PNG, or WebP image/);
+	assert.match(editor, /Cover ready\. Save catalog data to persist/);
+	assert.match(editor, /Could not upload this image\. Try again/);
 });
 
 test("Book Detail exposes catalog repair shortcut only through admin session", () => {

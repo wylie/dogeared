@@ -372,7 +372,7 @@ export async function resolveCanonicalCatalogWork(
 			coalesce(nullif(trim(b.title), ''), 'Untitled') as title,
 			coalesce(nullif(trim(b.primary_author), ''), '') as primary_author,
 			coalesce(nullif(trim(b.synopsis), ''), '') as description,
-			coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+			coalesce(nullif(trim(b.cover_url), ''), nullif(trim(ed.cover_url), ''), nullif(trim(bw.preferred_cover_url), ''), '') as cover_url,
 			coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
 			coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
 			coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
@@ -403,7 +403,18 @@ export async function resolveCanonicalCatalogWork(
 				array_agg(distinct be.open_library_edition_id) filter (where trim(coalesce(be.open_library_edition_id, '')) <> '') as open_library_edition_ids,
 				array_agg(distinct be.google_books_id) filter (where trim(coalesce(be.google_books_id, '')) <> '') as google_books_ids,
 				array_agg(distinct be.isbn10) filter (where trim(coalesce(be.isbn10, '')) <> '') as isbn10s,
-				array_agg(distinct be.isbn13) filter (where trim(coalesce(be.isbn13, '')) <> '') as isbn13s
+				array_agg(distinct be.isbn13) filter (where trim(coalesce(be.isbn13, '')) <> '') as isbn13s,
+				(
+					select cover_candidate.cover_url
+					from book_edition cover_candidate
+					where (cover_candidate.book_id = b.id or (b.work_id is not null and cover_candidate.work_id = b.work_id))
+						and nullif(trim(cover_candidate.cover_url), '') is not null
+					order by
+						case when cover_candidate.book_id = b.id then 0 else 1 end,
+						cover_candidate.updated_at desc,
+						cover_candidate.id desc
+					limit 1
+				) as cover_url
 			from book_edition be
 			where be.book_id = b.id
 				or (b.work_id is not null and be.work_id = b.work_id)
@@ -679,7 +690,7 @@ export async function resolveCanonicalCatalogWorksForSearch(
 				coalesce(nullif(trim(b.title), ''), 'Untitled') as title,
 				coalesce(nullif(trim(b.primary_author), ''), '') as primary_author,
 				coalesce(nullif(trim(b.synopsis), ''), '') as description,
-				coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+				coalesce(nullif(trim(b.cover_url), ''), nullif(trim(ed.cover_url), ''), nullif(trim(bw.preferred_cover_url), ''), '') as cover_url,
 				coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
 				coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
 				coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
@@ -710,7 +721,18 @@ export async function resolveCanonicalCatalogWorksForSearch(
 					array_agg(distinct be.open_library_edition_id) filter (where trim(coalesce(be.open_library_edition_id, '')) <> '') as open_library_edition_ids,
 					array_agg(distinct be.google_books_id) filter (where trim(coalesce(be.google_books_id, '')) <> '') as google_books_ids,
 					array_agg(distinct be.isbn10) filter (where trim(coalesce(be.isbn10, '')) <> '') as isbn10s,
-					array_agg(distinct be.isbn13) filter (where trim(coalesce(be.isbn13, '')) <> '') as isbn13s
+					array_agg(distinct be.isbn13) filter (where trim(coalesce(be.isbn13, '')) <> '') as isbn13s,
+					(
+						select cover_candidate.cover_url
+						from book_edition cover_candidate
+						where (cover_candidate.book_id = b.id or (b.work_id is not null and cover_candidate.work_id = b.work_id))
+							and nullif(trim(cover_candidate.cover_url), '') is not null
+						order by
+							case when cover_candidate.book_id = b.id then 0 else 1 end,
+							cover_candidate.updated_at desc,
+							cover_candidate.id desc
+						limit 1
+					) as cover_url
 				from book_edition be
 				where be.book_id = b.id
 					or (b.work_id is not null and be.work_id = b.work_id)

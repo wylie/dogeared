@@ -200,9 +200,9 @@ Safety rules:
 - The editor shows an impact preview before saving reader-adjacent catalog metadata, but the primary Save action lives in a sticky page-level bar outside the impact preview.
 - Data Health issue styling is applied only to affected controls. It clears immediately when the current form value repairs the field, while persisted Data Health issues clear after save and reload.
 - The editor uses one Book Catalog Editor form with lightweight headings, spacing, subtle dividers, shrink-safe grids, and full-width controls to avoid overflow.
-- Series is searchable and creatable inline. New Series rows use a normalized slug to avoid duplicates, are selected immediately, and enable Series position.
+- Series is searchable and creatable inline. Typing only searches; admins must choose an existing result or the explicit create result before Series position enables. New Series rows use a normalized slug to avoid duplicates and are selected immediately after save.
 - Format is controlled as Physical book, Ebook, or Audiobook. Progress metadata shows page count for physical/ebook records, duration for audiobooks, and asks for format first when unknown.
-- Cover display resolves the selected Edition cover, then the Work preferred-cover fallback, then a placeholder. Removing a selected Edition cover clears that Edition's cover; if a Work fallback appears, the editor labels it as a fallback. URL entry remains available behind advanced cover options; upload is the primary control.
+- Cover display resolves the selected Edition cover, then the Work preferred-cover fallback, then a placeholder. The primary remove action only appears for an actual selected Edition cover and clears that Edition's cover; if a Work fallback appears, the editor labels it as a fallback. Work fallback URL editing lives in Advanced metadata, while Edition URL entry remains behind advanced cover options and upload is the primary control.
 
 ## Catalog Review Queue
 

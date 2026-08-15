@@ -500,6 +500,29 @@ try {
 	markPagePerfStage("catalog_lookup_complete");
 	if (row?.id) {
 		const resolvedBookId = Number(row.id || 0);
+		if (!normalizeText(row.cover_url) && Number(row.work_id || 0) > 0) {
+			const fallbackRows = await sql<Array<{ cover_url: string }>>`
+				select coalesce(
+					(
+						select nullif(trim(be.cover_url), '')
+						from book_edition be
+						where be.work_id = ${Number(row.work_id || 0)}
+							and nullif(trim(be.cover_url), '') is not null
+						order by
+							case when be.book_id = ${resolvedBookId} then 0 else 1 end,
+							be.updated_at desc,
+							be.id desc
+						limit 1
+					),
+					nullif(trim(bw.preferred_cover_url), ''),
+					''
+				) as cover_url
+				from book_work bw
+				where bw.id = ${Number(row.work_id || 0)}
+				limit 1
+			`;
+			row.cover_url = normalizeText(fallbackRows[0]?.cover_url);
+		}
 		const representativeBookId = resolvedBookId > 0 ? await resolveRepresentativeBookId(sql, resolvedBookId) : 0;
 		if (representativeBookId > 0 && representativeBookId !== resolvedBookId) {
 			return Astro.redirect(`/book?bookId=${encodeURIComponent(String(representativeBookId))}`, 302);

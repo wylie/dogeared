@@ -96,8 +96,8 @@ async function loadExistingDogEaredCover(sql: Sql, input: CoverEnrichmentBook) {
 		const rows = await sql<Array<{ cover_url: string }>>`
 			select coalesce(
 				nullif(trim(b.cover_url), ''),
-				nullif(trim(bw.preferred_cover_url), ''),
 				nullif(trim(be.cover_url), ''),
+				nullif(trim(bw.preferred_cover_url), ''),
 				nullif(trim(sb.metadata ->> 'coverUrl'), ''),
 				''
 			) as cover_url

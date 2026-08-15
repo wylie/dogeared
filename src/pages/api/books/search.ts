@@ -700,7 +700,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 					coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 					b.published_year,
 					coalesce(nullif(trim(b.language), ''), '') as language,
-					coalesce(nullif(trim(b.cover_url), ''), '') as cover_url,
+					coalesce(nullif(trim(b.cover_url), ''), nullif(trim(be.cover_url), ''), nullif(trim(bw.preferred_cover_url), ''), '') as cover_url,
 					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
 					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
 					coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,
@@ -709,6 +709,18 @@ export const GET: APIRoute = async ({ request, url }) => {
 					coalesce(sb.book_order, 0)::numeric as series_book_order,
 					coalesce(nullif(b.page_count, 0), 0)::int as page_count
 				from book b
+				left join book_work bw on bw.id = b.work_id
+				left join lateral (
+					select cover_candidate.cover_url
+					from book_edition cover_candidate
+					where (cover_candidate.book_id = b.id or (b.work_id is not null and cover_candidate.work_id = b.work_id))
+						and nullif(trim(cover_candidate.cover_url), '') is not null
+					order by
+						case when cover_candidate.book_id = b.id then 0 else 1 end,
+						cover_candidate.updated_at desc,
+						cover_candidate.id desc
+					limit 1
+				) be on true
 				left join series_book sb on sb.book_id = b.id
 				left join series s on s.id = sb.series_id
 					where

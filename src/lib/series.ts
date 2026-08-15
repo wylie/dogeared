@@ -775,8 +775,8 @@ export async function loadBookSeriesContext(
 				b.author_id,
 				coalesce(
 					nullif(trim(b.cover_url), ''),
-					nullif(trim(bw.preferred_cover_url), ''),
 					nullif(trim(be.cover_url), ''),
+					nullif(trim(bw.preferred_cover_url), ''),
 					nullif(trim(sb.metadata ->> 'coverUrl'), ''),
 					''
 				) as cover_url,
@@ -842,8 +842,8 @@ export async function loadBookSeriesContext(
 				b.author_id,
 				coalesce(
 					nullif(trim(b.cover_url), ''),
-					nullif(trim(bw.preferred_cover_url), ''),
 					nullif(trim(be.cover_url), ''),
+					nullif(trim(bw.preferred_cover_url), ''),
 					''
 				) as cover_url,
 				coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,

@@ -863,7 +863,7 @@ function manualMetadata(metadata: Record<string, unknown>, changes: Array<{ fiel
 async function resolveCatalogEditorSeriesId(sql: Sql, formData: FormData) {
 	const selectedId = normalizeInt(formData.get("seriesId"));
 	if (selectedId > 0) return selectedId;
-	const requestedName = normalizeText(formData.get("seriesCreateName") || formData.get("seriesSearch"), 160);
+	const requestedName = normalizeText(formData.get("seriesCreateName"), 160);
 	if (!requestedName) return 0;
 	const slug = slugifySeriesName(requestedName);
 	if (!slug) return 0;

@@ -240,6 +240,12 @@ const displayCoverSource = selectedEdition?.coverUrl
 	: editor?.work.preferredCoverUrl
 		? "Work fallback"
 		: "No cover selected";
+const selectedEditionHasCover = !!selectedEdition?.coverUrl;
+const coverLayerNote = selectedEdition?.coverUrl
+	? "This image is stored on the selected Edition."
+	: editor?.work.preferredCoverUrl
+		? "This image is the Work fallback. Uploading here creates an Edition cover for the selected Edition."
+		: "No Edition cover is set. Uploading here creates an Edition cover for the selected Edition.";
 const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.trim() !== editor?.work.title.trim();
 ---
 
@@ -316,7 +322,6 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 					<input type="hidden" name="workId" value={String(editor.work.id)} />
 					<input type="hidden" name="editionId" value={String(selectedEdition?.id || 0)} />
 					<input type="hidden" name="editionMode" value={isAddingEdition ? "add" : "edit"} />
-					<input type="hidden" name="preferredCoverUrl" value={editor.work.preferredCoverUrl} data-preferred-cover-url />
 					<input type="hidden" name="coverUrl" value={selectedEdition?.coverUrl || ""} data-cover-url />
 					<input type="hidden" name="coverSource" value="" data-cover-source />
 
@@ -402,24 +407,27 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 						</fieldset>
 						<fieldset class="field-group">
 							<legend>Series</legend>
-							<div class="field-grid two">
-								<div id="field-seriesId" class={fieldClass("seriesId", "series-combobox")} data-health-field="seriesId">
+							<div class="series-editor">
+								<div id="field-seriesId" class={fieldClass("seriesId", "series-combobox")} data-health-field="seriesId" data-series-editor>
 									<span class="field-label">Series {fieldHealth("seriesId") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
 									<input type="hidden" name="seriesId" value={String(editor.work.seriesId || 0)} data-series-id />
 									<input type="hidden" name="seriesCreateName" value="" data-series-create-name />
-									<input name="seriesSearch" value={editor.work.seriesName} placeholder="Search existing Series..." autocomplete="off" aria-describedby={fieldHealth("seriesId") ? "help-seriesId why-seriesId" : "why-seriesId"} data-series-search />
-									<datalist id="series-options">
+									<div class="series-option-data" hidden>
 										{editor.seriesOptions.map((series) => (
-											<option value={series.name} data-id={String(series.id)} />
+											<span data-series-option data-id={String(series.id)}>{series.name}</span>
 										))}
-									</datalist>
-									<div class="series-results" data-series-results hidden></div>
+									</div>
+									<div class="series-control-shell">
+										<input name="seriesSearch" value={editor.work.seriesName} placeholder="Search existing Series..." autocomplete="off" aria-describedby={fieldHealth("seriesId") ? "help-seriesId why-seriesId" : "why-seriesId"} aria-controls="series-results" data-series-search />
+										<div id="series-results" class="series-results" data-series-results role="listbox" hidden></div>
+									</div>
+									<p class="series-selected" data-series-selected hidden={editor.work.seriesId <= 0}>Selected: <strong>{editor.work.seriesName}</strong></p>
 									<button type="button" class="secondary-button series-remove-button" data-series-clear hidden={editor.work.seriesId <= 0}>Remove Series</button>
 									{fieldHealth("seriesId") && <p id="help-seriesId" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("seriesId")!.issue.severity)}: </span>{fieldHealth("seriesId")!.helper}</p>}
 								</div>
-								<label id="field-seriesPosition" class={fieldClass("seriesPosition")} data-health-field="seriesPosition">
+								<label id="field-seriesPosition" class={fieldClass("seriesPosition", "series-position-field")} data-health-field="seriesPosition">
 									<span class="field-label">Series position {fieldHealth("seriesPosition") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-									<input name="seriesPosition" inputmode="decimal" value={editor.work.seriesPosition} aria-describedby={fieldHealth("seriesPosition") ? "help-seriesPosition why-seriesPosition" : "why-seriesPosition"} data-series-position />
+									<input name="seriesPosition" inputmode="decimal" value={editor.work.seriesPosition} aria-describedby={fieldHealth("seriesPosition") ? "help-seriesPosition why-seriesPosition" : "why-seriesPosition"} data-series-position disabled={editor.work.seriesId <= 0} />
 									{fieldHealth("seriesPosition") && <p id="help-seriesPosition" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("seriesPosition")!.issue.severity)}: </span>{fieldHealth("seriesPosition")!.helper}</p>}
 								</label>
 							</div>
@@ -509,19 +517,20 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 									<div class="cover-editor-head">
 										<strong>Current cover</strong>
 										<span data-cover-provenance>Source: {displayCoverSource}</span>
+										<p data-cover-layer-note>{coverLayerNote}</p>
 									</div>
 									{(fieldHealth("coverUrl") || fieldHealth("preferredCoverUrl")) && <p id="help-coverUrl" class="field-warning"><span class="sr-only">{severityLabel((fieldHealth("coverUrl") || fieldHealth("preferredCoverUrl"))!.issue.severity)}: </span>{(fieldHealth("coverUrl") || fieldHealth("preferredCoverUrl"))!.helper}</p>}
 									<div class="cover-actions">
 										<button type="button" class="secondary-button" data-cover-upload-trigger>Upload new cover</button>
 										<input type="file" accept="image/jpeg,image/png,image/webp" data-cover-file />
-										<button type="button" class="secondary-button" data-cover-remove>Remove</button>
+										<button type="button" class="secondary-button" data-cover-remove hidden={!selectedEditionHasCover}>Remove Edition cover</button>
 									</div>
-									<p class="cover-upload-status" data-cover-upload-status hidden></p>
+									<p class="cover-upload-status" data-cover-upload-status aria-live="polite" hidden></p>
 									<details class="advanced-field">
 										<summary>Use image URL instead</summary>
 										<label>
-											<span>Cover URL</span>
-											<input value={displayCoverUrl} maxlength="2000" data-cover-url-input />
+											<span>Edition cover URL</span>
+											<input value={selectedEdition?.coverUrl || ""} maxlength="2000" data-cover-url-input />
 										</label>
 									</details>
 								</div>
@@ -534,6 +543,10 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 								<label>
 									<span>Canonical title</span>
 									<input name="canonicalTitle" value={editor.work.canonicalTitle} maxlength="500" />
+								</label>
+								<label id="field-preferredCoverUrl" class={fieldClass("preferredCoverUrl")} data-health-field="preferredCoverUrl">
+									<span class="field-label">Work fallback cover URL {fieldHealth("preferredCoverUrl") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+									<input name="preferredCoverUrl" value={editor.work.preferredCoverUrl} maxlength="2000" data-preferred-cover-url />
 								</label>
 								<label>
 									<span>ISBN-10</span>
@@ -901,15 +914,33 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		font-size: 0.82rem;
 		font-weight: 700;
 	}
+	.series-editor {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(120px, 0.32fr);
+		gap: 0.8rem;
+		align-items: start;
+		margin-top: 0.85rem;
+		min-width: 0;
+	}
 	.series-combobox {
 		align-content: start;
 	}
+	.series-control-shell {
+		position: relative;
+		min-width: 0;
+	}
 	.series-results {
+		position: absolute;
+		z-index: 4;
+		top: calc(100% + 0.2rem);
+		left: 0;
+		right: 0;
 		display: grid;
 		gap: 0.25rem;
 		border: var(--border-subtle);
 		border-radius: var(--radius-sm);
 		background: #fff;
+		box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
 		padding: 0.3rem;
 	}
 	.series-results button {
@@ -931,7 +962,20 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	.series-results button:focus-visible {
 		background: rgba(31, 122, 69, 0.08);
 	}
+	.series-selected {
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
+	.series-selected strong {
+		color: var(--color-text);
+		font-weight: 800;
+	}
 	.series-remove-button { justify-self: start; }
+	.series-position-field {
+		align-content: start;
+	}
 	.cover-actions {
 		display: flex;
 		flex-wrap: wrap;
@@ -970,6 +1014,7 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		width: 1px;
 		height: 1px;
 		opacity: 0;
+		overflow: hidden;
 	}
 	[data-format-field].is-secondary {
 		opacity: 0.72;
@@ -1031,11 +1076,21 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		font-weight: 700;
 		margin-top: 0.1rem;
 	}
+	.cover-editor-head p {
+		margin: 0.15rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-weight: 600;
+		line-height: 1.35;
+	}
 	.cover-upload-status {
 		margin: 0;
 		color: var(--color-text-muted);
 		font-size: 0.82rem;
 		font-weight: 700;
+	}
+	.cover-upload-status.is-error {
+		color: #8f1d1d;
 	}
 	.advanced-field {
 		margin-top: 0.2rem;
@@ -1125,6 +1180,7 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		.hero { display: block; }
 		.hero-actions { margin-top: 0.7rem; }
 		.field-grid.two, .grid.five { grid-template-columns: 1fr; }
+		.series-editor { grid-template-columns: 1fr; }
 		.cover-editor { grid-template-columns: 72px minmax(0, 1fr); }
 		.cover-preview img,
 		.cover-placeholder {
@@ -1150,12 +1206,14 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	const seriesSearch = document.querySelector("[data-series-search]");
 	const seriesIdInput = document.querySelector("[data-series-id]");
 	const seriesCreateNameInput = document.querySelector("[data-series-create-name]");
+	const seriesEditor = document.querySelector("[data-series-editor]");
 	const seriesResults = document.querySelector("[data-series-results]");
 	const seriesClearButton = document.querySelector("[data-series-clear]");
 	const seriesPositionInput = document.querySelector("[data-series-position]");
-	const seriesOptions = Array.from(document.querySelectorAll("#series-options option")).map((option) => ({
+	const seriesSelected = document.querySelector("[data-series-selected]");
+	const seriesOptions = Array.from(document.querySelectorAll("[data-series-option]")).map((option) => ({
 		id: Number(option.getAttribute("data-id") || 0) || 0,
-		name: option.value || ""
+		name: option.textContent || ""
 	}));
 	const coverUrlInput = document.querySelector("[data-cover-url]");
 	const preferredCoverUrlInput = document.querySelector("[data-preferred-cover-url]");
@@ -1165,6 +1223,7 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	const coverUploadTrigger = document.querySelector("[data-cover-upload-trigger]");
 	const coverRemoveButton = document.querySelector("[data-cover-remove]");
 	const coverProvenance = document.querySelector("[data-cover-provenance]");
+	const coverLayerNote = document.querySelector("[data-cover-layer-note]");
 	const coverUploadStatus = document.querySelector("[data-cover-upload-status]");
 	const formatSelect = document.querySelector("[data-format-select]");
 	const formatHelp = document.querySelector("[data-format-help]");
@@ -1180,6 +1239,20 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	function optionLabel(option) {
 		return option?.name || "";
 	}
+	function setSeriesSelectedLabel(message, selected) {
+		if (!(seriesSelected instanceof HTMLElement)) return;
+		seriesSelected.hidden = !message;
+		seriesSelected.innerHTML = "";
+		if (!message) return;
+		const prefix = document.createTextNode(selected ? "Selected: " : "");
+		const strong = document.createElement("strong");
+		strong.textContent = message;
+		if (selected) {
+			seriesSelected.append(prefix, strong);
+		} else {
+			seriesSelected.append(strong);
+		}
+	}
 	function selectSeries(option) {
 		if (!(seriesSearch instanceof HTMLInputElement)) return;
 		if (!(seriesIdInput instanceof HTMLInputElement)) return;
@@ -1190,6 +1263,7 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		if (seriesResults instanceof HTMLElement) seriesResults.hidden = true;
 		if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
 		if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = false;
+		setSeriesSelectedLabel(optionLabel(option), true);
 		refreshHealthState();
 		updateDirtyState();
 	}
@@ -1221,7 +1295,8 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 				if (seriesCreateNameInput instanceof HTMLInputElement) seriesCreateNameInput.value = String(raw).trim();
 				if (seriesResults instanceof HTMLElement) seriesResults.hidden = true;
 				if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
-				if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = false;
+				if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = true;
+				setSeriesSelectedLabel(`Will create "${String(raw).trim()}" on save`, false);
 				refreshHealthState();
 				updateDirtyState();
 			});
@@ -1243,18 +1318,26 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 				seriesPositionInput.disabled = true;
 			}
 			if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = true;
+			setSeriesSelectedLabel("", false);
 			renderSeriesResults("");
 			return;
 		}
 		if (matched?.id) {
 			seriesIdInput.value = String(matched.id);
 			seriesCreateNameInput.value = "";
+			setSeriesSelectedLabel(matched.name, true);
+			if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = false;
+			if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
 		} else {
 			seriesIdInput.value = "0";
-			seriesCreateNameInput.value = raw;
+			seriesCreateNameInput.value = "";
+			setSeriesSelectedLabel("", false);
+			if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = true;
+			if (seriesPositionInput instanceof HTMLInputElement) {
+				seriesPositionInput.value = "";
+				seriesPositionInput.disabled = true;
+			}
 		}
-		if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = false;
-		if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
 		if (document.activeElement === seriesSearch) renderSeriesResults(raw);
 		else if (seriesResults instanceof HTMLElement) seriesResults.hidden = true;
 	}
@@ -1265,6 +1348,11 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		syncSeriesState();
 		refreshHealthState();
 		updateDirtyState();
+	});
+	document.addEventListener("click", (event) => {
+		if (!(seriesResults instanceof HTMLElement)) return;
+		if (seriesEditor instanceof HTMLElement && event.target instanceof Node && seriesEditor.contains(event.target)) return;
+		seriesResults.hidden = true;
 	});
 
 	function ensureCoverImageNode() {
@@ -1280,16 +1368,41 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		preview.replaceChildren(img);
 		return img;
 	}
-	function setCoverStatus(message) {
+	function setCoverStatus(message, isError = false) {
 		if (!(coverUploadStatus instanceof HTMLElement)) return;
 		coverUploadStatus.textContent = message;
 		coverUploadStatus.hidden = !message;
+		coverUploadStatus.classList.toggle("is-error", isError);
+	}
+	function refreshCoverActionState() {
+		const hasEditionCover = coverUrlInput instanceof HTMLInputElement && coverUrlInput.value.trim() !== "";
+		if (coverRemoveButton instanceof HTMLButtonElement) coverRemoveButton.hidden = !hasEditionCover;
+	}
+	function setCoverSourceText(source, hasEditionCover) {
+		if (coverProvenance instanceof HTMLElement) {
+			coverProvenance.textContent = hasEditionCover
+				? source === "upload"
+					? "Source: Admin upload"
+					: source === "url"
+						? "Source: Admin URL"
+						: "Source: Edition cover"
+				: workFallbackCover
+					? "Source: Work fallback"
+					: "No cover selected";
+		}
+		if (coverLayerNote instanceof HTMLElement) {
+			coverLayerNote.textContent = hasEditionCover
+				? "This image is stored on the selected Edition."
+				: workFallbackCover
+					? "This image is the Work fallback. Uploading here creates an Edition cover for the selected Edition."
+					: "No Edition cover is set. Uploading here creates an Edition cover for the selected Edition.";
+		}
 	}
 	function setCoverValue(value, source) {
 		const next = String(value || "").trim();
 		if (coverUrlInput instanceof HTMLInputElement) coverUrlInput.value = next;
 		if (coverSourceInput instanceof HTMLInputElement) coverSourceInput.value = source || "";
-		if (coverUrlTextInput instanceof HTMLInputElement) coverUrlTextInput.value = next || workFallbackCover;
+		if (coverUrlTextInput instanceof HTMLInputElement) coverUrlTextInput.value = next;
 		if (next) {
 			const img = ensureCoverImageNode();
 			if (img) img.src = next;
@@ -1302,15 +1415,8 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 				if (preview instanceof HTMLElement) preview.innerHTML = '<span class="cover-placeholder" aria-hidden="true" data-cover-placeholder><span class="material-icons">menu_book</span></span>';
 			}
 		}
-		if (coverProvenance instanceof HTMLElement && source) {
-			coverProvenance.textContent = source === "upload"
-				? "Source: Admin upload"
-				: source === "url"
-					? "Source: Admin URL"
-					: workFallbackCover
-						? "Source: Work fallback"
-						: "No cover selected";
-		}
+		setCoverSourceText(source, !!next);
+		refreshCoverActionState();
 		refreshHealthState();
 		updateDirtyState();
 	}
@@ -1323,17 +1429,18 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		if (!file) return;
 		const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
 		if (!allowed.has(file.type)) {
-			window.alert("Choose a JPEG, PNG, or WebP image.");
+			setCoverStatus("Choose a JPEG, PNG, or WebP image.", true);
 			coverFileInput.value = "";
 			return;
 		}
 		if (file.size > 750_000) {
-			window.alert("Choose a cover image under 750KB.");
+			setCoverStatus("Choose a cover image under 750KB.", true);
 			coverFileInput.value = "";
 			return;
 		}
 		try {
 			setCoverStatus("Uploading...");
+			if (coverUploadTrigger instanceof HTMLButtonElement) coverUploadTrigger.disabled = true;
 			const reader = new FileReader();
 			const dataUrl = await new Promise((resolve, reject) => {
 				reader.onload = () => resolve(String(reader.result || ""));
@@ -1341,14 +1448,22 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 				reader.readAsDataURL(file);
 			});
 			setCoverValue(dataUrl, "upload");
-			setCoverStatus("Uploaded");
+			setCoverStatus("Cover ready. Save catalog data to persist.");
 		} catch {
-			setCoverStatus("");
-			window.alert("Failed to load cover image.");
+			setCoverStatus("Could not upload this image. Try again.", true);
+		} finally {
+			if (coverUploadTrigger instanceof HTMLButtonElement) coverUploadTrigger.disabled = false;
 		}
 	});
 	coverUrlTextInput?.addEventListener("change", () => {
-		if (coverUrlTextInput instanceof HTMLInputElement) setCoverValue(coverUrlTextInput.value, coverUrlTextInput.value.trim() ? "url" : "");
+		if (!(coverUrlTextInput instanceof HTMLInputElement)) return;
+		const value = coverUrlTextInput.value.trim();
+		if (value && !/^https?:\/\//i.test(value)) {
+			setCoverStatus("Enter a valid image URL starting with http:// or https://.", true);
+			return;
+		}
+		setCoverValue(value, value ? "url" : "remove");
+		setCoverStatus(value ? "Cover URL ready. Save catalog data to persist." : "");
 	});
 	coverRemoveButton?.addEventListener("click", () => {
 		if (coverUrlInput instanceof HTMLInputElement) coverUrlInput.value = "";
@@ -1451,6 +1566,7 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	queueMicrotask(() => {
 		syncSeriesState();
 		refreshFormatFields();
+		refreshCoverActionState();
 		initialFormSnapshot = snapshotForm();
 		updateDirtyState();
 	});
