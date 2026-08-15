@@ -236,10 +236,18 @@ test("admin catalog editor unifies book repair while preserving Work and Edition
 	assert.match(editor, /if \(!admin\.isAdmin\) return Astro\.redirect\("\/"\)/);
 	assert.match(editor, /Book Catalog Editor/);
 	assert.match(editor, /Publication-specific information/);
+	assert.match(editor, /Editions/);
+	assert.match(editor, /\+ Add Edition/);
+	assert.match(editor, /Preferred Edition/);
+	assert.match(editor, /name="preferredEditionId"/);
+	assert.match(editor, /name="editionMode"/);
 	assert.match(editor, /data-series-search/);
-	assert.match(editor, /data-series-create/);
+	assert.match(editor, /data-series-results/);
 	assert.match(editor, /data-cover-file/);
+	assert.match(editor, /data-cover-upload-trigger/);
 	assert.match(editor, /Use image URL instead/);
+	assert.match(editor, /catalog-save-bar/);
+	assert.match(editor, /data-discard-changes/);
 	assert.match(editor, /Impact Preview/);
 	assert.match(editor, /Audit History/);
 	assert.match(editor, /name="duration"/);
@@ -261,6 +269,10 @@ test("admin catalog editor unifies book repair while preserving Work and Edition
 	assert.match(lib, /durationSeconds: nextEdition\.durationSeconds/);
 	assert.match(lib, /update book_work/);
 	assert.match(lib, /update book_edition/);
+	assert.match(lib, /insert into book_edition/);
+	assert.match(lib, /delete from book_edition/);
+	assert.match(lib, /referenceCount/);
+	assert.match(lib, /preferredEditionId/);
 });
 
 test("admin catalog editor surfaces Data Health issues next to relevant fields", () => {
@@ -281,6 +293,7 @@ test("admin catalog editor surfaces Data Health issues next to relevant fields",
 	assert.match(editor, /warning-icon/);
 	assert.match(editor, /scrollIntoView/);
 	assert.match(editor, /refreshHealthState/);
+	assert.match(editor, /isFieldValidNow/);
 	assert.match(editor, /All visible Data Health issues look corrected/);
 	for (const group of [
 		"Book",

@@ -24,16 +24,22 @@ const workId = Number(Astro.params.workId || 0);
 const notices: string[] = [];
 const warnings: string[] = [];
 let selectedEditionId = Number(Astro.url.searchParams.get("editionId") || 0);
+let isAddingEdition = Astro.url.searchParams.get("editionId") === "new";
+if (Astro.url.searchParams.get("saved") === "1") notices.push("Catalog changes saved.");
+if (Astro.url.searchParams.get("deleted") === "1") notices.push("Edition removed.");
 
 if (Astro.request.method === "POST") {
 	const formData = await Astro.request.formData();
 	selectedEditionId = Number(formData.get("editionId") || 0);
+	isAddingEdition = String(formData.get("editionMode") || "") === "add";
 	const saveResult = await safeAdminLoad(
 		"Catalog editor save",
 		() => saveCatalogEditorData(sql, admin.userId, formData),
 		{ ok: false, message: "Catalog changes could not be saved." }
 	);
 	if (saveResult.warning) warnings.push(saveResult.warning);
+	if (saveResult.data.ok && saveResult.data.deletedEditionId) return Astro.redirect(`/admin/books/${workId}?deleted=1`);
+	if (saveResult.data.ok && saveResult.data.editionId && isAddingEdition) return Astro.redirect(`/admin/books/${workId}?editionId=${encodeURIComponent(String(saveResult.data.editionId))}&saved=1`);
 	if (saveResult.data.ok) notices.push(saveResult.data.message);
 	else warnings.push(saveResult.data.message);
 }
@@ -41,7 +47,8 @@ if (Astro.request.method === "POST") {
 const editorResult = await safeAdminLoad("Catalog editor data", () => loadCatalogEditorData(sql, workId), null);
 if (editorResult.warning) warnings.push(editorResult.warning);
 const editor = editorResult.data;
-const selectedEdition = editor?.editions.find((edition) => edition.id === selectedEditionId) || editor?.editions[0] || null;
+if (editor && !selectedEditionId && editor.work.preferredEditionId > 0 && !isAddingEdition) selectedEditionId = editor.work.preferredEditionId;
+const selectedEdition = isAddingEdition ? null : editor?.editions.find((edition) => edition.id === selectedEditionId) || editor?.editions[0] || null;
 const healthResult = editor
 	? await safeAdminLoad("Catalog editor health", () => loadCatalogMetadataHealth(sql, { q: String(editor.work.id), limit: 200 }), { issues: [], records: [], pagination: { limit: 200, offset: 0, total: 0 }, facets: { formats: [], providers: [] }, summary: { totalIssues: 0, totalRecords: 0, critical: 0, needsAttention: 0, optional: 0, missingPageCounts: 0, missingAudiobookDurations: 0, potentialDuplicates: 0, progressBlocking: 0 } })
 	: { data: { issues: [], records: [], pagination: { limit: 200, offset: 0, total: 0 }, facets: { formats: [], providers: [] }, summary: { totalIssues: 0, totalRecords: 0, critical: 0, needsAttention: 0, optional: 0, missingPageCounts: 0, missingAudiobookDurations: 0, potentialDuplicates: 0, progressBlocking: 0 } }, warning: "" };
@@ -59,7 +66,9 @@ const sectionLinks = [
 const allEditorIssues = editor
 	? healthResult.data.issues.filter((issue) => issue.workId === editor.work.id)
 	: [];
-const editorIssues = allEditorIssues.filter((issue) => !selectedEdition || issue.editionId === 0 || issue.editionId === selectedEdition.id || issue.bookId === selectedEdition.bookId);
+const editorIssues = isAddingEdition
+	? allEditorIssues.filter((issue) => issue.editionId === 0)
+	: allEditorIssues.filter((issue) => !selectedEdition || issue.editionId === 0 || issue.editionId === selectedEdition.id || issue.bookId === selectedEdition.bookId);
 
 type FieldHealth = {
 	field: string;
@@ -221,11 +230,15 @@ function normalizedEditorFormat(value: unknown) {
 }
 
 const selectedFormatValue = normalizedEditorFormat(selectedEdition?.format);
+const editingEditionFields = isAddingEdition || !!selectedEdition;
+const preferredEditionId = editor?.work.preferredEditionId && editor.editions.some((edition) => edition.id === editor.work.preferredEditionId)
+	? editor.work.preferredEditionId
+	: editor?.editions[0]?.id || 0;
 const displayCoverUrl = selectedEdition?.coverUrl || editor?.work.preferredCoverUrl || "";
 const displayCoverSource = selectedEdition?.coverUrl
 	? String(editionProvenance.source || "Existing DogEared data")
 	: editor?.work.preferredCoverUrl
-		? String(workProvenance.source || "Existing DogEared data")
+		? "Work fallback"
 		: "No cover selected";
 const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.trim() !== editor?.work.title.trim();
 ---
@@ -293,24 +306,16 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 					)}
 				</section>
 
-				{editor.editions.length > 1 && (
-					<form class="edition-switch" method="get" action={`/admin/books/${editor.work.id}`}>
-						<label>
-							<span>Edition to edit</span>
-							<select name="editionId" onchange="this.form.submit()">
-								{editor.editions.map((edition) => (
-									<option value={String(edition.id)} selected={edition.id === selectedEdition?.id}>
-										{`#${edition.id} · ${edition.format || "Format unknown"}${edition.publisher ? ` · ${edition.publisher}` : ""}${edition.bookId ? ` · Book ${edition.bookId}` : ""}`}
-									</option>
-								))}
-							</select>
-						</label>
-					</form>
-				)}
-
-				<form id="catalog-editor" class="catalog-editor-form" method="post" data-selected-edition-id={String(selectedEdition?.id || 0)}>
+				<form
+					id="catalog-editor"
+					class="catalog-editor-form"
+					method="post"
+					data-selected-edition-id={String(selectedEdition?.id || 0)}
+					data-work-fallback-cover={editor.work.preferredCoverUrl}
+				>
 					<input type="hidden" name="workId" value={String(editor.work.id)} />
 					<input type="hidden" name="editionId" value={String(selectedEdition?.id || 0)} />
+					<input type="hidden" name="editionMode" value={isAddingEdition ? "add" : "edit"} />
 					<input type="hidden" name="preferredCoverUrl" value={editor.work.preferredCoverUrl} data-preferred-cover-url />
 					<input type="hidden" name="coverUrl" value={selectedEdition?.coverUrl || ""} data-cover-url />
 					<input type="hidden" name="coverSource" value="" data-cover-source />
@@ -320,6 +325,48 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 							<h2>Book Catalog Editor</h2>
 							<p>Repair the book as an administrator sees it. DogEared saves shared book identity, Series data, and publication-specific Edition details to the right records underneath.</p>
 						</div>
+						<fieldset class="field-group editions-manager">
+							<legend>Editions</legend>
+							<p class="subsection-note">Choose the publication or format you are editing. Book and Series fields stay shared across every Edition.</p>
+							<div class="edition-tabs" role="list" aria-label="Editions">
+								{editor.editions.map((edition) => (
+									<div class={`edition-tab ${edition.id === selectedEdition?.id ? "is-active" : ""}`} role="listitem">
+										<a href={`/admin/books/${editor.work.id}?editionId=${encodeURIComponent(String(edition.id))}`} data-edition-link>
+											<strong>{edition.format || "Choose format"}</strong>
+											<span>{edition.publisher || edition.title || `Edition #${edition.id}`}</span>
+											{edition.id === preferredEditionId ? <em>Preferred Edition</em> : null}
+										</a>
+										<label class="preferred-edition-radio">
+											<input type="radio" name="preferredEditionId" value={String(edition.id)} checked={edition.id === preferredEditionId} />
+											<span>Preferred</span>
+										</label>
+									</div>
+								))}
+								<a class={`edition-tab add-edition ${isAddingEdition ? "is-active" : ""}`} href={`/admin/books/${editor.work.id}?editionId=new`} data-edition-link role="listitem">
+									<strong>+ Add Edition</strong>
+									<span>Attach another format to this Work</span>
+								</a>
+							</div>
+							{selectedEdition ? (
+								<div class="edition-admin-actions">
+									<p>Editing Edition #{selectedEdition.id}{selectedEdition.bookId ? ` · Book ${selectedEdition.bookId}` : ""}</p>
+									<button
+										type="submit"
+										class="danger-button"
+										name="editionIntent"
+										value="delete"
+										formnovalidate
+										data-edition-delete
+										disabled={editor.editions.length <= 1 || selectedEdition.referenceCount > 0}
+									>
+										Delete Edition
+									</button>
+									{selectedEdition.referenceCount > 0 ? <span class="inline-note">Referenced by reader history</span> : null}
+								</div>
+							) : (
+								<p class="edition-current">Adding a new Edition to this Work.</p>
+							)}
+						</fieldset>
 						<fieldset class="field-group">
 							<legend>Book</legend>
 							<div class="field-grid two">
@@ -360,16 +407,14 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 									<span class="field-label">Series {fieldHealth("seriesId") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
 									<input type="hidden" name="seriesId" value={String(editor.work.seriesId || 0)} data-series-id />
 									<input type="hidden" name="seriesCreateName" value="" data-series-create-name />
-									<input name="seriesSearch" list="series-options" value={editor.work.seriesName} placeholder="Search or create a Series" autocomplete="off" aria-describedby={fieldHealth("seriesId") ? "help-seriesId why-seriesId" : "why-seriesId"} data-series-search />
+									<input name="seriesSearch" value={editor.work.seriesName} placeholder="Search existing Series..." autocomplete="off" aria-describedby={fieldHealth("seriesId") ? "help-seriesId why-seriesId" : "why-seriesId"} data-series-search />
 									<datalist id="series-options">
 										{editor.seriesOptions.map((series) => (
 											<option value={series.name} data-id={String(series.id)} />
 										))}
 									</datalist>
-									<div class="series-actions">
-										<button type="button" class="secondary-button" data-series-create hidden>Create Series</button>
-										<button type="button" class="secondary-button" data-series-clear>Remove Series</button>
-									</div>
+									<div class="series-results" data-series-results hidden></div>
+									<button type="button" class="secondary-button series-remove-button" data-series-clear hidden={editor.work.seriesId <= 0}>Remove Series</button>
 									{fieldHealth("seriesId") && <p id="help-seriesId" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("seriesId")!.issue.severity)}: </span>{fieldHealth("seriesId")!.helper}</p>}
 								</div>
 								<label id="field-seriesPosition" class={fieldClass("seriesPosition")} data-health-field="seriesPosition">
@@ -382,11 +427,11 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 						<fieldset class="field-group">
 							<legend>Edition & Format</legend>
 							<p class="subsection-note">Publication-specific information such as format, publisher, length, and identifiers.</p>
-							{editor.editions.length === 0 ? (
-								<p>No Editions exist for this book yet.</p>
+							{!editingEditionFields ? (
+								<p>No Edition is selected. Add an Edition to enter publication-specific metadata.</p>
 							) : (
 								<>
-									<p class="edition-current">Editing Edition #{selectedEdition?.id}{selectedEdition?.bookId ? ` · Book ${selectedEdition.bookId}` : ""}</p>
+									<p class="edition-current">{isAddingEdition ? "New Edition" : `Editing Edition #${selectedEdition?.id}${selectedEdition?.bookId ? ` · Book ${selectedEdition.bookId}` : ""}`}</p>
 									<div class="field-grid two">
 										<label id="field-editionFormat" class={fieldClass("editionFormat")} data-health-field="editionFormat">
 											<span class="field-label">Format {fieldHealth("editionFormat") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
@@ -467,12 +512,11 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 									</div>
 									{(fieldHealth("coverUrl") || fieldHealth("preferredCoverUrl")) && <p id="help-coverUrl" class="field-warning"><span class="sr-only">{severityLabel((fieldHealth("coverUrl") || fieldHealth("preferredCoverUrl"))!.issue.severity)}: </span>{(fieldHealth("coverUrl") || fieldHealth("preferredCoverUrl"))!.helper}</p>}
 									<div class="cover-actions">
-										<label class="upload-button">
-											<span>Upload new cover</span>
-											<input type="file" accept="image/jpeg,image/png,image/webp" data-cover-file />
-										</label>
+										<button type="button" class="secondary-button" data-cover-upload-trigger>Upload new cover</button>
+										<input type="file" accept="image/jpeg,image/png,image/webp" data-cover-file />
 										<button type="button" class="secondary-button" data-cover-remove>Remove</button>
 									</div>
+									<p class="cover-upload-status" data-cover-upload-status hidden></p>
 									<details class="advanced-field">
 										<summary>Use image URL instead</summary>
 										<label>
@@ -528,10 +572,14 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 							<article class="stat"><p>Journal entries</p><strong>{formatNumber(editor.impact.journalEntries)}</strong></article>
 							<article class="stat"><p>Editions</p><strong>{formatNumber(editor.impact.editionCount)}</strong></article>
 						</div>
-						<div class="actions">
-							<button type="submit">Save catalog data</button>
-						</div>
 					</section>
+					<div class="catalog-save-bar" data-save-bar hidden>
+						<p data-save-status>Unsaved changes</p>
+						<div class="save-actions">
+							<button type="button" class="secondary-button" data-discard-changes>Discard changes</button>
+							<button type="submit" data-save-button disabled>Save catalog data</button>
+						</div>
+					</div>
 				</form>
 
 				<section id="audit-history" class="panel">
@@ -684,7 +732,9 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		font-size: 1rem;
 		line-height: 1;
 	}
-	input, select, textarea {
+	.catalog-editor-form input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]),
+	.catalog-editor-form select,
+	.catalog-editor-form textarea {
 		width: 100%;
 		max-width: 100%;
 		min-width: 0;
@@ -695,8 +745,12 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		color: var(--color-text);
 		font: inherit;
 		font-weight: 500;
-		padding: 0.5rem 0.55rem;
+		padding: 0.5rem 0.65rem;
 		overflow-wrap: anywhere;
+	}
+	.catalog-editor-form input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]),
+	.catalog-editor-form select {
+		min-height: 42px;
 	}
 	textarea {
 		resize: vertical;
@@ -763,13 +817,9 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		font-size: 0.86rem;
 	}
 	.span-two { grid-column: 1 / -1; }
-	.edition-select { margin-top: 0.8rem; }
-	.edition-switch {
-		margin-top: 1rem;
-		border: var(--border-subtle);
-		border-radius: var(--radius-md);
-		background: rgba(255, 255, 255, 0.56);
-		padding: 0.75rem;
+	.editions-manager {
+		border-top: 0;
+		padding-top: 0;
 	}
 	.edition-current {
 		margin: 0.75rem 0 0;
@@ -777,10 +827,111 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		font-size: 0.86rem;
 		font-weight: 700;
 	}
+	.edition-tabs {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+		gap: 0.55rem;
+		margin-top: 0.85rem;
+		min-width: 0;
+	}
+	.edition-tab {
+		display: grid;
+		gap: 0.45rem;
+		min-width: 0;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: rgba(255, 255, 255, 0.64);
+		padding: 0.6rem 0.65rem;
+	}
+	.edition-tab.is-active {
+		border-color: rgba(31, 122, 69, 0.48);
+		box-shadow: 0 0 0 1px rgba(31, 122, 69, 0.14);
+	}
+	.edition-tab a,
+	.edition-tab.add-edition {
+		color: var(--color-text);
+		display: grid;
+		gap: 0.12rem;
+		text-decoration: none;
+		min-width: 0;
+	}
+	.edition-tab strong,
+	.edition-tab span,
+	.edition-tab em {
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+	.edition-tab strong { font-size: 0.9rem; }
+	.edition-tab span {
+		color: var(--color-text-muted);
+		font-size: 0.8rem;
+	}
+	.edition-tab em {
+		color: var(--color-primary);
+		font-size: 0.75rem;
+		font-style: normal;
+		font-weight: 800;
+	}
+	.preferred-edition-radio {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: 0.78rem;
+		font-weight: 800;
+	}
+	.preferred-edition-radio input {
+		width: 16px;
+		height: 16px;
+	}
+	.edition-admin-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.55rem;
+		align-items: center;
+		margin-top: 0.75rem;
+	}
+	.edition-admin-actions p {
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: 0.86rem;
+		font-weight: 700;
+	}
+	.inline-note {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
 	.series-combobox {
 		align-content: start;
 	}
-	.series-actions,
+	.series-results {
+		display: grid;
+		gap: 0.25rem;
+		border: var(--border-subtle);
+		border-radius: var(--radius-sm);
+		background: #fff;
+		padding: 0.3rem;
+	}
+	.series-results button {
+		justify-content: flex-start;
+		width: 100%;
+		border: 0;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--color-text);
+		cursor: pointer;
+		font: inherit;
+		font-size: 0.84rem;
+		font-weight: 700;
+		min-height: 34px;
+		padding: 0.35rem 0.5rem;
+		text-align: left;
+	}
+	.series-results button:hover,
+	.series-results button:focus-visible {
+		background: rgba(31, 122, 69, 0.08);
+	}
+	.series-remove-button { justify-self: start; }
 	.cover-actions {
 		display: flex;
 		flex-wrap: wrap;
@@ -788,34 +939,37 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		align-items: center;
 	}
 	.secondary-button,
-	.upload-button > span {
+	.danger-button {
 		display: inline-flex;
 		align-items: center;
-		min-height: 34px;
+		justify-content: center;
+		min-height: 38px;
 		border: var(--border-subtle);
-		border-radius: var(--radius-pill);
+		border-radius: var(--radius-sm);
 		background: rgba(255, 255, 255, 0.72);
 		color: var(--color-nav);
 		cursor: pointer;
 		font: inherit;
 		font-size: 0.84rem;
 		font-weight: 800;
-		padding: 0.35rem 0.68rem;
+		padding: 0.45rem 0.72rem;
 	}
 	.secondary-button:hover,
-	.upload-button > span:hover {
+	.secondary-button:focus-visible {
 		color: var(--color-nav-hover);
 		background: #fff;
 	}
-	.upload-button {
-		display: inline-flex;
+	.danger-button { color: #8f1d1d; }
+	.danger-button:disabled,
+	.secondary-button:disabled {
+		cursor: not-allowed;
+		opacity: 0.58;
 	}
-	.upload-button input {
+	[data-cover-file] {
 		position: absolute;
 		width: 1px;
 		height: 1px;
 		opacity: 0;
-		pointer-events: none;
 	}
 	[data-format-field].is-secondary {
 		opacity: 0.72;
@@ -877,6 +1031,12 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		font-weight: 700;
 		margin-top: 0.1rem;
 	}
+	.cover-upload-status {
+		margin: 0;
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-weight: 700;
+	}
 	.advanced-field {
 		margin-top: 0.2rem;
 	}
@@ -900,18 +1060,50 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	.stat p { margin: 0; color: #606060; font-size: 0.82rem; }
 	.stat strong { display: block; margin-top: 0.2rem; font-size: 1.2rem; }
 	.note { margin-top: 0.65rem; color: #5c5c5c; font-size: 0.86rem; }
-	.actions { margin-top: 0.8rem; }
-	.actions button {
+	.catalog-save-bar {
+		position: sticky;
+		bottom: 0.75rem;
+		z-index: 5;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		align-items: center;
+		justify-content: space-between;
+		margin-top: 1rem;
+		border: 1px solid rgba(31, 122, 69, 0.28);
+		border-radius: var(--radius-md);
+		background: rgba(255, 255, 255, 0.96);
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+		padding: 0.7rem 0.8rem;
+	}
+	.catalog-save-bar p {
+		margin: 0;
+		color: var(--color-text);
+		font-size: 0.9rem;
+		font-weight: 800;
+	}
+	.save-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		align-items: center;
+	}
+	.save-actions button[type="submit"] {
 		border: 0;
-		border-radius: var(--radius-pill);
+		border-radius: var(--radius-sm);
 		background: var(--color-primary);
 		color: #fff;
 		cursor: pointer;
 		font: inherit;
 		font-weight: 700;
-		padding: 0.55rem 0.9rem;
+		min-height: 38px;
+		padding: 0.45rem 0.9rem;
 	}
-	.actions button:hover { background: var(--color-primary-hover); }
+	.save-actions button[type="submit"]:hover { background: var(--color-primary-hover); }
+	.save-actions button[type="submit"]:disabled {
+		cursor: not-allowed;
+		opacity: 0.58;
+	}
 	.table-wrap { margin-top: 0.7rem; overflow-x: auto; }
 	table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 	th, td { text-align: left; padding: 0.45rem; border-bottom: var(--border-subtle); vertical-align: top; }
@@ -954,10 +1146,11 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	const countNode = summary?.querySelector("[data-health-summary-count]");
 	const issueNodes = Array.from(document.querySelectorAll("[data-health-summary-item]"));
 	const selectedEditionId = Number(form?.getAttribute("data-selected-edition-id") || 0) || 0;
+	const workFallbackCover = String(form?.getAttribute("data-work-fallback-cover") || "").trim();
 	const seriesSearch = document.querySelector("[data-series-search]");
 	const seriesIdInput = document.querySelector("[data-series-id]");
 	const seriesCreateNameInput = document.querySelector("[data-series-create-name]");
-	const seriesCreateButton = document.querySelector("[data-series-create]");
+	const seriesResults = document.querySelector("[data-series-results]");
 	const seriesClearButton = document.querySelector("[data-series-clear]");
 	const seriesPositionInput = document.querySelector("[data-series-position]");
 	const seriesOptions = Array.from(document.querySelectorAll("#series-options option")).map((option) => ({
@@ -969,14 +1162,72 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	const coverSourceInput = document.querySelector("[data-cover-source]");
 	const coverFileInput = document.querySelector("[data-cover-file]");
 	const coverUrlTextInput = document.querySelector("[data-cover-url-input]");
+	const coverUploadTrigger = document.querySelector("[data-cover-upload-trigger]");
 	const coverRemoveButton = document.querySelector("[data-cover-remove]");
 	const coverProvenance = document.querySelector("[data-cover-provenance]");
+	const coverUploadStatus = document.querySelector("[data-cover-upload-status]");
 	const formatSelect = document.querySelector("[data-format-select]");
 	const formatHelp = document.querySelector("[data-format-help]");
+	const saveBar = document.querySelector("[data-save-bar]");
+	const saveButton = document.querySelector("[data-save-button]");
+	const discardButton = document.querySelector("[data-discard-changes]");
 	let isSubmittingCatalogEditor = false;
+	let initialFormSnapshot = "";
 
 	function normalizeSeriesName(value) {
 		return String(value || "").trim().toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+	}
+	function optionLabel(option) {
+		return option?.name || "";
+	}
+	function selectSeries(option) {
+		if (!(seriesSearch instanceof HTMLInputElement)) return;
+		if (!(seriesIdInput instanceof HTMLInputElement)) return;
+		if (!(seriesCreateNameInput instanceof HTMLInputElement)) return;
+		seriesSearch.value = optionLabel(option);
+		seriesIdInput.value = String(option?.id || 0);
+		seriesCreateNameInput.value = "";
+		if (seriesResults instanceof HTMLElement) seriesResults.hidden = true;
+		if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
+		if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = false;
+		refreshHealthState();
+		updateDirtyState();
+	}
+	function renderSeriesResults(raw) {
+		if (!(seriesResults instanceof HTMLElement)) return;
+		seriesResults.replaceChildren();
+		const normalized = normalizeSeriesName(raw);
+		if (!normalized) {
+			seriesResults.hidden = true;
+			return;
+		}
+		const matches = seriesOptions
+			.filter((option) => normalizeSeriesName(option.name).includes(normalized))
+			.slice(0, 6);
+		for (const option of matches) {
+			const button = document.createElement("button");
+			button.type = "button";
+			button.textContent = option.name;
+			button.addEventListener("click", () => selectSeries(option));
+			seriesResults.append(button);
+		}
+		const exact = seriesOptions.some((option) => normalizeSeriesName(option.name) === normalized);
+		if (!exact) {
+			const createButton = document.createElement("button");
+			createButton.type = "button";
+			createButton.textContent = `+ Create "${String(raw).trim()}"`;
+			createButton.addEventListener("click", () => {
+				if (seriesIdInput instanceof HTMLInputElement) seriesIdInput.value = "0";
+				if (seriesCreateNameInput instanceof HTMLInputElement) seriesCreateNameInput.value = String(raw).trim();
+				if (seriesResults instanceof HTMLElement) seriesResults.hidden = true;
+				if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
+				if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = false;
+				refreshHealthState();
+				updateDirtyState();
+			});
+			seriesResults.append(createButton);
+		}
+		seriesResults.hidden = seriesResults.childElementCount === 0;
 	}
 	function syncSeriesState() {
 		if (!(seriesSearch instanceof HTMLInputElement)) return;
@@ -987,38 +1238,33 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		if (!raw) {
 			seriesIdInput.value = "0";
 			seriesCreateNameInput.value = "";
-			if (seriesCreateButton instanceof HTMLElement) seriesCreateButton.hidden = true;
 			if (seriesPositionInput instanceof HTMLInputElement) {
 				seriesPositionInput.value = "";
 				seriesPositionInput.disabled = true;
 			}
+			if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = true;
+			renderSeriesResults("");
 			return;
 		}
 		if (matched?.id) {
 			seriesIdInput.value = String(matched.id);
 			seriesCreateNameInput.value = "";
-			if (seriesCreateButton instanceof HTMLElement) seriesCreateButton.hidden = true;
 		} else {
 			seriesIdInput.value = "0";
 			seriesCreateNameInput.value = raw;
-			if (seriesCreateButton instanceof HTMLButtonElement) {
-				seriesCreateButton.hidden = false;
-				seriesCreateButton.textContent = `Create "${raw}"`;
-			}
 		}
+		if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = false;
 		if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
+		if (document.activeElement === seriesSearch) renderSeriesResults(raw);
+		else if (seriesResults instanceof HTMLElement) seriesResults.hidden = true;
 	}
 	seriesSearch?.addEventListener("input", syncSeriesState);
 	seriesSearch?.addEventListener("change", syncSeriesState);
-	seriesCreateButton?.addEventListener("click", () => {
-		if (!(seriesSearch instanceof HTMLInputElement)) return;
-		if (seriesCreateNameInput instanceof HTMLInputElement) seriesCreateNameInput.value = seriesSearch.value.trim();
-		if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
-	});
 	seriesClearButton?.addEventListener("click", () => {
 		if (seriesSearch instanceof HTMLInputElement) seriesSearch.value = "";
 		syncSeriesState();
 		refreshHealthState();
+		updateDirtyState();
 	});
 
 	function ensureCoverImageNode() {
@@ -1034,24 +1280,43 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		preview.replaceChildren(img);
 		return img;
 	}
+	function setCoverStatus(message) {
+		if (!(coverUploadStatus instanceof HTMLElement)) return;
+		coverUploadStatus.textContent = message;
+		coverUploadStatus.hidden = !message;
+	}
 	function setCoverValue(value, source) {
 		const next = String(value || "").trim();
-		const targetInput = selectedEditionId > 0 ? coverUrlInput : preferredCoverUrlInput;
-		if (targetInput instanceof HTMLInputElement) targetInput.value = next;
+		if (coverUrlInput instanceof HTMLInputElement) coverUrlInput.value = next;
 		if (coverSourceInput instanceof HTMLInputElement) coverSourceInput.value = source || "";
-		if (coverUrlTextInput instanceof HTMLInputElement) coverUrlTextInput.value = next;
+		if (coverUrlTextInput instanceof HTMLInputElement) coverUrlTextInput.value = next || workFallbackCover;
 		if (next) {
 			const img = ensureCoverImageNode();
 			if (img) img.src = next;
 		} else {
-			const preview = document.querySelector(".cover-preview");
-			if (preview instanceof HTMLElement) preview.innerHTML = '<span class="cover-placeholder" aria-hidden="true" data-cover-placeholder><span class="material-icons">menu_book</span></span>';
+			if (workFallbackCover) {
+				const img = ensureCoverImageNode();
+				if (img) img.src = workFallbackCover;
+			} else {
+				const preview = document.querySelector(".cover-preview");
+				if (preview instanceof HTMLElement) preview.innerHTML = '<span class="cover-placeholder" aria-hidden="true" data-cover-placeholder><span class="material-icons">menu_book</span></span>';
+			}
 		}
 		if (coverProvenance instanceof HTMLElement && source) {
-			coverProvenance.textContent = source === "upload" ? "Source: Admin upload" : source === "url" ? "Source: Admin URL" : "No cover selected";
+			coverProvenance.textContent = source === "upload"
+				? "Source: Admin upload"
+				: source === "url"
+					? "Source: Admin URL"
+					: workFallbackCover
+						? "Source: Work fallback"
+						: "No cover selected";
 		}
 		refreshHealthState();
+		updateDirtyState();
 	}
+	coverUploadTrigger?.addEventListener("click", () => {
+		if (coverFileInput instanceof HTMLInputElement) coverFileInput.click();
+	});
 	coverFileInput?.addEventListener("change", async () => {
 		if (!(coverFileInput instanceof HTMLInputElement)) return;
 		const file = coverFileInput.files?.[0];
@@ -1068,6 +1333,7 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 			return;
 		}
 		try {
+			setCoverStatus("Uploading...");
 			const reader = new FileReader();
 			const dataUrl = await new Promise((resolve, reject) => {
 				reader.onload = () => resolve(String(reader.result || ""));
@@ -1075,7 +1341,9 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 				reader.readAsDataURL(file);
 			});
 			setCoverValue(dataUrl, "upload");
+			setCoverStatus("Uploaded");
 		} catch {
+			setCoverStatus("");
 			window.alert("Failed to load cover image.");
 		}
 	});
@@ -1083,13 +1351,9 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		if (coverUrlTextInput instanceof HTMLInputElement) setCoverValue(coverUrlTextInput.value, coverUrlTextInput.value.trim() ? "url" : "");
 	});
 	coverRemoveButton?.addEventListener("click", () => {
-		const editionCover = coverUrlInput instanceof HTMLInputElement ? coverUrlInput.value.trim() : "";
-		if (selectedEditionId > 0 && editionCover) {
-			if (coverUrlInput instanceof HTMLInputElement) coverUrlInput.value = "";
-		} else if (preferredCoverUrlInput instanceof HTMLInputElement) {
-			preferredCoverUrlInput.value = "";
-		}
+		if (coverUrlInput instanceof HTMLInputElement) coverUrlInput.value = "";
 		setCoverValue("", "remove");
+		setCoverStatus("");
 	});
 
 	function refreshFormatFields() {
@@ -1109,30 +1373,43 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	}
 	formatSelect?.addEventListener("change", refreshFormatFields);
 
-	const initialFieldValues = new Map();
-	for (const container of document.querySelectorAll("[data-health-field]")) {
-		const field = container.getAttribute("data-health-field") || "";
-		const values = Array.from(container.querySelectorAll("input, select, textarea")).map((control) => String(control.value || "").trim());
-		initialFieldValues.set(field, values);
+	function fieldControlValue(field, selector) {
+		const container = document.querySelector(`[data-health-field="${CSS.escape(field)}"]`);
+		const control = selector ? container?.querySelector(selector) : container?.querySelector("input, select, textarea");
+		return control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement || control instanceof HTMLSelectElement
+			? String(control.value || "").trim()
+			: "";
 	}
-	function isFieldCorrected(field) {
-		const containers = Array.from(document.querySelectorAll(`[data-health-field="${CSS.escape(field)}"]`));
-		return containers.some((container) => {
-			const controls = Array.from(container.querySelectorAll("input, select, textarea"));
-			return controls.some((control, index) => {
-				const value = String(control.value || "").trim();
-				const initialValue = initialFieldValues.get(field)?.[index] || "";
-				if (control instanceof HTMLSelectElement) return value !== "" && value !== "0" && value !== initialValue;
-				if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) return value !== "" && (initialValue === "" || value !== initialValue);
-				return false;
-			});
+	function positiveNumber(value) {
+		return Number(String(value || "").trim()) > 0;
+	}
+	function durationLooksValid(value) {
+		const raw = String(value || "").trim();
+		return raw !== "" && /\d/.test(raw);
+	}
+	function hasExternalIdentifier() {
+		return ["isbn10", "isbn13", "googleBooksId", "openLibraryWorkId", "openLibraryEditionId"].some((name) => {
+			const control = form?.querySelector(`[name="${name}"]`);
+			return control instanceof HTMLInputElement && control.value.trim() !== "";
 		});
+	}
+	function isFieldValidNow(field) {
+		if (field === "seriesId") return seriesIdInput instanceof HTMLInputElement && Number(seriesIdInput.value || 0) > 0 || seriesCreateNameInput instanceof HTMLInputElement && seriesCreateNameInput.value.trim() !== "";
+		if (field === "seriesPosition") return !(seriesIdInput instanceof HTMLInputElement) || Number(seriesIdInput.value || 0) <= 0 || fieldControlValue(field) !== "";
+		if (field === "editionFormat") return formatSelect instanceof HTMLSelectElement && formatSelect.value !== "";
+		if (field === "pageCount") return formatSelect instanceof HTMLSelectElement && formatSelect.value === "audiobook" ? true : positiveNumber(fieldControlValue(field));
+		if (field === "duration") return formatSelect instanceof HTMLSelectElement && formatSelect.value !== "audiobook" ? true : durationLooksValid(fieldControlValue(field));
+		if (field === "locationCount") return formatSelect instanceof HTMLSelectElement && formatSelect.value !== "ebook" ? true : positiveNumber(fieldControlValue(field));
+		if (field === "coverUrl") return coverUrlInput instanceof HTMLInputElement && coverUrlInput.value.trim() !== "" || workFallbackCover !== "";
+		if (field === "preferredCoverUrl") return preferredCoverUrlInput instanceof HTMLInputElement && preferredCoverUrlInput.value.trim() !== "";
+		if (field === "externalIdentifiers") return hasExternalIdentifier();
+		return fieldControlValue(field) !== "";
 	}
 	function refreshHealthState() {
 		let visibleIssues = 0;
 		for (const item of issueNodes) {
 			const field = item.getAttribute("data-health-summary-item") || "";
-			const corrected = field && isFieldCorrected(field);
+			const corrected = field && isFieldValidNow(field);
 			item.toggleAttribute("hidden", corrected);
 			if (!corrected) visibleIssues += 1;
 			for (const container of document.querySelectorAll(`[data-health-field="${CSS.escape(field)}"]`)) {
@@ -1148,24 +1425,56 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		summary?.classList.toggle("has-issues", visibleIssues > 0);
 	}
 	document.addEventListener("input", (event) => {
-		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) refreshHealthState();
+		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+			refreshHealthState();
+			updateDirtyState();
+		}
 	});
 	document.addEventListener("change", (event) => {
-		if (event.target instanceof HTMLSelectElement || event.target instanceof HTMLInputElement) refreshHealthState();
+		if (event.target instanceof HTMLSelectElement || event.target instanceof HTMLInputElement) {
+			refreshHealthState();
+			updateDirtyState();
+		}
 	});
 	function snapshotForm() {
 		if (!(form instanceof HTMLFormElement)) return "";
 		return Array.from(new FormData(form).entries()).map(([key, value]) => `${key}=${value instanceof File ? `${value.name}:${value.size}` : String(value)}`).join("&");
 	}
-	let initialFormSnapshot = "";
+	function isDirty() {
+		return !!initialFormSnapshot && snapshotForm() !== initialFormSnapshot;
+	}
+	function updateDirtyState() {
+		const dirty = isDirty();
+		if (saveBar instanceof HTMLElement) saveBar.hidden = !dirty;
+		if (saveButton instanceof HTMLButtonElement) saveButton.disabled = !dirty;
+	}
 	queueMicrotask(() => {
 		syncSeriesState();
 		refreshFormatFields();
 		initialFormSnapshot = snapshotForm();
+		updateDirtyState();
 	});
 	form?.addEventListener("submit", () => {
 		isSubmittingCatalogEditor = true;
 	});
+	discardButton?.addEventListener("click", () => {
+		if (!isDirty()) return;
+		if (window.confirm("Discard unsaved catalog changes?")) window.location.reload();
+	});
+	for (const link of document.querySelectorAll("[data-edition-link]")) {
+		link.addEventListener("click", (event) => {
+			if (!isDirty()) return;
+			if (window.confirm("Switch Editions and discard unsaved changes?")) return;
+			event.preventDefault();
+		});
+	}
+	for (const button of document.querySelectorAll("[data-edition-delete]")) {
+		button.addEventListener("click", (event) => {
+			if (button instanceof HTMLButtonElement && button.disabled) return;
+			if (window.confirm("Delete this Edition? This cannot be undone.")) return;
+			event.preventDefault();
+		});
+	}
 	window.addEventListener("beforeunload", (event) => {
 		if (isSubmittingCatalogEditor || !initialFormSnapshot || snapshotForm() === initialFormSnapshot) return;
 		event.preventDefault();

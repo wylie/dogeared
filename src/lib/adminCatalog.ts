@@ -92,6 +92,7 @@ export type CatalogEditorData = {
 		seriesPosition: string;
 		originalPublicationYear: number;
 		preferredCoverUrl: string;
+		preferredEditionId: number;
 		metadata: Record<string, unknown>;
 		updatedAt: string;
 	};
@@ -115,6 +116,7 @@ export type CatalogEditorData = {
 		durationSeconds: number;
 		locationCount: number;
 		chapterCount: number;
+		referenceCount: number;
 		metadata: Record<string, unknown>;
 		updatedAt: string;
 	}>;
@@ -711,31 +713,42 @@ export async function loadCatalogEditorData(sql: Sql, workId: unknown): Promise<
 			open_library_work_id: string;
 			open_library_edition_id: string;
 			language: string;
+			reference_count: number;
 			metadata: Record<string, unknown>;
 			updated_at: string;
 		}>>`
 			select
-				id,
-				book_id,
-				edition_key,
-				coalesce((metadata->>'title'), '') as title,
-				coalesce(format, '') as format,
-				coalesce(isbn10, '') as isbn10,
-				coalesce(isbn13, '') as isbn13,
-				coalesce(publisher, '') as publisher,
-				coalesce(publication_date, '') as publication_date,
-				publication_year,
-				coalesce(page_count, 0)::int as page_count,
-				coalesce(cover_url, '') as cover_url,
-				coalesce(google_books_id, '') as google_books_id,
-				coalesce(open_library_work_id, '') as open_library_work_id,
-				coalesce(open_library_edition_id, '') as open_library_edition_id,
-				coalesce(language, '') as language,
-				coalesce(metadata, '{}'::jsonb) as metadata,
-				updated_at::text as updated_at
-			from book_edition
-			where work_id = ${id}
-			order by coalesce(book_id, 0) desc, id asc
+				be.id,
+				be.book_id,
+				be.edition_key,
+				coalesce((be.metadata->>'title'), '') as title,
+				coalesce(be.format, '') as format,
+				coalesce(be.isbn10, '') as isbn10,
+				coalesce(be.isbn13, '') as isbn13,
+				coalesce(be.publisher, '') as publisher,
+				coalesce(be.publication_date, '') as publication_date,
+				be.publication_year,
+				coalesce(be.page_count, 0)::int as page_count,
+				coalesce(be.cover_url, '') as cover_url,
+				coalesce(be.google_books_id, '') as google_books_id,
+				coalesce(be.open_library_work_id, '') as open_library_work_id,
+				coalesce(be.open_library_edition_id, '') as open_library_edition_id,
+				coalesce(be.language, '') as language,
+				(
+					(select count(*)::int from user_book ub where ub.edition_id = be.id)
+					+ case when be.book_id is not null then
+						(select count(*)::int from user_book ub where ub.book_id = be.book_id)
+						+ (select count(*)::int from user_reading_progress_event pe where pe.book_id = be.book_id)
+						+ (select count(*)::int from reading_journal_entry rj where rj.book_id = be.book_id)
+						+ (select count(*)::int from reading_journal_note rn where rn.book_id = be.book_id)
+						+ (select count(*)::int from user_activity ua where ua.book_id = be.book_id)
+					else 0 end
+				)::int as reference_count,
+				coalesce(be.metadata, '{}'::jsonb) as metadata,
+				be.updated_at::text as updated_at
+			from book_edition be
+			where be.work_id = ${id}
+			order by coalesce(be.book_id, 0) desc, be.id asc
 		`,
 		sql<Array<{ id: number; name: string }>>`select id, name from series order by lower(name) asc limit 500`,
 		sql<Array<{ readers: number; shelf_entries: number; progress_events: number; journal_entries: number; edition_count: number }>>`
@@ -762,6 +775,7 @@ export async function loadCatalogEditorData(sql: Sql, workId: unknown): Promise<
 			limit 25
 		`
 	]);
+	const workMetadata = readMetadataObject(work.metadata);
 	return {
 		work: {
 			id: Number(work.id || 0),
@@ -777,7 +791,8 @@ export async function loadCatalogEditorData(sql: Sql, workId: unknown): Promise<
 			seriesPosition: work.series_position || "",
 			originalPublicationYear: Number(work.original_publication_year || 0),
 			preferredCoverUrl: work.preferred_cover_url || "",
-			metadata: readMetadataObject(work.metadata),
+			preferredEditionId: normalizeInt(workMetadata.preferredEditionId || workMetadata.preferred_edition_id),
+			metadata: workMetadata,
 			updatedAt: work.updated_at || ""
 		},
 		editions: editionRows.map((edition) => {
@@ -802,6 +817,7 @@ export async function loadCatalogEditorData(sql: Sql, workId: unknown): Promise<
 				durationSeconds: metadataInt(metadata, "durationSeconds") || metadataInt(metadata, "duration_seconds"),
 				locationCount: metadataInt(metadata, "locationCount") || metadataInt(metadata, "location_count"),
 				chapterCount: metadataInt(metadata, "chapterCount") || metadataInt(metadata, "chapter_count"),
+				referenceCount: Number(edition.reference_count || 0),
 				metadata,
 				updatedAt: edition.updated_at || ""
 			};
@@ -867,23 +883,66 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 	await ensureAdminCatalogSchema(sql);
 	const workId = normalizeInt(formData.get("workId"));
 	const editionId = normalizeInt(formData.get("editionId"));
+	const editionMode = normalizeText(formData.get("editionMode"), 20);
+	const editionIntent = normalizeText(formData.get("editionIntent"), 20);
 	if (!workId) return { ok: false, message: "Missing Work ID." };
 	const current = await loadCatalogEditorData(sql, workId);
 	if (!current) return { ok: false, message: "Work not found." };
+	const submittedEdition = current.editions.find((item) => item.id === editionId) || null;
+	if (editionIntent === "delete") {
+		if (!submittedEdition) return { ok: false, message: "Edition not found." };
+		if (current.editions.length <= 1) return { ok: false, message: "Keep at least one Edition attached to this Work." };
+		if (submittedEdition.referenceCount > 0) return { ok: false, message: "This Edition is referenced by reader-owned history and cannot be deleted here." };
+		const replacementPreferredEditionId = current.work.preferredEditionId === submittedEdition.id
+			? current.editions.find((edition) => edition.id !== submittedEdition.id)?.id || 0
+			: current.work.preferredEditionId;
+		const deletionWorkChanges: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
+		addChange(deletionWorkChanges, "preferredEditionId", current.work.preferredEditionId, replacementPreferredEditionId);
+		const deletionWorkMetadata = deletionWorkChanges.length > 0 ? manualMetadata({
+			...current.work.metadata,
+			preferredEditionId: replacementPreferredEditionId || undefined
+		}, deletionWorkChanges, "Manual") : null;
+		await sql.transaction((tx) => {
+			const steps = [
+				tx`delete from book_edition where id = ${submittedEdition.id} and work_id = ${workId}`,
+				tx`
+					insert into admin_catalog_audit_event (admin_user_id, entity_type, entity_id, changed_fields)
+					values (${adminUserId}::uuid, 'edition', ${submittedEdition.id}, ${JSON.stringify([{ field: "edition", oldValue: submittedEdition.editionKey, newValue: "deleted" }])}::jsonb)
+				`
+			];
+			if (deletionWorkMetadata) {
+				steps.push(tx`
+					update book_work
+					set metadata = ${JSON.stringify(deletionWorkMetadata)}::jsonb, updated_at = now()
+					where id = ${workId}
+				`);
+				steps.push(tx`
+					insert into admin_catalog_audit_event (admin_user_id, entity_type, entity_id, changed_fields)
+					values (${adminUserId}::uuid, 'work', ${workId}, ${JSON.stringify(deletionWorkChanges)}::jsonb)
+				`);
+			}
+			return steps;
+		});
+		return { ok: true, message: "Edition removed.", deletedEditionId: submittedEdition.id };
+	}
 	const coverValidation = validateCoverValue(formData.get("coverUrl"));
 	if (!coverValidation.ok) return { ok: false, message: coverValidation.message || "Cover could not be saved." };
 	const preferredCoverValidation = validateCoverValue(formData.get("preferredCoverUrl"));
 	if (!preferredCoverValidation.ok) return { ok: false, message: preferredCoverValidation.message || "Cover could not be saved." };
-	const submittedEdition = current.editions.find((item) => item.id === editionId) || null;
-	if (submittedEdition) {
+	const isAddingEdition = editionMode === "add";
+	if (submittedEdition || isAddingEdition) {
 		if (hasMalformedIsbn(formData.get("isbn10"), 10)) return { ok: false, message: "ISBN-10 must contain 10 ISBN characters." };
 		if (hasMalformedIsbn(formData.get("isbn13"), 13)) return { ok: false, message: "ISBN-13 must contain 13 digits." };
 		if (!isValidPublicationDate(formData.get("publicationDate"))) return { ok: false, message: "Publication date must be a valid date, year, or year-month." };
-		if (isAudiobookFormat(normalizeEditionFormat(formData.get("editionFormat"))) && !parseDurationToSeconds(formData.get("duration"))) return { ok: false, message: "Audiobook duration must be a positive duration." };
+		const normalizedFormat = normalizeEditionFormat(formData.get("editionFormat"));
+		if (isAddingEdition && !normalizedFormat) return { ok: false, message: "Choose a format before adding an Edition." };
+		if (isAudiobookFormat(normalizedFormat) && !parseDurationToSeconds(formData.get("duration"))) return { ok: false, message: "Audiobook duration must be a positive duration." };
 	}
 	const resolvedSeriesId = await resolveCatalogEditorSeriesId(sql, formData);
 	const coverSource = normalizeText(formData.get("coverSource"), 40);
 	const coverProvenance = coverSource === "upload" ? "Admin upload" : coverSource === "url" ? "Admin URL" : "Manual";
+	const requestedPreferredEditionId = normalizeInt(formData.get("preferredEditionId"));
+	const nextPreferredEditionId = current.editions.some((edition) => edition.id === requestedPreferredEditionId) ? requestedPreferredEditionId : current.work.preferredEditionId;
 
 	const workChanges: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
 	const nextWork = {
@@ -896,7 +955,8 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 		seriesId: resolvedSeriesId,
 		seriesPosition: resolvedSeriesId > 0 ? normalizeDecimalText(formData.get("seriesPosition")) : "",
 		originalPublicationYear: normalizePositiveYear(formData.get("originalPublicationYear")),
-		preferredCoverUrl: preferredCoverValidation.cover
+		preferredCoverUrl: preferredCoverValidation.cover,
+		preferredEditionId: nextPreferredEditionId
 	};
 	if (!nextWork.title) return { ok: false, message: "Work title is required." };
 	addChange(workChanges, "title", current.work.title, nextWork.title);
@@ -909,11 +969,12 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 	addChange(workChanges, "seriesPosition", current.work.seriesPosition, nextWork.seriesPosition);
 	addChange(workChanges, "originalPublicationYear", current.work.originalPublicationYear, nextWork.originalPublicationYear);
 	addChange(workChanges, "preferredCoverUrl", current.work.preferredCoverUrl, nextWork.preferredCoverUrl);
+	addChange(workChanges, "preferredEditionId", current.work.preferredEditionId, nextWork.preferredEditionId);
 
 	const edition = submittedEdition;
 	const editionChanges: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
 	let nextEdition: Record<string, unknown> | null = null;
-	if (edition) {
+	if (edition || isAddingEdition) {
 		const durationSeconds = parseDurationToSeconds(formData.get("duration"));
 		if (hasMalformedIsbn(formData.get("isbn10"), 10)) return { ok: false, message: "ISBN-10 must contain 10 ISBN characters." };
 		if (hasMalformedIsbn(formData.get("isbn13"), 13)) return { ok: false, message: "ISBN-13 must contain 13 digits." };
@@ -937,35 +998,57 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 			title: normalizeText(formData.get("editionTitle"), 500)
 		};
 		if (isAudiobookFormat(nextEdition.format) && !durationSeconds) return { ok: false, message: "Audiobook duration must be a positive duration." };
-		addChange(editionChanges, "format", edition.format, nextEdition.format);
-		addChange(editionChanges, "isbn10", edition.isbn10, nextEdition.isbn10);
-		addChange(editionChanges, "isbn13", edition.isbn13, nextEdition.isbn13);
-		addChange(editionChanges, "publisher", edition.publisher, nextEdition.publisher);
-		addChange(editionChanges, "publicationDate", edition.publicationDate, nextEdition.publicationDate);
-		addChange(editionChanges, "publicationYear", edition.publicationYear, nextEdition.publicationYear);
-		addChange(editionChanges, "pageCount", edition.pageCount, nextEdition.pageCount);
-		addChange(editionChanges, "coverUrl", edition.coverUrl, nextEdition.coverUrl);
-		addChange(editionChanges, "googleBooksId", edition.googleBooksId, nextEdition.googleBooksId);
-		addChange(editionChanges, "openLibraryWorkId", edition.openLibraryWorkId, nextEdition.openLibraryWorkId);
-		addChange(editionChanges, "openLibraryEditionId", edition.openLibraryEditionId, nextEdition.openLibraryEditionId);
-		addChange(editionChanges, "language", edition.language, nextEdition.language);
-		addChange(editionChanges, "durationSeconds", edition.durationSeconds, nextEdition.durationSeconds);
-		addChange(editionChanges, "locationCount", edition.locationCount, nextEdition.locationCount);
-		addChange(editionChanges, "chapterCount", edition.chapterCount, nextEdition.chapterCount);
-		addChange(editionChanges, "title", edition.title, nextEdition.title);
+		const existingEdition = edition || {
+			format: "",
+			isbn10: "",
+			isbn13: "",
+			publisher: "",
+			publicationDate: "",
+			publicationYear: 0,
+			pageCount: 0,
+			coverUrl: "",
+			googleBooksId: "",
+			openLibraryWorkId: "",
+			openLibraryEditionId: "",
+			language: "",
+			durationSeconds: 0,
+			locationCount: 0,
+			chapterCount: 0,
+			title: ""
+		};
+		addChange(editionChanges, "format", existingEdition.format, nextEdition.format);
+		addChange(editionChanges, "isbn10", existingEdition.isbn10, nextEdition.isbn10);
+		addChange(editionChanges, "isbn13", existingEdition.isbn13, nextEdition.isbn13);
+		addChange(editionChanges, "publisher", existingEdition.publisher, nextEdition.publisher);
+		addChange(editionChanges, "publicationDate", existingEdition.publicationDate, nextEdition.publicationDate);
+		addChange(editionChanges, "publicationYear", existingEdition.publicationYear, nextEdition.publicationYear);
+		addChange(editionChanges, "pageCount", existingEdition.pageCount, nextEdition.pageCount);
+		addChange(editionChanges, "coverUrl", existingEdition.coverUrl, nextEdition.coverUrl);
+		addChange(editionChanges, "googleBooksId", existingEdition.googleBooksId, nextEdition.googleBooksId);
+		addChange(editionChanges, "openLibraryWorkId", existingEdition.openLibraryWorkId, nextEdition.openLibraryWorkId);
+		addChange(editionChanges, "openLibraryEditionId", existingEdition.openLibraryEditionId, nextEdition.openLibraryEditionId);
+		addChange(editionChanges, "language", existingEdition.language, nextEdition.language);
+		addChange(editionChanges, "durationSeconds", existingEdition.durationSeconds, nextEdition.durationSeconds);
+		addChange(editionChanges, "locationCount", existingEdition.locationCount, nextEdition.locationCount);
+		addChange(editionChanges, "chapterCount", existingEdition.chapterCount, nextEdition.chapterCount);
+		addChange(editionChanges, "title", existingEdition.title, nextEdition.title);
 	}
 
 	if (workChanges.length === 0 && editionChanges.length === 0) return { ok: true, message: "No catalog changes to save." };
-	const nextWorkMetadata = workChanges.length > 0 ? manualMetadata(current.work.metadata, workChanges, workChanges.some((change) => change.field === "preferredCoverUrl") ? coverProvenance : "Manual") : current.work.metadata;
-	const nextEditionMetadata = edition && nextEdition && editionChanges.length > 0
+	const nextWorkMetadata = workChanges.length > 0 ? manualMetadata({
+		...current.work.metadata,
+		preferredEditionId: nextWork.preferredEditionId || undefined
+	}, workChanges, workChanges.some((change) => change.field === "preferredCoverUrl") ? coverProvenance : "Manual") : current.work.metadata;
+	const nextEditionMetadata = nextEdition && editionChanges.length > 0
 		? manualMetadata({
-			...edition.metadata,
+			...(edition?.metadata || {}),
 			title: nextEdition.title,
 			durationSeconds: nextEdition.durationSeconds,
 			locationCount: nextEdition.locationCount,
 			chapterCount: nextEdition.chapterCount
 		}, editionChanges, editionChanges.some((change) => change.field === "coverUrl") ? coverProvenance : "Manual")
 		: null;
+	const newEditionKey = isAddingEdition ? `admin:${workId}:${Date.now()}` : "";
 	await sql.transaction((tx) => {
 		const steps = [];
 		if (workChanges.length > 0) {
@@ -1033,6 +1116,7 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 			}
 		}
 		if (edition && nextEdition && nextEditionMetadata && editionChanges.length > 0) {
+			const coverChanged = editionChanges.some((change) => change.field === "coverUrl");
 			steps.push(tx`
 				update book_edition
 				set
@@ -1064,7 +1148,7 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 						isbn13 = case when ${nextEdition.isbn13}::text <> '' then ${nextEdition.isbn13} else isbn13 end,
 						publisher = case when ${nextEdition.publisher}::text <> '' then ${nextEdition.publisher} else publisher end,
 						page_count = greatest(coalesce(page_count, 0), ${nextEdition.pageCount}::int),
-						cover_url = case when ${nextEdition.coverUrl}::text <> '' then ${nextEdition.coverUrl} else cover_url end,
+						cover_url = case when ${coverChanged}::boolean then ${nextEdition.coverUrl} else case when ${nextEdition.coverUrl}::text <> '' then ${nextEdition.coverUrl} else cover_url end end,
 						google_books_id = case when ${nextEdition.googleBooksId}::text <> '' then ${nextEdition.googleBooksId} else google_books_id end,
 						language = case when ${nextEdition.language}::text <> '' then ${nextEdition.language} else language end,
 						published_year = coalesce(published_year, ${nextEdition.publicationYear || null}),
@@ -1073,7 +1157,59 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 				`);
 			}
 		}
+		if (isAddingEdition && nextEdition && nextEditionMetadata && editionChanges.length > 0) {
+			steps.push(tx`
+				insert into book_edition (
+					work_id,
+					book_id,
+					edition_key,
+					format,
+					isbn10,
+					isbn13,
+					publisher,
+					publication_date,
+					publication_year,
+					page_count,
+					cover_url,
+					google_books_id,
+					open_library_work_id,
+					open_library_edition_id,
+					language,
+					metadata
+				)
+				values (
+					${workId},
+					null,
+					${newEditionKey},
+					${nextEdition.format},
+					${nextEdition.isbn10},
+					${nextEdition.isbn13},
+					${nextEdition.publisher},
+					${nextEdition.publicationDate},
+					${nextEdition.publicationYear || null},
+					${nextEdition.pageCount},
+					${nextEdition.coverUrl},
+					${nextEdition.googleBooksId},
+					${nextEdition.openLibraryWorkId},
+					${nextEdition.openLibraryEditionId},
+					${nextEdition.language},
+					${JSON.stringify(nextEditionMetadata)}::jsonb
+				)
+			`);
+			steps.push(tx`
+				insert into admin_catalog_audit_event (admin_user_id, entity_type, entity_id, changed_fields)
+				values (${adminUserId}::uuid, 'work', ${workId}, ${JSON.stringify([{ field: "edition", oldValue: "", newValue: newEditionKey }, ...editionChanges])}::jsonb)
+			`);
+		}
 		return steps;
 	});
-	return { ok: true, message: `Saved ${workChanges.length + editionChanges.length} catalog field change${workChanges.length + editionChanges.length === 1 ? "" : "s"}.` };
+	const createdRows = newEditionKey
+		? await sql<Array<{ id: number }>>`select id from book_edition where work_id = ${workId} and edition_key = ${newEditionKey} limit 1`
+		: [];
+	const savedCount = workChanges.length + editionChanges.length;
+	return {
+		ok: true,
+		message: `Saved ${savedCount} catalog field change${savedCount === 1 ? "" : "s"}.`,
+		editionId: Number(createdRows[0]?.id || edition?.id || 0)
+	};
 }
