@@ -228,14 +228,18 @@ test("Catalog Review Queue filters and paginates unique review targets after agg
 	assert.equal(new Set(paged.records.map((record) => record.recordKey)).size, paged.records.length);
 });
 
-test("admin catalog editor separates Work and Edition metadata and records audit history", () => {
+test("admin catalog editor unifies book repair while preserving Work and Edition saves", () => {
 	const editor = readFileSync("src/pages/admin/books/[workId].astro", "utf8");
 	const lib = readFileSync("src/lib/adminCatalog.ts", "utf8");
 
 	assert.match(editor, /resolveAdminSession/);
 	assert.match(editor, /if \(!admin\.isAdmin\) return Astro\.redirect\("\/"\)/);
-	assert.match(editor, /Work Metadata/);
-	assert.match(editor, /Edition Metadata/);
+	assert.match(editor, /Book Catalog Editor/);
+	assert.match(editor, /Publication-specific information/);
+	assert.match(editor, /data-series-search/);
+	assert.match(editor, /data-series-create/);
+	assert.match(editor, /data-cover-file/);
+	assert.match(editor, /Use image URL instead/);
 	assert.match(editor, /Impact Preview/);
 	assert.match(editor, /Audit History/);
 	assert.match(editor, /name="duration"/);
@@ -245,13 +249,18 @@ test("admin catalog editor separates Work and Edition metadata and records audit
 	assert.match(editor, /type="hidden" name="editionId"/);
 
 	assert.match(lib, /manualOverrides/);
-	assert.match(lib, /source: "Manual"/);
+	assert.match(lib, /source = "Manual"/);
+	assert.match(lib, /manuallyCurated/);
+	assert.match(lib, /Admin upload/);
+	assert.match(lib, /resolveCatalogEditorSeriesId/);
 	assert.match(lib, /admin_catalog_audit_event/);
 	assert.match(lib, /Audiobook duration must be a positive duration/);
 	assert.match(lib, /ISBN-10 must contain 10 ISBN characters/);
 	assert.match(lib, /Publication date must be a valid date/);
 	assert.match(lib, /sql\.transaction/);
 	assert.match(lib, /durationSeconds: nextEdition\.durationSeconds/);
+	assert.match(lib, /update book_work/);
+	assert.match(lib, /update book_edition/);
 });
 
 test("admin catalog editor surfaces Data Health issues next to relevant fields", () => {
@@ -274,22 +283,19 @@ test("admin catalog editor surfaces Data Health issues next to relevant fields",
 	assert.match(editor, /refreshHealthState/);
 	assert.match(editor, /All visible Data Health issues look corrected/);
 	for (const group of [
-		"Work Identity",
+		"Book",
 		"Series",
-		"Classification",
-		"Description",
+		"Edition & Format",
 		"Cover",
-		"Edition Identity",
-		"Publication",
 		"Progress Metadata",
-		"External Identifiers"
+		"Advanced metadata"
 	]) {
 		assert.match(editor, new RegExp(group));
 	}
-	assert.match(editor, /Percentage tracking, Reading Activity, Daily Reading Volume/);
-	assert.match(editor, /Series pages, reading order, Previous\/Next navigation/);
+	assert.match(editor, /Required for audiobook and percentage progress/);
+	assert.match(editor, /The title suggests this book belongs to a Series/);
 	assert.match(editor, /cover-preview/);
-	assert.match(editor, /Replace cover URL/);
+	assert.match(editor, /Upload new cover/);
 });
 
 test("Book Detail exposes catalog repair shortcut only through admin session", () => {
@@ -314,8 +320,8 @@ test("Product Bible documents catalog ownership, provenance, and audit rules", (
 		assert.match(source, /audiobook duration/i);
 		assert.match(source, /audit/i);
 	}
-	assert.match(features, /Work edits cover/);
-	assert.match(features, /Edition edits cover/);
+	assert.match(features, /Work edits still cover/);
+	assert.match(features, /Edition edits still cover/);
 	assert.match(overview, /preserve reader-owned shelves/);
 	assert.match(database, /durationSeconds/);
 	assert.match(admin, /\/admin\/books\/\[workId\]/);

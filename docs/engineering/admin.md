@@ -165,25 +165,25 @@ Shows metadata coverage and gaps:
 
 Route: `/admin/books/[workId]`
 
-Admin-only Work and Edition editor reached from Data Health or the Book Detail admin shortcut.
+Admin-only unified Book Catalog Editor reached from Data Health or the Book Detail admin shortcut. The page is organized for editorial repair, while saves still write each field to the correct Work, Edition, or Series record.
 
-Work-level fields:
+Work-level fields preserved underneath:
 
 - Title and canonical title.
 - Primary author.
 - Description, subjects, and genres.
 - Series and Series position.
 - Original publication year.
-- Preferred cover URL.
+- Preferred cover URL fallback.
 
-Edition-level fields:
+Edition-level fields preserved underneath:
 
 - Format.
 - ISBN-10 and ISBN-13.
 - Publisher.
 - Publication date and year.
 - Page count.
-- Cover URL.
+- Cover URL, preferred over the Work fallback when present.
 - Google Books and Open Library IDs.
 - Language.
 - Audiobook duration, stored as seconds in Edition metadata.
@@ -193,10 +193,13 @@ Safety rules:
 
 - Regular readers cannot access the route.
 - Edits preserve shelves, reading progress, journal entries, ratings, reading formats, reading dates, finish dates, and activity.
-- Manual changes update metadata provenance and manual override fields.
+- Manual changes update metadata provenance and manual override fields. Cover replacements are marked as `Admin upload` or `Admin URL` so automated refreshes do not silently replace curated images.
 - Each save writes an `admin_catalog_audit_event`.
 - The editor shows an impact preview before saving reader-adjacent catalog metadata.
-- Data Health issue styling is applied only to affected controls. The editor keeps Work and Edition sections lightweight with headings, spacing, subtle dividers, shrink-safe grids, and full-width controls to avoid overflow.
+- Data Health issue styling is applied only to affected controls. The editor uses one Book Catalog Editor form with lightweight headings, spacing, subtle dividers, shrink-safe grids, and full-width controls to avoid overflow.
+- Series is searchable and creatable inline. New Series rows use a normalized slug to avoid duplicates, are selected immediately, and enable Series position.
+- Format is controlled as Physical book, Ebook, or Audiobook. Progress metadata shows page count for physical/ebook records, duration for audiobooks, and asks for format first when unknown.
+- Cover display resolves Edition cover, then Work preferred cover, then placeholder. URL entry remains available behind advanced cover options; upload is the primary control.
 
 ## Catalog Review Queue
 

@@ -136,7 +136,11 @@ export type CatalogEditorData = {
 	}>;
 };
 
-const KNOWN_FORMAT_OPTIONS = ["", "hardcover", "paperback", "ebook", "kindle", "audiobook", "audio", "library binding"];
+const KNOWN_FORMAT_OPTIONS = [
+	{ value: "physical", label: "Physical book" },
+	{ value: "ebook", label: "Ebook" },
+	{ value: "audiobook", label: "Audiobook" }
+];
 
 export function catalogEditorFormatOptions() {
 	return KNOWN_FORMAT_OPTIONS;
@@ -164,6 +168,34 @@ function normalizeDecimalText(value: unknown) {
 	const parsed = Number(raw);
 	if (!Number.isFinite(parsed) || parsed < 0) return "";
 	return raw;
+}
+
+function slugifySeriesName(value: unknown) {
+	return normalizeText(value, 160)
+		.toLowerCase()
+		.replace(/&/g, " and ")
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 120);
+}
+
+function normalizeEditionFormat(value: unknown) {
+	const raw = normalizeText(value, 100).toLowerCase();
+	if (raw === "physical" || raw === "physical book" || raw === "paperback" || raw === "hardcover" || raw === "library binding") return "physical";
+	if (raw === "ebook" || raw === "e-book" || raw === "kindle" || raw === "digital") return "ebook";
+	if (raw === "audiobook" || raw === "audio" || raw === "audible" || raw === "listening") return "audiobook";
+	return "";
+}
+
+function validateCoverValue(value: unknown) {
+	const cover = normalizeText(value, 1_000_000);
+	if (!cover) return { ok: true, cover };
+	if (/^data:image\/(jpeg|png|webp);base64,/i.test(cover)) {
+		if (cover.length > 1_000_000) return { ok: false, cover: "", message: "Cover uploads must be under 750KB." };
+		return { ok: true, cover };
+	}
+	if (/^https?:\/\//i.test(cover)) return { ok: true, cover: normalizeText(value, 2000) };
+	return { ok: false, cover: "", message: "Cover must be a JPEG, PNG, WebP upload, or a valid image URL." };
 }
 
 function splitList(value: unknown) {
@@ -448,11 +480,11 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 		const isAudio = isAudiobookFormat(row.format);
 		const isLocationBased = isDigitalLocationFormat(row.format);
 		const usefulPageCount = Math.max(Number(row.edition_page_count || 0), Number(row.book_page_count || 0));
-		if (!normalizeText(row.format)) pushIssue(row, "missing_reading_format_metadata", "needs_attention", "Missing Edition format metadata");
+		if (!normalizeText(row.format)) pushIssue(row, "missing_reading_format_metadata", "needs_attention", "Format missing");
 		if (isAudio) {
-			if (durationSeconds <= 0) pushIssue(row, "missing_audiobook_duration", row.audio_progress_entries > 0 ? "critical" : "needs_attention", "Missing audiobook duration");
+			if (durationSeconds <= 0) pushIssue(row, "missing_audiobook_duration", row.audio_progress_entries > 0 ? "critical" : "needs_attention", "Duration needed");
 		} else if (usefulPageCount <= 0) {
-			pushIssue(row, "missing_page_count", row.percent_progress_entries > 0 ? "critical" : "needs_attention", "Missing page count");
+			pushIssue(row, "missing_page_count", row.percent_progress_entries > 0 ? "critical" : "needs_attention", "Page count needed");
 		}
 		if (isLocationBased && locationCount <= 0) pushIssue(row, "missing_location_count", "optional", "Missing location count");
 		if (chapterCount <= 0 && /chapter/i.test(String(row.format || ""))) pushIssue(row, "missing_chapter_count", "optional", "Missing chapter count");
@@ -464,11 +496,11 @@ export async function loadCatalogMetadataHealth(sql: Sql, filters: CatalogHealth
 		if (!normalizeText(row.isbn10) && !normalizeText(row.isbn13) && !normalizeText(row.google_books_id) && !normalizeText(row.open_library_work_id) && !normalizeText(row.open_library_edition_id)) {
 			pushIssue(row, "missing_identifiers", "needs_attention", "Missing ISBN or external identifiers");
 		}
-		if (row.series_id && !normalizeText(row.series_position)) pushIssue(row, "missing_series_position", "needs_attention", "Missing Series position", "work");
-		if (/\(.*#?\d+.*\)$|\bbook\s+\d+\b/i.test(row.title) && !row.series_id) pushIssue(row, "missing_series_relationship", "needs_attention", "Possible missing Series relationship", "work");
+		if (row.series_id && !normalizeText(row.series_position)) pushIssue(row, "missing_series_position", "needs_attention", "Series position needed", "work");
+		if (/\(.*#?\d+.*\)$|\bbook\s+\d+\b/i.test(row.title) && !row.series_id) pushIssue(row, "missing_series_relationship", "needs_attention", "Series needs review", "work");
 		if (/\b(audiobook|hardcover|paperback|kindle edition|ebook)\b/i.test(row.title)) pushIssue(row, "malformed_title", "needs_attention", "Potentially malformed Work title", "work");
-		if (row.progress_entries > 0 && usefulPageCount <= 0 && !isAudio) pushIssue(row, "progress_not_normalizable", "critical", "Progress entries cannot be normalized without page count");
-		if (row.audio_progress_entries > 0 && isAudio && durationSeconds <= 0) pushIssue(row, "progress_not_normalizable", "critical", "Audiobook progress cannot be normalized without duration");
+		if (row.progress_entries > 0 && usefulPageCount <= 0 && !isAudio) pushIssue(row, "progress_not_normalizable", "critical", "Page count needed");
+		if (row.audio_progress_entries > 0 && isAudio && durationSeconds <= 0) pushIssue(row, "progress_not_normalizable", "critical", "Duration needed");
 	}
 	const duplicateRows = await sql<Array<{ work_id: number; book_id: number; title: string; author: string; updated_at: string }>>`
 		with groups as (
@@ -798,17 +830,37 @@ function addChange(changes: Array<{ field: string; oldValue: unknown; newValue: 
 	changes.push({ field, oldValue: oldValue ?? "", newValue: newValue ?? "" });
 }
 
-function manualMetadata(metadata: Record<string, unknown>, changes: Array<{ field: string; oldValue: unknown; newValue: unknown }>) {
+function manualMetadata(metadata: Record<string, unknown>, changes: Array<{ field: string; oldValue: unknown; newValue: unknown }>, source = "Manual") {
 	const fields = changes.map((change) => change.field);
 	return {
 		...metadata,
 		manualOverrides: Array.from(new Set([...(Array.isArray(metadata.manualOverrides) ? metadata.manualOverrides.map(String) : []), ...fields])),
 		provenance: {
 			...readMetadataObject(metadata.provenance),
-			source: "Manual",
+			source,
+			manuallyCurated: true,
 			updatedAt: new Date().toISOString()
 		}
 	};
+}
+
+async function resolveCatalogEditorSeriesId(sql: Sql, formData: FormData) {
+	const selectedId = normalizeInt(formData.get("seriesId"));
+	if (selectedId > 0) return selectedId;
+	const requestedName = normalizeText(formData.get("seriesCreateName") || formData.get("seriesSearch"), 160);
+	if (!requestedName) return 0;
+	const slug = slugifySeriesName(requestedName);
+	if (!slug) return 0;
+	const rows = await sql<Array<{ id: number }>>`
+		insert into series (name, slug, metadata)
+		values (${requestedName}, ${slug}, jsonb_build_object('source', 'admin-catalog-editor'))
+		on conflict (slug) do update set
+			name = case when trim(series.name) = '' then excluded.name else series.name end,
+			metadata = series.metadata || jsonb_build_object('lastSelectedBy', 'admin-catalog-editor'),
+			updated_at = now()
+		returning id
+	`;
+	return normalizeInt(rows[0]?.id);
 }
 
 export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formData: FormData) {
@@ -818,6 +870,20 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 	if (!workId) return { ok: false, message: "Missing Work ID." };
 	const current = await loadCatalogEditorData(sql, workId);
 	if (!current) return { ok: false, message: "Work not found." };
+	const coverValidation = validateCoverValue(formData.get("coverUrl"));
+	if (!coverValidation.ok) return { ok: false, message: coverValidation.message || "Cover could not be saved." };
+	const preferredCoverValidation = validateCoverValue(formData.get("preferredCoverUrl"));
+	if (!preferredCoverValidation.ok) return { ok: false, message: preferredCoverValidation.message || "Cover could not be saved." };
+	const submittedEdition = current.editions.find((item) => item.id === editionId) || null;
+	if (submittedEdition) {
+		if (hasMalformedIsbn(formData.get("isbn10"), 10)) return { ok: false, message: "ISBN-10 must contain 10 ISBN characters." };
+		if (hasMalformedIsbn(formData.get("isbn13"), 13)) return { ok: false, message: "ISBN-13 must contain 13 digits." };
+		if (!isValidPublicationDate(formData.get("publicationDate"))) return { ok: false, message: "Publication date must be a valid date, year, or year-month." };
+		if (isAudiobookFormat(normalizeEditionFormat(formData.get("editionFormat"))) && !parseDurationToSeconds(formData.get("duration"))) return { ok: false, message: "Audiobook duration must be a positive duration." };
+	}
+	const resolvedSeriesId = await resolveCatalogEditorSeriesId(sql, formData);
+	const coverSource = normalizeText(formData.get("coverSource"), 40);
+	const coverProvenance = coverSource === "upload" ? "Admin upload" : coverSource === "url" ? "Admin URL" : "Manual";
 
 	const workChanges: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
 	const nextWork = {
@@ -827,10 +893,10 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 		description: normalizeText(formData.get("description"), 12000),
 		subjects: splitList(formData.get("subjects")),
 		genres: splitList(formData.get("genres")),
-		seriesId: normalizeInt(formData.get("seriesId")),
-		seriesPosition: normalizeDecimalText(formData.get("seriesPosition")),
+		seriesId: resolvedSeriesId,
+		seriesPosition: resolvedSeriesId > 0 ? normalizeDecimalText(formData.get("seriesPosition")) : "",
 		originalPublicationYear: normalizePositiveYear(formData.get("originalPublicationYear")),
-		preferredCoverUrl: normalizeText(formData.get("preferredCoverUrl"), 1000)
+		preferredCoverUrl: preferredCoverValidation.cover
 	};
 	if (!nextWork.title) return { ok: false, message: "Work title is required." };
 	addChange(workChanges, "title", current.work.title, nextWork.title);
@@ -844,7 +910,7 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 	addChange(workChanges, "originalPublicationYear", current.work.originalPublicationYear, nextWork.originalPublicationYear);
 	addChange(workChanges, "preferredCoverUrl", current.work.preferredCoverUrl, nextWork.preferredCoverUrl);
 
-	const edition = current.editions.find((item) => item.id === editionId) || null;
+	const edition = submittedEdition;
 	const editionChanges: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
 	let nextEdition: Record<string, unknown> | null = null;
 	if (edition) {
@@ -853,14 +919,14 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 		if (hasMalformedIsbn(formData.get("isbn13"), 13)) return { ok: false, message: "ISBN-13 must contain 13 digits." };
 		if (!isValidPublicationDate(formData.get("publicationDate"))) return { ok: false, message: "Publication date must be a valid date, year, or year-month." };
 		nextEdition = {
-			format: normalizeText(formData.get("editionFormat"), 100).toLowerCase(),
+			format: normalizeEditionFormat(formData.get("editionFormat")),
 			isbn10: normalizeIsbn(formData.get("isbn10"), 10),
 			isbn13: normalizeIsbn(formData.get("isbn13"), 13),
 			publisher: normalizeText(formData.get("publisher"), 300),
 			publicationDate: normalizeText(formData.get("publicationDate"), 80),
 			publicationYear: normalizePositiveYear(formData.get("publicationYear")),
 			pageCount: normalizeInt(formData.get("pageCount")),
-			coverUrl: normalizeText(formData.get("coverUrl"), 1000),
+			coverUrl: coverValidation.cover,
 			googleBooksId: normalizeText(formData.get("googleBooksId"), 200),
 			openLibraryWorkId: normalizeText(formData.get("openLibraryWorkId"), 200),
 			openLibraryEditionId: normalizeText(formData.get("openLibraryEditionId"), 200),
@@ -890,7 +956,7 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 	}
 
 	if (workChanges.length === 0 && editionChanges.length === 0) return { ok: true, message: "No catalog changes to save." };
-	const nextWorkMetadata = workChanges.length > 0 ? manualMetadata(current.work.metadata, workChanges) : current.work.metadata;
+	const nextWorkMetadata = workChanges.length > 0 ? manualMetadata(current.work.metadata, workChanges, workChanges.some((change) => change.field === "preferredCoverUrl") ? coverProvenance : "Manual") : current.work.metadata;
 	const nextEditionMetadata = edition && nextEdition && editionChanges.length > 0
 		? manualMetadata({
 			...edition.metadata,
@@ -898,7 +964,7 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 			durationSeconds: nextEdition.durationSeconds,
 			locationCount: nextEdition.locationCount,
 			chapterCount: nextEdition.chapterCount
-		}, editionChanges)
+		}, editionChanges, editionChanges.some((change) => change.field === "coverUrl") ? coverProvenance : "Manual")
 		: null;
 	await sql.transaction((tx) => {
 		const steps = [];
@@ -924,6 +990,47 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 				insert into admin_catalog_audit_event (admin_user_id, entity_type, entity_id, changed_fields)
 				values (${adminUserId}::uuid, 'work', ${workId}, ${JSON.stringify(workChanges)}::jsonb)
 			`);
+			if (nextWork.seriesId > 0) {
+				steps.push(tx`
+					delete from series_book
+					where book_id in (select id from book where work_id = ${workId})
+						and series_id <> ${nextWork.seriesId}
+				`);
+				if (current.work.bookId > 0) {
+					steps.push(tx`
+						insert into series_book (
+							series_id,
+							book_id,
+							title_override,
+							book_order,
+							publication_order,
+							chronological_order,
+							metadata
+						)
+						values (
+							${nextWork.seriesId},
+							${current.work.bookId},
+							'',
+							${nextWork.seriesPosition || null}::numeric,
+							${nextWork.seriesPosition || null}::numeric,
+							${nextWork.seriesPosition || null}::numeric,
+							jsonb_build_object('source', 'admin-catalog-editor')
+						)
+						on conflict (series_id, book_id) where book_id is not null do update set
+							title_override = '',
+							book_order = excluded.book_order,
+							publication_order = excluded.publication_order,
+							chronological_order = excluded.chronological_order,
+							metadata = series_book.metadata || excluded.metadata,
+							updated_at = now()
+					`);
+				}
+			} else {
+				steps.push(tx`
+					delete from series_book
+					where book_id in (select id from book where work_id = ${workId})
+				`);
+			}
 		}
 		if (edition && nextEdition && nextEditionMetadata && editionChanges.length > 0) {
 			steps.push(tx`

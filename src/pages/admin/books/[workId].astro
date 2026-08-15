@@ -6,6 +6,8 @@ import { formatDate, formatNumber, safeAdminLoad } from "../../../lib/adminForma
 import {
 	catalogEditorFormatOptions,
 	formatDuration,
+	isAudiobookFormat,
+	isDigitalLocationFormat,
 	loadCatalogEditorData,
 	loadCatalogMetadataHealth,
 	saveCatalogEditorData
@@ -86,7 +88,7 @@ function issueToField(issue: CatalogHealthIssue): FieldHealth {
 		missing_page_count: "pageCount",
 		missing_location_count: "locationCount",
 		missing_chapter_count: "chapterCount",
-		missing_cover: issue.editionId > 0 ? "coverUrl" : "preferredCoverUrl",
+		missing_cover: "coverUrl",
 		missing_author: "primaryAuthor",
 		missing_publication_year: issue.editionId > 0 ? "publicationYear" : "originalPublicationYear",
 		missing_publisher: "publisher",
@@ -100,13 +102,13 @@ function issueToField(issue: CatalogHealthIssue): FieldHealth {
 	} as Record<string, string>)[issue.issueType] || "catalogEditor";
 	const details: Record<string, { label: string; helper: string; uses: string[] }> = {
 		duration: {
-			label: "Audiobook duration",
-			helper: "Audiobook progress cannot be normalized until this Edition has a total duration.",
+			label: "Duration needed",
+			helper: "Required for audiobook and percentage progress.",
 			uses: ["Percentage tracking", "Reading Activity", "Daily Reading Volume"]
 		},
 		pageCount: {
-			label: "Page count",
-			helper: "Page and percentage progress need a total page count for reliable normalization.",
+			label: "Page count needed",
+			helper: "Required for page and percentage progress.",
 			uses: ["Percentage tracking", "Reading statistics", "Reading Activity"]
 		},
 		locationCount: {
@@ -120,13 +122,13 @@ function issueToField(issue: CatalogHealthIssue): FieldHealth {
 			uses: ["Chapter tracking", "Progress labels", "Reading Activity"]
 		},
 		seriesPosition: {
-			label: "Series position",
-			helper: "Series membership exists, but DogEared does not know this Work's reading order.",
+			label: "Series position needed",
+			helper: "Required for reading order in the selected Series.",
 			uses: ["Series pages", "Reading order", "Previous/Next navigation"]
 		},
 		seriesId: {
-			label: "Series",
-			helper: "The title strongly suggests Series membership. Confirm the structured Series relationship.",
+			label: "Series needs review",
+			helper: "The title suggests this book belongs to a Series.",
 			uses: ["Series pages", "Search dedupe", "Author pages"]
 		},
 		primaryAuthor: {
@@ -135,18 +137,18 @@ function issueToField(issue: CatalogHealthIssue): FieldHealth {
 			uses: ["Search dedupe", "Author pages", "BookCards"]
 		},
 		workTitle: {
-			label: "Work title",
-			helper: "The Work title may include Edition or format text that should live on an Edition instead.",
+			label: "Title needs review",
+			helper: "Remove redundant Series or format text once the structured fields are set.",
 			uses: ["Search dedupe", "BookCards", "Series grouping"]
 		},
 		description: {
-			label: "Description",
-			helper: "Description helps administrators and readers understand the canonical Work.",
+			label: "Description missing",
+			helper: "Add a concise book description for reader-facing detail pages.",
 			uses: ["Book detail", "Search context", "Catalog QA"]
 		},
 		editionFormat: {
-			label: "Edition format",
-			helper: "Format determines which extent metadata matters for this Edition.",
+			label: "Format missing",
+			helper: "Choose a format so DogEared can determine which length metadata is relevant.",
 			uses: ["Data Health", "Progress metadata", "Edition display"]
 		},
 		publisher: {
@@ -209,6 +211,23 @@ function fieldClass(field: string, extra = "") {
 function issueTarget(issue: CatalogHealthIssue) {
 	return issueToField(issue).field;
 }
+
+function normalizedEditorFormat(value: unknown) {
+	const raw = String(value || "").trim().toLowerCase();
+	if (isAudiobookFormat(raw)) return "audiobook";
+	if (isDigitalLocationFormat(raw)) return "ebook";
+	if (["physical", "hardcover", "paperback", "library binding"].includes(raw)) return "physical";
+	return "";
+}
+
+const selectedFormatValue = normalizedEditorFormat(selectedEdition?.format);
+const displayCoverUrl = selectedEdition?.coverUrl || editor?.work.preferredCoverUrl || "";
+const displayCoverSource = selectedEdition?.coverUrl
+	? String(editionProvenance.source || "Existing DogEared data")
+	: editor?.work.preferredCoverUrl
+		? String(workProvenance.source || "Existing DogEared data")
+		: "No cover selected";
+const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.trim() !== editor?.work.title.trim();
 ---
 
 <Layout title={editor ? `Edit ${editor.work.title}` : "Catalog Editor"} sectionLinks={sectionLinks} robots="noindex,nofollow">
@@ -289,26 +308,25 @@ function issueTarget(issue: CatalogHealthIssue) {
 					</form>
 				)}
 
-				<form id="catalog-editor" class="catalog-editor-form" method="post">
+				<form id="catalog-editor" class="catalog-editor-form" method="post" data-selected-edition-id={String(selectedEdition?.id || 0)}>
 					<input type="hidden" name="workId" value={String(editor.work.id)} />
 					<input type="hidden" name="editionId" value={String(selectedEdition?.id || 0)} />
+					<input type="hidden" name="preferredCoverUrl" value={editor.work.preferredCoverUrl} data-preferred-cover-url />
+					<input type="hidden" name="coverUrl" value={selectedEdition?.coverUrl || ""} data-cover-url />
+					<input type="hidden" name="coverSource" value="" data-cover-source />
 
 					<section class="panel">
 						<div class="panel-head">
-							<h2>Work Metadata</h2>
-							<p>Shared canonical identity used for grouping, search dedupe, Series membership, and reader-facing catalog reuse.</p>
+							<h2>Book Catalog Editor</h2>
+							<p>Repair the book as an administrator sees it. DogEared saves shared book identity, Series data, and publication-specific Edition details to the right records underneath.</p>
 						</div>
 						<fieldset class="field-group">
-							<legend>Work Identity</legend>
+							<legend>Book</legend>
 							<div class="field-grid two">
 								<label id="field-workTitle" class={fieldClass("workTitle")} data-health-field="workTitle">
-									<span class="field-label">Work title {fieldHealth("workTitle") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+									<span class="field-label">Title {fieldHealth("workTitle") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
 									<input name="workTitle" value={editor.work.title} required maxlength="500" aria-describedby={fieldHealth("workTitle") ? "help-workTitle why-workTitle" : undefined} />
 									{fieldHealth("workTitle") && <p id="help-workTitle" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("workTitle")!.issue.severity)}: </span>{fieldHealth("workTitle")!.helper}</p>}
-								</label>
-								<label class={fieldClass("canonicalTitle")}>
-									<span>Canonical title</span>
-									<input name="canonicalTitle" value={editor.work.canonicalTitle} maxlength="500" />
 								</label>
 								<label id="field-primaryAuthor" class={fieldClass("primaryAuthor")} data-health-field="primaryAuthor">
 									<span class="field-label">Primary author {fieldHealth("primaryAuthor") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
@@ -320,118 +338,71 @@ function issueTarget(issue: CatalogHealthIssue) {
 									<input name="originalPublicationYear" inputmode="numeric" value={editor.work.originalPublicationYear > 0 ? String(editor.work.originalPublicationYear) : ""} aria-describedby={fieldHealth("originalPublicationYear") ? "help-originalPublicationYear why-originalPublicationYear" : undefined} />
 									{fieldHealth("originalPublicationYear") && <p id="help-originalPublicationYear" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("originalPublicationYear")!.issue.severity)}: </span>{fieldHealth("originalPublicationYear")!.helper}</p>}
 								</label>
+								<label id="field-description" class={fieldClass("description", "span-two")} data-health-field="description">
+									<span class="field-label">Description {fieldHealth("description") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+									<textarea name="description" rows="5" aria-describedby={fieldHealth("description") ? "help-description why-description" : "why-description"}>{editor.work.description}</textarea>
+									{fieldHealth("description") && <p id="help-description" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("description")!.issue.severity)}: </span>{fieldHealth("description")!.helper}</p>}
+								</label>
+								<label class="span-two">
+									<span>Subjects</span>
+									<textarea name="subjects" rows="2">{editor.work.subjects.join(", ")}</textarea>
+								</label>
+								<label class="span-two">
+									<span>Genres</span>
+									<textarea name="genres" rows="2">{editor.work.genres.join(", ")}</textarea>
+								</label>
 							</div>
 						</fieldset>
 						<fieldset class="field-group">
 							<legend>Series</legend>
 							<div class="field-grid two">
-								<label id="field-seriesId" class={fieldClass("seriesId")} data-health-field="seriesId">
+								<div id="field-seriesId" class={fieldClass("seriesId", "series-combobox")} data-health-field="seriesId">
 									<span class="field-label">Series {fieldHealth("seriesId") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-									<select name="seriesId" aria-describedby={fieldHealth("seriesId") ? "help-seriesId why-seriesId" : "why-seriesId"}>
-										<option value="0">Standalone / no Series</option>
+									<input type="hidden" name="seriesId" value={String(editor.work.seriesId || 0)} data-series-id />
+									<input type="hidden" name="seriesCreateName" value="" data-series-create-name />
+									<input name="seriesSearch" list="series-options" value={editor.work.seriesName} placeholder="Search or create a Series" autocomplete="off" aria-describedby={fieldHealth("seriesId") ? "help-seriesId why-seriesId" : "why-seriesId"} data-series-search />
+									<datalist id="series-options">
 										{editor.seriesOptions.map((series) => (
-											<option value={String(series.id)} selected={series.id === editor.work.seriesId}>{series.name}</option>
+											<option value={series.name} data-id={String(series.id)} />
 										))}
-									</select>
+									</datalist>
+									<div class="series-actions">
+										<button type="button" class="secondary-button" data-series-create hidden>Create Series</button>
+										<button type="button" class="secondary-button" data-series-clear>Remove Series</button>
+									</div>
 									{fieldHealth("seriesId") && <p id="help-seriesId" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("seriesId")!.issue.severity)}: </span>{fieldHealth("seriesId")!.helper}</p>}
-									<p id="why-seriesId" class="why-note"><strong>Used for:</strong> Series pages, search dedupe, author pages.</p>
-								</label>
+								</div>
 								<label id="field-seriesPosition" class={fieldClass("seriesPosition")} data-health-field="seriesPosition">
 									<span class="field-label">Series position {fieldHealth("seriesPosition") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-									<input name="seriesPosition" inputmode="decimal" value={editor.work.seriesPosition} aria-describedby={fieldHealth("seriesPosition") ? "help-seriesPosition why-seriesPosition" : "why-seriesPosition"} />
+									<input name="seriesPosition" inputmode="decimal" value={editor.work.seriesPosition} aria-describedby={fieldHealth("seriesPosition") ? "help-seriesPosition why-seriesPosition" : "why-seriesPosition"} data-series-position />
 									{fieldHealth("seriesPosition") && <p id="help-seriesPosition" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("seriesPosition")!.issue.severity)}: </span>{fieldHealth("seriesPosition")!.helper}</p>}
-									<p id="why-seriesPosition" class="why-note"><strong>Used for:</strong> Series pages, reading order, Previous/Next navigation.</p>
 								</label>
 							</div>
 						</fieldset>
 						<fieldset class="field-group">
-							<legend>Classification</legend>
-							<div class="field-grid two">
-								<label class="span-two">
-									<span>Subjects</span>
-									<textarea name="subjects" rows="3">{editor.work.subjects.join(", ")}</textarea>
-								</label>
-								<label class="span-two">
-									<span>Genres</span>
-									<textarea name="genres" rows="3">{editor.work.genres.join(", ")}</textarea>
-								</label>
-							</div>
-						</fieldset>
-						<fieldset class="field-group">
-							<legend>Description</legend>
-							<label id="field-description" class={fieldClass("description")} data-health-field="description">
-								<span class="field-label">Description {fieldHealth("description") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-								<textarea name="description" rows="6" aria-describedby={fieldHealth("description") ? "help-description why-description" : "why-description"}>{editor.work.description}</textarea>
-								{fieldHealth("description") && <p id="help-description" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("description")!.issue.severity)}: </span>{fieldHealth("description")!.helper}</p>}
-								<p id="why-description" class="why-note"><strong>Used for:</strong> Book detail, search context, catalog QA.</p>
-							</label>
-						</fieldset>
-						<fieldset class="field-group">
-							<legend>Cover</legend>
-							<div id="field-preferredCoverUrl" class={fieldClass("preferredCoverUrl", "cover-editor")} data-health-field="preferredCoverUrl">
-								<div class="cover-preview">
-									{editor.work.preferredCoverUrl ? <img src={editor.work.preferredCoverUrl} alt={`Preferred cover for ${editor.work.title}`} loading="lazy" decoding="async" /> : <span class="cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></span>}
-								</div>
-								<div class="cover-editor-main">
-									<div class="cover-editor-head">
-										<strong>Preferred cover</strong>
-										<span>{String(workProvenance.source || "Existing DogEared data")}</span>
-									</div>
-									{fieldHealth("preferredCoverUrl") && <p id="help-preferredCoverUrl" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("preferredCoverUrl")!.issue.severity)}: </span>{fieldHealth("preferredCoverUrl")!.helper}</p>}
-									<p id="why-preferredCoverUrl" class="why-note"><strong>Used for:</strong> BookCards, search results, Series pages.</p>
-									<details class="advanced-field">
-										<summary>Replace cover URL</summary>
-										<label>
-											<span>Preferred cover URL</span>
-											<input name="preferredCoverUrl" value={editor.work.preferredCoverUrl} maxlength="1000" aria-describedby={fieldHealth("preferredCoverUrl") ? "help-preferredCoverUrl why-preferredCoverUrl" : "why-preferredCoverUrl"} />
-										</label>
-									</details>
-								</div>
-							</div>
-						</fieldset>
-						<p class="note">Work provenance: {String(workProvenance.source || "Existing DogEared data")} · Updated {formatDate(editor.work.updatedAt)}</p>
-					</section>
-
-					<section class="panel">
-						<div class="panel-head">
-							<h2>Edition Metadata</h2>
-							<p>Format, identifiers, publisher, page count, audiobook duration, locations, chapters, and cover data belong to a specific Edition.</p>
-						</div>
-						{editor.editions.length === 0 ? (
-							<p>No Editions exist for this Work yet.</p>
-						) : (
-							<>
-								<p class="edition-current">Editing Edition #{selectedEdition?.id}{selectedEdition?.bookId ? ` · Book ${selectedEdition.bookId}` : ""}</p>
-								<fieldset class="field-group">
-									<legend>Edition Identity</legend>
+							<legend>Edition & Format</legend>
+							<p class="subsection-note">Publication-specific information such as format, publisher, length, and identifiers.</p>
+							{editor.editions.length === 0 ? (
+								<p>No Editions exist for this book yet.</p>
+							) : (
+								<>
+									<p class="edition-current">Editing Edition #{selectedEdition?.id}{selectedEdition?.bookId ? ` · Book ${selectedEdition.bookId}` : ""}</p>
 									<div class="field-grid two">
-										<label class="field-control">
-											<span>Edition title</span>
-											<input name="editionTitle" value={selectedEdition?.title || ""} maxlength="500" />
-										</label>
 										<label id="field-editionFormat" class={fieldClass("editionFormat")} data-health-field="editionFormat">
 											<span class="field-label">Format {fieldHealth("editionFormat") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-											<input name="editionFormat" list="edition-format-options" value={selectedEdition?.format || ""} maxlength="100" aria-describedby={fieldHealth("editionFormat") ? "help-editionFormat why-editionFormat" : "why-editionFormat"} />
-											<datalist id="edition-format-options">
-												{catalogEditorFormatOptions().map((format) => format ? <option value={format} /> : null)}
-											</datalist>
+											<select name="editionFormat" aria-describedby={fieldHealth("editionFormat") ? "help-editionFormat why-editionFormat" : "why-editionFormat"} data-format-select>
+												<option value="" selected={!selectedFormatValue}>Choose reading format...</option>
+												{catalogEditorFormatOptions().map((format) => (
+													<option value={format.value} selected={format.value === selectedFormatValue}>{format.label}</option>
+												))}
+											</select>
 											{fieldHealth("editionFormat") && <p id="help-editionFormat" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("editionFormat")!.issue.severity)}: </span>{fieldHealth("editionFormat")!.helper}</p>}
-											<p id="why-editionFormat" class="why-note"><strong>Used for:</strong> Data Health, progress metadata, Edition display.</p>
+											<p id="why-editionFormat" class="why-note">Choose a format so DogEared can show the relevant length fields.</p>
 										</label>
-										<label class="field-control">
-											<span>Language</span>
-											<input name="language" value={selectedEdition?.language || ""} maxlength="80" />
-										</label>
-									</div>
-								</fieldset>
-								<fieldset class="field-group">
-									<legend>Publication</legend>
-									<div class="field-grid two">
 										<label id="field-publisher" class={fieldClass("publisher")} data-health-field="publisher">
 											<span class="field-label">Publisher {fieldHealth("publisher") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
 											<input name="publisher" value={selectedEdition?.publisher || ""} maxlength="300" aria-describedby={fieldHealth("publisher") ? "help-publisher why-publisher" : "why-publisher"} />
 											{fieldHealth("publisher") && <p id="help-publisher" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("publisher")!.issue.severity)}: </span>{fieldHealth("publisher")!.helper}</p>}
-											<p id="why-publisher" class="why-note"><strong>Used for:</strong> Edition display, provider review, catalog QA.</p>
 										</label>
 										<label class="field-control">
 											<span>Publication date</span>
@@ -441,92 +412,108 @@ function issueTarget(issue: CatalogHealthIssue) {
 											<span class="field-label">Publication year {fieldHealth("publicationYear") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
 											<input name="publicationYear" inputmode="numeric" value={selectedEdition && selectedEdition.publicationYear > 0 ? String(selectedEdition.publicationYear) : ""} aria-describedby={fieldHealth("publicationYear") ? "help-publicationYear why-publicationYear" : "why-publicationYear"} />
 											{fieldHealth("publicationYear") && <p id="help-publicationYear" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("publicationYear")!.issue.severity)}: </span>{fieldHealth("publicationYear")!.helper}</p>}
-											<p id="why-publicationYear" class="why-note"><strong>Used for:</strong> Edition display, search filters, catalog QA.</p>
+										</label>
+										<label class="field-control">
+											<span>Language</span>
+											<input name="language" value={selectedEdition?.language || ""} maxlength="80" />
 										</label>
 									</div>
-								</fieldset>
-								<fieldset class="field-group">
-									<legend>Progress Metadata</legend>
-									<div class="field-grid two">
-										<label id="field-pageCount" class={fieldClass("pageCount")} data-health-field="pageCount">
-											<span class="field-label">Page count {fieldHealth("pageCount") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-											<input name="pageCount" inputmode="numeric" value={selectedEdition && selectedEdition.pageCount > 0 ? String(selectedEdition.pageCount) : ""} aria-describedby={fieldHealth("pageCount") ? "help-pageCount why-pageCount" : "why-pageCount"} />
-											{fieldHealth("pageCount") && <p id="help-pageCount" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("pageCount")!.issue.severity)}: </span>{fieldHealth("pageCount")!.helper}</p>}
-											<p id="why-pageCount" class="why-note"><strong>Used for:</strong> Percentage tracking, reading statistics, Reading Activity.</p>
+									<details class="advanced-field" open={editionTitleIsUseful}>
+										<summary>Edition title</summary>
+										<label>
+											<span>Edition title or subtitle</span>
+											<input name="editionTitle" value={selectedEdition?.title || ""} maxlength="500" />
 										</label>
-										<label id="field-duration" class={fieldClass("duration")} data-health-field="duration">
-											<span class="field-label">Audiobook duration {fieldHealth("duration") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-											<input name="duration" value={formatDuration(selectedEdition?.durationSeconds || 0)} placeholder="11 hr 24 min" aria-describedby={fieldHealth("duration") ? "help-duration why-duration" : "why-duration"} />
-											{fieldHealth("duration") && <p id="help-duration" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("duration")!.issue.severity)}: </span>{fieldHealth("duration")!.helper}</p>}
-											<p id="why-duration" class="why-note"><strong>Used for:</strong> Percentage tracking, Reading Activity, Daily Reading Volume.</p>
-										</label>
-										<label id="field-locationCount" class={fieldClass("locationCount")} data-health-field="locationCount">
+									</details>
+								</>
+							)}
+						</fieldset>
+						<fieldset class="field-group" data-progress-metadata>
+							<legend>Progress Metadata</legend>
+							<p class="subsection-note" data-format-help>Choose a format so DogEared can determine which length metadata is relevant.</p>
+							<div class="field-grid two">
+								<label id="field-pageCount" class={fieldClass("pageCount")} data-health-field="pageCount" data-format-field="physical ebook">
+									<span class="field-label">Page count {fieldHealth("pageCount") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+									<input name="pageCount" inputmode="numeric" value={selectedEdition && selectedEdition.pageCount > 0 ? String(selectedEdition.pageCount) : ""} aria-describedby={fieldHealth("pageCount") ? "help-pageCount why-pageCount" : "why-pageCount"} />
+									{fieldHealth("pageCount") && <p id="help-pageCount" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("pageCount")!.issue.severity)}: </span>{fieldHealth("pageCount")!.helper}</p>}
+								</label>
+								<label id="field-duration" class={fieldClass("duration")} data-health-field="duration" data-format-field="audiobook">
+									<span class="field-label">Audiobook duration {fieldHealth("duration") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+									<input name="duration" value={formatDuration(selectedEdition?.durationSeconds || 0)} placeholder="11 hr 24 min" aria-describedby={fieldHealth("duration") ? "help-duration why-duration" : "why-duration"} />
+									{fieldHealth("duration") && <p id="help-duration" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("duration")!.issue.severity)}: </span>{fieldHealth("duration")!.helper}</p>}
+								</label>
+										<label id="field-locationCount" class={fieldClass("locationCount")} data-health-field="locationCount" data-format-field="ebook">
 											<span class="field-label">Location count {fieldHealth("locationCount") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
 											<input name="locationCount" inputmode="numeric" value={selectedEdition && selectedEdition.locationCount > 0 ? String(selectedEdition.locationCount) : ""} aria-describedby={fieldHealth("locationCount") ? "help-locationCount why-locationCount" : "why-locationCount"} />
 											{fieldHealth("locationCount") && <p id="help-locationCount" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("locationCount")!.issue.severity)}: </span>{fieldHealth("locationCount")!.helper}</p>}
-											<p id="why-locationCount" class="why-note"><strong>Used for:</strong> Location tracking, Reading Activity, Daily Reading Volume.</p>
 										</label>
 										<label id="field-chapterCount" class={fieldClass("chapterCount")} data-health-field="chapterCount">
 											<span class="field-label">Chapter count {fieldHealth("chapterCount") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
 											<input name="chapterCount" inputmode="numeric" value={selectedEdition && selectedEdition.chapterCount > 0 ? String(selectedEdition.chapterCount) : ""} aria-describedby={fieldHealth("chapterCount") ? "help-chapterCount why-chapterCount" : "why-chapterCount"} />
 											{fieldHealth("chapterCount") && <p id="help-chapterCount" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("chapterCount")!.issue.severity)}: </span>{fieldHealth("chapterCount")!.helper}</p>}
-											<p id="why-chapterCount" class="why-note"><strong>Used for:</strong> Chapter tracking, progress labels, Reading Activity.</p>
 										</label>
+							</div>
+						</fieldset>
+						<fieldset class="field-group">
+							<legend>Cover</legend>
+							<div id="field-coverUrl" class={fieldClass("coverUrl", "cover-editor")} data-health-field="coverUrl">
+								<div class="cover-preview">
+									{displayCoverUrl ? <img src={displayCoverUrl} alt={`Cover for ${editor.work.title}`} loading="lazy" decoding="async" data-cover-preview /> : <span class="cover-placeholder" aria-hidden="true" data-cover-placeholder><span class="material-icons">menu_book</span></span>}
+								</div>
+								<div class="cover-editor-main">
+									<div class="cover-editor-head">
+										<strong>Current cover</strong>
+										<span data-cover-provenance>Source: {displayCoverSource}</span>
 									</div>
-								</fieldset>
-								<fieldset class="field-group">
-									<legend>Cover</legend>
-									<div id="field-coverUrl" class={fieldClass("coverUrl", "cover-editor")} data-health-field="coverUrl">
-										<div class="cover-preview">
-											{selectedEdition?.coverUrl ? <img src={selectedEdition.coverUrl} alt={`Cover for Edition ${selectedEdition.id}`} loading="lazy" decoding="async" /> : <span class="cover-placeholder" aria-hidden="true"><span class="material-icons">menu_book</span></span>}
-										</div>
-										<div class="cover-editor-main">
-											<div class="cover-editor-head">
-												<strong>Edition cover</strong>
-												<span>{String(editionProvenance.source || "Existing DogEared data")}</span>
-											</div>
-											{fieldHealth("coverUrl") && <p id="help-coverUrl" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("coverUrl")!.issue.severity)}: </span>{fieldHealth("coverUrl")!.helper}</p>}
-											<p id="why-coverUrl" class="why-note"><strong>Used for:</strong> Edition display, Book Detail, search results.</p>
-											<details class="advanced-field">
-												<summary>Replace cover URL</summary>
-												<label>
-													<span>Cover URL</span>
-													<input name="coverUrl" value={selectedEdition?.coverUrl || ""} maxlength="1000" aria-describedby={fieldHealth("coverUrl") ? "help-coverUrl why-coverUrl" : "why-coverUrl"} />
-												</label>
-											</details>
-										</div>
+									{(fieldHealth("coverUrl") || fieldHealth("preferredCoverUrl")) && <p id="help-coverUrl" class="field-warning"><span class="sr-only">{severityLabel((fieldHealth("coverUrl") || fieldHealth("preferredCoverUrl"))!.issue.severity)}: </span>{(fieldHealth("coverUrl") || fieldHealth("preferredCoverUrl"))!.helper}</p>}
+									<div class="cover-actions">
+										<label class="upload-button">
+											<span>Upload new cover</span>
+											<input type="file" accept="image/jpeg,image/png,image/webp" data-cover-file />
+										</label>
+										<button type="button" class="secondary-button" data-cover-remove>Remove</button>
 									</div>
-								</fieldset>
-								<fieldset id="field-externalIdentifiers" class={fieldClass("externalIdentifiers", "field-group")} data-health-field="externalIdentifiers">
-									<legend>External Identifiers {fieldHealth("externalIdentifiers") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</legend>
-									{fieldHealth("externalIdentifiers") && <p id="help-externalIdentifiers" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("externalIdentifiers")!.issue.severity)}: </span>{fieldHealth("externalIdentifiers")!.helper}</p>}
-									<p id="why-externalIdentifiers" class="why-note"><strong>Used for:</strong> Search dedupe, provider matching, import cleanup.</p>
-									<div class="field-grid two">
+									<details class="advanced-field">
+										<summary>Use image URL instead</summary>
 										<label>
-											<span>ISBN-10</span>
-											<input name="isbn10" value={selectedEdition?.isbn10 || ""} maxlength="40" />
+											<span>Cover URL</span>
+											<input value={displayCoverUrl} maxlength="2000" data-cover-url-input />
 										</label>
-										<label>
-											<span>ISBN-13</span>
-											<input name="isbn13" value={selectedEdition?.isbn13 || ""} maxlength="40" />
-										</label>
-										<label>
-											<span>Google Books ID</span>
-											<input name="googleBooksId" value={selectedEdition?.googleBooksId || ""} maxlength="200" />
-										</label>
-										<label>
-											<span>Open Library Work ID</span>
-											<input name="openLibraryWorkId" value={selectedEdition?.openLibraryWorkId || ""} maxlength="200" />
-										</label>
-										<label>
-											<span>Open Library Edition ID</span>
-											<input name="openLibraryEditionId" value={selectedEdition?.openLibraryEditionId || ""} maxlength="200" />
-										</label>
-									</div>
-								</fieldset>
-								<p class="note">Edition provenance: {String(editionProvenance.source || "Existing DogEared data")} · Updated {formatDate(selectedEdition?.updatedAt)}</p>
-							</>
-						)}
+									</details>
+								</div>
+							</div>
+						</fieldset>
+						<details id="field-externalIdentifiers" class={fieldClass("externalIdentifiers", "advanced-metadata")} data-health-field="externalIdentifiers">
+							<summary>Advanced metadata {fieldHealth("externalIdentifiers") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</summary>
+							{fieldHealth("externalIdentifiers") && <p id="help-externalIdentifiers" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("externalIdentifiers")!.issue.severity)}: </span>{fieldHealth("externalIdentifiers")!.helper}</p>}
+							<div class="field-grid two">
+								<label>
+									<span>Canonical title</span>
+									<input name="canonicalTitle" value={editor.work.canonicalTitle} maxlength="500" />
+								</label>
+								<label>
+									<span>ISBN-10</span>
+									<input name="isbn10" value={selectedEdition?.isbn10 || ""} maxlength="40" />
+								</label>
+								<label>
+									<span>ISBN-13</span>
+									<input name="isbn13" value={selectedEdition?.isbn13 || ""} maxlength="40" />
+								</label>
+								<label>
+									<span>Google Books ID</span>
+									<input name="googleBooksId" value={selectedEdition?.googleBooksId || ""} maxlength="200" />
+								</label>
+								<label>
+									<span>Open Library Work ID</span>
+									<input name="openLibraryWorkId" value={selectedEdition?.openLibraryWorkId || ""} maxlength="200" />
+								</label>
+								<label>
+									<span>Open Library Edition ID</span>
+									<input name="openLibraryEditionId" value={selectedEdition?.openLibraryEditionId || ""} maxlength="200" />
+								</label>
+							</div>
+						</details>
+						<p class="note">Source: {String(editionProvenance.source || workProvenance.source || "Existing DogEared data")} · Manually reviewed fields are protected from automated refreshes · Updated {formatDate(selectedEdition?.updatedAt || editor.work.updatedAt)}</p>
 					</section>
 
 					<section id="impact-preview" class="panel">
@@ -770,6 +757,11 @@ function issueTarget(issue: CatalogHealthIssue) {
 		line-height: 1.35;
 	}
 	.why-note strong { color: #444; font-weight: 800; }
+	.subsection-note {
+		margin: 0.4rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.86rem;
+	}
 	.span-two { grid-column: 1 / -1; }
 	.edition-select { margin-top: 0.8rem; }
 	.edition-switch {
@@ -784,6 +776,52 @@ function issueTarget(issue: CatalogHealthIssue) {
 		color: var(--color-text-muted);
 		font-size: 0.86rem;
 		font-weight: 700;
+	}
+	.series-combobox {
+		align-content: start;
+	}
+	.series-actions,
+	.cover-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.45rem;
+		align-items: center;
+	}
+	.secondary-button,
+	.upload-button > span {
+		display: inline-flex;
+		align-items: center;
+		min-height: 34px;
+		border: var(--border-subtle);
+		border-radius: var(--radius-pill);
+		background: rgba(255, 255, 255, 0.72);
+		color: var(--color-nav);
+		cursor: pointer;
+		font: inherit;
+		font-size: 0.84rem;
+		font-weight: 800;
+		padding: 0.35rem 0.68rem;
+	}
+	.secondary-button:hover,
+	.upload-button > span:hover {
+		color: var(--color-nav-hover);
+		background: #fff;
+	}
+	.upload-button {
+		display: inline-flex;
+	}
+	.upload-button input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		opacity: 0;
+		pointer-events: none;
+	}
+	[data-format-field].is-secondary {
+		opacity: 0.72;
+	}
+	[data-format-field].is-hidden-for-format {
+		display: none;
 	}
 	.cover-editor {
 		display: grid;
@@ -842,13 +880,20 @@ function issueTarget(issue: CatalogHealthIssue) {
 	.advanced-field {
 		margin-top: 0.2rem;
 	}
-	.advanced-field summary {
+	.advanced-field summary,
+	.advanced-metadata summary {
 		color: var(--color-nav);
 		cursor: pointer;
 		font-weight: 800;
 	}
-	.advanced-field summary:hover { color: var(--color-nav-hover); }
+	.advanced-field summary:hover,
+	.advanced-metadata summary:hover { color: var(--color-nav-hover); }
 	.advanced-field label { margin-top: 0.45rem; }
+	.advanced-metadata {
+		margin-top: 1rem;
+		border-top: 1px solid rgba(87, 117, 144, 0.22);
+		padding-top: 0.8rem;
+	}
 	.grid { display: grid; gap: 0.55rem; margin-top: 0.7rem; }
 	.grid.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 	.stat { border: var(--border-subtle); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.56); padding: 0.6rem; }
@@ -904,9 +949,166 @@ function issueTarget(issue: CatalogHealthIssue) {
 </style>
 
 <script>
+	const form = document.getElementById("catalog-editor");
 	const summary = document.querySelector("[data-health-summary]");
 	const countNode = summary?.querySelector("[data-health-summary-count]");
 	const issueNodes = Array.from(document.querySelectorAll("[data-health-summary-item]"));
+	const selectedEditionId = Number(form?.getAttribute("data-selected-edition-id") || 0) || 0;
+	const seriesSearch = document.querySelector("[data-series-search]");
+	const seriesIdInput = document.querySelector("[data-series-id]");
+	const seriesCreateNameInput = document.querySelector("[data-series-create-name]");
+	const seriesCreateButton = document.querySelector("[data-series-create]");
+	const seriesClearButton = document.querySelector("[data-series-clear]");
+	const seriesPositionInput = document.querySelector("[data-series-position]");
+	const seriesOptions = Array.from(document.querySelectorAll("#series-options option")).map((option) => ({
+		id: Number(option.getAttribute("data-id") || 0) || 0,
+		name: option.value || ""
+	}));
+	const coverUrlInput = document.querySelector("[data-cover-url]");
+	const preferredCoverUrlInput = document.querySelector("[data-preferred-cover-url]");
+	const coverSourceInput = document.querySelector("[data-cover-source]");
+	const coverFileInput = document.querySelector("[data-cover-file]");
+	const coverUrlTextInput = document.querySelector("[data-cover-url-input]");
+	const coverRemoveButton = document.querySelector("[data-cover-remove]");
+	const coverProvenance = document.querySelector("[data-cover-provenance]");
+	const formatSelect = document.querySelector("[data-format-select]");
+	const formatHelp = document.querySelector("[data-format-help]");
+	let isSubmittingCatalogEditor = false;
+
+	function normalizeSeriesName(value) {
+		return String(value || "").trim().toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+	}
+	function syncSeriesState() {
+		if (!(seriesSearch instanceof HTMLInputElement)) return;
+		if (!(seriesIdInput instanceof HTMLInputElement)) return;
+		if (!(seriesCreateNameInput instanceof HTMLInputElement)) return;
+		const raw = seriesSearch.value.trim();
+		const matched = seriesOptions.find((option) => normalizeSeriesName(option.name) === normalizeSeriesName(raw));
+		if (!raw) {
+			seriesIdInput.value = "0";
+			seriesCreateNameInput.value = "";
+			if (seriesCreateButton instanceof HTMLElement) seriesCreateButton.hidden = true;
+			if (seriesPositionInput instanceof HTMLInputElement) {
+				seriesPositionInput.value = "";
+				seriesPositionInput.disabled = true;
+			}
+			return;
+		}
+		if (matched?.id) {
+			seriesIdInput.value = String(matched.id);
+			seriesCreateNameInput.value = "";
+			if (seriesCreateButton instanceof HTMLElement) seriesCreateButton.hidden = true;
+		} else {
+			seriesIdInput.value = "0";
+			seriesCreateNameInput.value = raw;
+			if (seriesCreateButton instanceof HTMLButtonElement) {
+				seriesCreateButton.hidden = false;
+				seriesCreateButton.textContent = `Create "${raw}"`;
+			}
+		}
+		if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
+	}
+	seriesSearch?.addEventListener("input", syncSeriesState);
+	seriesSearch?.addEventListener("change", syncSeriesState);
+	seriesCreateButton?.addEventListener("click", () => {
+		if (!(seriesSearch instanceof HTMLInputElement)) return;
+		if (seriesCreateNameInput instanceof HTMLInputElement) seriesCreateNameInput.value = seriesSearch.value.trim();
+		if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
+	});
+	seriesClearButton?.addEventListener("click", () => {
+		if (seriesSearch instanceof HTMLInputElement) seriesSearch.value = "";
+		syncSeriesState();
+		refreshHealthState();
+	});
+
+	function ensureCoverImageNode() {
+		const existing = document.querySelector("[data-cover-preview]");
+		if (existing instanceof HTMLImageElement) return existing;
+		const preview = document.querySelector(".cover-preview");
+		if (!(preview instanceof HTMLElement)) return null;
+		const img = document.createElement("img");
+		img.setAttribute("alt", "Selected cover preview");
+		img.setAttribute("data-cover-preview", "");
+		img.loading = "lazy";
+		img.decoding = "async";
+		preview.replaceChildren(img);
+		return img;
+	}
+	function setCoverValue(value, source) {
+		const next = String(value || "").trim();
+		const targetInput = selectedEditionId > 0 ? coverUrlInput : preferredCoverUrlInput;
+		if (targetInput instanceof HTMLInputElement) targetInput.value = next;
+		if (coverSourceInput instanceof HTMLInputElement) coverSourceInput.value = source || "";
+		if (coverUrlTextInput instanceof HTMLInputElement) coverUrlTextInput.value = next;
+		if (next) {
+			const img = ensureCoverImageNode();
+			if (img) img.src = next;
+		} else {
+			const preview = document.querySelector(".cover-preview");
+			if (preview instanceof HTMLElement) preview.innerHTML = '<span class="cover-placeholder" aria-hidden="true" data-cover-placeholder><span class="material-icons">menu_book</span></span>';
+		}
+		if (coverProvenance instanceof HTMLElement && source) {
+			coverProvenance.textContent = source === "upload" ? "Source: Admin upload" : source === "url" ? "Source: Admin URL" : "No cover selected";
+		}
+		refreshHealthState();
+	}
+	coverFileInput?.addEventListener("change", async () => {
+		if (!(coverFileInput instanceof HTMLInputElement)) return;
+		const file = coverFileInput.files?.[0];
+		if (!file) return;
+		const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
+		if (!allowed.has(file.type)) {
+			window.alert("Choose a JPEG, PNG, or WebP image.");
+			coverFileInput.value = "";
+			return;
+		}
+		if (file.size > 750_000) {
+			window.alert("Choose a cover image under 750KB.");
+			coverFileInput.value = "";
+			return;
+		}
+		try {
+			const reader = new FileReader();
+			const dataUrl = await new Promise((resolve, reject) => {
+				reader.onload = () => resolve(String(reader.result || ""));
+				reader.onerror = () => reject(new Error("Failed to read cover."));
+				reader.readAsDataURL(file);
+			});
+			setCoverValue(dataUrl, "upload");
+		} catch {
+			window.alert("Failed to load cover image.");
+		}
+	});
+	coverUrlTextInput?.addEventListener("change", () => {
+		if (coverUrlTextInput instanceof HTMLInputElement) setCoverValue(coverUrlTextInput.value, coverUrlTextInput.value.trim() ? "url" : "");
+	});
+	coverRemoveButton?.addEventListener("click", () => {
+		const editionCover = coverUrlInput instanceof HTMLInputElement ? coverUrlInput.value.trim() : "";
+		if (selectedEditionId > 0 && editionCover) {
+			if (coverUrlInput instanceof HTMLInputElement) coverUrlInput.value = "";
+		} else if (preferredCoverUrlInput instanceof HTMLInputElement) {
+			preferredCoverUrlInput.value = "";
+		}
+		setCoverValue("", "remove");
+	});
+
+	function refreshFormatFields() {
+		const value = formatSelect instanceof HTMLSelectElement ? formatSelect.value : "";
+		for (const node of document.querySelectorAll("[data-format-field]")) {
+			const formats = String(node.getAttribute("data-format-field") || "").split(/\s+/).filter(Boolean);
+			const show = !value || formats.includes(value);
+			node.classList.toggle("is-hidden-for-format", !show);
+			node.classList.toggle("is-secondary", value === "ebook" && node.getAttribute("data-format-field") === "physical ebook");
+		}
+		if (formatHelp instanceof HTMLElement) {
+			if (!value) formatHelp.textContent = "Choose a format so DogEared can determine which length metadata is relevant.";
+			else if (value === "audiobook") formatHelp.textContent = "Audiobooks use duration for progress normalization. Page count is optional unless this Edition also has print metadata.";
+			else if (value === "ebook") formatHelp.textContent = "Ebooks use page count when available. Location count can help with Kindle-style progress.";
+			else formatHelp.textContent = "Physical books use page count for page and percentage progress.";
+		}
+	}
+	formatSelect?.addEventListener("change", refreshFormatFields);
+
 	const initialFieldValues = new Map();
 	for (const container of document.querySelectorAll("[data-health-field]")) {
 		const field = container.getAttribute("data-health-field") || "";
@@ -950,6 +1152,24 @@ function issueTarget(issue: CatalogHealthIssue) {
 	});
 	document.addEventListener("change", (event) => {
 		if (event.target instanceof HTMLSelectElement || event.target instanceof HTMLInputElement) refreshHealthState();
+	});
+	function snapshotForm() {
+		if (!(form instanceof HTMLFormElement)) return "";
+		return Array.from(new FormData(form).entries()).map(([key, value]) => `${key}=${value instanceof File ? `${value.name}:${value.size}` : String(value)}`).join("&");
+	}
+	let initialFormSnapshot = "";
+	queueMicrotask(() => {
+		syncSeriesState();
+		refreshFormatFields();
+		initialFormSnapshot = snapshotForm();
+	});
+	form?.addEventListener("submit", () => {
+		isSubmittingCatalogEditor = true;
+	});
+	window.addEventListener("beforeunload", (event) => {
+		if (isSubmittingCatalogEditor || !initialFormSnapshot || snapshotForm() === initialFormSnapshot) return;
+		event.preventDefault();
+		event.returnValue = "";
 	});
 	for (const link of document.querySelectorAll("[data-health-summary-link]")) {
 		link.addEventListener("click", (event) => {
