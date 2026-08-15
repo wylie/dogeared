@@ -234,11 +234,35 @@ const editingEditionFields = isAddingEdition || !!selectedEdition;
 const preferredEditionId = editor?.work.preferredEditionId && editor.editions.some((edition) => edition.id === editor.work.preferredEditionId)
 	? editor.work.preferredEditionId
 	: editor?.editions[0]?.id || 0;
+const languageOptions = [
+	{ value: "en", label: "English" },
+	{ value: "es", label: "Spanish" },
+	{ value: "fr", label: "French" },
+	{ value: "de", label: "German" },
+	{ value: "it", label: "Italian" },
+	{ value: "ja", label: "Japanese" },
+	{ value: "ko", label: "Korean" },
+	{ value: "pt", label: "Portuguese" },
+	{ value: "zh", label: "Chinese" }
+];
+const selectedLanguageValue = String(selectedEdition?.language || "").trim().toLowerCase();
+const hasKnownLanguage = languageOptions.some((language) => language.value === selectedLanguageValue);
+function coverProviderLabel(source: unknown, url: unknown) {
+	const normalizedSource = String(source || "").trim();
+	if (/admin upload/i.test(normalizedSource)) return "Admin upload";
+	if (/admin url/i.test(normalizedSource)) return "Admin URL";
+	if (/google/i.test(normalizedSource)) return "Google Books";
+	if (/open library/i.test(normalizedSource)) return "Open Library";
+	const normalizedUrl = String(url || "").trim();
+	if (/books\.google|googleusercontent/i.test(normalizedUrl)) return "Google Books";
+	if (/openlibrary|covers\.openlibrary/i.test(normalizedUrl)) return "Open Library";
+	return normalizedSource && !/existing dogeared data/i.test(normalizedSource) ? normalizedSource : "Existing DogEared data";
+}
 const displayCoverUrl = selectedEdition?.coverUrl || editor?.work.preferredCoverUrl || "";
 const displayCoverSource = selectedEdition?.coverUrl
-	? String(editionProvenance.source || "Existing DogEared data")
+	? `Edition cover · ${coverProviderLabel(editionProvenance.source, selectedEdition.coverUrl)}`
 	: editor?.work.preferredCoverUrl
-		? "Work fallback"
+		? `Work fallback cover · ${coverProviderLabel(workProvenance.source, editor.work.preferredCoverUrl)}`
 		: "No cover selected";
 const selectedEditionHasCover = !!selectedEdition?.coverUrl;
 const coverLayerNote = selectedEdition?.coverUrl
@@ -377,31 +401,37 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 							<div class="field-grid two">
 								<label id="field-workTitle" class={fieldClass("workTitle")} data-health-field="workTitle">
 									<span class="field-label">Title {fieldHealth("workTitle") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-									<input name="workTitle" value={editor.work.title} required maxlength="500" aria-describedby={fieldHealth("workTitle") ? "help-workTitle why-workTitle" : undefined} />
+									<input name="workTitle" value={editor.work.title} required maxlength="500" placeholder="The Last Graduate" aria-describedby={fieldHealth("workTitle") ? "help-workTitle why-workTitle" : "why-workTitle"} />
 									{fieldHealth("workTitle") && <p id="help-workTitle" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("workTitle")!.issue.severity)}: </span>{fieldHealth("workTitle")!.helper}</p>}
+									<p id="why-workTitle" class="why-note">Shared book title, without Series numbering when possible.</p>
 								</label>
 								<label id="field-primaryAuthor" class={fieldClass("primaryAuthor")} data-health-field="primaryAuthor">
 									<span class="field-label">Primary author {fieldHealth("primaryAuthor") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-									<input name="primaryAuthor" value={editor.work.primaryAuthor} maxlength="300" aria-describedby={fieldHealth("primaryAuthor") ? "help-primaryAuthor why-primaryAuthor" : undefined} />
+									<input name="primaryAuthor" value={editor.work.primaryAuthor} maxlength="300" placeholder="Naomi Novik" aria-describedby={fieldHealth("primaryAuthor") ? "help-primaryAuthor why-primaryAuthor" : "why-primaryAuthor"} />
 									{fieldHealth("primaryAuthor") && <p id="help-primaryAuthor" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("primaryAuthor")!.issue.severity)}: </span>{fieldHealth("primaryAuthor")!.helper}</p>}
+									<p id="why-primaryAuthor" class="why-note">Main credited author shown on reader-facing pages.</p>
 								</label>
 								<label id="field-originalPublicationYear" class={fieldClass("originalPublicationYear")} data-health-field="originalPublicationYear">
 									<span class="field-label">Original publication year {fieldHealth("originalPublicationYear") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-									<input name="originalPublicationYear" inputmode="numeric" value={editor.work.originalPublicationYear > 0 ? String(editor.work.originalPublicationYear) : ""} aria-describedby={fieldHealth("originalPublicationYear") ? "help-originalPublicationYear why-originalPublicationYear" : undefined} />
+									<input name="originalPublicationYear" type="number" min="1400" max="2100" step="1" inputmode="numeric" value={editor.work.originalPublicationYear > 0 ? String(editor.work.originalPublicationYear) : ""} placeholder="2021" aria-describedby={fieldHealth("originalPublicationYear") ? "help-originalPublicationYear why-originalPublicationYear" : "why-originalPublicationYear"} />
 									{fieldHealth("originalPublicationYear") && <p id="help-originalPublicationYear" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("originalPublicationYear")!.issue.severity)}: </span>{fieldHealth("originalPublicationYear")!.helper}</p>}
+									<p id="why-originalPublicationYear" class="why-note">Year the book was first published, regardless of this Edition.</p>
 								</label>
 								<label id="field-description" class={fieldClass("description", "span-two")} data-health-field="description">
 									<span class="field-label">Description {fieldHealth("description") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-									<textarea name="description" rows="5" aria-describedby={fieldHealth("description") ? "help-description why-description" : "why-description"}>{editor.work.description}</textarea>
+									<textarea name="description" rows="5" placeholder="A concise reader-facing description." aria-describedby={fieldHealth("description") ? "help-description why-description" : "why-description"}>{editor.work.description}</textarea>
 									{fieldHealth("description") && <p id="help-description" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("description")!.issue.severity)}: </span>{fieldHealth("description")!.helper}</p>}
+									<p id="why-description" class="why-note">Reader-facing synopsis for the shared book.</p>
 								</label>
 								<label class="span-two">
 									<span>Subjects</span>
-									<textarea name="subjects" rows="2">{editor.work.subjects.join(", ")}</textarea>
+									<textarea name="subjects" rows="2" placeholder="Magic schools, coming of age">{editor.work.subjects.join(", ")}</textarea>
+									<p class="why-note">Comma-separated topics or provider subjects.</p>
 								</label>
 								<label class="span-two">
 									<span>Genres</span>
-									<textarea name="genres" rows="2">{editor.work.genres.join(", ")}</textarea>
+									<textarea name="genres" rows="2" placeholder="Fantasy, Young Adult">{editor.work.genres.join(", ")}</textarea>
+									<p class="why-note">Reader-facing genre labels. Keep these broad and recognizable.</p>
 								</label>
 							</div>
 						</fieldset>
@@ -424,11 +454,13 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 									<p class="series-selected" data-series-selected hidden={editor.work.seriesId <= 0}>Selected: <strong>{editor.work.seriesName}</strong></p>
 									<button type="button" class="secondary-button series-remove-button" data-series-clear hidden={editor.work.seriesId <= 0}>Remove Series</button>
 									{fieldHealth("seriesId") && <p id="help-seriesId" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("seriesId")!.issue.severity)}: </span>{fieldHealth("seriesId")!.helper}</p>}
+									<p id="why-seriesId" class="why-note">Search for an existing Series or create a new one.</p>
 								</div>
 								<label id="field-seriesPosition" class={fieldClass("seriesPosition", "series-position-field")} data-health-field="seriesPosition">
 									<span class="field-label">Series position {fieldHealth("seriesPosition") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-									<input name="seriesPosition" inputmode="decimal" value={editor.work.seriesPosition} aria-describedby={fieldHealth("seriesPosition") ? "help-seriesPosition why-seriesPosition" : "why-seriesPosition"} data-series-position disabled={editor.work.seriesId <= 0} />
+									<input name="seriesPosition" type="number" min="1" step="1" inputmode="numeric" value={editor.work.seriesPosition} placeholder="2" aria-describedby={fieldHealth("seriesPosition") ? "help-seriesPosition why-seriesPosition" : "why-seriesPosition"} data-series-position disabled={editor.work.seriesId <= 0} />
 									{fieldHealth("seriesPosition") && <p id="help-seriesPosition" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("seriesPosition")!.issue.severity)}: </span>{fieldHealth("seriesPosition")!.helper}</p>}
+									<p id="why-seriesPosition" class="why-note">Enter the book's number in the Series, e.g. 2. DogEared derives totals like Book 2 of 3.</p>
 								</label>
 							</div>
 						</fieldset>
@@ -450,32 +482,43 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 												))}
 											</select>
 											{fieldHealth("editionFormat") && <p id="help-editionFormat" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("editionFormat")!.issue.severity)}: </span>{fieldHealth("editionFormat")!.helper}</p>}
-											<p id="why-editionFormat" class="why-note">Choose a format so DogEared can show the relevant length fields.</p>
+											<p id="why-editionFormat" class="why-note">Format of the Edition you are currently editing.</p>
 										</label>
 										<label id="field-publisher" class={fieldClass("publisher")} data-health-field="publisher">
 											<span class="field-label">Publisher {fieldHealth("publisher") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-											<input name="publisher" value={selectedEdition?.publisher || ""} maxlength="300" aria-describedby={fieldHealth("publisher") ? "help-publisher why-publisher" : "why-publisher"} />
+											<input name="publisher" value={selectedEdition?.publisher || ""} maxlength="300" placeholder="Random House" aria-describedby={fieldHealth("publisher") ? "help-publisher why-publisher" : "why-publisher"} />
 											{fieldHealth("publisher") && <p id="help-publisher" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("publisher")!.issue.severity)}: </span>{fieldHealth("publisher")!.helper}</p>}
+											<p id="why-publisher" class="why-note">Publisher of this specific Edition.</p>
 										</label>
 										<label class="field-control">
 											<span>Publication date</span>
-											<input name="publicationDate" value={selectedEdition?.publicationDate || ""} maxlength="80" />
+											<input name="publicationDate" value={selectedEdition?.publicationDate || ""} maxlength="80" placeholder="2021-09-28" aria-describedby="why-publicationDate" data-publication-date />
+											<p id="why-publicationDate" class="why-note">Publication date of this specific Edition. Use YYYY-MM-DD when known.</p>
 										</label>
 										<label id="field-publicationYear" class={fieldClass("publicationYear")} data-health-field="publicationYear">
 											<span class="field-label">Publication year {fieldHealth("publicationYear") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-											<input name="publicationYear" inputmode="numeric" value={selectedEdition && selectedEdition.publicationYear > 0 ? String(selectedEdition.publicationYear) : ""} aria-describedby={fieldHealth("publicationYear") ? "help-publicationYear why-publicationYear" : "why-publicationYear"} />
+											<input name="publicationYear" type="number" min="1400" max="2100" step="1" inputmode="numeric" value={selectedEdition && selectedEdition.publicationYear > 0 ? String(selectedEdition.publicationYear) : ""} placeholder="2021" aria-describedby={fieldHealth("publicationYear") ? "help-publicationYear why-publicationYear" : "why-publicationYear"} data-publication-year />
 											{fieldHealth("publicationYear") && <p id="help-publicationYear" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("publicationYear")!.issue.severity)}: </span>{fieldHealth("publicationYear")!.helper}</p>}
+											<p id="why-publicationYear" class="why-note">Edition year. DogEared can fill this from Publication date when the year is clear.</p>
 										</label>
 										<label class="field-control">
 											<span>Language</span>
-											<input name="language" value={selectedEdition?.language || ""} maxlength="80" />
+											<select name="language" aria-describedby="why-language">
+												<option value="" selected={!selectedLanguageValue}>Choose language...</option>
+												{!hasKnownLanguage && selectedLanguageValue ? <option value={selectedLanguageValue} selected>{selectedEdition?.language}</option> : null}
+												{languageOptions.map((language) => (
+													<option value={language.value} selected={language.value === selectedLanguageValue}>{language.label}</option>
+												))}
+											</select>
+											<p id="why-language" class="why-note">Language for this Edition. DogEared stores the standard code underneath.</p>
 										</label>
 									</div>
 									<details class="advanced-field" open={editionTitleIsUseful}>
 										<summary>Edition title</summary>
 										<label>
 											<span>Edition title or subtitle</span>
-											<input name="editionTitle" value={selectedEdition?.title || ""} maxlength="500" />
+											<input name="editionTitle" value={selectedEdition?.title || ""} maxlength="500" placeholder="Special illustrated edition" />
+											<p class="why-note">Use only when this Edition has a distinct title or subtitle.</p>
 										</label>
 									</details>
 								</>
@@ -487,23 +530,27 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 							<div class="field-grid two">
 								<label id="field-pageCount" class={fieldClass("pageCount")} data-health-field="pageCount" data-format-field="physical ebook">
 									<span class="field-label">Page count {fieldHealth("pageCount") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-									<input name="pageCount" inputmode="numeric" value={selectedEdition && selectedEdition.pageCount > 0 ? String(selectedEdition.pageCount) : ""} aria-describedby={fieldHealth("pageCount") ? "help-pageCount why-pageCount" : "why-pageCount"} />
+									<input name="pageCount" type="number" min="1" step="1" inputmode="numeric" value={selectedEdition && selectedEdition.pageCount > 0 ? String(selectedEdition.pageCount) : ""} placeholder="400" aria-describedby={fieldHealth("pageCount") ? "help-pageCount why-pageCount" : "why-pageCount"} />
 									{fieldHealth("pageCount") && <p id="help-pageCount" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("pageCount")!.issue.severity)}: </span>{fieldHealth("pageCount")!.helper}</p>}
+									<p id="why-pageCount" class="why-note">Total number of pages in this Edition.</p>
 								</label>
 								<label id="field-duration" class={fieldClass("duration")} data-health-field="duration" data-format-field="audiobook">
 									<span class="field-label">Audiobook duration {fieldHealth("duration") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-									<input name="duration" value={formatDuration(selectedEdition?.durationSeconds || 0)} placeholder="11 hr 24 min" aria-describedby={fieldHealth("duration") ? "help-duration why-duration" : "why-duration"} />
+									<input name="duration" value={formatDuration(selectedEdition?.durationSeconds || 0)} placeholder="13 hr 24 min" aria-describedby={fieldHealth("duration") ? "help-duration why-duration" : "why-duration"} />
 									{fieldHealth("duration") && <p id="help-duration" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("duration")!.issue.severity)}: </span>{fieldHealth("duration")!.helper}</p>}
+									<p id="why-duration" class="why-note">Total running time of this audiobook Edition.</p>
 								</label>
 										<label id="field-locationCount" class={fieldClass("locationCount")} data-health-field="locationCount" data-format-field="ebook">
-											<span class="field-label">Location count {fieldHealth("locationCount") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-											<input name="locationCount" inputmode="numeric" value={selectedEdition && selectedEdition.locationCount > 0 ? String(selectedEdition.locationCount) : ""} aria-describedby={fieldHealth("locationCount") ? "help-locationCount why-locationCount" : "why-locationCount"} />
+											<span class="field-label">Total ebook locations {fieldHealth("locationCount") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
+											<input name="locationCount" type="number" min="1" step="1" inputmode="numeric" value={selectedEdition && selectedEdition.locationCount > 0 ? String(selectedEdition.locationCount) : ""} placeholder="5120" aria-describedby={fieldHealth("locationCount") ? "help-locationCount why-locationCount" : "why-locationCount"} />
 											{fieldHealth("locationCount") && <p id="help-locationCount" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("locationCount")!.issue.severity)}: </span>{fieldHealth("locationCount")!.helper}</p>}
+											<p id="why-locationCount" class="why-note">Total location count used by this ebook Edition, when available.</p>
 										</label>
 										<label id="field-chapterCount" class={fieldClass("chapterCount")} data-health-field="chapterCount">
 											<span class="field-label">Chapter count {fieldHealth("chapterCount") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-											<input name="chapterCount" inputmode="numeric" value={selectedEdition && selectedEdition.chapterCount > 0 ? String(selectedEdition.chapterCount) : ""} aria-describedby={fieldHealth("chapterCount") ? "help-chapterCount why-chapterCount" : "why-chapterCount"} />
+											<input name="chapterCount" type="number" min="1" step="1" inputmode="numeric" value={selectedEdition && selectedEdition.chapterCount > 0 ? String(selectedEdition.chapterCount) : ""} placeholder="32" aria-describedby={fieldHealth("chapterCount") ? "help-chapterCount why-chapterCount" : "why-chapterCount"} />
 											{fieldHealth("chapterCount") && <p id="help-chapterCount" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("chapterCount")!.issue.severity)}: </span>{fieldHealth("chapterCount")!.helper}</p>}
+											<p id="why-chapterCount" class="why-note">Total number of chapters in this Edition, when known.</p>
 										</label>
 							</div>
 						</fieldset>
@@ -530,7 +577,8 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 										<summary>Use image URL instead</summary>
 										<label>
 											<span>Edition cover URL</span>
-											<input value={selectedEdition?.coverUrl || ""} maxlength="2000" data-cover-url-input />
+											<input value={selectedEdition?.coverUrl || ""} maxlength="2000" placeholder="https://..." data-cover-url-input />
+											<p class="why-note">Creates or replaces the selected Edition's cover.</p>
 										</label>
 									</details>
 								</div>
@@ -542,31 +590,38 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 							<div class="field-grid two">
 								<label>
 									<span>Canonical title</span>
-									<input name="canonicalTitle" value={editor.work.canonicalTitle} maxlength="500" />
+									<input name="canonicalTitle" value={editor.work.canonicalTitle} maxlength="500" placeholder="The Last Graduate" />
+									<p class="why-note">Advanced title used for matching when provider titles disagree.</p>
 								</label>
 								<label id="field-preferredCoverUrl" class={fieldClass("preferredCoverUrl")} data-health-field="preferredCoverUrl">
 									<span class="field-label">Work fallback cover URL {fieldHealth("preferredCoverUrl") && <span class="material-icons warning-icon" aria-hidden="true">warning</span>}</span>
-									<input name="preferredCoverUrl" value={editor.work.preferredCoverUrl} maxlength="2000" data-preferred-cover-url />
+									<input name="preferredCoverUrl" value={editor.work.preferredCoverUrl} maxlength="2000" placeholder="https://..." data-preferred-cover-url />
+									<p class="why-note">Fallback used when the selected Edition has no cover.</p>
 								</label>
 								<label>
 									<span>ISBN-10</span>
-									<input name="isbn10" value={selectedEdition?.isbn10 || ""} maxlength="40" />
+									<input name="isbn10" value={selectedEdition?.isbn10 || ""} maxlength="40" placeholder="0593321203" />
+									<p class="why-note">10-digit identifier for this Edition.</p>
 								</label>
 								<label>
 									<span>ISBN-13</span>
-									<input name="isbn13" value={selectedEdition?.isbn13 || ""} maxlength="40" />
+									<input name="isbn13" value={selectedEdition?.isbn13 || ""} maxlength="40" placeholder="9780593321201" />
+									<p class="why-note">13-digit identifier for this Edition.</p>
 								</label>
 								<label>
 									<span>Google Books ID</span>
-									<input name="googleBooksId" value={selectedEdition?.googleBooksId || ""} maxlength="200" />
+									<input name="googleBooksId" value={selectedEdition?.googleBooksId || ""} maxlength="200" placeholder="abc123" />
+									<p class="why-note">Google Books identifier for this Edition.</p>
 								</label>
 								<label>
 									<span>Open Library Work ID</span>
-									<input name="openLibraryWorkId" value={selectedEdition?.openLibraryWorkId || ""} maxlength="200" />
+									<input name="openLibraryWorkId" value={selectedEdition?.openLibraryWorkId || ""} maxlength="200" placeholder="OL12345W" />
+									<p class="why-note">Open Library identifier for the shared book.</p>
 								</label>
 								<label>
 									<span>Open Library Edition ID</span>
-									<input name="openLibraryEditionId" value={selectedEdition?.openLibraryEditionId || ""} maxlength="200" />
+									<input name="openLibraryEditionId" value={selectedEdition?.openLibraryEditionId || ""} maxlength="200" placeholder="OL12345M" />
+									<p class="why-note">Open Library identifier for this specific Edition.</p>
 								</label>
 							</div>
 						</details>
@@ -1227,6 +1282,8 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	const coverUploadStatus = document.querySelector("[data-cover-upload-status]");
 	const formatSelect = document.querySelector("[data-format-select]");
 	const formatHelp = document.querySelector("[data-format-help]");
+	const publicationDateInput = document.querySelector("[data-publication-date]");
+	const publicationYearInput = document.querySelector("[data-publication-year]");
 	const saveBar = document.querySelector("[data-save-bar]");
 	const saveButton = document.querySelector("[data-save-button]");
 	const discardButton = document.querySelector("[data-discard-changes]");
@@ -1382,12 +1439,12 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		if (coverProvenance instanceof HTMLElement) {
 			coverProvenance.textContent = hasEditionCover
 				? source === "upload"
-					? "Source: Admin upload"
+					? "Source: Edition cover · Admin upload"
 					: source === "url"
-						? "Source: Admin URL"
-						: "Source: Edition cover"
+						? "Source: Edition cover · Admin URL"
+						: "Source: Edition cover · Existing DogEared data"
 				: workFallbackCover
-					? "Source: Work fallback"
+					? "Source: Work fallback cover"
 					: "No cover selected";
 		}
 		if (coverLayerNote instanceof HTMLElement) {
@@ -1498,6 +1555,10 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	function positiveNumber(value) {
 		return Number(String(value || "").trim()) > 0;
 	}
+	function positiveWholeNumber(value) {
+		const parsed = Number(String(value || "").trim());
+		return Number.isInteger(parsed) && parsed > 0;
+	}
 	function durationLooksValid(value) {
 		const raw = String(value || "").trim();
 		return raw !== "" && /\d/.test(raw);
@@ -1510,7 +1571,7 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	}
 	function isFieldValidNow(field) {
 		if (field === "seriesId") return seriesIdInput instanceof HTMLInputElement && Number(seriesIdInput.value || 0) > 0 || seriesCreateNameInput instanceof HTMLInputElement && seriesCreateNameInput.value.trim() !== "";
-		if (field === "seriesPosition") return !(seriesIdInput instanceof HTMLInputElement) || Number(seriesIdInput.value || 0) <= 0 || fieldControlValue(field) !== "";
+		if (field === "seriesPosition") return !(seriesIdInput instanceof HTMLInputElement) || Number(seriesIdInput.value || 0) <= 0 || positiveWholeNumber(fieldControlValue(field));
 		if (field === "editionFormat") return formatSelect instanceof HTMLSelectElement && formatSelect.value !== "";
 		if (field === "pageCount") return formatSelect instanceof HTMLSelectElement && formatSelect.value === "audiobook" ? true : positiveNumber(fieldControlValue(field));
 		if (field === "duration") return formatSelect instanceof HTMLSelectElement && formatSelect.value !== "audiobook" ? true : durationLooksValid(fieldControlValue(field));
@@ -1550,6 +1611,16 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 			refreshHealthState();
 			updateDirtyState();
 		}
+	});
+	publicationDateInput?.addEventListener("change", () => {
+		if (!(publicationDateInput instanceof HTMLInputElement)) return;
+		if (!(publicationYearInput instanceof HTMLInputElement)) return;
+		if (publicationYearInput.value.trim()) return;
+		const year = publicationDateInput.value.trim().match(/^\d{4}/)?.[0] || "";
+		if (!year) return;
+		publicationYearInput.value = year;
+		refreshHealthState();
+		updateDirtyState();
 	});
 	function snapshotForm() {
 		if (!(form instanceof HTMLFormElement)) return "";

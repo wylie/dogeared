@@ -164,12 +164,12 @@ function normalizePositiveYear(value: unknown) {
 	return year >= 1400 && year <= currentYear ? year : 0;
 }
 
-function normalizeDecimalText(value: unknown) {
+function normalizePositiveWholeText(value: unknown) {
 	const raw = normalizeText(value, 40);
 	if (!raw) return "";
 	const parsed = Number(raw);
-	if (!Number.isFinite(parsed) || parsed < 0) return "";
-	return raw;
+	if (!Number.isInteger(parsed) || parsed <= 0) return "";
+	return String(parsed);
 }
 
 function slugifySeriesName(value: unknown) {
@@ -939,6 +939,10 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 		if (isAudiobookFormat(normalizedFormat) && !parseDurationToSeconds(formData.get("duration"))) return { ok: false, message: "Audiobook duration must be a positive duration." };
 	}
 	const resolvedSeriesId = await resolveCatalogEditorSeriesId(sql, formData);
+	const rawSeriesPosition = normalizeText(formData.get("seriesPosition"), 40);
+	if (resolvedSeriesId > 0 && rawSeriesPosition && !normalizePositiveWholeText(rawSeriesPosition)) {
+		return { ok: false, message: "Series position must be a positive whole number." };
+	}
 	const coverSource = normalizeText(formData.get("coverSource"), 40);
 	const coverProvenance = coverSource === "upload" ? "Admin upload" : coverSource === "url" ? "Admin URL" : "Manual";
 	const requestedPreferredEditionId = normalizeInt(formData.get("preferredEditionId"));
@@ -953,7 +957,7 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 		subjects: splitList(formData.get("subjects")),
 		genres: splitList(formData.get("genres")),
 		seriesId: resolvedSeriesId,
-		seriesPosition: resolvedSeriesId > 0 ? normalizeDecimalText(formData.get("seriesPosition")) : "",
+		seriesPosition: resolvedSeriesId > 0 ? normalizePositiveWholeText(formData.get("seriesPosition")) : "",
 		originalPublicationYear: normalizePositiveYear(formData.get("originalPublicationYear")),
 		preferredCoverUrl: preferredCoverValidation.cover,
 		preferredEditionId: nextPreferredEditionId

@@ -246,6 +246,9 @@ test("admin catalog editor unifies book repair while preserving Work and Edition
 	assert.match(editor, /data-series-option/);
 	assert.match(editor, /data-series-selected/);
 	assert.match(editor, /series-position-field/);
+	assert.match(editor, /Enter the book's number in the Series, e\.g\. 2/);
+	assert.match(editor, /DogEared derives totals like Book 2 of 3/);
+	assert.match(editor, /type="number" min="1" step="1" inputmode="numeric" value=\{editor\.work\.seriesPosition\}/);
 	assert.doesNotMatch(editor, /list="series-options"/);
 	assert.match(editor, /data-cover-file/);
 	assert.match(editor, /data-cover-upload-trigger/);
@@ -253,7 +256,10 @@ test("admin catalog editor unifies book repair while preserving Work and Edition
 	assert.match(editor, /Remove Edition cover/);
 	assert.match(editor, /Edition cover URL/);
 	assert.match(editor, /Work fallback cover URL/);
+	assert.match(editor, /Edition cover · Admin upload/);
+	assert.match(editor, /Work fallback cover ·/);
 	assert.match(editor, /Use image URL instead/);
+	assert.match(editor, /Creates or replaces the selected Edition's cover/);
 	assert.match(editor, /catalog-save-bar/);
 	assert.match(editor, /data-discard-changes/);
 	assert.match(editor, /Impact Preview/);
@@ -270,6 +276,8 @@ test("admin catalog editor unifies book repair while preserving Work and Edition
 	assert.match(lib, /Admin upload/);
 	assert.match(lib, /resolveCatalogEditorSeriesId/);
 	assert.match(lib, /normalizeText\(formData\.get\("seriesCreateName"\), 160\)/);
+	assert.match(lib, /Series position must be a positive whole number/);
+	assert.match(lib, /normalizePositiveWholeText\(formData\.get\("seriesPosition"\)\)/);
 	assert.match(lib, /admin_catalog_audit_event/);
 	assert.match(lib, /Audiobook duration must be a positive duration/);
 	assert.match(lib, /ISBN-10 must contain 10 ISBN characters/);
@@ -299,6 +307,16 @@ test("admin catalog editor surfaces Data Health issues next to relevant fields",
 	assert.doesNotMatch(editor, /border: 1px solid transparent/);
 	assert.match(editor, /field-warning/);
 	assert.match(editor, /why-note/);
+	assert.match(editor, /Shared book title, without Series numbering when possible/);
+	assert.match(editor, /Year the book was first published, regardless of this Edition/);
+	assert.match(editor, /Publisher of this specific Edition/);
+	assert.match(editor, /Publication date of this specific Edition/);
+	assert.match(editor, /Choose language/);
+	assert.match(editor, /Total number of pages in this Edition/);
+	assert.match(editor, /Total running time of this audiobook Edition/);
+	assert.match(editor, /Total ebook locations/);
+	assert.match(editor, /10-digit identifier for this Edition/);
+	assert.match(editor, /Open Library identifier for the shared book/);
 	assert.match(editor, /warning-icon/);
 	assert.match(editor, /scrollIntoView/);
 	assert.match(editor, /refreshHealthState/);
