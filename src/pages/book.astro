@@ -500,7 +500,7 @@ try {
 	markPagePerfStage("catalog_lookup_complete");
 	if (row?.id) {
 		const resolvedBookId = Number(row.id || 0);
-		if (!normalizeText(row.cover_url) && Number(row.work_id || 0) > 0) {
+		if (Number(row.work_id || 0) > 0) {
 			const fallbackRows = await sql<Array<{ cover_url: string }>>`
 				select coalesce(
 					(
@@ -521,7 +521,7 @@ try {
 				where bw.id = ${Number(row.work_id || 0)}
 				limit 1
 			`;
-			row.cover_url = normalizeText(fallbackRows[0]?.cover_url);
+			row.cover_url = normalizeText(fallbackRows[0]?.cover_url) || normalizeText(row.cover_url);
 		}
 		const representativeBookId = resolvedBookId > 0 ? await resolveRepresentativeBookId(sql, resolvedBookId) : 0;
 		if (representativeBookId > 0 && representativeBookId !== resolvedBookId) {

@@ -59,6 +59,37 @@ export function getRuntimeCacheValue<T>(key: string): T | null {
 	return existing.value as T;
 }
 
+export function invalidateRuntimeCache(key: string) {
+	getStore().delete(key);
+	getInFlightStore().delete(key);
+}
+
+export function invalidateRuntimeCacheByPrefix(prefix: string) {
+	let count = 0;
+	for (const key of getStore().keys()) {
+		if (!key.startsWith(prefix)) continue;
+		getStore().delete(key);
+		count += 1;
+	}
+	for (const key of getInFlightStore().keys()) {
+		if (key.startsWith(prefix)) getInFlightStore().delete(key);
+	}
+	return count;
+}
+
+export function invalidateCatalogRuntimeCaches() {
+	return [
+		"search:dbd:",
+		"search:collections:",
+		"search:external-resolved:",
+		"book-catalog:",
+		"home:",
+		"top:",
+		"profile:",
+		"reading-life:"
+	].reduce((count, prefix) => count + invalidateRuntimeCacheByPrefix(prefix), 0);
+}
+
 export function createPublicCacheControl(maxAgeSeconds: number, staleWhileRevalidateSeconds = 0) {
 	const maxAge = Math.max(0, Math.floor(maxAgeSeconds));
 	const swr = Math.max(0, Math.floor(staleWhileRevalidateSeconds));

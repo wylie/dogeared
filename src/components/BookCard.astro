@@ -103,9 +103,12 @@ function renderAverageStars(value: number) {
 	{hasTopRight && <div class="top-right"><slot name="topRight" /></div>}
 	<div class="cover-wrap">
 		{normalizedThumbnail ? (
-			titleHref
-				? <a href={titleHref} aria-label={`View ${title}`}><img class="cover" src={displayThumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="84" height="126" sizes="(max-width: 420px) 72px, 84px" /></a>
-				: <img class="cover" src={displayThumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="84" height="126" sizes="(max-width: 420px) 72px, 84px" />
+			<>
+				{titleHref
+					? <a href={titleHref} aria-label={`View ${title}`}><img class="cover" src={displayThumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="84" height="126" sizes="(max-width: 420px) 72px, 84px" onerror="this.hidden=true; this.closest('.cover-wrap')?.querySelector('[data-cover-placeholder]')?.removeAttribute('hidden');" /></a>
+					: <img class="cover" src={displayThumbnail} alt={`${title} cover`} loading="lazy" decoding="async" width="84" height="126" sizes="(max-width: 420px) 72px, 84px" onerror="this.hidden=true; this.closest('.cover-wrap')?.querySelector('[data-cover-placeholder]')?.removeAttribute('hidden');" />}
+				<div class="cover cover-placeholder" data-cover-placeholder hidden><span class="material-icons" aria-hidden="true">menu_book</span></div>
+			</>
 		) : (
 			<div class="cover cover-placeholder"><span class="material-icons" aria-hidden="true">menu_book</span></div>
 		)}

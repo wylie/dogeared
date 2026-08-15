@@ -1,4 +1,5 @@
 import type { getNeonSql } from "./neon.ts";
+import { resolvedCatalogCoverUrl } from "./catalogCovers.ts";
 import { canonicalCatalogDisplayWorkKey } from "./catalogKeys.ts";
 import { normalizeReadingFormat, type ReadingFormat } from "./readingFormats.ts";
 
@@ -47,7 +48,9 @@ type RawCanonicalFinishedBookRow = {
 	title: string | null;
 	primary_author: string | null;
 	author_id: number | null;
-	cover_url: string | null;
+	book_cover_url: string | null;
+	edition_cover_url: string | null;
+	work_cover_url: string | null;
 	language: string | null;
 	isbn10: string | null;
 	isbn13: string | null;
@@ -215,6 +218,11 @@ function mapFinishedBookRow(row: RawCanonicalFinishedBookRow): CanonicalFinished
 	if (!canonicalWorkKey) return null;
 	const genres = parseGenres(row.genres);
 	const bookId = Math.max(0, Number(row.book_id || 0) || 0);
+	const coverUrl = resolvedCatalogCoverUrl({
+		editionCoverUrl: row.edition_cover_url,
+		legacyBookCoverUrl: row.book_cover_url,
+		workCoverUrl: row.work_cover_url
+	});
 	return {
 		id: bookId,
 		bookId,
@@ -223,8 +231,8 @@ function mapFinishedBookRow(row: RawCanonicalFinishedBookRow): CanonicalFinished
 		title,
 		author,
 		authorId: row.author_id ? Number(row.author_id) : null,
-		coverUrl: cleanText(row.cover_url),
-		thumbnail: cleanText(row.cover_url),
+		coverUrl,
+		thumbnail: coverUrl,
 		language: cleanText(row.language),
 		isbn10: cleanText(row.isbn10),
 		isbn13: cleanText(row.isbn13),
@@ -256,7 +264,9 @@ export async function loadFinishedBooksForReader(sql: Sql, userId: string) {
 			b.title,
 			b.primary_author,
 			coalesce(bw.author_id, b.author_id) as author_id,
-			coalesce(nullif(bw.preferred_cover_url, ''), b.cover_url) as cover_url,
+			coalesce(nullif(trim(b.cover_url), ''), '') as book_cover_url,
+			coalesce(nullif(trim(edition_cover.cover_url), ''), '') as edition_cover_url,
+			coalesce(nullif(trim(bw.preferred_cover_url), ''), '') as work_cover_url,
 			b.language,
 			b.isbn10,
 			b.isbn13,
@@ -284,6 +294,34 @@ export async function loadFinishedBooksForReader(sql: Sql, userId: string) {
 		from user_book ub
 		join book b on b.id = ub.book_id
 		left join book_work bw on bw.id = b.work_id
+		left join lateral (
+			select case
+				when coalesce(bw.metadata->>'preferredEditionId', bw.metadata->>'preferred_edition_id', '') ~ '^[0-9]+$'
+					then coalesce(bw.metadata->>'preferredEditionId', bw.metadata->>'preferred_edition_id')::bigint
+				else 0::bigint
+			end as edition_id
+		) preferred_edition on true
+		left join lateral (
+			select be.cover_url
+			from book_edition be
+			where be.work_id = coalesce(bw.id, b.work_id)
+				and nullif(trim(be.cover_url), '') is not null
+				and (
+					(ub.edition_id is not null and be.id = ub.edition_id)
+					or (ub.edition_id is null and be.book_id = b.id)
+					or (ub.edition_id is null and preferred_edition.edition_id > 0 and be.id = preferred_edition.edition_id)
+				)
+			order by
+				case
+					when ub.edition_id is not null and be.id = ub.edition_id then 0
+					when ub.edition_id is null and be.book_id = b.id then 1
+					when ub.edition_id is null and preferred_edition.edition_id > 0 and be.id = preferred_edition.edition_id then 2
+					else 9
+				end,
+				be.updated_at desc,
+				be.id desc
+			limit 1
+		) edition_cover on true
 		left join lateral (
 			select s.id as series_id, s.name as series_name
 			from (

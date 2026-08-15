@@ -1,3 +1,4 @@
+import { resolvedCatalogCoverUrl } from "./catalogCovers.ts";
 import { resolveMomentumPrediction } from "./momentumPrediction.ts";
 import { calculateReadingStreak } from "./readingLife.ts";
 import { normalizeProgressInputMode, type ProgressInputMode } from "./readingProgress.ts";
@@ -59,7 +60,9 @@ type CurrentBookRow = {
 	title: string;
 	primary_author: string;
 	author_id: number | null;
-	cover_url: string;
+	book_cover_url: string;
+	edition_cover_url: string;
+	work_cover_url: string;
 	language: string;
 	isbn10: string;
 	isbn13: string;
@@ -233,7 +236,9 @@ export async function loadReaderReadingSummary(
 					b.title,
 					b.primary_author,
 					b.author_id,
-					b.cover_url,
+					coalesce(nullif(trim(b.cover_url), ''), '') as book_cover_url,
+					coalesce(nullif(trim(edition_cover.cover_url), ''), '') as edition_cover_url,
+					coalesce(nullif(trim(bw.preferred_cover_url), ''), '') as work_cover_url,
 					b.language,
 					b.isbn10,
 					b.isbn13,
@@ -251,6 +256,35 @@ export async function loadReaderReadingSummary(
 					) as genres
 				from user_book ub
 				join book b on b.id = ub.book_id
+				left join book_work bw on bw.id = b.work_id
+				left join lateral (
+					select case
+						when coalesce(bw.metadata->>'preferredEditionId', bw.metadata->>'preferred_edition_id', '') ~ '^[0-9]+$'
+							then coalesce(bw.metadata->>'preferredEditionId', bw.metadata->>'preferred_edition_id')::bigint
+						else 0::bigint
+					end as edition_id
+				) preferred_edition on true
+				left join lateral (
+					select be.cover_url
+					from book_edition be
+					where be.work_id = coalesce(bw.id, b.work_id)
+						and nullif(trim(be.cover_url), '') is not null
+						and (
+							(ub.edition_id is not null and be.id = ub.edition_id)
+							or (ub.edition_id is null and be.book_id = b.id)
+							or (ub.edition_id is null and preferred_edition.edition_id > 0 and be.id = preferred_edition.edition_id)
+						)
+					order by
+						case
+							when ub.edition_id is not null and be.id = ub.edition_id then 0
+							when ub.edition_id is null and be.book_id = b.id then 1
+							when ub.edition_id is null and preferred_edition.edition_id > 0 and be.id = preferred_edition.edition_id then 2
+							else 9
+						end,
+						be.updated_at desc,
+						be.id desc
+					limit 1
+				) edition_cover on true
 				left join lateral (
 					select count(*)::int as progress_updates
 					from user_reading_progress_event pe
@@ -292,7 +326,11 @@ export async function loadReaderReadingSummary(
 		title: String(row.title || "").trim(),
 		author: String(row.primary_author || "").trim(),
 		authorId: toPositiveInt(row.author_id),
-		thumbnail: String(row.cover_url || "").trim(),
+		thumbnail: resolvedCatalogCoverUrl({
+			editionCoverUrl: row.edition_cover_url,
+			legacyBookCoverUrl: row.book_cover_url,
+			workCoverUrl: row.work_cover_url
+		}),
 		language: String(row.language || "").trim(),
 		isbn10: String(row.isbn10 || "").trim(),
 		isbn13: String(row.isbn13 || "").trim(),

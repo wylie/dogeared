@@ -1,4 +1,5 @@
 import type { getNeonSql } from "./neon";
+import { invalidateCatalogRuntimeCaches } from "./runtimeCache.ts";
 
 type Sql = ReturnType<typeof getNeonSql>;
 
@@ -923,6 +924,7 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 			}
 			return steps;
 		});
+		invalidateCatalogRuntimeCaches();
 		return { ok: true, message: "Edition removed.", deletedEditionId: submittedEdition.id };
 	}
 	const coverValidation = validateCoverValue(formData.get("coverUrl"));
@@ -1207,6 +1209,7 @@ export async function saveCatalogEditorData(sql: Sql, adminUserId: string, formD
 		}
 		return steps;
 	});
+	invalidateCatalogRuntimeCaches();
 	const createdRows = newEditionKey
 		? await sql<Array<{ id: number }>>`select id from book_edition where work_id = ${workId} and edition_key = ${newEditionKey} limit 1`
 		: [];

@@ -44,7 +44,7 @@ test("series loader uses Work, Edition, and cached series cover metadata", () =>
 	assert.match(source, /bw\.preferred_cover_url/);
 	assert.match(source, /candidate\.cover_url/);
 	assert.match(source, /sb\.metadata ->> 'coverUrl'/);
-	assert.match(source, /nullif\(trim\(b\.cover_url\), ''\),\s*nullif\(trim\(be\.cover_url\), ''\),\s*nullif\(trim\(bw\.preferred_cover_url\), ''\)/s);
+	assert.match(source, /nullif\(trim\(be\.cover_url\), ''\),\s*nullif\(trim\(b\.cover_url\), ''\),\s*nullif\(trim\(bw\.preferred_cover_url\), ''\)/s);
 });
 
 test("Book Detail backfills missing compatibility covers from Edition before Work fallback", () => {
@@ -62,6 +62,6 @@ test("search and canonical lookup prepare card covers with Edition before Work f
 	const enrichment = readFileSync("src/lib/bookCoverEnrichment.ts", "utf8");
 
 	for (const source of [search, catalog, enrichment]) {
-		assert.match(source, /nullif\(trim\(b\.cover_url\), ''\),\s*nullif\(trim\((?:be|ed)\.cover_url\), ''\),\s*nullif\(trim\(bw\.preferred_cover_url\), ''\)/s);
+		assert.match(source, /nullif\(trim\((?:be|ed)\.cover_url\), ''\),\s*nullif\(trim\(b\.cover_url\), ''\),\s*nullif\(trim\(bw\.preferred_cover_url\), ''\)/s);
 	}
 });

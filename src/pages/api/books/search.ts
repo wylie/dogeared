@@ -700,7 +700,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 					coalesce(nullif(trim(b.synopsis), ''), '') as synopsis,
 					b.published_year,
 					coalesce(nullif(trim(b.language), ''), '') as language,
-					coalesce(nullif(trim(b.cover_url), ''), nullif(trim(be.cover_url), ''), nullif(trim(bw.preferred_cover_url), ''), '') as cover_url,
+					coalesce(nullif(trim(be.cover_url), ''), nullif(trim(b.cover_url), ''), nullif(trim(bw.preferred_cover_url), ''), '') as cover_url,
 					coalesce(nullif(trim(b.isbn10), ''), '') as isbn10,
 					coalesce(nullif(trim(b.isbn13), ''), '') as isbn13,
 					coalesce(nullif(trim(b.google_books_id), ''), '') as google_books_id,

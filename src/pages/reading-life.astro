@@ -3,6 +3,7 @@ import Layout from "../layouts/Layout.astro";
 import { resolveUserBySession } from "../lib/auth";
 import { getNeonSql } from "../lib/neon";
 import { authorHref } from "../lib/author";
+import { resolvedCatalogCoverUrl } from "../lib/catalogCovers";
 import { loadFinishedBooksForReader } from "../lib/finishedBooks";
 import {
 	buildReadingLifeSummary,
@@ -27,7 +28,9 @@ type RawCurrentBookRow = {
 	id: number;
 	title: string;
 	primary_author: string;
-	cover_url: string;
+	book_cover_url: string;
+	edition_cover_url: string;
+	work_cover_url: string;
 	current_page: number;
 	total_pages: number;
 	reading_format: string;
@@ -256,13 +259,44 @@ if (viewerUserId) {
 					b.id,
 					b.title,
 					b.primary_author,
-					b.cover_url,
+					coalesce(nullif(trim(b.cover_url), ''), '') as book_cover_url,
+					coalesce(nullif(trim(edition_cover.cover_url), ''), '') as edition_cover_url,
+					coalesce(nullif(trim(bw.preferred_cover_url), ''), '') as work_cover_url,
 					ub.current_page,
 					ub.total_pages,
 					coalesce(nullif(trim(ub.reading_format), ''), 'unknown') as reading_format,
 					ub.updated_at::text as updated_at
 				from user_book ub
 				join book b on b.id = ub.book_id
+				left join book_work bw on bw.id = b.work_id
+				left join lateral (
+					select case
+						when coalesce(bw.metadata->>'preferredEditionId', bw.metadata->>'preferred_edition_id', '') ~ '^[0-9]+$'
+							then coalesce(bw.metadata->>'preferredEditionId', bw.metadata->>'preferred_edition_id')::bigint
+						else 0::bigint
+					end as edition_id
+				) preferred_edition on true
+				left join lateral (
+					select be.cover_url
+					from book_edition be
+					where be.work_id = coalesce(bw.id, b.work_id)
+						and nullif(trim(be.cover_url), '') is not null
+						and (
+							(ub.edition_id is not null and be.id = ub.edition_id)
+							or (ub.edition_id is null and be.book_id = b.id)
+							or (ub.edition_id is null and preferred_edition.edition_id > 0 and be.id = preferred_edition.edition_id)
+						)
+					order by
+						case
+							when ub.edition_id is not null and be.id = ub.edition_id then 0
+							when ub.edition_id is null and be.book_id = b.id then 1
+							when ub.edition_id is null and preferred_edition.edition_id > 0 and be.id = preferred_edition.edition_id then 2
+							else 9
+						end,
+						be.updated_at desc,
+						be.id desc
+					limit 1
+				) edition_cover on true
 				where ub.user_id = ${viewerUserId}::uuid
 					and ub.status = 'reading'
 				order by ub.updated_at desc, b.title asc
@@ -301,7 +335,11 @@ if (viewerUserId) {
 			id: Number(row.id || 0),
 			title: String(row.title || "Untitled"),
 			author: String(row.primary_author || "Unknown Author"),
-			coverUrl: String(row.cover_url || ""),
+			coverUrl: resolvedCatalogCoverUrl({
+				editionCoverUrl: row.edition_cover_url,
+				legacyBookCoverUrl: row.book_cover_url,
+				workCoverUrl: row.work_cover_url
+			}),
 			currentPage: Number(row.current_page || 0),
 			totalPages: Number(row.total_pages || 0),
 			readingFormat: normalizeReadingFormat(row.reading_format),
@@ -514,7 +552,12 @@ recordPerformanceEventSafe({
 										<li>
 											<a href={bookHref(book.id)} aria-label={`${book.title} by ${book.author}${progress > 0 ? `, ${progress}% read` : ""}`}>
 												<div class="current-book-main">
-													{book.coverUrl ? <img src={book.coverUrl} alt="" loading="lazy" /> : <span class="cover-placeholder" aria-hidden="true">menu_book</span>}
+													{book.coverUrl ? (
+														<>
+															<img src={book.coverUrl} alt="" loading="lazy" onerror="this.hidden=true; this.nextElementSibling?.removeAttribute('hidden');" />
+															<span class="cover-placeholder" aria-hidden="true" hidden>menu_book</span>
+														</>
+													) : <span class="cover-placeholder" aria-hidden="true">menu_book</span>}
 													<span class="current-book-text">
 														<strong title={book.title}>{book.title}</strong>
 														<small title={book.author}>{book.author}</small>
@@ -616,7 +659,12 @@ recordPerformanceEventSafe({
 							{timelineItems.map((book) => (
 								<li>
 									<a class="timeline-cover" href={bookHref(book.id)}>
-										{book.coverUrl ? <img src={book.coverUrl} alt="" loading="lazy" /> : <span class="cover-placeholder" aria-hidden="true">menu_book</span>}
+										{book.coverUrl ? (
+											<>
+												<img src={book.coverUrl} alt="" loading="lazy" onerror="this.hidden=true; this.nextElementSibling?.removeAttribute('hidden');" />
+												<span class="cover-placeholder" aria-hidden="true" hidden>menu_book</span>
+											</>
+										) : <span class="cover-placeholder" aria-hidden="true">menu_book</span>}
 									</a>
 									<div>
 										<p class="timeline-date">{formatDate(book.dateKey)}</p>
