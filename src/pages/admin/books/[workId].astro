@@ -448,11 +448,12 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 										))}
 									</div>
 									<div class="series-control-shell">
-										<input name="seriesSearch" value={editor.work.seriesName} placeholder="Search existing Series..." autocomplete="off" aria-describedby={fieldHealth("seriesId") ? "help-seriesId why-seriesId" : "why-seriesId"} aria-controls="series-results" data-series-search />
+										<input name="seriesSearch" value={editor.work.seriesName} placeholder="Search existing Series..." autocomplete="off" aria-describedby={fieldHealth("seriesId") ? "help-seriesId why-seriesId" : "why-seriesId"} aria-controls="series-results" data-series-search readonly={editor.work.seriesId > 0} />
+										<button type="button" class="series-clear-button" data-series-clear aria-label="Remove Series" hidden={editor.work.seriesId <= 0}>
+											<span aria-hidden="true">×</span>
+										</button>
 										<div id="series-results" class="series-results" data-series-results role="listbox" hidden></div>
 									</div>
-									<p class="series-selected" data-series-selected hidden={editor.work.seriesId <= 0}>Selected: <strong>{editor.work.seriesName}</strong></p>
-									<button type="button" class="secondary-button series-remove-button" data-series-clear hidden={editor.work.seriesId <= 0}>Remove Series</button>
 									{fieldHealth("seriesId") && <p id="help-seriesId" class="field-warning"><span class="sr-only">{severityLabel(fieldHealth("seriesId")!.issue.severity)}: </span>{fieldHealth("seriesId")!.helper}</p>}
 									<p id="why-seriesId" class="why-note">Search for an existing Series or create a new one.</p>
 								</div>
@@ -971,7 +972,7 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	}
 	.series-editor {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(120px, 0.32fr);
+		grid-template-columns: minmax(0, 3fr) minmax(112px, 1fr);
 		gap: 0.8rem;
 		align-items: start;
 		margin-top: 0.85rem;
@@ -983,6 +984,43 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	.series-control-shell {
 		position: relative;
 		min-width: 0;
+	}
+	.series-control-shell input[data-series-search] {
+		padding-right: 2.35rem;
+	}
+	.series-control-shell input[data-series-search][readonly] {
+		cursor: default;
+		background: #fff;
+		color: var(--color-text);
+		font-weight: 700;
+	}
+	.series-clear-button {
+		position: absolute;
+		top: 50%;
+		right: 0.42rem;
+		transform: translateY(-50%);
+		width: 28px;
+		height: 28px;
+		border: 0;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		display: inline-grid;
+		place-items: center;
+		font: inherit;
+		font-size: 1.1rem;
+		font-weight: 800;
+		line-height: 1;
+	}
+	.series-clear-button:hover,
+	.series-clear-button:focus-visible {
+		background: rgba(87, 117, 144, 0.1);
+		color: var(--color-text);
+	}
+	.series-clear-button[hidden],
+	.series-results[hidden] {
+		display: none;
 	}
 	.series-results {
 		position: absolute;
@@ -1017,19 +1055,13 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	.series-results button:focus-visible {
 		background: rgba(31, 122, 69, 0.08);
 	}
-	.series-selected {
-		margin: 0;
-		color: var(--color-text-muted);
-		font-size: 0.82rem;
-		font-weight: 700;
-	}
-	.series-selected strong {
-		color: var(--color-text);
-		font-weight: 800;
-	}
-	.series-remove-button { justify-self: start; }
 	.series-position-field {
 		align-content: start;
+	}
+	.series-position-field input:disabled {
+		background: rgba(248, 248, 246, 0.84);
+		color: var(--color-text-subtle);
+		cursor: not-allowed;
 	}
 	.cover-actions {
 		display: flex;
@@ -1265,7 +1297,6 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	const seriesResults = document.querySelector("[data-series-results]");
 	const seriesClearButton = document.querySelector("[data-series-clear]");
 	const seriesPositionInput = document.querySelector("[data-series-position]");
-	const seriesSelected = document.querySelector("[data-series-selected]");
 	const seriesOptions = Array.from(document.querySelectorAll("[data-series-option]")).map((option) => ({
 		id: Number(option.getAttribute("data-id") || 0) || 0,
 		name: option.textContent || ""
@@ -1296,18 +1327,22 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 	function optionLabel(option) {
 		return option?.name || "";
 	}
-	function setSeriesSelectedLabel(message, selected) {
-		if (!(seriesSelected instanceof HTMLElement)) return;
-		seriesSelected.hidden = !message;
-		seriesSelected.innerHTML = "";
-		if (!message) return;
-		const prefix = document.createTextNode(selected ? "Selected: " : "");
-		const strong = document.createElement("strong");
-		strong.textContent = message;
-		if (selected) {
-			seriesSelected.append(prefix, strong);
-		} else {
-			seriesSelected.append(strong);
+	function closeSeriesResults() {
+		if (seriesResults instanceof HTMLElement) {
+			seriesResults.replaceChildren();
+			seriesResults.hidden = true;
+		}
+	}
+	function setSeriesControlSelected(selected) {
+		if (seriesSearch instanceof HTMLInputElement) {
+			seriesSearch.readOnly = selected;
+		}
+		if (seriesClearButton instanceof HTMLElement) {
+			seriesClearButton.hidden = !selected;
+		}
+		if (seriesPositionInput instanceof HTMLInputElement) {
+			seriesPositionInput.disabled = !selected;
+			if (!selected) seriesPositionInput.value = "";
 		}
 	}
 	function selectSeries(option) {
@@ -1317,23 +1352,50 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		seriesSearch.value = optionLabel(option);
 		seriesIdInput.value = String(option?.id || 0);
 		seriesCreateNameInput.value = "";
-		if (seriesResults instanceof HTMLElement) seriesResults.hidden = true;
-		if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
-		if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = false;
-		setSeriesSelectedLabel(optionLabel(option), true);
+		setSeriesControlSelected(true);
+		closeSeriesResults();
+		seriesSearch.blur();
 		refreshHealthState();
 		updateDirtyState();
 	}
-	function renderSeriesResults(raw) {
+	function selectCreatedSeries(raw) {
+		if (!(seriesSearch instanceof HTMLInputElement)) return;
+		if (!(seriesIdInput instanceof HTMLInputElement)) return;
+		if (!(seriesCreateNameInput instanceof HTMLInputElement)) return;
+		const name = String(raw || "").trim();
+		if (!name) return;
+		seriesSearch.value = name;
+		seriesIdInput.value = "0";
+		seriesCreateNameInput.value = name;
+		setSeriesControlSelected(true);
+		closeSeriesResults();
+		seriesSearch.blur();
+		refreshHealthState();
+		updateDirtyState();
+	}
+	function clearSeriesSelection() {
+		if (seriesSearch instanceof HTMLInputElement) {
+			seriesSearch.value = "";
+			seriesSearch.readOnly = false;
+		}
+		if (seriesIdInput instanceof HTMLInputElement) seriesIdInput.value = "0";
+		if (seriesCreateNameInput instanceof HTMLInputElement) seriesCreateNameInput.value = "";
+		setSeriesControlSelected(false);
+		closeSeriesResults();
+		refreshHealthState();
+		updateDirtyState();
+		seriesSearch instanceof HTMLInputElement && seriesSearch.focus();
+	}
+	function renderSeriesResults(raw, showInitial = false) {
 		if (!(seriesResults instanceof HTMLElement)) return;
 		seriesResults.replaceChildren();
 		const normalized = normalizeSeriesName(raw);
-		if (!normalized) {
+		if (!normalized && !showInitial) {
 			seriesResults.hidden = true;
 			return;
 		}
 		const matches = seriesOptions
-			.filter((option) => normalizeSeriesName(option.name).includes(normalized))
+			.filter((option) => !normalized || normalizeSeriesName(option.name).includes(normalized))
 			.slice(0, 6);
 		for (const option of matches) {
 			const button = document.createElement("button");
@@ -1343,20 +1405,11 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 			seriesResults.append(button);
 		}
 		const exact = seriesOptions.some((option) => normalizeSeriesName(option.name) === normalized);
-		if (!exact) {
+		if (normalized && !exact) {
 			const createButton = document.createElement("button");
 			createButton.type = "button";
 			createButton.textContent = `+ Create "${String(raw).trim()}"`;
-			createButton.addEventListener("click", () => {
-				if (seriesIdInput instanceof HTMLInputElement) seriesIdInput.value = "0";
-				if (seriesCreateNameInput instanceof HTMLInputElement) seriesCreateNameInput.value = String(raw).trim();
-				if (seriesResults instanceof HTMLElement) seriesResults.hidden = true;
-				if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
-				if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = true;
-				setSeriesSelectedLabel(`Will create "${String(raw).trim()}" on save`, false);
-				refreshHealthState();
-				updateDirtyState();
-			});
+			createButton.addEventListener("click", () => selectCreatedSeries(raw));
 			seriesResults.append(createButton);
 		}
 		seriesResults.hidden = seriesResults.childElementCount === 0;
@@ -1365,47 +1418,28 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 		if (!(seriesSearch instanceof HTMLInputElement)) return;
 		if (!(seriesIdInput instanceof HTMLInputElement)) return;
 		if (!(seriesCreateNameInput instanceof HTMLInputElement)) return;
+		if (seriesSearch.readOnly) return;
 		const raw = seriesSearch.value.trim();
-		const matched = seriesOptions.find((option) => normalizeSeriesName(option.name) === normalizeSeriesName(raw));
 		if (!raw) {
 			seriesIdInput.value = "0";
 			seriesCreateNameInput.value = "";
-			if (seriesPositionInput instanceof HTMLInputElement) {
-				seriesPositionInput.value = "";
-				seriesPositionInput.disabled = true;
-			}
-			if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = true;
-			setSeriesSelectedLabel("", false);
-			renderSeriesResults("");
+			setSeriesControlSelected(false);
+			renderSeriesResults("", document.activeElement === seriesSearch);
 			return;
 		}
-		if (matched?.id) {
-			seriesIdInput.value = String(matched.id);
-			seriesCreateNameInput.value = "";
-			setSeriesSelectedLabel(matched.name, true);
-			if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = false;
-			if (seriesPositionInput instanceof HTMLInputElement) seriesPositionInput.disabled = false;
-		} else {
-			seriesIdInput.value = "0";
-			seriesCreateNameInput.value = "";
-			setSeriesSelectedLabel("", false);
-			if (seriesClearButton instanceof HTMLElement) seriesClearButton.hidden = true;
-			if (seriesPositionInput instanceof HTMLInputElement) {
-				seriesPositionInput.value = "";
-				seriesPositionInput.disabled = true;
-			}
-		}
+		seriesIdInput.value = "0";
+		seriesCreateNameInput.value = "";
+		setSeriesControlSelected(false);
 		if (document.activeElement === seriesSearch) renderSeriesResults(raw);
-		else if (seriesResults instanceof HTMLElement) seriesResults.hidden = true;
+		else closeSeriesResults();
 	}
 	seriesSearch?.addEventListener("input", syncSeriesState);
 	seriesSearch?.addEventListener("change", syncSeriesState);
-	seriesClearButton?.addEventListener("click", () => {
-		if (seriesSearch instanceof HTMLInputElement) seriesSearch.value = "";
-		syncSeriesState();
-		refreshHealthState();
-		updateDirtyState();
+	seriesSearch?.addEventListener("focus", () => {
+		if (!(seriesSearch instanceof HTMLInputElement) || seriesSearch.readOnly) return;
+		renderSeriesResults(seriesSearch.value, true);
 	});
+	seriesClearButton?.addEventListener("click", clearSeriesSelection);
 	document.addEventListener("click", (event) => {
 		if (!(seriesResults instanceof HTMLElement)) return;
 		if (seriesEditor instanceof HTMLElement && event.target instanceof Node && seriesEditor.contains(event.target)) return;

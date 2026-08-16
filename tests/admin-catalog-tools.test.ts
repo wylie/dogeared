@@ -244,11 +244,16 @@ test("admin catalog editor unifies book repair while preserving Work and Edition
 	assert.match(editor, /data-series-search/);
 	assert.match(editor, /data-series-results/);
 	assert.match(editor, /data-series-option/);
-	assert.match(editor, /data-series-selected/);
+	assert.match(editor, /class="series-clear-button"/);
+	assert.match(editor, /aria-label="Remove Series"/);
+	assert.match(editor, /\.series-results\[hidden\]/);
 	assert.match(editor, /series-position-field/);
 	assert.match(editor, /Enter the book's number in the Series, e\.g\. 2/);
 	assert.match(editor, /DogEared derives totals like Book 2 of 3/);
 	assert.match(editor, /type="number" min="1" step="1" inputmode="numeric" value=\{editor\.work\.seriesPosition\}/);
+	assert.doesNotMatch(editor, /series-selected/);
+	assert.doesNotMatch(editor, /series-remove-button/);
+	assert.doesNotMatch(editor, />Remove Series<\/button>/);
 	assert.doesNotMatch(editor, /list="series-options"/);
 	assert.match(editor, /data-cover-file/);
 	assert.match(editor, /data-cover-upload-trigger/);
