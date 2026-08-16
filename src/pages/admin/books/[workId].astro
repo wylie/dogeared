@@ -492,7 +492,7 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 											<p id="why-publisher" class="why-note">Publisher of this specific Edition.</p>
 										</label>
 										<label class="field-control">
-											<span>Publication date</span>
+											<span class="field-label">Publication date</span>
 											<input name="publicationDate" value={selectedEdition?.publicationDate || ""} maxlength="80" placeholder="2021-09-28" aria-describedby="why-publicationDate" data-publication-date />
 											<p id="why-publicationDate" class="why-note">Publication date of this specific Edition. Use YYYY-MM-DD when known.</p>
 										</label>
@@ -503,7 +503,7 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 											<p id="why-publicationYear" class="why-note">Edition year. DogEared can fill this from Publication date when the year is clear.</p>
 										</label>
 										<label class="field-control">
-											<span>Language</span>
+											<span class="field-label">Language</span>
 											<select name="language" aria-describedby="why-language">
 												<option value="" selected={!selectedLanguageValue}>Choose language...</option>
 												{!hasKnownLanguage && selectedLanguageValue ? <option value={selectedLanguageValue} selected>{selectedEdition?.language}</option> : null}
