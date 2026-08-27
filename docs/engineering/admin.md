@@ -272,10 +272,12 @@ Route: `/admin/users`
 
 Admins can:
 
-- Search by username or email.
+- Search by username/profile name or exact email.
 - View joined date, last activity, shelf entry count, and review count.
 - Open user detail.
 - Delete users from the list with confirmation.
+
+The list view is intentionally shallow and server-paginated. `/admin/users` resolves authorization, ensures support indexes, runs a SQL count query, then runs one bounded page-row query that decrypts email only for visible users and aggregates shelf/review/last-activity counts only for those visible user IDs. Exact email search uses `app_user.email_hash`; partial decrypted-email scans are avoided on the list route. Streak repair, achievements, full reading statistics, and richer account history are loaded only by the detail route.
 
 Route: `/admin/users/[username]`
 

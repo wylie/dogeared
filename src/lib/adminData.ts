@@ -1,5 +1,5 @@
 import type { NeonQueryFunction } from "@neondatabase/serverless";
-import { getEncryptionKey } from "./auth";
+import { getEncryptionKey, normalizeEmail, sha256Hex } from "./auth";
 import { ensureReleaseSchema, loadReleases, saveRelease, type ReleaseRecord } from "./releases";
 
 export type AdminOverviewStats = {
@@ -81,8 +81,11 @@ export type AdminReleaseNote = ReleaseRecord;
 
 export type AdminUserSummary = {
 	id: string;
+	displayName: string;
 	username: string;
 	email: string;
+	avatar: string;
+	status: string;
 	joinedAt: string;
 	lastActivityAt: string;
 	shelfEntryCount: number;
@@ -96,6 +99,20 @@ export type AdminUserDetail = AdminUserSummary & {
 	commentCount: number;
 	followerCount: number;
 	followingCount: number;
+};
+
+export type AdminUsersPagination = {
+	page: number;
+	pageSize: number;
+	total: number;
+	totalPages: number;
+	offset: number;
+	query: string;
+};
+
+export type AdminUsersIndexResult = {
+	users: AdminUserSummary[];
+	pagination: AdminUsersPagination;
 };
 
 export function emptyAdminOverviewStats(): AdminOverviewStats {
@@ -138,6 +155,10 @@ function toCount(value: unknown) {
 
 function toBool(value: unknown) {
 	return value === true || String(value || "").trim().toLowerCase() === "true";
+}
+
+function readProfileObject(value: unknown) {
+	return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function normalizeStatus(value: unknown, allowed: string[], fallback: string) {
@@ -254,6 +275,13 @@ export async function ensureAdminSupportSchema(sql: NeonQueryFunction<false, fal
 			verified_at timestamptz
 		)
 	`;
+	await Promise.all([
+		sql`create index if not exists idx_app_user_created_desc on app_user(created_at desc, id desc)`,
+		sql`create index if not exists idx_app_user_profile_name_lower on app_user (lower(coalesce(profile_data->>'name', '')))`,
+		sql`create index if not exists idx_user_book_user_updated on user_book(user_id, updated_at desc)`,
+		sql`create index if not exists idx_user_activity_user_created on user_activity(user_id, created_at desc)`,
+		sql`create index if not exists idx_user_activity_comment_user on user_activity_comment(user_id, created_at desc)`
+	]);
 }
 
 export async function ensureAdminOperationsSchema(sql: NeonQueryFunction<false, false>) {
@@ -469,61 +497,160 @@ export async function loadAdminOperationsSummary(sql: NeonQueryFunction<false, f
 	};
 }
 
-export async function searchAdminUsers(sql: NeonQueryFunction<false, false>, query: string, limit = 50): Promise<AdminUserSummary[]> {
-	await ensureAdminSupportSchema(sql);
-	const encryptionKey = getEncryptionKey();
-	const search = normalizeText(query).toLowerCase();
+export function normalizeAdminUsersPagination(input: { query?: unknown; page?: unknown; pageSize?: unknown } = {}): AdminUsersPagination {
+	const pageSize = Math.min(100, Math.max(1, Math.floor(Number(input.pageSize || 25) || 25)));
+	const page = Math.max(1, Math.floor(Number(input.page || 1) || 1));
+	const query = normalizeText(input.query, 160).replace(/\s+/g, " ");
+	return {
+		page,
+		pageSize,
+		total: 0,
+		totalPages: 1,
+		offset: (page - 1) * pageSize,
+		query
+	};
+}
+
+function adminUserSearchParts(query: unknown) {
+	const search = normalizeText(query, 160).toLowerCase();
 	const pattern = `%${search}%`;
-	const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
+	const email = search.includes("@") ? normalizeEmail(search) : "";
+	const emailHash = email ? sha256Hex(email) : "";
+	return { search, pattern, emailHash };
+}
+
+export async function countAdminUsers(sql: NeonQueryFunction<false, false>, query: string): Promise<number> {
+	const { search, pattern, emailHash } = adminUserSearchParts(query);
+	const rows = await sql<Array<{ count: number }>>`
+		select count(*)::int as count
+		from app_user au
+		where ${search} = ''
+			or lower(coalesce(au.username, '')) like ${pattern}
+			or lower(coalesce(au.profile_data->>'name', '')) like ${pattern}
+			or (${emailHash} <> '' and au.email_hash = ${emailHash})
+	`;
+	return toCount(rows[0]?.count);
+}
+
+export async function loadAdminUserListRows(
+	sql: NeonQueryFunction<false, false>,
+	query: string,
+	page = 1,
+	pageSize = 25
+): Promise<AdminUserSummary[]> {
+	const encryptionKey = getEncryptionKey();
+	const pagination = normalizeAdminUsersPagination({ query, page, pageSize });
+	const { search, pattern, emailHash } = adminUserSearchParts(query);
 	const rows = await sql<Array<{
 		id: string;
 		username: string | null;
 		email: string | null;
+		profile_data: unknown;
 		created_at: string | null;
 		last_activity_at: string | null;
 		shelf_entry_count: number;
 		review_count: number;
 	}>>`
-		with users as (
+		with visible_users as (
 			select
 				au.id,
 				au.username,
-				coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), '') as email,
-				au.created_at
+				au.email_enc,
+				au.profile_data,
+				au.created_at,
+				au.updated_at
 			from app_user au
+			where ${search} = ''
+				or lower(coalesce(au.username, '')) like ${pattern}
+				or lower(coalesce(au.profile_data->>'name', '')) like ${pattern}
+				or (${emailHash} <> '' and au.email_hash = ${emailHash})
+			order by au.created_at desc nulls last, au.id desc
+			limit ${pagination.pageSize}
+			offset ${pagination.offset}
+		),
+		shelf_counts as (
+			select
+				ub.user_id,
+				count(*)::int as shelf_entry_count,
+				count(*) filter (where char_length(trim(coalesce(ub.finished_reflection, ''))) > 0)::int as review_count,
+				max(ub.updated_at) as last_shelf_at
+			from user_book ub
+			join visible_users vu on vu.id = ub.user_id
+			group by ub.user_id
+		),
+		activity_counts as (
+			select ua.user_id, max(ua.created_at) as last_activity_at
+			from user_activity ua
+			join visible_users vu on vu.id = ua.user_id
+			group by ua.user_id
+		),
+		comment_counts as (
+			select uac.user_id, max(uac.created_at) as last_comment_at
+			from user_activity_comment uac
+			join visible_users vu on vu.id = uac.user_id
+			group by uac.user_id
 		)
 		select
-			u.id::text as id,
-			u.username,
-			u.email,
-			u.created_at::text as created_at,
+			vu.id::text as id,
+			vu.username,
+			coalesce(pgp_sym_decrypt(vu.email_enc, ${encryptionKey}), '') as email,
+			vu.profile_data,
+			vu.created_at::text as created_at,
 			greatest(
-				coalesce(max(ub.updated_at), 'epoch'::timestamptz),
-				coalesce(max(ua.created_at), 'epoch'::timestamptz),
-				coalesce(max(uac.created_at), 'epoch'::timestamptz)
+				coalesce(vu.updated_at, 'epoch'::timestamptz),
+				coalesce(sc.last_shelf_at, 'epoch'::timestamptz),
+				coalesce(ac.last_activity_at, 'epoch'::timestamptz),
+				coalesce(cc.last_comment_at, 'epoch'::timestamptz)
 			)::text as last_activity_at,
-			count(distinct ub.book_id)::int as shelf_entry_count,
-			count(distinct ub.book_id) filter (where char_length(trim(coalesce(ub.finished_reflection, ''))) > 0)::int as review_count
-		from users u
-		left join user_book ub on ub.user_id = u.id
-		left join user_activity ua on ua.user_id = u.id
-		left join user_activity_comment uac on uac.user_id = u.id
-		where ${search} = ''
-			or lower(coalesce(u.username, '')) like ${pattern}
-			or lower(coalesce(u.email, '')) like ${pattern}
-		group by u.id, u.username, u.email, u.created_at
-		order by u.created_at desc nulls last, u.id desc
-		limit ${safeLimit}
+			coalesce(sc.shelf_entry_count, 0)::int as shelf_entry_count,
+			coalesce(sc.review_count, 0)::int as review_count
+		from visible_users vu
+		left join shelf_counts sc on sc.user_id = vu.id
+		left join activity_counts ac on ac.user_id = vu.id
+		left join comment_counts cc on cc.user_id = vu.id
+		order by vu.created_at desc nulls last, vu.id desc
 	`;
-	return rows.map((row) => ({
-		id: normalizeText(row.id),
-		username: normalizeText(row.username),
-		email: normalizeText(row.email),
-		joinedAt: normalizeText(row.created_at),
-		lastActivityAt: normalizeText(row.last_activity_at).startsWith("1970-") ? "" : normalizeText(row.last_activity_at),
-		shelfEntryCount: toCount(row.shelf_entry_count),
-		reviewCount: toCount(row.review_count)
-	}));
+	return rows.map((row) => {
+		const profile = readProfileObject(row.profile_data);
+		return {
+			id: normalizeText(row.id),
+			displayName: normalizeText(profile.name, 120),
+			username: normalizeText(row.username),
+			email: normalizeText(row.email),
+			avatar: normalizeText(profile.avatar, 1000),
+			status: normalizeText(profile.accountStatus || profile.account_status || profile.status, 80) || "active",
+			joinedAt: normalizeText(row.created_at),
+			lastActivityAt: normalizeText(row.last_activity_at).startsWith("1970-") ? "" : normalizeText(row.last_activity_at),
+			shelfEntryCount: toCount(row.shelf_entry_count),
+			reviewCount: toCount(row.review_count)
+		};
+	});
+}
+
+export async function loadAdminUsersIndex(
+	sql: NeonQueryFunction<false, false>,
+	input: { query?: unknown; page?: unknown; pageSize?: unknown } = {}
+): Promise<AdminUsersIndexResult> {
+	await ensureAdminSupportSchema(sql);
+	const requested = normalizeAdminUsersPagination(input);
+	const [total, users] = await Promise.all([
+		countAdminUsers(sql, requested.query),
+		loadAdminUserListRows(sql, requested.query, requested.page, requested.pageSize)
+	]);
+	const totalPages = Math.max(1, Math.ceil(total / requested.pageSize));
+	return {
+		users,
+		pagination: {
+			...requested,
+			total,
+			totalPages
+		}
+	};
+}
+
+export async function searchAdminUsers(sql: NeonQueryFunction<false, false>, query: string, limit = 50): Promise<AdminUserSummary[]> {
+	const page = await loadAdminUsersIndex(sql, { query, page: 1, pageSize: limit });
+	return page.users;
 }
 
 export async function loadAdminBetaUsers(sql: NeonQueryFunction<false, false>, query: string, limit = 100): Promise<AdminBetaUser[]> {
@@ -802,6 +929,7 @@ export async function loadAdminUserDetail(sql: NeonQueryFunction<false, false>, 
 		id: string;
 		username: string | null;
 		email: string | null;
+		profile_data: unknown;
 		created_at: string | null;
 		last_activity_at: string | null;
 		shelf_entry_count: number;
@@ -817,6 +945,7 @@ export async function loadAdminUserDetail(sql: NeonQueryFunction<false, false>, 
 			select
 				au.id,
 				au.username,
+				au.profile_data,
 				coalesce(pgp_sym_decrypt(au.email_enc, ${encryptionKey}), '') as email,
 				au.created_at
 			from app_user au
@@ -827,6 +956,7 @@ export async function loadAdminUserDetail(sql: NeonQueryFunction<false, false>, 
 			t.id::text as id,
 			t.username,
 			t.email,
+			t.profile_data,
 			t.created_at::text as created_at,
 			greatest(
 				coalesce((select max(updated_at) from user_book where user_id = t.id), 'epoch'::timestamptz),
@@ -845,10 +975,14 @@ export async function loadAdminUserDetail(sql: NeonQueryFunction<false, false>, 
 	`;
 	const row = rows[0];
 	if (!row?.id) return null;
+	const profile = readProfileObject(row.profile_data);
 	return {
 		id: normalizeText(row.id),
+		displayName: normalizeText(profile.name, 120),
 		username: normalizeText(row.username),
 		email: normalizeText(row.email),
+		avatar: normalizeText(profile.avatar, 1000),
+		status: normalizeText(profile.accountStatus || profile.account_status || profile.status, 80) || "active",
 		joinedAt: normalizeText(row.created_at),
 		lastActivityAt: normalizeText(row.last_activity_at).startsWith("1970-") ? "" : normalizeText(row.last_activity_at),
 		shelfEntryCount: toCount(row.shelf_entry_count),

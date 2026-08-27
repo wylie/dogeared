@@ -78,6 +78,7 @@ test("admin performance loader computes workflow, route, provider, slow-operatio
 	assert.match(telemetry, /shelf\.mutate/);
 	assert.match(telemetry, /page\.profile/);
 	assert.match(telemetry, /page\.book-detail/);
+	assert.match(telemetry, /page\.admin-users/);
 	assert.match(telemetry, /navigation\.feedback/);
 	assert.match(telemetry, /external\.google-books/);
 	assert.match(telemetry, /external\.open-library/);

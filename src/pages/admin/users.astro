@@ -1,16 +1,49 @@
 ---
 import Layout from "../../layouts/Layout.astro";
+import Pagination from "../../components/Pagination.astro";
 import { resolveAdminSession } from "../../lib/admin";
 import { getNeonSql } from "../../lib/neon";
-import { deleteAdminUser, searchAdminUsers } from "../../lib/adminData";
-import { formatDate, formatNumber, safeAdminLoad, safeArray } from "../../lib/adminFormatting";
+import {
+	countAdminUsers,
+	deleteAdminUser,
+	ensureAdminSupportSchema,
+	loadAdminUserListRows,
+	normalizeAdminUsersPagination,
+	type AdminUserSummary
+} from "../../lib/adminData";
+import { formatDate, formatNumber, safeAdminLoad } from "../../lib/adminFormatting";
+import { recordPerformanceEventSafe, type PerformanceSpanInput } from "../../lib/performanceTelemetry";
 
 export const prerender = false;
 
+const pageStartedAt = performance.now();
+const pageSpans: PerformanceSpanInput[] = [];
+const recordSpan = (name: string, startedAt: number, status = "OK", parentName = "") => {
+	pageSpans.push({
+		name,
+		durationMs: Math.round(Math.max(0, performance.now() - startedAt) * 10) / 10,
+		startMs: Math.round(Math.max(0, startedAt - pageStartedAt) * 10) / 10,
+		status,
+		...(parentName ? { parentName } : {})
+	});
+};
+const recordMarkerSpan = (name: string, parentName = "") => {
+	pageSpans.push({
+		name,
+		durationMs: 0,
+		startMs: Math.round(Math.max(0, performance.now() - pageStartedAt) * 10) / 10,
+		status: "OK",
+		...(parentName ? { parentName } : {})
+	});
+};
+const authStartedAt = performance.now();
 const admin = await resolveAdminSession(Astro.request);
+recordSpan("authentication/admin authorization", authStartedAt);
 if (!admin.isAdmin) return Astro.redirect("/");
 
 const query = String(Astro.url.searchParams.get("q") || "").trim();
+const requestedPage = Astro.url.searchParams.get("page") || "1";
+const paginationRequest = normalizeAdminUsersPagination({ query, page: requestedPage, pageSize: 25 });
 const sql = getNeonSql();
 let actionMessage = Astro.url.searchParams.get("deleted") === "1" ? "User deleted." : "";
 let actionError = false;
@@ -37,8 +70,66 @@ if (Astro.request.method === "POST") {
 	}
 }
 
-const usersResult = await safeAdminLoad("Admin users", () => searchAdminUsers(sql, query), []);
-const users = safeArray(usersResult.data);
+const schemaResult = await safeAdminLoad("Admin Users schema", async () => {
+	const startedAt = performance.now();
+	await ensureAdminSupportSchema(sql);
+	recordSpan("schema/index setup", startedAt);
+	return true;
+}, false);
+
+const usersFallback = {
+	users: [] as AdminUserSummary[],
+	total: 0
+};
+const usersLoadStartedAt = performance.now();
+const [countResult, rowsResult] = schemaResult.data
+	? await Promise.all([
+		safeAdminLoad("Admin Users count", async () => {
+			const startedAt = performance.now();
+			const total = await countAdminUsers(sql, paginationRequest.query);
+			recordSpan("pagination/count query", startedAt);
+			return total;
+		}, usersFallback.total),
+		safeAdminLoad("Admin Users list", async () => {
+			const startedAt = performance.now();
+			const rows = await loadAdminUserListRows(sql, paginationRequest.query, paginationRequest.page, paginationRequest.pageSize);
+			recordSpan("user-list database query", startedAt);
+			recordMarkerSpan("profile data", "user-list database query");
+			recordMarkerSpan("shelf/count aggregation", "user-list database query");
+			return rows;
+		}, usersFallback.users)
+	])
+	: [
+		{ data: usersFallback.total, warning: schemaResult.warning },
+		{ data: usersFallback.users, warning: schemaResult.warning }
+	];
+recordSpan("admin users data loading", usersLoadStartedAt);
+recordMarkerSpan("reading statistics deferred to User Detail");
+recordMarkerSpan("streak calculations deferred to User Detail");
+recordMarkerSpan("achievement loading deferred to User Detail");
+
+const users = rowsResult.data;
+const totalUsers = countResult.data;
+const totalPages = Math.max(1, Math.ceil(totalUsers / paginationRequest.pageSize));
+const currentPage = Math.max(1, Math.min(totalPages, paginationRequest.page));
+const pagination = {
+	...paginationRequest,
+	page: currentPage,
+	total: totalUsers,
+	totalPages,
+	offset: (currentPage - 1) * paginationRequest.pageSize
+};
+const pageHref = (page: number) => {
+	const params = new URLSearchParams();
+	if (query) params.set("q", query);
+	if (page > 1) params.set("page", String(page));
+	const suffix = params.toString();
+	return suffix ? `/admin/users?${suffix}` : "/admin/users";
+};
+const previousHref = pagination.page > 1 ? pageHref(pagination.page - 1) : "";
+const nextHref = pagination.page < pagination.totalPages ? pageHref(pagination.page + 1) : "";
+const firstItem = users.length > 0 ? pagination.offset + 1 : 0;
+const lastItem = users.length > 0 ? pagination.offset + users.length : 0;
 
 const sectionLinks = [
 	{ id: "overview", label: "Overview" },
@@ -46,6 +137,28 @@ const sectionLinks = [
 	{ id: "user-list", label: "Users" }
 ];
 
+const renderPrepStartedAt = performance.now();
+recordSpan("final server rendering preparation", renderPrepStartedAt);
+recordPerformanceEventSafe(sql, {
+	operationName: "page.admin-users",
+	route: "/admin/users",
+	totalMs: performance.now() - pageStartedAt,
+	success: !schemaResult.warning && !countResult.warning && !rowsResult.warning,
+	httpStatus: 200,
+	spans: pageSpans,
+	metadata: {
+		boundedDataQueryCount: 2,
+		userListQueryCount: 1,
+		userRowsReturned: users.length,
+		totalUsers,
+		page: pagination.page,
+		pageSize: pagination.pageSize,
+		searchActive: query !== "",
+		schemaWarning: !!schemaResult.warning,
+		countWarning: !!countResult.warning,
+		rowsWarning: !!rowsResult.warning
+	}
+});
 ---
 
 <Layout title="Admin Users" sectionLinks={sectionLinks} robots="noindex,nofollow">
@@ -72,17 +185,24 @@ const sectionLinks = [
 		<section class="panel" id="user-list">
 			<div class="panel-head">
 				<h2>Users</h2>
-				<p>{formatNumber(users.length)} {users.length === 1 ? "user" : "users"} shown.</p>
+				<p>
+					{users.length > 0
+						? `${formatNumber(firstItem)}-${formatNumber(lastItem)} of ${formatNumber(totalUsers)} ${totalUsers === 1 ? "user" : "users"}`
+						: `0 of ${formatNumber(totalUsers)} users`}
+				</p>
 			</div>
 			<p class="danger-note">Books on shelves are shelf entries from reader accounts, not distinct shelf names. Deleting a user removes reader-owned data including shelves, ratings, reviews, progress, activity, comments, follows, notifications, sessions, magic links, custom shelves, and pending email changes. Catalog books and authors are preserved.</p>
 			{actionMessage && <p class={`admin-message${actionError ? " error" : ""}`} role="status">{actionMessage}</p>}
-			{usersResult.warning && <p class="admin-message error" role="status">{usersResult.warning}</p>}
+			{schemaResult.warning && <p class="admin-message error" role="status">{schemaResult.warning}</p>}
+			{countResult.warning && countResult.warning !== schemaResult.warning && <p class="admin-message error" role="status">{countResult.warning}</p>}
+			{rowsResult.warning && rowsResult.warning !== schemaResult.warning && <p class="admin-message error" role="status">{rowsResult.warning}</p>}
 			<div class="table-wrap">
 				<table>
 					<thead>
 						<tr>
-							<th>Username</th>
+							<th>Reader</th>
 							<th>Email</th>
+							<th>Status</th>
 							<th>Joined</th>
 							<th>Last activity</th>
 							<th>Books on shelves</th>
@@ -92,17 +212,24 @@ const sectionLinks = [
 					</thead>
 					<tbody>
 						{users.length === 0 ? (
-							<tr><td colspan="7">No users matched that search.</td></tr>
+							<tr><td colspan="8">No users matched that search.</td></tr>
 						) : users.map((user) => (
 							<tr>
 								<td>
 									{user.username ? (
-										<a class="table-link" href={`/admin/users/${encodeURIComponent(user.username)}`}>@{user.username}</a>
+										<span class="reader-cell">
+											{user.avatar ? <img src={user.avatar} alt="" loading="lazy" decoding="async" /> : <span class="reader-avatar-placeholder" aria-hidden="true">{(user.displayName || user.username || "?").slice(0, 1).toUpperCase()}</span>}
+											<span>
+												<a class="table-link" href={`/admin/users/${encodeURIComponent(user.username)}`}>{user.displayName || `@${user.username}`}</a>
+												<small>@{user.username}</small>
+											</span>
+										</span>
 									) : (
 										<span class="muted">No username</span>
 									)}
 								</td>
 								<td>{user.email || "Unknown"}</td>
+								<td>{user.status || "active"}</td>
 								<td>{formatDate(user.joinedAt)}</td>
 								<td>{user.lastActivityAt ? formatDate(user.lastActivityAt) : "No activity"}</td>
 								<td>{formatNumber(user.shelfEntryCount)}</td>
@@ -123,6 +250,13 @@ const sectionLinks = [
 					</tbody>
 				</table>
 			</div>
+			<Pagination
+				currentPage={pagination.page}
+				totalPages={pagination.totalPages}
+				previousHref={previousHref}
+				nextHref={nextHref}
+				label="Admin users pagination"
+			/>
 		</section>
 	</div>
 </Layout>
@@ -184,6 +318,34 @@ const sectionLinks = [
 	table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 	th, td { text-align: left; padding: 0.45rem; border-bottom: var(--border-subtle); vertical-align: top; }
 	th { font-weight: 700; color: #444; }
+	.reader-cell {
+		display: flex;
+		align-items: center;
+		gap: 0.55rem;
+		min-width: 180px;
+	}
+	.reader-cell img,
+	.reader-avatar-placeholder {
+		width: 32px;
+		height: 32px;
+		border-radius: 999px;
+		flex: 0 0 auto;
+		object-fit: cover;
+		background: var(--color-nav-surface);
+		border: var(--border-subtle);
+	}
+	.reader-avatar-placeholder {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--color-text-muted);
+		font-weight: 800;
+	}
+	.reader-cell small {
+		display: block;
+		margin-top: 0.1rem;
+		color: var(--color-text-muted);
+	}
 	.muted { color: #6b7280; }
 	.inline-delete-form { margin: 0; }
 	.danger-button {

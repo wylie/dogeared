@@ -164,7 +164,7 @@ const CORE_WORKFLOWS = [
 	{ key: "search", label: "Search", operations: ["search.books"], targetMs: 1200, slowMs: 2500 },
 	{ key: "progress", label: "Save Progress", operations: ["progress.save"], targetMs: 750, slowMs: 1500 },
 	{ key: "shelf", label: "Shelf Mutations", operations: ["shelf.mutate"], targetMs: 1200, slowMs: 2500 },
-	{ key: "page", label: "Page Rendering", operations: ["page.profile", "page.reading-life", "page.search", "page.book-detail", "page.author-detail", "page.discover"], targetMs: 1600, slowMs: 3000 },
+	{ key: "page", label: "Page Rendering", operations: ["page.profile", "page.reading-life", "page.search", "page.book-detail", "page.author-detail", "page.discover", "page.admin-users"], targetMs: 1600, slowMs: 3000 },
 	{ key: "navigation", label: "Navigation Feedback", operations: ["navigation.feedback"], targetMs: 120, slowMs: 300 },
 	{ key: "external", label: "External Book APIs", operations: ["external.google-books", "external.open-library"], targetMs: 1200, slowMs: 2500 }
 ];
@@ -179,6 +179,7 @@ const OPERATION_LABELS = new Map<string, string>([
 	["page.book-detail", "Book Detail"],
 	["page.author-detail", "Author Detail"],
 	["page.discover", "Discover"],
+	["page.admin-users", "Admin Users"],
 	["navigation.feedback", "Navigation Feedback"],
 	["external.google-books", "Google Books"],
 	["external.open-library", "Open Library"]
