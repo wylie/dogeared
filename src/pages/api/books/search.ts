@@ -8,6 +8,7 @@ import { searchCollections } from "../../../lib/collections";
 import { resolveUserBySession } from "../../../lib/auth";
 import { classifySearchAnalyticsSubject, recordProductAnalyticsEventSafe } from "../../../lib/productAnalytics";
 import { recordPerformanceEventSafe, type PerformanceSpanInput } from "../../../lib/performanceTelemetry";
+import { reconcileCanonicalSearchResults, type ReconciledSearchResults } from "../../../lib/searchReconciliation";
 import { normalizeSearchResult, type SearchResult } from "../../../lib/searchResults";
 
 export const prerender = false;
@@ -444,6 +445,14 @@ export const GET: APIRoute = async ({ request, url }) => {
 	let canonicalCacheHits = 0;
 	let canonicalCacheMisses = 0;
 	let canonicalCandidateSetTruncated = false;
+	let reconciliationInputCount = 0;
+	let reconciliationOutputCount = 0;
+	let reconciliationGroupsMerged = 0;
+	let reconciliationProviderGroupsMerged = 0;
+	let reconciliationIdentifierMergeCount = 0;
+	let reconciliationMetadataMergeCount = 0;
+	let reconciliationEditionVariantCount = 0;
+	let reconciliationFalseMergeGuardCount = 0;
 	const providerTimeouts = new Set<string>();
 	const markPerfStage = (stage: string) => {
 		perfStages[stage] = Math.round((performance.now() - perfStartedAt) * 10) / 10;
@@ -471,6 +480,17 @@ export const GET: APIRoute = async ({ request, url }) => {
 		} finally {
 			recordSearchSpan(name, performance.now() - startedAt, startedAt - perfStartedAt);
 		}
+	};
+	const rememberReconciliationMetrics = (payload: ReconciledSearchResults) => {
+		reconciliationInputCount += payload.metrics.inputCount;
+		reconciliationOutputCount += payload.metrics.outputCount;
+		reconciliationGroupsMerged += payload.metrics.groupsMerged;
+		reconciliationProviderGroupsMerged += payload.metrics.providerGroupsMerged;
+		reconciliationIdentifierMergeCount += payload.metrics.identifierMergeCount;
+		reconciliationMetadataMergeCount += payload.metrics.metadataMergeCount;
+		reconciliationEditionVariantCount += payload.metrics.editionVariantCount;
+		reconciliationFalseMergeGuardCount += payload.metrics.falseMergeGuardCount;
+		return payload.results;
 	};
 	const logPerf = (outcome: string, extra: Record<string, unknown> = {}) => {
 		if (!import.meta.env.DEV) return;
@@ -511,6 +531,14 @@ export const GET: APIRoute = async ({ request, url }) => {
 				canonicalCacheHits,
 				canonicalCacheMisses,
 				canonicalCandidateSetTruncated,
+				reconciliationInputCount,
+				reconciliationOutputCount,
+				reconciliationGroupsMerged,
+				reconciliationProviderGroupsMerged,
+				reconciliationIdentifierMergeCount,
+				reconciliationMetadataMergeCount,
+				reconciliationEditionVariantCount,
+				reconciliationFalseMergeGuardCount,
 				timeout: providerTimeoutCount > 0 || localTimeoutCount > 0 || canonicalTimeoutCount > 0,
 				clientAborted: isRequestAborted(requestSignal),
 				retryCount: 0,
@@ -780,16 +808,16 @@ export const GET: APIRoute = async ({ request, url }) => {
 				seriesLabel: formatSeriesSearchLabel(String(row.series_name || ""), Number(row.series_book_order || 0) || 0)
 			}));
 
-			const normalizeAndDedupe = (input: SearchResult[], source: string) => dedupeVariants(
-				input
+			const normalizeAndDedupe = (input: SearchResult[], source: string) => {
+				const normalized = input
 					.map((result, index) => normalizeSearchResult(result, { source, index, query }))
 					.filter((result): result is SearchResult => !!result)
 					.filter((result) => isLikelyMatch(result, query))
-					.filter((result) => passesQualityGate(result)),
-				query
-			)
-				.map((result, index) => normalizeSearchResult(result, { source: `${source}.dedupe`, index, query }))
-				.filter((result): result is SearchResult => !!result);
+					.filter((result) => passesQualityGate(result));
+				return rememberReconciliationMetrics(reconcileCanonicalSearchResults(normalized, query))
+					.map((result, index) => normalizeSearchResult(result, { source: `${source}.reconciled`, index, query }))
+					.filter((result): result is SearchResult => !!result);
+			};
 
 			const loadLocalResults = async () => {
 				const localStartedAt = performance.now();
@@ -957,12 +985,13 @@ export const GET: APIRoute = async ({ request, url }) => {
 						.filter((result): result is SearchResult => !!result)
 						.filter((result) => isLikelyMatch(result, query))
 						.filter((result) => passesQualityGate(result));
-					recordSearchSpan("metadata enrichment", performance.now() - metadataStartedAt, metadataStartedAt - perfStartedAt);
+					recordSearchSpan("provider normalization", performance.now() - metadataStartedAt, metadataStartedAt - perfStartedAt);
 					if (isRequestAborted(requestSignal)) return { results: [] as SearchResult[], hasMore: false };
-					const canonicalCandidates = measureSearchSpanSync("dedupe", () => dedupeVariants(mapped, query)
+					const preCanonicalPayload = measureSearchSpanSync("metadata merge", () => reconcileCanonicalSearchResults(mapped, query));
+					const canonicalCandidates = rememberReconciliationMetrics(preCanonicalPayload)
 						.slice(0, Math.max(pageSize, MAX_CANONICAL_MATCH_CANDIDATES))
 						.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.precatalog", index, query }))
-						.filter((result): result is SearchResult => !!result));
+						.filter((result): result is SearchResult => !!result);
 					canonicalCandidateCount = canonicalCandidates.length;
 
 					const canonicalInputs = canonicalCandidates.map((item): { item: SearchResult; cacheKey: string; lookup: CatalogBookLookupInput } => {
@@ -1072,7 +1101,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 						.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.catalog", index, query }))
 						.filter((result): result is SearchResult => !!result);
 					markPerfStage("canonical_resolution_complete");
-					const results = measureSearchSpanSync("result merge", () => dedupeVariants(mappedWithIds, query)
+					const results = measureSearchSpanSync("result ranking", () => rememberReconciliationMetrics(reconcileCanonicalSearchResults(mappedWithIds, query))
 						.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.dedupe", index, query }))
 						.filter((result): result is SearchResult => !!result));
 					return {
@@ -1148,7 +1177,7 @@ export const GET: APIRoute = async ({ request, url }) => {
 			});
 			const results = measureSearchSpanSync("rendering preparation", () => phase === "external"
 				? externalResults
-				: dedupeVariants([...localPayload.results, ...externalResults], query)
+				: rememberReconciliationMetrics(reconcileCanonicalSearchResults([...localPayload.results, ...externalResults], query))
 					.map((result, index) => normalizeSearchResult(result, { source: "api.books.search.final", index, query }))
 					.filter((result): result is SearchResult => !!result));
 			const collectionResults = localPayload.collectionResults;

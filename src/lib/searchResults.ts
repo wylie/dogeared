@@ -1,6 +1,7 @@
 export type SearchResultSource = "dbd" | "google_books" | "open_library";
 
 export type SearchResultVariant = {
+	source?: SearchResultSource;
 	title: string;
 	author: string;
 	pageCount: number;
@@ -45,6 +46,8 @@ export type SearchResult = {
 	seriesLabel?: string;
 	variantCount?: number;
 	variants?: SearchResultVariant[];
+	providerSources?: string[];
+	metadataProvenance?: Record<string, string>;
 };
 
 type NormalizeContext = {
@@ -105,6 +108,7 @@ function normalizeVariant(value: unknown): SearchResultVariant | null {
 		publishedDate ? `Published ${publishedDate}` : ""
 	].filter(Boolean);
 	return {
+		source: source(record.source),
 		title,
 		author: text(record.author),
 		pageCount: positiveNumber(record.pageCount),
@@ -158,6 +162,14 @@ export function normalizeSearchResult(value: unknown, context: NormalizeContext 
 	const normalizedPageCount = pageCount(record.pageCount);
 	const seriesBookOrder = positiveNumber(record.seriesBookOrder);
 	const variantCount = positiveNumber(record.variantCount) || normalizedVariants.length || undefined;
+	const metadataProvenance: Record<string, string> = {};
+	if (record.metadataProvenance && typeof record.metadataProvenance === "object") {
+		for (const [key, value] of Object.entries(record.metadataProvenance as Record<string, unknown>)) {
+			const normalizedKey = text(key);
+			const normalizedValue = text(value);
+			if (normalizedKey && normalizedValue) metadataProvenance[normalizedKey] = normalizedValue;
+		}
+	}
 
 	return {
 		source: source(record.source),
@@ -183,7 +195,9 @@ export function normalizeSearchResult(value: unknown, context: NormalizeContext 
 		seriesBookOrder,
 		seriesLabel: text(record.seriesLabel),
 		variantCount,
-		variants: normalizedVariants
+		variants: normalizedVariants,
+		providerSources: textArray(record.providerSources),
+		metadataProvenance
 	};
 }
 

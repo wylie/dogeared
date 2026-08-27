@@ -39,7 +39,8 @@ test("search API supports local-first and deferred external results", () => {
 	assert.match(source, /recordSearchSpan\("local catalog search"/);
 	assert.match(source, /measureSearchSpan\("Google Books"/);
 	assert.match(source, /measureSearchSpan\("Open Library"/);
-	assert.match(source, /measureSearchSpanSync\("dedupe"/);
+	assert.match(source, /measureSearchSpanSync\("metadata merge"/);
+	assert.match(source, /measureSearchSpanSync\("result ranking"/);
 	assert.match(source, /resolveCanonicalCatalogWorksForSearch/);
 	assert.match(source, /recordSearchSpan\("canonical Work matching"/);
 	assert.match(source, /withSearchTimeout\("canonical Work matching", CANONICAL_MATCH_TIMEOUT_MS/);
@@ -49,7 +50,7 @@ test("search API supports local-first and deferred external results", () => {
 	assert.match(source, /canonicalComparisonCount/);
 	assert.match(source, /providerTimeoutCount/);
 	assert.match(source, /retryCount: 0/);
-	assert.match(source, /measureSearchSpanSync\("result merge"/);
+	assert.match(source, /reconciliationGroupsMerged/);
 	assert.match(catalogWorks, /let backfillReady: Promise<void> \| null = null/);
 	assert.match(catalogWorks, /options: \{ backfill\?: boolean \} = \{\}/);
 	assert.match(catalogWorks, /if \(options\.backfill === false\) return/);
@@ -66,8 +67,9 @@ test("search page parallelizes result decoration and preserves duplicate-submit 
 	assert.match(searchPage, /new AbortController\(\)/);
 	assert.match(searchPage, /externalSearchRequestId/);
 	assert.match(searchPage, /mode: "external"/);
-	assert.match(searchPage, /providerParams\.set\("provider", provider\.id\)/);
-	assert.match(searchPage, /Promise\.all\(providers\.map/);
+	assert.match(searchPage, /fetch\(`\/api\/books\/search\?\$\{params\.toString\(\)\}`/);
+	assert.doesNotMatch(searchPage, /providerParams\.set\("provider", provider\.id\)/);
+	assert.doesNotMatch(searchPage, /Promise\.all\(providers\.map/);
 	assert.match(searchPage, /showExternalSearchSkeletons/);
 	assert.match(searchPage, /hideExternalSearchSkeletons/);
 	assert.match(searchPage, /data-search-skeleton/);

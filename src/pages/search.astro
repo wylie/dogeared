@@ -1310,7 +1310,7 @@ recordPerformanceEventSafe({
 					<h3><a href="${escapeHtml(titleHref)}">${escapeHtml(title)}</a></h3>
 					<p class="meta">by ${authorSlug ? `<a class="author-link" href="/author/${encodeURIComponent(authorSlug)}">${escapeHtml(author)}</a>` : escapeHtml(author)}</p>
 					${result?.seriesLabel ? `<p class="meta series-meta">${escapeHtml(result.seriesLabel)}</p>` : ""}
-					${bookId > 0 ? `<p class="meta">Already in DogEared</p>` : `<p class="meta">Found through ${result?.source === "open_library" ? "Open Library" : "Google Books"}</p>`}
+					${bookId > 0 ? `<p class="meta">Already in DogEared</p>` : ""}
 					${year ? `<p class="meta">Published: ${escapeHtml(year)}</p>` : ""}
 					${Number(result?.pageCount || 0) > 0 ? `<p class="meta">Pages: ${Number(result.pageCount).toLocaleString()}</p>` : ""}
 					${result?.publisher ? `<p class="meta">Publisher: ${escapeHtml(result.publisher)}</p>` : ""}
@@ -1416,40 +1416,34 @@ recordPerformanceEventSafe({
 		const excludeIds = Array.from(renderedBookIds());
 		if (excludeIds.length > 0) params.set("excludeBookIds", excludeIds.join(","));
 		setProgressiveStatus("Checking Google Books and Open Library for more matches.");
-		const providers = [
-			{ id: "google_books", label: "Google Books" },
-			{ id: "open_library", label: "Open Library" }
-		];
 		let appendedTotal = 0;
 		let providerFailures = 0;
 		let externalSkeletonTimer = window.setTimeout(showExternalSearchSkeletons, 140);
-		await Promise.all(providers.map(async (provider) => {
-			const providerParams = new URLSearchParams(params);
-			providerParams.set("provider", provider.id);
-			try {
-				const response = await fetch(`/api/books/search?${providerParams.toString()}`, {
-					headers: { Accept: "application/json" },
-					signal: controller.signal
-				});
-				const payload = await response.json().catch(() => ({}));
-				if (requestId !== externalSearchRequestId) return;
+		try {
+			const response = await fetch(`/api/books/search?${params.toString()}`, {
+				headers: { Accept: "application/json" },
+				signal: controller.signal
+			});
+			const payload = await response.json().catch(() => ({}));
+			if (requestId === externalSearchRequestId) {
 				if (!response.ok) {
 					providerFailures += 1;
-					return;
+				} else {
+					const appended = appendExternalResults(payload?.results || []);
+					appendedTotal += appended;
+					if (appended > 0) {
+						setSearchLifecycleState("loading");
+						setCompletedEmptyState(false, queryText);
+						setSearchLiveStatus(`Added ${appended.toLocaleString()} more match${appended === 1 ? "" : "es"}.`);
+						setProgressiveStatus(`Added ${appended.toLocaleString()} more match${appended === 1 ? "" : "es"}.`, false);
+					}
 				}
-				const appended = appendExternalResults(payload?.results || []);
-				appendedTotal += appended;
-				if (appended > 0) {
-					setSearchLifecycleState("loading");
-					setCompletedEmptyState(false, queryText);
-					setSearchLiveStatus(`Added ${appended.toLocaleString()} more match${appended === 1 ? "" : "es"} from ${provider.label}.`);
-					setProgressiveStatus(`Added ${appended.toLocaleString()} more match${appended === 1 ? "" : "es"} from ${provider.label}.`, false);
-				}
-			} catch (error) {
-				if (error instanceof DOMException && error.name === "AbortError") return;
-				if (requestId === externalSearchRequestId) providerFailures += 1;
 			}
-		}));
+		} catch (error) {
+			if (!(error instanceof DOMException && error.name === "AbortError") && requestId === externalSearchRequestId) {
+				providerFailures += 1;
+			}
+		}
 		window.clearTimeout(externalSkeletonTimer);
 		hideExternalSearchSkeletons();
 		if (requestId !== externalSearchRequestId) return;
