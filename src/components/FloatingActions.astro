@@ -34,8 +34,13 @@ const supportActions = [
 </div>
 
 <script>
-	const floatingActions = document.querySelector(".floating-actions");
-	if (floatingActions instanceof HTMLElement) {
+	import { onDogearedPageLoad } from "../lib/pageLifecycle.ts";
+
+	onDogearedPageLoad("floating-actions", () => {
+		const floatingActions = document.querySelector(".floating-actions");
+		if (!(floatingActions instanceof HTMLElement)) return;
+		const controller = new AbortController();
+		const { signal } = controller;
 		const enablePointerExpansion = () => {
 			floatingActions.classList.add("is-pointer-active");
 		};
@@ -45,10 +50,12 @@ const supportActions = [
 		const disableKeyboardExpansion = () => {
 			floatingActions.classList.remove("is-keyboard-active");
 		};
-		floatingActions.addEventListener("pointermove", enablePointerExpansion, { once: true });
-		window.addEventListener("keydown", enableKeyboardExpansion);
-		window.addEventListener("pointerdown", disableKeyboardExpansion);
-	}
+		floatingActions.classList.remove("is-pointer-active", "is-keyboard-active");
+		floatingActions.addEventListener("pointermove", enablePointerExpansion, { once: true, signal });
+		window.addEventListener("keydown", enableKeyboardExpansion, { signal });
+		window.addEventListener("pointerdown", disableKeyboardExpansion, { signal });
+		return () => controller.abort();
+	});
 </script>
 
 <style>

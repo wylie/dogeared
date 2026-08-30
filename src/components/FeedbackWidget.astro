@@ -121,8 +121,13 @@ const { isAuthenticated = false } = Astro.props as Props;
 </div>
 
 <script>
-	const widget = document.querySelector("[data-feedback-widget]");
-	if (widget instanceof HTMLElement) {
+	import { onDogearedPageLoad } from "../lib/pageLifecycle.ts";
+
+	onDogearedPageLoad("feedback-widget", () => {
+		const widget = document.querySelector("[data-feedback-widget]");
+		if (!(widget instanceof HTMLElement)) return;
+		const controller = new AbortController();
+		const { signal } = controller;
 		const openButton = widget.querySelector("[data-feedback-open]");
 		const modal = widget.querySelector("[data-feedback-modal]");
 		const panel = widget.querySelector(".feedback-panel");
@@ -301,14 +306,14 @@ const { isAuthenticated = false } = Astro.props as Props;
 				.replace(/'/g, "&#39;");
 		}
 
-		openButton?.addEventListener("click", () => openFeedbackModal());
-		typeInputs.forEach((input) => input.addEventListener("change", syncFeedbackMode));
+		openButton?.addEventListener("click", () => openFeedbackModal(), { signal });
+		typeInputs.forEach((input) => input.addEventListener("change", syncFeedbackMode, { signal }));
 		widget.querySelectorAll("[data-feedback-close]").forEach((button) => {
-			button.addEventListener("click", closeFeedbackModal);
+			button.addEventListener("click", closeFeedbackModal, { signal });
 		});
 		document.addEventListener("keydown", (event) => {
 			if (event.key === "Escape" && modal instanceof HTMLElement && !modal.hidden) closeFeedbackModal();
-		});
+		}, { signal });
 
 		function renderScreenshots() {
 			if (!(screenshotList instanceof HTMLElement)) return;
@@ -360,7 +365,7 @@ const { isAuthenticated = false } = Astro.props as Props;
 
 		screenshotInput?.addEventListener("change", () => {
 			if (screenshotInput instanceof HTMLInputElement) void addScreenshotFiles(screenshotInput.files);
-		});
+		}, { signal });
 		screenshotList?.addEventListener("click", (event) => {
 			const target = event.target;
 			if (!(target instanceof HTMLElement)) return;
@@ -371,24 +376,24 @@ const { isAuthenticated = false } = Astro.props as Props;
 				selectedScreenshots.splice(index, 1);
 				renderScreenshots();
 			}
-		});
+		}, { signal });
 		dropzone?.addEventListener("dragover", (event) => {
 			event.preventDefault();
 			if (dropzone instanceof HTMLElement) dropzone.classList.add("is-dragging");
-		});
+		}, { signal });
 		dropzone?.addEventListener("dragleave", () => {
 			if (dropzone instanceof HTMLElement) dropzone.classList.remove("is-dragging");
-		});
+		}, { signal });
 		dropzone?.addEventListener("drop", (event) => {
 			event.preventDefault();
 			if (dropzone instanceof HTMLElement) dropzone.classList.remove("is-dragging");
 			void addScreenshotFiles(event.dataTransfer?.files);
-		});
+		}, { signal });
 		dropzone?.addEventListener("keydown", (event) => {
 			if (event.key !== "Enter" && event.key !== " ") return;
 			event.preventDefault();
 			if (screenshotInput instanceof HTMLInputElement) screenshotInput.click();
-		});
+		}, { signal });
 
 		form?.addEventListener("submit", async (event) => {
 			event.preventDefault();
@@ -459,7 +464,7 @@ const { isAuthenticated = false } = Astro.props as Props;
 			} finally {
 				if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
 			}
-		});
+		}, { signal });
 
 		function rememberClientError(error) {
 			const list = Array.isArray(window.__dogearedClientErrors) ? window.__dogearedClientErrors : [];
@@ -477,13 +482,13 @@ const { isAuthenticated = false } = Astro.props as Props;
 
 		window.addEventListener("error", (event) => {
 			rememberClientError(event);
-		});
+		}, { signal });
 		window.addEventListener("unhandledrejection", (event) => {
 			rememberClientError(event);
-		});
+		}, { signal });
 		errorDismissButton?.addEventListener("click", () => {
 			if (errorPrompt instanceof HTMLElement) errorPrompt.hidden = true;
-		});
+		}, { signal });
 		errorReportButton?.addEventListener("click", () => {
 			if (errorPrompt instanceof HTMLElement) errorPrompt.hidden = true;
 			openFeedbackModal({
@@ -491,9 +496,13 @@ const { isAuthenticated = false } = Astro.props as Props;
 				subject: "Unexpected client error",
 				description: "Something unexpected happened while I was using DogEared."
 			});
-		});
+		}, { signal });
 		syncFeedbackMode();
-	}
+		return () => {
+			controller.abort();
+			document.body.classList.remove("feedback-modal-open");
+		};
+	});
 </script>
 
 <style>

@@ -869,9 +869,13 @@ const adminNavItems: NavItem[] = [
 </style>
 
 <script>
+  import { onDogearedPageLoad } from "../lib/pageLifecycle.ts";
   import { resolveClientAuthState, subscribeAuthStateChange, setAuthPreviewMode } from "../lib/clientAuth.ts";
 
+  onDogearedPageLoad("left-hand", () => {
   const leftHandNav = document.getElementById("left-hand-nav");
+  const controller = new AbortController();
+  const { signal } = controller;
   const ssrAuthenticated = leftHandNav?.dataset.ssrAuthenticated === "true";
   const allowAuthPrompt = leftHandNav?.dataset.authPrompt === "true";
   const foundingReaderMode = String(leftHandNav?.dataset.foundingReaderMode || "open");
@@ -1038,16 +1042,16 @@ const adminNavItems: NavItem[] = [
     } finally {
       window.location.href = "/";
     }
-  });
+  }, { signal });
 
   leftHandLoginButton?.addEventListener("click", () => {
     openLoginModal("login");
-  });
+  }, { signal });
 
   window.addEventListener("dogeared:open-auth", (event) => {
     const mode = event instanceof CustomEvent && event.detail?.mode === "create" ? "create" : "login";
     openLoginModal(mode);
-  });
+  }, { signal });
 
   leftHandLoginModal?.addEventListener("click", (event) => {
     const target = event.target;
@@ -1055,13 +1059,13 @@ const adminNavItems: NavItem[] = [
     if (target.matches('[data-action="close-login-modal"]')) {
       closeLoginModal();
     }
-  });
+  }, { signal });
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && leftHandLoginModal instanceof HTMLElement && !leftHandLoginModal.hidden) {
       closeLoginModal();
     }
-  });
+  }, { signal });
 
   leftHandLoginForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1095,7 +1099,7 @@ const adminNavItems: NavItem[] = [
     } catch {
       showLoginFeedback("Failed to send magic link.", true);
     }
-  });
+  }, { signal });
 
   leftHandSearchForm?.addEventListener("submit", (event) => {
     if (!(leftHandSearchForm instanceof HTMLFormElement)) return;
@@ -1111,7 +1115,7 @@ const adminNavItems: NavItem[] = [
     if (leftHandSearchStatus instanceof HTMLElement) {
       leftHandSearchStatus.hidden = false;
     }
-  });
+  }, { signal });
 
   function syncSearchClearButton() {
     if (!(leftHandSearchClear instanceof HTMLButtonElement)) return;
@@ -1121,7 +1125,7 @@ const adminNavItems: NavItem[] = [
 
   leftHandSearchInput?.addEventListener("input", () => {
     syncSearchClearButton();
-  });
+  }, { signal });
 
   leftHandSearchClear?.addEventListener("click", (event) => {
     event.preventDefault();
@@ -1138,7 +1142,7 @@ const adminNavItems: NavItem[] = [
     }
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.focus();
-  });
+  }, { signal });
 
   syncSearchClearButton();
 
@@ -1152,7 +1156,7 @@ const adminNavItems: NavItem[] = [
       leftHandMenuToggle.setAttribute("aria-label", willOpen ? "Close navigation menu" : "Open navigation menu");
     }
     updateMobileStickyOffset();
-  });
+  }, { signal });
 
   leftHandPrimaryLinks?.addEventListener("click", (event) => {
     const target = event.target;
@@ -1167,19 +1171,19 @@ const adminNavItems: NavItem[] = [
     }
     persistNavScrollPosition();
     updateMobileStickyOffset();
-  });
+  }, { signal });
 
   leftHandSecondaryLinks?.addEventListener("click", () => {
     persistNavScrollPosition();
-  });
+  }, { signal });
 
   leftHandPrimaryLinks?.addEventListener("scroll", () => {
     persistNavScrollPosition();
-  }, { passive: true });
+  }, { passive: true, signal });
 
   leftHandSecondaryLinks?.addEventListener("scroll", () => {
     persistNavScrollPosition();
-  }, { passive: true });
+  }, { passive: true, signal });
 
   function updateMobileStickyOffset() {
     if (!(leftHandNav instanceof HTMLElement)) return;
@@ -1191,9 +1195,9 @@ const adminNavItems: NavItem[] = [
 
   updateMobileStickyOffset();
   restoreNavScrollPosition();
-  window.addEventListener("pageshow", restoreNavScrollPosition);
-  window.addEventListener("resize", updateMobileStickyOffset);
-  window.addEventListener("load", updateMobileStickyOffset);
+  window.addEventListener("pageshow", restoreNavScrollPosition, { signal });
+  window.addEventListener("resize", updateMobileStickyOffset, { signal });
+  window.addEventListener("load", updateMobileStickyOffset, { signal });
 
   const sectionNavLinks = Array.from(document.querySelectorAll("[data-section-link]"));
   const sectionTargets = sectionNavLinks
@@ -1246,17 +1250,17 @@ const adminNavItems: NavItem[] = [
       });
     }
     setActiveSectionLink(resolveCurrentSectionId());
-    window.addEventListener("scroll", requestActiveSectionUpdate, { passive: true });
-    window.addEventListener("resize", requestActiveSectionUpdate);
-    window.addEventListener("load", updateActiveSectionLink);
+    window.addEventListener("scroll", requestActiveSectionUpdate, { passive: true, signal });
+    window.addEventListener("resize", requestActiveSectionUpdate, { signal });
+    window.addEventListener("load", updateActiveSectionLink, { signal });
     window.addEventListener("hashchange", () => {
       const id = window.location.hash.replace(/^#/, "");
       if (id) setActiveSectionLink(id);
       else updateActiveSectionLink();
-    });
+    }, { signal });
   }
 
-  subscribeAuthStateChange(() => {
+  const unsubscribeAuthStateChange = subscribeAuthStateChange(() => {
     void syncLeftHandAuthState();
   });
   window.addEventListener("dogeared:notifications-updated", (event) => {
@@ -1269,6 +1273,11 @@ const adminNavItems: NavItem[] = [
       leftHandNotificationBadge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
       leftHandNotificationBadge.setAttribute("aria-label", `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}`);
     }
-  });
+  }, { signal });
   void syncLeftHandAuthState();
+  return () => {
+    unsubscribeAuthStateChange();
+    controller.abort();
+  };
+  });
 </script>

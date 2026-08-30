@@ -213,6 +213,8 @@ import '../assets/global.css';
 			<WhatsNewModal release={latestRelease} />
 			<script is:inline>
 				(() => {
+					if (window.__dogearedRouteProgressBound) return;
+					window.__dogearedRouteProgressBound = true;
 					let navigationTimer = 0;
 					let skeletonTimer = 0;
 					let slowNavigationTimer = 0;

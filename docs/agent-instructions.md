@@ -34,6 +34,8 @@ When implementing features or fixing bugs:
 
 Do not spend time searching unrelated areas of the codebase.
 
+For Astro pages using the shared `ClientRouter`, do not bind shared component behavior only through one-time top-level DOM references. Reusable layout/client scripts that must work after client-side navigation should initialize through DogEared's page lifecycle helper on `astro:page-load` and clean up old listeners before rebinding.
+
 ---
 
 ## Bug Fixes

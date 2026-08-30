@@ -176,6 +176,32 @@ test("page navigation and route rendering avoid avoidable blocking work", () => 
 	assert.match(reviews, /let reviewSchemaReady: Promise<void> \| null = null/);
 });
 
+test("shared client scripts rebind to swapped Astro page DOM", () => {
+	const lifecycle = read("../src/lib/pageLifecycle.ts");
+	const layout = read("../src/layouts/Layout.astro");
+	const floatingActions = read("../src/components/FloatingActions.astro");
+	const feedbackWidget = read("../src/components/FeedbackWidget.astro");
+	const leftHand = read("../src/components/LeftHand.astro");
+	const architecture = read("../docs/engineering/architecture.md");
+	const productFeatures = read("../docs/product/features.md");
+
+	assert.match(lifecycle, /document\.addEventListener\("astro:page-load", run\)/);
+	assert.match(lifecycle, /previousCleanup\(\)/);
+	assert.match(lifecycle, /__dogearedPageLifecycle/);
+	assert.match(layout, /__dogearedRouteProgressBound/);
+	assert.match(floatingActions, /onDogearedPageLoad\("floating-actions"/);
+	assert.match(floatingActions, /new AbortController\(\)/);
+	assert.match(feedbackWidget, /onDogearedPageLoad\("feedback-widget"/);
+	assert.match(feedbackWidget, /data-feedback-open/);
+	assert.match(feedbackWidget, /controller\.abort\(\)/);
+	assert.match(leftHand, /onDogearedPageLoad\("left-hand"/);
+	assert.match(leftHand, /leftHandMenuToggle\?\.addEventListener\("click"/);
+	assert.match(leftHand, /leftHandSearchForm\?\.addEventListener\("submit"/);
+	assert.match(leftHand, /unsubscribeAuthStateChange\(\)/);
+	assert.match(architecture, /astro:page-load/);
+	assert.match(productFeatures, /astro:page-load/);
+});
+
 test("shelf feedback disables duplicate actions without committing success before acceptance", () => {
 	const searchPage = read("../src/pages/search.astro");
 	const bookPage = read("../src/pages/book.astro");
