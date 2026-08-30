@@ -54,7 +54,9 @@ test("BookCard and Reading Life fall back when a cover image URL breaks", () => 
 
 	assert.match(bookCard, /data-cover-placeholder/);
 	assert.match(bookCard, /onerror="this\.hidden=true;/);
+	assert.match(bookCard, /\.cover-placeholder\[hidden\]\s*{\s*display: none;/);
 	assert.match(readingLife, /onerror="this\.hidden=true; this\.nextElementSibling\?\.removeAttribute\('hidden'\);"/);
+	assert.match(readingLife, /\.cover-placeholder\[hidden\]\s*{\s*display: none;/);
 });
 
 test("Catalog Editor saves invalidate catalog cover caches", () => {
