@@ -348,14 +348,49 @@ test("admin catalog editor surfaces Data Health issues next to relevant fields",
 
 test("Book Detail exposes catalog repair shortcut only through admin session", () => {
 	const book = readFileSync("src/pages/book.astro", "utf8");
+	const catalogEditor = readFileSync("src/pages/admin/books/[workId].astro", "utf8");
+	const dataHealth = readFileSync("src/pages/admin/data-health.astro", "utf8");
 
 	assert.match(book, /resolveAdminSession/);
 	assert.match(book, /countCatalogHealthIssuesForWork/);
 	assert.match(book, /bookDetailAdminSession\.isAdmin/);
+	assert.match(book, /let bookDetailAdminSession = \{ isAdmin: false, userId: "", username: "" \}/);
+	assert.match(book, /if \(isAuthenticated\) \{\s*try \{\s*bookDetailAdminSession = await resolveAdminSession\(Astro\.request\);/s);
+	assert.match(book, /const catalogMetadataAdminWorkId = bookDetailAdminSession\.isAdmin \? Math\.max\(0, Number\(book\?\.workId \|\| 0\) \|\| 0\) : 0/);
+	assert.match(book, /const canShowCatalogMetadataBanner = catalogMetadataAdminWorkId > 0/);
+	assert.match(book, /if \(canShowCatalogMetadataBanner && bookDetailSql\) \{\s*try \{\s*adminCatalogIssueCount = await countCatalogHealthIssuesForWork\(bookDetailSql, catalogMetadataAdminWorkId\);/s);
+	assert.match(book, /\{canShowCatalogMetadataBanner && \(\s*<section class="admin-catalog-shortcut"/s);
 	assert.match(book, /admin-catalog-shortcut/);
 	assert.match(book, /Edit catalog data/);
 	assert.match(book, /View Data Health/);
 	assert.match(book, /metadata issue/);
+
+	const defaultSessionIndex = book.indexOf('let bookDetailAdminSession = { isAdmin: false, userId: "", username: "" }');
+	const resolveAdminIndex = book.indexOf("bookDetailAdminSession = await resolveAdminSession(Astro.request)");
+	const healthQueryIndex = book.indexOf("countCatalogHealthIssuesForWork(bookDetailSql, catalogMetadataAdminWorkId)");
+	const bannerIndex = book.indexOf('<section class="admin-catalog-shortcut"');
+	assert.ok(defaultSessionIndex > -1);
+	assert.ok(resolveAdminIndex > defaultSessionIndex);
+	assert.ok(healthQueryIndex > resolveAdminIndex);
+	assert.ok(bannerIndex > healthQueryIndex);
+
+	const canRenderBanner = ({ isAuthenticated, isAdmin, workId }: { isAuthenticated: boolean; isAdmin: boolean; workId: number }) => {
+		const adminWorkId = isAuthenticated && isAdmin ? Math.max(0, Number(workId || 0) || 0) : 0;
+		return adminWorkId > 0;
+	};
+	assert.equal(canRenderBanner({ isAuthenticated: true, isAdmin: true, workId: 123 }), true);
+	assert.equal(canRenderBanner({ isAuthenticated: true, isAdmin: false, workId: 123 }), false);
+	assert.equal(canRenderBanner({ isAuthenticated: false, isAdmin: false, workId: 123 }), false);
+	assert.equal(canRenderBanner({ isAuthenticated: true, isAdmin: true, workId: 0 }), false);
+
+	for (const adminPage of [catalogEditor, dataHealth]) {
+		const adminResolveIndex = adminPage.indexOf("const admin = await resolveAdminSession(Astro.request)");
+		const guardIndex = adminPage.indexOf('if (!admin.isAdmin) return Astro.redirect("/")');
+		const postIndex = adminPage.indexOf('if (Astro.request.method === "POST")');
+		assert.ok(adminResolveIndex > -1);
+		assert.ok(guardIndex > adminResolveIndex);
+		assert.ok(postIndex === -1 || guardIndex < postIndex);
+	}
 });
 
 test("Product Bible documents catalog ownership, provenance, and audit rules", () => {

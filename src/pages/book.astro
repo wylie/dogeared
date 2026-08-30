@@ -1010,9 +1010,11 @@ markPagePerfStage("related_content_loaded");
 	markPagePerfStage("load_failed");
 }
 
-if (bookDetailAdminSession.isAdmin && book?.workId && bookDetailSql) {
+const catalogMetadataAdminWorkId = bookDetailAdminSession.isAdmin ? Math.max(0, Number(book?.workId || 0) || 0) : 0;
+const canShowCatalogMetadataBanner = catalogMetadataAdminWorkId > 0;
+if (canShowCatalogMetadataBanner && bookDetailSql) {
 	try {
-		adminCatalogIssueCount = await countCatalogHealthIssuesForWork(bookDetailSql, book.workId);
+		adminCatalogIssueCount = await countCatalogHealthIssuesForWork(bookDetailSql, catalogMetadataAdminWorkId);
 	} catch (error) {
 		logBookDetailLoadError("admin-catalog-health", error);
 	}
@@ -1173,7 +1175,7 @@ recordPerformanceEventSafe({
 					</ul>
 				</section>
 
-				{bookDetailAdminSession.isAdmin && book.workId > 0 && (
+				{canShowCatalogMetadataBanner && (
 					<section class="admin-catalog-shortcut" aria-label="Admin catalog tools">
 						<div>
 							<strong>Catalog metadata</strong>
