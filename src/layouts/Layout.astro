@@ -88,7 +88,7 @@ const [
 ]);
 if (performanceTelemetry) {
 	performanceTelemetry.spans.push({
-		name: "shared navigation/sidebar data",
+		name: "shared navigation data",
 		durationMs: performance.now() - layoutSharedStartedAt,
 		startMs: Math.max(0, layoutSharedStartedAt - performanceTelemetry.startedAt)
 	});
@@ -96,7 +96,7 @@ if (performanceTelemetry) {
 		name: "notification count",
 		durationMs: 0,
 		startMs: Math.max(0, performance.now() - performanceTelemetry.startedAt),
-		parentName: "shared navigation/sidebar data"
+		parentName: "shared navigation data"
 	});
 }
 const { activeAnnouncement, foundingReaderConfig, latestRelease } = layoutGlobalData;
@@ -171,21 +171,19 @@ import '../assets/global.css';
 			<div class="navigation-progress" aria-hidden="true"></div>
 			<a class="skip-link" href="#main-content">Skip to main content</a>
 			<div class="container">
-				<div class="column" style="padding-bottom: 0;">
-					<slot name="left">
-						<LeftHand
-							current={currentPath}
-							sectionLinks={sectionLinks}
-							isAuthenticated={isAuthenticated}
-							isAdmin={isAdmin}
-							allowAuthPrompt={allowAuthPrompt}
-							foundingReaderMode={foundingReaderConfig.effectiveMode}
-							appVersion={appVersion}
-							releaseVersion={releaseVersion}
-						/>
-					</slot>
-				</div>
-				<main id="main-content" class="column content-column" tabindex="-1">
+				<slot name="left">
+					<LeftHand
+						current={currentPath}
+						sectionLinks={sectionLinks}
+						isAuthenticated={isAuthenticated}
+						isAdmin={isAdmin}
+						allowAuthPrompt={allowAuthPrompt}
+						foundingReaderMode={foundingReaderConfig.effectiveMode}
+						appVersion={appVersion}
+						releaseVersion={releaseVersion}
+					/>
+				</slot>
+				<main id="main-content" class="content-column" tabindex="-1">
 					<div id="route-loading-announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
 					<div id="route-transition-skeleton" class="route-transition-skeleton" hidden aria-hidden="true"></div>
 					{activeAnnouncement ? (
@@ -642,28 +640,20 @@ import '../assets/global.css';
 		}
 	}
 	.container {
-		max-width: 1280px;
-		margin: auto;
-		display: grid;
-		grid-template-columns: minmax(238px, 24%) minmax(0, 1fr);
+		width: 100%;
+		margin: 0;
+		display: block;
 		min-height: 100vh;
-		align-items: start;
 		overflow-x: clip;
-		column-gap: clamp(0.5rem, 2vw, 1.5rem);
-	}
-	.column {
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
-	}
-	.column {
-		padding: clamp(0.85rem, 1.4vw, 1.35rem);
 		box-sizing: border-box;
 	}
 	.content-column {
-		padding-top: clamp(1rem, 2.1vw, 2rem);
-		padding-bottom: 2.5rem;
+		width: min(100%, 1480px);
+		margin: 0 auto;
+		box-sizing: border-box;
+		padding: clamp(1rem, 2vw, 1.75rem) clamp(1rem, 2.4vw, 1.8rem) 2.5rem;
 		position: relative;
+		min-width: 0;
 	}
 	.visually-hidden {
 		position: absolute;
@@ -839,15 +829,6 @@ import '../assets/global.css';
 		font-weight: 700;
 		cursor: pointer;
 	}
-	.container > .column:first-child {
-		position: sticky;
-		top: 0;
-		align-self: start;
-		height: 100vh;
-		max-height: 100vh;
-		min-height: 0;
-		overflow-y: auto;
-	}
 	.skip-link {
 		position: fixed;
 		top: 0.5rem;
@@ -874,16 +855,10 @@ import '../assets/global.css';
 		}
 		.container {
 			max-width: 100%;
-			grid-template-columns: 1fr;
 			min-height: 0;
-			align-content: start;
-			padding: 0 0.65rem 1.1rem;
+			padding: 0 0 1.1rem;
 			box-sizing: border-box;
 			overflow-x: clip;
-		}
-		.column {
-			padding: 0.6rem 0.5rem;
-			min-width: 0;
 		}
 		.content-column {
 			padding-top: 1.15rem;
@@ -899,14 +874,6 @@ import '../assets/global.css';
 		.route-skeleton-stats,
 		.route-skeleton-book-grid {
 			grid-template-columns: 1fr;
-		}
-		.container > .column:first-child {
-			position: sticky;
-			top: 0;
-			z-index: 40;
-			height: auto;
-			overflow: visible;
-			padding-top: 0;
 		}
 	}
 </style>

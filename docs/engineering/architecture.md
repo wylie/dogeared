@@ -75,7 +75,7 @@ Utilities normalize text, status, slugs, metadata, ISBNs, privacy defaults, user
 
 Global UI should have explicit rendering rules so release-blocker fixes do not depend on incidental route behavior.
 
-- `LeftHand` owns the sidebar navigation and login dialog markup.
+- `LeftHand` owns the shared responsive header navigation and login dialog markup.
 - The shared `Layout` includes Astro's `ClientRouter` for progressive same-origin navigation. Direct URLs still render through SSR, while internal links and GET forms can preserve browser history without forcing a full document reload. A delayed top progress bar provides subtle feedback only when a route swap is noticeable.
 - Shared client-side DOM behavior that lives in the persistent layout, including `LeftHand`, floating actions, and the feedback widget, initializes through DogEared's `astro:page-load` lifecycle helper and aborts stale listeners before rebinding to swapped page markup. Bundled Astro component scripts must not assume top-level `querySelector` references remain valid after client-side navigation.
 - Shared layout data follows cache boundaries: request-scoped auth/session data can be reused within a request, short-lived public layout data can be runtime-cached, and user-specific navigation state such as notification counts remains per-reader and is loaded from authenticated endpoints.

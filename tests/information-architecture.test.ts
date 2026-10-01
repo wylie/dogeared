@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-test("signed-in navigation separates personal, discovery, and settings destinations", () => {
+test("signed-in header keeps personal, discovery, and account destinations organized", () => {
 	const nav = readFileSync("src/components/LeftHand.astro", "utf8");
 
 	assert.match(nav, /const routeMatches/);
@@ -19,8 +19,12 @@ test("signed-in navigation separates personal, discovery, and settings destinati
 
 	const exploreItems = nav.slice(nav.indexOf("const exploreNavItems"), nav.indexOf("const aboutNavItems"));
 	assert.match(exploreItems, /Following/);
-	const youGroup = nav.slice(nav.indexOf("nav-group-you"), nav.indexOf("nav-group-explore"));
-	assert.ok(youGroup.indexOf("left-hand-login-item") < youGroup.indexOf("left-hand-logout-item"));
+	const primaryList = nav.slice(nav.indexOf("primary-direct-list"), nav.indexOf("nav-menu-cluster"));
+	const accountMenu = nav.slice(nav.indexOf("nav-group-account"), nav.indexOf("secondary-links-mobile"));
+	const accountItems = nav.slice(nav.indexOf("const accountNavItems"), nav.indexOf("const footerNavItems"));
+	assert.match(primaryList, /left-hand-login-item/);
+	assert.match(accountMenu, /left-hand-logout-item/);
+	assert.match(accountItems, /\/settings/);
 });
 
 test("profile stays focused on reader identity and current reading state", () => {

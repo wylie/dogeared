@@ -14,12 +14,12 @@ test("BookCard recommendation feedback buttons stay centered and single-line on 
 	assert.match(source, /@media \(max-width: 420px\)\s*{[\s\S]*?\.recommendation-feedback button\s*{[^}]*font-size: 0\.71rem;/s);
 });
 
-test("mobile left navigation footer compresses into a horizontal no-wrap row", () => {
+test("mobile header footer compresses into a horizontal no-wrap row", () => {
 	const source = read("../src/components/LeftHand.astro");
 	const layout = read("../src/layouts/Layout.astro");
-	const privacyIndex = source.indexOf(">Privacy</a>");
-	const supportIndex = source.indexOf(">Support DogEared</a>");
-	const betaIndex = source.indexOf(">DogEared Beta {releaseVersion || appVersion}</a>");
+	const privacyIndex = source.indexOf('href: "/privacy"');
+	const supportIndex = source.indexOf('href: "/support"');
+	const betaIndex = source.indexOf("DogEared Beta");
 	const builtIndex = source.indexOf(">Built by Argon Collective LLC</span>");
 
 	assert.equal(source.includes("founding-reader-badge"), false);
@@ -29,6 +29,8 @@ test("mobile left navigation footer compresses into a horizontal no-wrap row", (
 	assert.equal(supportIndex > privacyIndex, true);
 	assert.equal(betaIndex > supportIndex, true);
 	assert.equal(builtIndex > betaIndex, true);
+	assert.match(layout, /\.container\s*{[^}]*display: block;/s);
+	assert.doesNotMatch(layout, /grid-template-columns: minmax\(238px, 24%\) minmax\(0, 1fr\);/);
 	assert.match(source, /#left-hand-nav \.sidebar-footer\s*{[^}]*overflow-x: auto;/s);
 	assert.match(source, /#left-hand-nav \.sidebar-footer\s*{[^}]*white-space: nowrap;/s);
 	assert.match(source, /#left-hand-nav \.sidebar-footer-nav ul\s*{[^}]*flex-wrap: nowrap;/s);
@@ -38,7 +40,7 @@ test("mobile left navigation footer compresses into a horizontal no-wrap row", (
 	assert.match(layout, /\.content-column\s*{[^}]*padding-inline: 0\.65rem;/s);
 });
 
-test("mobile primary navigation uses natural item sizing with a consistent gap", () => {
+test("mobile primary header navigation uses natural item sizing with a consistent gap", () => {
 	const source = read("../src/components/LeftHand.astro");
 
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*display: flex;/s);
@@ -47,17 +49,13 @@ test("mobile primary navigation uses natural item sizing with a consistent gap",
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*gap: var\(--mobile-primary-nav-gap\);/s);
 	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*column-gap: 1rem;/s);
 	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*justify-content: space-(between|around|evenly);/s);
-	assert.match(source, /#left-hand-nav \.primary-links \.nav-group\s*{[^}]*display: flex;/s);
-	assert.match(source, /#left-hand-nav \.primary-links \.nav-group\s*{[^}]*flex: 0 0 auto;/s);
-	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul\s*{[^}]*display: flex;/s);
-	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul\s*{[^}]*flex-wrap: nowrap;/s);
-	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul\s*{[^}]*gap: var\(--mobile-primary-nav-gap\);/s);
-	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul > li\s*{[^}]*flex: 0 0 auto;/s);
-	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul > li\s*{[^}]*width: auto;/s);
-	assert.match(source, /#left-hand-nav \.primary-links \.nav-group > ul > li\s*{[^}]*margin: 0;/s);
-	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button\s*{[^}]*width: auto;/s);
-	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button\s*{[^}]*padding: 0\.38rem 0\.44rem;/s);
-	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button\s*{[^}]*white-space: nowrap;/s);
+	assert.match(source, /#left-hand-nav \.primary-direct-list,\s*#left-hand-nav \.nav-menu-cluster\s*{[^}]*display: flex;/s);
+	assert.match(source, /#left-hand-nav \.primary-direct-list,\s*#left-hand-nav \.nav-menu-cluster\s*{[^}]*flex: 0 0 auto;/s);
+	assert.match(source, /#left-hand-nav \.primary-direct-list,\s*#left-hand-nav \.nav-menu-cluster\s*{[^}]*flex-wrap: nowrap;/s);
+	assert.match(source, /#left-hand-nav \.primary-direct-list,\s*#left-hand-nav \.nav-menu-cluster\s*{[^}]*gap: var\(--mobile-primary-nav-gap\);/s);
+	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger\s*{[^}]*width: auto;/s);
+	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger\s*{[^}]*padding: 0\.38rem 0\.44rem;/s);
+	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger\s*{[^}]*white-space: nowrap;/s);
 	assert.match(source, /#left-hand-nav \.primary-links \.notification-nav-link\s*{[^}]*justify-content: flex-start;/s);
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*overflow-x: auto;/s);
 	assert.match(source, /scrollActivePrimaryNavIntoView/);
@@ -76,7 +74,7 @@ test("search loading indicator stays inside the search input without layout shif
 	assert.match(source, /\.search-submit-status\s*{[^}]*width: var\(--search-spinner-control-space\);/s);
 	assert.match(source, /input\[type="search"\]\s*{[^}]*padding: 0\.58rem calc\(var\(--search-clear-control-space\) \+ var\(--search-spinner-control-space\) \+ 0\.75rem\) 0\.58rem 0\.95rem;/s);
 	assert.match(source, /input\[type="search"\]\s*{[^}]*margin-top: 0;/s);
-	assert.match(source, /\.search-input-wrap\s*{[^}]*margin-top: 1rem;/s);
+	assert.match(source, /\.search-input-wrap\s*{[^}]*margin-top: 0;/s);
 	assert.match(source, /#left-hand-nav input\[type="search"\]\s*{[^}]*padding: 0\.4rem calc\(var\(--search-clear-control-space\) \+ var\(--search-spinner-control-space\) \+ 0\.55rem\) 0\.4rem 0\.8rem;/s);
 	assert.match(source, /#left-hand-nav \.search-input-wrap\s*{[^}]*margin-top: 0;/s);
 	assert.match(source, /<span class="search-submit-label visually-hidden">Searching books\.<\/span>/);

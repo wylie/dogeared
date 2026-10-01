@@ -190,7 +190,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 >
 	<div slot="right" class="browse-page" id="browse-page" data-authenticated={String(isAuthenticated)}>
 		<header class="intro" data-guided-anchor="home-intro">
-			<h1>Find your next book.<br/>Keep your reading life your own.</h1>
+			<h1><span>Find your next book.</span><span>Keep your reading life your own.</span></h1>
 			<p class="subhead">Browse popular shelves, save what matters, and build your reading history without the noise.</p>
 		</header>
 		{shouldShowWelcome && (
@@ -599,6 +599,9 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		line-height: 1.08;
 		font-weight: 600;
 		font-size: clamp(1.85rem, 3.2vw, 2.75rem);
+	}
+	.browse-page h1 span {
+		display: block;
 	}
 
 	.subhead {
@@ -1264,6 +1267,11 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 	}
 
 	@media (max-width: 860px) {
+		.browse-page {
+			width: 100%;
+			max-width: calc(100vw - 1.3rem);
+			overflow-x: clip;
+		}
 		.intro {
 			margin-bottom: 1.15rem;
 		}
@@ -1279,10 +1287,16 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			line-height: 1.12;
 		}
 		.browse-page h1 {
-			max-width: 100%;
+			max-width: calc(100vw - 1.3rem);
 			font-size: clamp(1.95rem, 7.2vw, 2.4rem);
 			line-height: 1.1;
 			font-weight: 600;
+		}
+		.browse-page h1 span {
+			display: inline;
+		}
+		.browse-page h1 span + span::before {
+			content: " ";
 		}
 		.subhead {
 			margin-top: 0.55rem;
