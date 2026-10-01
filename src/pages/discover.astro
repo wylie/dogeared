@@ -207,7 +207,8 @@ recordPerformanceEventSafe({
 
 <style>
 	.discover-page {
-		max-width: 1040px;
+		width: 100%;
+		max-width: 100%;
 		display: grid;
 		gap: 1rem;
 	}
@@ -225,6 +226,7 @@ recordPerformanceEventSafe({
 	.discover-intro {
 		display: grid;
 		gap: 0.35rem;
+		max-width: 58rem;
 	}
 	.discover-intro h1 {
 		margin: 0;
@@ -248,12 +250,14 @@ recordPerformanceEventSafe({
 		margin: 0;
 	}
 	.discover-grid {
+		--book-grid-min: 310px;
 		list-style: none;
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--book-grid-min)), 1fr));
 		gap: 0.95rem;
 		margin: 0;
 		padding: 0;
+		align-items: stretch;
 	}
 	.recommendation-reason {
 		margin: 0 0 0.35rem;

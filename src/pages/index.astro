@@ -531,12 +531,14 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 
 <style>
 	.browse-page {
-		max-width: 1020px;
+		width: 100%;
+		max-width: 100%;
 	}
 
 	.intro {
 		margin-bottom: 2.15rem;
 		min-width: 0;
+		max-width: 58rem;
 	}
 	.home-jump-links {
 		display: flex;
@@ -596,6 +598,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 
 	.browse-page h1 {
 		margin: 0;
+		max-width: 54rem;
 		line-height: 1.08;
 		font-weight: 600;
 		font-size: clamp(1.85rem, 3.2vw, 2.75rem);
@@ -843,12 +846,14 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 	}
 
 	.book-grid {
+		--book-grid-min: 310px;
 		list-style: none;
 		padding: 0;
 		margin: 0;
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--book-grid-min)), 1fr));
 		gap: 0.95rem;
+		align-items: stretch;
 	}
 	.recommended-section {
 		margin-top: 1.3rem;
@@ -1269,7 +1274,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 	@media (max-width: 860px) {
 		.browse-page {
 			width: 100%;
-			max-width: calc(100vw - 1.3rem);
+			max-width: 100%;
 			overflow-x: clip;
 		}
 		.intro {

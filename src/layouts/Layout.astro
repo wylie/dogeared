@@ -183,7 +183,7 @@ import '../assets/global.css';
 						releaseVersion={releaseVersion}
 					/>
 				</slot>
-				<main id="main-content" class="content-column" tabindex="-1">
+				<main id="main-content" class="site-container content-column" tabindex="-1">
 					<div id="route-loading-announcer" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
 					<div id="route-transition-skeleton" class="route-transition-skeleton" hidden aria-hidden="true"></div>
 					{activeAnnouncement ? (
@@ -648,10 +648,8 @@ import '../assets/global.css';
 		box-sizing: border-box;
 	}
 	.content-column {
-		width: min(100%, 1480px);
-		margin: 0 auto;
 		box-sizing: border-box;
-		padding: clamp(1rem, 2vw, 1.75rem) clamp(1rem, 2.4vw, 1.8rem) 2.5rem;
+		padding-block: clamp(1rem, 2vw, 1.75rem) 2.5rem;
 		position: relative;
 		min-width: 0;
 	}
@@ -861,9 +859,8 @@ import '../assets/global.css';
 			overflow-x: clip;
 		}
 		.content-column {
-			padding-top: 1.15rem;
-			padding-inline: 0.65rem;
-			padding-bottom: 1.5rem;
+			width: min(calc(100% - var(--site-gutter) - var(--site-gutter)), var(--site-max-width));
+			padding-block: 1.15rem 1.5rem;
 		}
 		.route-transition-skeleton {
 			inset: 0.6rem 0.65rem;

@@ -81,14 +81,17 @@ const adminNavItems: NavItem[] = [
   { href: "/admin/operations", label: "Operations" },
   { href: "/admin/users", label: "Users", match: "prefix" }
 ];
-const personalPrimaryItems = youNavItems.filter((item) => item.href !== "/settings");
 const publicPrimaryItems = exploreNavItems.filter((item) => item.href !== "/following");
-const accountNavItems = youNavItems.filter((item) => item.href === "/settings");
+const readingLifeNavItems = youNavItems.filter((item) => item.href === "/reading-life");
+const accountNavItems = youNavItems.filter((item) => item.href !== "/reading-life");
+const moreNavItems = exploreNavItems.filter((item) => item.href === "/following");
 const footerNavItems: NavItem[] = [
   { href: "/privacy", label: "Privacy" },
   { href: "/support", label: "Support DogEared" },
   { href: "/release-notes", label: `DogEared Beta ${releaseVersion || appVersion}` }
 ];
+const navMenuTriggerClass = (items: NavItem[]) =>
+  ["nav-menu-trigger", items.some((item) => isNavItemActive(item)) ? "active" : ""].filter(Boolean).join(" ");
 ---
 
 <header
@@ -99,7 +102,7 @@ const footerNavItems: NavItem[] = [
   data-auth-prompt={String(allowAuthPrompt)}
   data-founding-reader-mode={normalizedFoundingReaderMode}
 >
-  <div class="app-header-inner">
+  <div class="app-header-inner site-container">
     <div class="brand-row">
       <div class="brand-lockup">
         <h2>
@@ -137,22 +140,6 @@ const footerNavItems: NavItem[] = [
 
     <nav id="left-hand-primary-links" class="primary-links" aria-label="Primary navigation">
       <ul class="primary-direct-list">
-        <li id="left-hand-login-item" data-logged-out-only hidden={isAuthenticated || !allowAuthPrompt}><button type="button" class="nav-text-button hover">Log In</button></li>
-        {personalPrimaryItems.map((item) => (
-          <li id={item.id} data-authenticated-only hidden={!isAuthenticated}>
-            <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
-              <span>{item.label}</span>
-              {item.href === "/notifications" && <span id="left-hand-notification-badge" class="notification-badge" aria-label="0 unread notifications" hidden>0</span>}
-            </a>
-            {showSectionLinks(item) && (
-              <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-        ))}
         {publicPrimaryItems.map((item) => (
           <li>
             <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>{item.label}</a>
@@ -165,31 +152,44 @@ const footerNavItems: NavItem[] = [
             )}
           </li>
         ))}
+        {readingLifeNavItems.map((item) => (
+          <li id={item.id} data-authenticated-only hidden={!isAuthenticated}>
+            <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
+              <span>{item.label}</span>
+            </a>
+            {showSectionLinks(item) && (
+              <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
+                {sectionLinks.map((link) => (
+                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+        <li id="left-hand-login-item" data-logged-out-only hidden={isAuthenticated || !allowAuthPrompt}><button type="button" class="nav-text-button hover">Log In</button></li>
       </ul>
 
       <div class="nav-menu-cluster" aria-label="Secondary navigation">
-        {isAuthenticated && (
-          <details class="nav-menu nav-group nav-group-explore">
-            <summary class="nav-menu-trigger">Explore</summary>
-            <ul>
-              {exploreNavItems.map((item) => (
-                <li id={item.id} data-authenticated-only={item.href === "/following" ? true : undefined} hidden={item.href === "/following" && !isAuthenticated}>
-                  <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>{item.label}</a>
-                  {showSectionLinks(item) && (
-                    <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
-                      {sectionLinks.map((link) => (
-                        <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
+        <details class="nav-menu nav-group nav-group-more" data-authenticated-only hidden={!isAuthenticated}>
+          <summary class={navMenuTriggerClass(moreNavItems)}>More</summary>
+          <ul>
+            {moreNavItems.map((item) => (
+              <li id={item.id} data-authenticated-only hidden={!isAuthenticated}>
+                <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>{item.label}</a>
+                {showSectionLinks(item) && (
+                  <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
+                    {sectionLinks.map((link) => (
+                      <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
 
         <details class="nav-menu nav-group nav-group-about">
-          <summary class="nav-menu-trigger">About</summary>
+          <summary class={navMenuTriggerClass(aboutNavItems)}>About</summary>
           <ul>
             {aboutNavItems.map((item) => (
               <li>
@@ -213,11 +213,33 @@ const footerNavItems: NavItem[] = [
 
         {isAdmin && (
         <details class="nav-menu nav-group nav-group-admin">
-          <summary class="nav-menu-trigger">Admin</summary>
+          <summary class={navMenuTriggerClass(adminNavItems)}>Admin</summary>
+            <ul>
+              {adminNavItems.map((item) => (
+                <li id={item.id}>
+                  <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>{item.label}</a>
+                  {showSectionLinks(item) && (
+                    <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
+                      {sectionLinks.map((link) => (
+                        <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+
+        <details class="nav-menu nav-group nav-group-account" data-authenticated-only hidden={!isAuthenticated}>
+          <summary class={navMenuTriggerClass(accountNavItems)}>Account</summary>
           <ul>
-            {adminNavItems.map((item) => (
-              <li id={item.id}>
-                <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>{item.label}</a>
+            {accountNavItems.map((item) => (
+              <li id={item.id} data-authenticated-only hidden={!isAuthenticated}>
+                <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
+                  <span>{item.label}</span>
+                  {item.href === "/notifications" && <span id="left-hand-notification-badge" class="notification-badge" aria-label="0 unread notifications" hidden>0</span>}
+                </a>
                 {showSectionLinks(item) && (
                   <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
                     {sectionLinks.map((link) => (
@@ -225,18 +247,6 @@ const footerNavItems: NavItem[] = [
                     ))}
                   </ul>
                 )}
-              </li>
-            ))}
-          </ul>
-        </details>
-        )}
-
-        <details class="nav-menu nav-group nav-group-account" data-authenticated-only hidden={!isAuthenticated}>
-          <summary class="nav-menu-trigger">Account</summary>
-          <ul>
-            {accountNavItems.map((item) => (
-              <li id={item.id} data-authenticated-only hidden={!isAuthenticated}>
-                <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>{item.label}</a>
               </li>
             ))}
             <li id="left-hand-logout-item" data-authenticated-only hidden={!isAuthenticated}><button type="button" class="nav-text-button hover">Log Out</button></li>
@@ -253,8 +263,8 @@ const footerNavItems: NavItem[] = [
       </ul>
     )}
 
-    <footer class="sidebar-footer">
-      <nav class="sidebar-footer-nav" aria-label="Footer navigation">
+    <footer class="header-footer">
+      <nav class="header-footer-nav" aria-label="Footer navigation">
         <ul>
           {footerNavItems.map((item) => (
             <li><a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>{item.label}</a></li>
@@ -291,7 +301,7 @@ const footerNavItems: NavItem[] = [
     z-index: 50;
     width: 100%;
     box-sizing: border-box;
-    padding: 0.62rem clamp(0.75rem, 2vw, 1.35rem);
+    padding: 0.48rem 0;
     background: rgba(255, 255, 255, 0.93);
     border-bottom: var(--border-subtle);
     box-shadow: 0 8px 28px rgba(29, 49, 64, 0.08);
@@ -299,11 +309,9 @@ const footerNavItems: NavItem[] = [
   }
 
   .app-header-inner {
-    width: min(100%, 1480px);
-    margin: 0 auto;
     display: grid;
-    grid-template-columns: auto minmax(15rem, 27rem) minmax(0, 1fr);
-    gap: 0.65rem clamp(0.7rem, 1.4vw, 1.15rem);
+    grid-template-columns: auto minmax(15rem, 29rem) minmax(0, 1fr);
+    gap: 0.55rem clamp(0.7rem, 1.25vw, 1rem);
     align-items: center;
   }
 
@@ -342,14 +350,15 @@ const footerNavItems: NavItem[] = [
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.32rem;
     min-width: 0;
+    overflow: visible;
   }
 
   .primary-direct-list,
   .nav-menu-cluster,
   .nav-group > ul,
-  .sidebar-footer-nav ul,
+  .header-footer-nav ul,
   .secondary-links-mobile {
     list-style-type: none;
     margin: 0;
@@ -359,15 +368,15 @@ const footerNavItems: NavItem[] = [
   .primary-direct-list,
   .nav-menu-cluster {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
     align-items: center;
-    gap: 0.2rem;
+    gap: 0.14rem;
     min-width: 0;
   }
 
   .primary-direct-list {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
   }
 
   .nav-menu-cluster {
@@ -421,33 +430,37 @@ const footerNavItems: NavItem[] = [
     color: var(--color-nav);
   }
 
-  .sidebar-footer {
+  .primary-direct-list > li > .section-links-nested {
+    display: none;
+  }
+
+  .header-footer {
     display: none;
     color: var(--color-text-subtle);
     font-size: 0.78rem;
     line-height: 1.35;
   }
 
-  .sidebar-footer a {
+  .header-footer a {
     color: var(--color-nav);
     text-decoration: none;
   }
-  .sidebar-footer a,
-  .sidebar-footer span {
+  .header-footer a,
+  .header-footer span {
     display: inline-flex;
     align-items: center;
     min-height: 24px;
   }
-  .sidebar-footer a {
+  .header-footer a {
     text-underline-offset: 3px;
     text-decoration-thickness: 1px;
   }
-  .sidebar-footer a:hover,
-  .sidebar-footer a:focus-visible {
+  .header-footer a:hover,
+  .header-footer a:focus-visible {
     color: var(--color-nav-hover);
     text-decoration: underline;
   }
-  .sidebar-footer a.active {
+  .header-footer a.active {
     color: var(--color-nav-active);
     text-decoration: underline;
   }
@@ -470,7 +483,7 @@ const footerNavItems: NavItem[] = [
     align-items: center;
     min-height: 2.08rem;
     box-sizing: border-box;
-    padding: 0.38rem 0.62rem;
+    padding: 0.35rem 0.56rem;
     line-height: 1.2;
     border-radius: var(--radius-pill);
     white-space: nowrap;
@@ -522,7 +535,8 @@ const footerNavItems: NavItem[] = [
     display: none;
   }
 
-  a.active {
+  a.active,
+  .nav-menu-trigger.active {
     background: var(--color-nav-surface);
     color: var(--color-nav-active);
     text-decoration: none;
@@ -776,6 +790,19 @@ const footerNavItems: NavItem[] = [
 
     .primary-links {
       grid-area: nav;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .primary-links::-webkit-scrollbar {
+      display: none;
+    }
+
+    .primary-direct-list,
+    .nav-menu-cluster {
+      flex: 0 0 auto;
     }
 
     .secondary-links-mobile {
@@ -785,7 +812,7 @@ const footerNavItems: NavItem[] = [
 
   @media (max-width: 900px) {
     #left-hand-nav {
-      padding: 0.58rem 0.65rem 0.5rem;
+      padding: 0.58rem 0 0.5rem;
       overflow-x: clip;
     }
 
@@ -991,7 +1018,7 @@ const footerNavItems: NavItem[] = [
       text-decoration: none;
     }
 
-    #left-hand-nav .sidebar-footer {
+    #left-hand-nav .header-footer {
       display: block;
       grid-area: footer;
       margin-top: 0.22rem;
@@ -1006,11 +1033,11 @@ const footerNavItems: NavItem[] = [
       font-size: 0.76rem;
     }
 
-    #left-hand-nav .sidebar-footer::-webkit-scrollbar {
+    #left-hand-nav .header-footer::-webkit-scrollbar {
       display: none;
     }
 
-    #left-hand-nav .sidebar-footer-nav ul {
+    #left-hand-nav .header-footer-nav ul {
       display: flex;
       flex-wrap: nowrap;
       justify-content: space-between;
@@ -1020,12 +1047,12 @@ const footerNavItems: NavItem[] = [
       width: 100%;
     }
 
-    #left-hand-nav .sidebar-footer-nav ul li {
+    #left-hand-nav .header-footer-nav ul li {
       width: unset;
     }
 
-    #left-hand-nav .sidebar-footer a,
-    #left-hand-nav .sidebar-footer span {
+    #left-hand-nav .header-footer a,
+    #left-hand-nav .header-footer span {
       min-height: 32px;
       align-items: center;
       white-space: nowrap;
@@ -1050,7 +1077,6 @@ const footerNavItems: NavItem[] = [
   const ssrAuthenticated = leftHandNav?.dataset.ssrAuthenticated === "true";
   const allowAuthPrompt = leftHandNav?.dataset.authPrompt === "true";
   const foundingReaderMode = String(leftHandNav?.dataset.foundingReaderMode || "open");
-  const leftHandMenuToggle = document.getElementById("left-hand-menu-toggle");
   const leftHandPrimaryLinks = document.getElementById("left-hand-primary-links");
   const leftHandLoginItem = document.getElementById("left-hand-login-item");
   const leftHandLoginButton = leftHandLoginItem?.querySelector("button");
@@ -1061,7 +1087,6 @@ const footerNavItems: NavItem[] = [
   const leftHandNotificationBadge = document.getElementById("left-hand-notification-badge");
   const leftHandSettingsItem = document.getElementById("left-hand-settings-item");
   const leftHandLogoutItem = document.getElementById("left-hand-logout-item");
-  const leftHandAuthDivider = document.getElementById("left-hand-auth-divider");
   const leftHandLogoutButton = leftHandLogoutItem?.querySelector("button");
   const leftHandLoginModal = document.getElementById("left-hand-login-modal");
   const leftHandLoginTitle = document.getElementById("left-hand-login-title");
@@ -1175,7 +1200,6 @@ const footerNavItems: NavItem[] = [
     if (leftHandNotificationsItem instanceof HTMLElement) leftHandNotificationsItem.hidden = !authenticated;
     if (leftHandSettingsItem instanceof HTMLElement) leftHandSettingsItem.hidden = !authenticated;
     if (leftHandLogoutItem instanceof HTMLElement) leftHandLogoutItem.hidden = !authenticated;
-    if (leftHandAuthDivider instanceof HTMLElement) leftHandAuthDivider.hidden = !authenticated;
     scrollActivePrimaryNavIntoView();
     window.requestAnimationFrame(updateMobileStickyOffset);
   }
@@ -1245,8 +1269,15 @@ const footerNavItems: NavItem[] = [
   }, { signal });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && leftHandLoginModal instanceof HTMLElement && !leftHandLoginModal.hidden) {
+    if (event.key !== "Escape") return;
+    if (leftHandLoginModal instanceof HTMLElement && !leftHandLoginModal.hidden) {
       closeLoginModal();
+      return;
+    }
+    if (leftHandNav instanceof HTMLElement) {
+      for (const menu of Array.from(leftHandNav.querySelectorAll("details[open]"))) {
+        if (menu instanceof HTMLDetailsElement) menu.open = false;
+      }
     }
   }, { signal });
 
@@ -1329,29 +1360,11 @@ const footerNavItems: NavItem[] = [
 
   syncSearchClearButton();
 
-  leftHandMenuToggle?.addEventListener("click", () => {
-    if (!(leftHandNav instanceof HTMLElement)) return;
-    const willOpen = !leftHandNav.classList.contains("menu-open");
-    leftHandNav.classList.toggle("menu-open", willOpen);
-    if (leftHandMenuToggle instanceof HTMLButtonElement) {
-      leftHandMenuToggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
-      leftHandMenuToggle.textContent = willOpen ? "✕" : "☰";
-      leftHandMenuToggle.setAttribute("aria-label", willOpen ? "Close navigation menu" : "Open navigation menu");
-    }
-    updateMobileStickyOffset();
-  }, { signal });
-
   leftHandPrimaryLinks?.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     if (!target.closest("a,button")) return;
     if (!(leftHandNav instanceof HTMLElement)) return;
-    if (window.matchMedia("(max-width: 900px)").matches && leftHandMenuToggle instanceof HTMLButtonElement) {
-      leftHandNav.classList.remove("menu-open");
-      leftHandMenuToggle.setAttribute("aria-expanded", "false");
-      leftHandMenuToggle.textContent = "☰";
-      leftHandMenuToggle.setAttribute("aria-label", "Open navigation menu");
-    }
     for (const menu of Array.from(leftHandNav.querySelectorAll("details[open]"))) {
       if (menu instanceof HTMLDetailsElement) menu.open = false;
     }
@@ -1361,6 +1374,15 @@ const footerNavItems: NavItem[] = [
 
   leftHandSecondaryLinks?.addEventListener("click", () => {
     persistNavScrollPosition();
+  }, { signal });
+
+  document.addEventListener("click", (event) => {
+    if (!(leftHandNav instanceof HTMLElement)) return;
+    const target = event.target;
+    if (target instanceof Node && leftHandNav.contains(target)) return;
+    for (const menu of Array.from(leftHandNav.querySelectorAll("details[open]"))) {
+      if (menu instanceof HTMLDetailsElement) menu.open = false;
+    }
   }, { signal });
 
   leftHandPrimaryLinks?.addEventListener("scroll", () => {

@@ -23,7 +23,7 @@ test("mobile header footer compresses into a horizontal no-wrap row", () => {
 	const builtIndex = source.indexOf(">Built by Argon Collective LLC</span>");
 
 	assert.equal(source.includes("founding-reader-badge"), false);
-	assert.match(source, /<nav class="sidebar-footer-nav" aria-label="Footer navigation">/);
+	assert.match(source, /<nav class="header-footer-nav" aria-label="Footer navigation">/);
 	assert.equal(source.includes("<p>Built by"), false);
 	assert.equal(privacyIndex > -1, true);
 	assert.equal(supportIndex > privacyIndex, true);
@@ -31,13 +31,13 @@ test("mobile header footer compresses into a horizontal no-wrap row", () => {
 	assert.equal(builtIndex > betaIndex, true);
 	assert.match(layout, /\.container\s*{[^}]*display: block;/s);
 	assert.doesNotMatch(layout, /grid-template-columns: minmax\(238px, 24%\) minmax\(0, 1fr\);/);
-	assert.match(source, /#left-hand-nav \.sidebar-footer\s*{[^}]*overflow-x: auto;/s);
-	assert.match(source, /#left-hand-nav \.sidebar-footer\s*{[^}]*white-space: nowrap;/s);
-	assert.match(source, /#left-hand-nav \.sidebar-footer-nav ul\s*{[^}]*flex-wrap: nowrap;/s);
-	assert.match(source, /#left-hand-nav \.sidebar-footer-nav ul\s*{[^}]*justify-content: space-between;/s);
-	assert.match(source, /#left-hand-nav \.sidebar-footer-nav ul\s*{[^}]*gap: clamp\(0\.45rem, 3vw, 0\.9rem\);/s);
-	assert.match(layout, /@media \(max-width: 900px\)\s*{[\s\S]*?\.content-column\s*{[^}]*padding-top: 1\.15rem;/s);
-	assert.match(layout, /\.content-column\s*{[^}]*padding-inline: 0\.65rem;/s);
+	assert.match(source, /#left-hand-nav \.header-footer\s*{[^}]*overflow-x: auto;/s);
+	assert.match(source, /#left-hand-nav \.header-footer\s*{[^}]*white-space: nowrap;/s);
+	assert.match(source, /#left-hand-nav \.header-footer-nav ul\s*{[^}]*flex-wrap: nowrap;/s);
+	assert.match(source, /#left-hand-nav \.header-footer-nav ul\s*{[^}]*justify-content: space-between;/s);
+	assert.match(source, /#left-hand-nav \.header-footer-nav ul\s*{[^}]*gap: clamp\(0\.45rem, 3vw, 0\.9rem\);/s);
+	assert.match(layout, /<main id="main-content" class="site-container content-column"/);
+	assert.match(layout, /@media \(max-width: 900px\)\s*{[\s\S]*?\.content-column\s*{[^}]*padding-block: 1\.15rem 1\.5rem;/s);
 });
 
 test("mobile primary header navigation uses natural item sizing with a consistent gap", () => {
@@ -102,6 +102,21 @@ test("Home and Discover use tighter mobile section rhythm", () => {
 	assert.match(home, /\.section-explanation\s*{[^}]*font-size: 0\.84rem;/s);
 	assert.match(discover, /@media \(max-width: 760px\)\s*{[\s\S]*?\.discover-page\s*{[^}]*gap: 0\.72rem;/s);
 	assert.match(discover, /\.discover-grid\s*{[^}]*gap: 0\.72rem;/s);
+});
+
+test("Home and Discover use the shared wide app canvas", () => {
+	const global = read("../src/assets/global.css");
+	const layout = read("../src/layouts/Layout.astro");
+	const home = read("../src/pages/index.astro");
+	const discover = read("../src/pages/discover.astro");
+
+	assert.match(global, /--site-max-width: 1540px;/);
+	assert.match(global, /\.site-container\s*{[^}]*var\(--site-max-width\)/s);
+	assert.match(layout, /<main id="main-content" class="site-container content-column"/);
+	assert.doesNotMatch(home, /max-width: 1020px;/);
+	assert.doesNotMatch(discover, /max-width: 1040px;/);
+	assert.match(home, /\.book-grid\s*{[^}]*repeat\(auto-fill, minmax\(min\(100%, var\(--book-grid-min\)\), 1fr\)\)/s);
+	assert.match(discover, /\.discover-grid\s*{[^}]*repeat\(auto-fill, minmax\(min\(100%, var\(--book-grid-min\)\), 1fr\)\)/s);
 });
 
 test("Product Bible documents reusable mobile density patterns", () => {

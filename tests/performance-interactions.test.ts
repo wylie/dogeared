@@ -195,7 +195,8 @@ test("shared client scripts rebind to swapped Astro page DOM", () => {
 	assert.match(feedbackWidget, /data-feedback-open/);
 	assert.match(feedbackWidget, /controller\.abort\(\)/);
 	assert.match(leftHand, /onDogearedPageLoad\("left-hand"/);
-	assert.match(leftHand, /leftHandMenuToggle\?\.addEventListener\("click"/);
+	assert.match(leftHand, /document\.addEventListener\("click", \(event\) =>/);
+	assert.match(leftHand, /querySelectorAll\("details\[open\]"\)/);
 	assert.match(leftHand, /leftHandSearchForm\?\.addEventListener\("submit"/);
 	assert.match(leftHand, /unsubscribeAuthStateChange\(\)/);
 	assert.match(architecture, /astro:page-load/);
