@@ -1049,8 +1049,9 @@ const profilePerformanceTelemetry = {
 						))}
 					</ul>
 				</nav>
-				<section id="about" class="profile-about-grid">
-					<div class="profile-card profile-identity-card">
+				<section class="profile-upper-layout" aria-label="Profile overview">
+					<div class="profile-column profile-column-left">
+						<section class="profile-card profile-identity-card" aria-label="Profile identity">
 						{isOwnerViewer && (
 							<div class="profile-card-actions">
 								<div class="profile-actions-menu-wrap" data-profile-actions-menu>
@@ -1239,8 +1240,70 @@ const profilePerformanceTelemetry = {
 								)}
 							</>
 						)}
+						</section>
+						<section id="shelf-summary" class="shelf-card">
+							<div class="shelf-summary-head">
+								<h2>Shelf Summary</h2>
+								{isOwnerViewer && (
+									<div class="custom-shelf-menu-wrap">
+										<button
+											type="button"
+											class="custom-shelf-menu-trigger"
+											data-action="toggle-shelf-summary-menu"
+											aria-expanded="false"
+											aria-label="Shelf summary actions"
+										>
+											<span class="material-icons" aria-hidden="true">more_vert</span>
+										</button>
+										<div class="custom-shelf-menu" data-shelf-summary-menu hidden>
+											<button type="button" class="custom-shelf-menu-item" data-action="open-create-custom-shelf-modal">Create custom shelf</button>
+										</div>
+									</div>
+								)}
+							</div>
+							<div class="shelf-summary-grid">
+								<a class="shelf-summary-item" href={shelfHrefForOwner("reading")}>
+									<p class="shelf-summary-label">
+										<span class="material-icons shelf-summary-icon" aria-hidden="true">menu_book</span>
+										<span>Currently Reading</span>
+									</p>
+									<p class="shelf-summary-value" data-shelf-count="reading">{shelfStats.reading}</p>
+								</a>
+								<a class="shelf-summary-item" href={shelfHrefForOwner("want_to_read")}>
+									<p class="shelf-summary-label">
+										<span class="material-icons shelf-summary-icon" aria-hidden="true">add</span>
+										<span>Want to Read</span>
+									</p>
+									<p class="shelf-summary-value" data-shelf-count="want_to_read">{shelfStats.wantToRead}</p>
+								</a>
+								<a class="shelf-summary-item" href={shelfHrefForOwner("finished")}>
+									<p class="shelf-summary-label">
+										<span class="material-icons shelf-summary-icon" aria-hidden="true">check</span>
+										<span>Read</span>
+									</p>
+									<p class="shelf-summary-value" data-shelf-count="finished">{shelfStats.finished}</p>
+								</a>
+								<div class="shelf-summary-item shelf-summary-item-total" role="group" aria-label="Total books">
+									<p class="shelf-summary-label">
+										<span class="material-icons shelf-summary-icon" aria-hidden="true">library_books</span>
+										<span>Total</span>
+									</p>
+									<p class="shelf-summary-value" data-shelf-count="total">{shelfStats.total}</p>
+								</div>
+								{isOwnerViewer && customShelves.map((shelf) => (
+									<a class="shelf-summary-item" href={`#custom-shelf-${shelf.slug || shelf.id}`}>
+										<p class="shelf-summary-label">
+											<span class="material-icons shelf-summary-icon" aria-hidden="true">{shelf.icon}</span>
+											<span>{shelf.name}</span>
+										</p>
+										<p class="shelf-summary-value">{shelf.bookCount}</p>
+									</a>
+								))}
+							</div>
+						</section>
 					</div>
-					<div class="profile-about-card">
+					<div class="profile-column profile-column-right">
+						<section id="about" class="profile-about-card">
 						<h2>About</h2>
 						{isOwnerViewer && editMode ? (
 							<form method="post" action={`/profile/${encodeURIComponent(profile.username)}?edit=1`} class="inline-profile-form">
@@ -1264,8 +1327,7 @@ const profilePerformanceTelemetry = {
 						) : (
 							profile.blurb && <p class="blurb">{profile.blurb}</p>
 						)}
-					</div>
-				</section>
+						</section>
 				<section id="reading-goal" class="reading-goal-card">
 					<div class="reading-goal-head">
 						<div>
@@ -1343,64 +1405,6 @@ const profilePerformanceTelemetry = {
 						)}
 					</div>
 				</section>
-				<section id="shelf-summary" class="shelf-card">
-					<div class="shelf-summary-head">
-						<h2>Shelf Summary</h2>
-						{isOwnerViewer && (
-							<div class="custom-shelf-menu-wrap">
-								<button
-									type="button"
-									class="custom-shelf-menu-trigger"
-									data-action="toggle-shelf-summary-menu"
-									aria-expanded="false"
-									aria-label="Shelf summary actions"
-								>
-									<span class="material-icons" aria-hidden="true">more_vert</span>
-								</button>
-								<div class="custom-shelf-menu" data-shelf-summary-menu hidden>
-									<button type="button" class="custom-shelf-menu-item" data-action="open-create-custom-shelf-modal">Create custom shelf</button>
-								</div>
-							</div>
-						)}
-					</div>
-					<div class="shelf-summary-grid">
-						<a class="shelf-summary-item" href={shelfHrefForOwner("reading")}>
-							<p class="shelf-summary-label">
-								<span class="material-icons shelf-summary-icon" aria-hidden="true">menu_book</span>
-								<span>Currently Reading</span>
-							</p>
-							<p class="shelf-summary-value" data-shelf-count="reading">{shelfStats.reading}</p>
-						</a>
-						<a class="shelf-summary-item" href={shelfHrefForOwner("want_to_read")}>
-							<p class="shelf-summary-label">
-								<span class="material-icons shelf-summary-icon" aria-hidden="true">add</span>
-								<span>Want to Read</span>
-							</p>
-							<p class="shelf-summary-value" data-shelf-count="want_to_read">{shelfStats.wantToRead}</p>
-						</a>
-						<a class="shelf-summary-item" href={shelfHrefForOwner("finished")}>
-							<p class="shelf-summary-label">
-								<span class="material-icons shelf-summary-icon" aria-hidden="true">check</span>
-								<span>Read</span>
-							</p>
-							<p class="shelf-summary-value" data-shelf-count="finished">{shelfStats.finished}</p>
-						</a>
-						<div class="shelf-summary-item shelf-summary-item-total" role="group" aria-label="Total books">
-							<p class="shelf-summary-label">
-								<span class="material-icons shelf-summary-icon" aria-hidden="true">library_books</span>
-								<span>Total</span>
-							</p>
-							<p class="shelf-summary-value" data-shelf-count="total">{shelfStats.total}</p>
-						</div>
-						{isOwnerViewer && customShelves.map((shelf) => (
-							<a class="shelf-summary-item" href={`#custom-shelf-${shelf.slug || shelf.id}`}>
-								<p class="shelf-summary-label">
-									<span class="material-icons shelf-summary-icon" aria-hidden="true">{shelf.icon}</span>
-									<span>{shelf.name}</span>
-								</p>
-								<p class="shelf-summary-value">{shelf.bookCount}</p>
-							</a>
-						))}
 					</div>
 				</section>
 
@@ -2235,11 +2239,18 @@ const profilePerformanceTelemetry = {
 		border-color: var(--color-border-soft);
 		color: var(--color-nav);
 	}
-	.profile-about-grid {
+	.profile-upper-layout {
+		grid-column: 1 / -1;
 		display: grid;
 		grid-template-columns: minmax(0, 0.4fr) minmax(0, 0.6fr);
 		align-items: start;
 		gap: clamp(0.85rem, 1.45vw, 1.35rem);
+	}
+	.profile-column {
+		display: grid;
+		align-content: start;
+		gap: clamp(0.85rem, 1.45vw, 1.35rem);
+		min-width: 0;
 	}
 	.profile-card {
 		width: 100%;
@@ -2423,8 +2434,7 @@ const profilePerformanceTelemetry = {
 	}
 	.genre-list { list-style: none; margin: 0.7rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
 	.genre-list li { list-style: none; }
-	.public-profile-page > .reading-goal-card {
-		grid-column: span 8;
+	.reading-goal-card {
 		border: none;
 		border-radius: 12px;
 		background: var(--color-surface);
@@ -2893,8 +2903,7 @@ const profilePerformanceTelemetry = {
 	.shelf-summary-item-total {
 		grid-column: span 1;
 	}
-	.public-profile-page > .shelf-card {
-		grid-column: span 4;
+	.shelf-card {
 		border: none;
 		background: transparent;
 		border-radius: 0;
@@ -3931,14 +3940,8 @@ const profilePerformanceTelemetry = {
 		.public-profile-page {
 			--profile-book-grid-min: 20rem;
 		}
-		.profile-about-grid {
+		.profile-upper-layout {
 			grid-template-columns: 1fr;
-		}
-		.public-profile-page > .reading-goal-card {
-			grid-column: span 7;
-		}
-		.public-profile-page > .shelf-card {
-			grid-column: span 5;
 		}
 		#recent-activity,
 		.public-profile-page > .profile-reviews-section {
@@ -3946,10 +3949,6 @@ const profilePerformanceTelemetry = {
 		}
 	}
 	@media (max-width: 940px) {
-		.public-profile-page > .reading-goal-card,
-		.public-profile-page > .shelf-card {
-			grid-column: 1 / -1;
-		}
 		.shelf-summary-grid {
 			grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
 		}

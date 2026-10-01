@@ -124,14 +124,22 @@ test("canonical finished book filter counts one Work per year from finished date
 	assert.equal(filterCanonicalFinishedBooksForYear(books, 2025).length, 1);
 });
 
-test("profile page renders reading goal between profile card and shelf summary", () => {
+test("profile page renders the upper profile as independent identity and reading columns", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
-	const aboutIndex = source.indexOf('<section id="about" class="profile-about-grid">');
-	const goalIndex = source.indexOf('<section id="reading-goal" class="reading-goal-card">');
+	const upperLayoutIndex = source.indexOf('<section class="profile-upper-layout" aria-label="Profile overview">');
+	const leftColumnIndex = source.indexOf('<div class="profile-column profile-column-left">');
+	const identityIndex = source.indexOf('<section class="profile-card profile-identity-card" aria-label="Profile identity">');
 	const summaryIndex = source.indexOf('<section id="shelf-summary" class="shelf-card">');
+	const rightColumnIndex = source.indexOf('<div class="profile-column profile-column-right">');
+	const aboutIndex = source.indexOf('<section id="about" class="profile-about-card">');
+	const goalIndex = source.indexOf('<section id="reading-goal" class="reading-goal-card">');
+	assert.ok(upperLayoutIndex >= 0);
+	assert.ok(leftColumnIndex > upperLayoutIndex);
+	assert.ok(identityIndex > leftColumnIndex);
+	assert.ok(summaryIndex > identityIndex);
+	assert.ok(rightColumnIndex > summaryIndex);
 	assert.ok(aboutIndex >= 0);
 	assert.ok(goalIndex > aboutIndex);
-	assert.ok(summaryIndex > goalIndex);
 	assert.equal(source.includes("<strong>Reading goal:</strong>"), false);
 	assert.equal(source.includes("booksCompletedThisYear"), true);
 	assert.equal(source.includes("loadFinishedBooksForReader"), true);
