@@ -26,18 +26,26 @@ test("signed-in header keeps personal, discovery, and account destinations organ
 	const moreItems = nav.slice(nav.indexOf("const moreNavItems"), nav.indexOf("const footerNavItems"));
 	assert.match(primaryList, /left-hand-login-item/);
 	assert.match(primaryList, /publicPrimaryItems/);
+	assert.match(primaryList, /profilePrimaryItems/);
 	assert.match(primaryList, /readingLifeNavItems/);
 	assert.doesNotMatch(nav, /nav-group-explore/);
 	assert.doesNotMatch(nav, />Explore</);
+	assert.match(moreItems, /\/journal/);
+	assert.match(moreItems, /\/notifications/);
 	assert.match(moreItems, /\/following/);
 	assert.match(moreMenu, /moreNavItems/);
-	assert.match(accountItems, /item\.href !== "\/reading-life"/);
+	assert.match(moreMenu, /left-hand-notification-badge/);
+	assert.match(moreMenu, /left-hand-more-notification-badge/);
+	assert.match(accountItems, /item\.href === "\/settings"/);
 	assert.match(youItems, /left-hand-profile-item/);
 	assert.match(youItems, /left-hand-journal-item/);
 	assert.match(youItems, /left-hand-notifications-item/);
 	assert.match(youItems, /left-hand-settings-item/);
 	assert.match(accountMenu, /left-hand-logout-item/);
 	assert.match(youItems, /\/settings/);
+	assert.doesNotMatch(accountMenu, /left-hand-profile-item/);
+	assert.doesNotMatch(accountMenu, /left-hand-journal-item/);
+	assert.doesNotMatch(accountMenu, /left-hand-notifications-item/);
 });
 
 test("profile stays focused on reader identity and current reading state", () => {
@@ -93,6 +101,7 @@ test("product documentation records the reorganized responsibilities", () => {
 	assert.match(overview, /What was I thinking while reading\?/);
 	assert.match(overview, /one responsive top navigation/);
 	assert.match(overview, /site-container/);
+	assert.match(overview, /direct Profile and My Reading Life access/);
 	assert.match(features, /Reading Journal is private notebook space/);
 	assert.match(routes, /\/reading-timeline[\s\S]+redirect/i);
 });

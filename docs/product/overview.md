@@ -52,7 +52,7 @@ DogEared is for readers who want a quieter alternative to high-noise book platfo
 
 ## Current Information Architecture
 
-DogEared uses one responsive top navigation across the primary app. The desktop row keeps the DogEared brand, global search, direct Discover/Books/Authors links, direct My Reading Life access for signed-in readers, a More menu for lower-frequency community destinations such as Following, an About menu for public product context, an Admin menu only for admins, and an Account menu for Profile, Reading Journal, Notifications, Settings, and Log Out. The header and main content share the reusable `site-container` width system (`--site-max-width` plus responsive gutters), so discovery grids, admin surfaces, profile views, and reading dashboards can use a broad app canvas while individual prose blocks keep their own readable line lengths.
+DogEared uses one responsive top navigation across the primary app. The desktop row keeps the DogEared brand, global search, direct Discover/Books/Authors links, direct Profile and My Reading Life access for signed-in readers, a More menu for secondary reader destinations such as Reading Journal, Notifications, and Following, an About menu for public product context, an Admin menu only for admins, and an Account menu for Settings and Log Out. The header and main content share the reusable `site-container` width system (`--site-max-width` plus responsive gutters), so discovery grids, admin surfaces, profile views, and reading dashboards can use a broad app canvas while individual prose blocks keep their own readable line lengths.
 
 DogEared separates the signed-in reader experience into three personal destinations with distinct jobs:
 
@@ -60,7 +60,7 @@ DogEared separates the signed-in reader experience into three personal destinati
 - My Reading Life answers "How has my reading changed over time?" It consolidates yearly progress, timeline, Reading Activity, genre/author history, milestones, journey summaries, and fun statistics into one richer reflective area.
 - Reading Journal answers "What was I thinking while reading?" It is private notebook space only, with no shelves, reading goal, profile information, or statistics.
 
-The signed-in navigation keeps My Reading Life as the only always-visible personal destination. Profile, Reading Journal, Notifications, Settings, and Log Out live under Account, and Following remains available as a community/discovery destination under More rather than part of the core personal IA.
+The signed-in navigation keeps Profile and My Reading Life as always-visible personal destinations. Reading Journal, Notifications, and Following live under More; Settings and Log Out live under Account.
 
 ## Major Workflows
 

@@ -439,7 +439,7 @@ Limitations: Comments are capped at 500 characters.
 
 Status: Complete
 
-DogEared has a dedicated low-noise notification center for meaningful updates. Notifications are grouped by Today, This Week, and Earlier and include an icon, title, short description, timestamp, read/unread state, and optional action. Readers can open, mark read, mark all read, or delete notifications. The Account navigation shows a subtle unread badge only when unread notifications exist.
+DogEared has a dedicated low-noise notification center for meaningful updates. Notifications are grouped by Today, This Week, and Earlier and include an icon, title, short description, timestamp, read/unread state, and optional action. Readers can open, mark read, mark all read, or delete notifications. The More navigation and Notifications item show a subtle unread badge only when unread notifications exist.
 
 Supported v1 event types cover community updates (follows, likes, comments, replies), reading and milestone updates (goal completion, achievement-backed streak milestones, achievement-backed finished series), discovery updates (trending Want to Read books and favorite-author imports), and future-ready system imports. Achievement notifications use the same icon, accent color token, title, and description as the earned profile badge, then deep-link to the profile badge. Similar events can be grouped within a configurable window so repeated likes or replies become one calm notification. Settings includes in-app category preferences for Community, Reading, Discovery, Milestones, and System. Admin includes a notification operations dashboard for sent today, unread count, common types, and volume over time.
 
