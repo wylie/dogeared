@@ -1035,6 +1035,20 @@ const profilePerformanceTelemetry = {
 						<a id="dismiss-welcome-banner" class="welcome-banner-dismiss" href={dismissWelcomeUrl}>Dismiss</a>
 					</section>
 				)}
+				<nav class="profile-subnav" aria-label="Profile sections">
+					<ul>
+						{sectionLinks.map((link, index) => (
+							<li>
+								<a
+									href={`#${link.id}`}
+									class={index === 0 ? "is-active" : ""}
+									data-profile-section-link={link.id}
+									aria-current={index === 0 ? "location" : undefined}
+								>{link.label}</a>
+							</li>
+						))}
+					</ul>
+				</nav>
 				<section id="about" class="profile-card">
 					{isOwnerViewer && (
 						<div class="profile-card-actions">
@@ -2098,7 +2112,30 @@ const profilePerformanceTelemetry = {
 </Layout>
 
 <style>
-	.public-profile-page { max-width: 860px; display: grid; gap: 0.9rem; }
+	.public-profile-page {
+		--profile-book-grid-min: 21.5rem;
+		width: 100%;
+		max-width: none;
+		display: grid;
+		grid-template-columns: repeat(12, minmax(0, 1fr));
+		align-items: start;
+		gap: clamp(0.85rem, 1.45vw, 1.35rem);
+	}
+	.public-profile-page > * {
+		grid-column: 1 / -1;
+		min-width: 0;
+	}
+	#about,
+	#reading-goal,
+	#shelf-summary,
+	#currently-reading,
+	#recent-activity,
+	#reviews,
+	#want-to-read,
+	#read,
+	.custom-shelf-books-section {
+		scroll-margin-top: 6rem;
+	}
 	.breadcrumbs {
 		display: flex;
 		gap: 0.35rem;
@@ -2117,6 +2154,47 @@ const profilePerformanceTelemetry = {
 		color: var(--color-nav-hover);
 		text-decoration: underline;
 		text-underline-offset: 2px;
+	}
+	.profile-subnav {
+		overflow: auto hidden;
+		-webkit-overflow-scrolling: touch;
+		padding-bottom: 0.08rem;
+	}
+	.profile-subnav ul {
+		list-style: none;
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin: 0;
+		padding: 0;
+		min-width: max-content;
+	}
+	.profile-subnav li {
+		list-style: none;
+	}
+	.profile-subnav a {
+		display: inline-flex;
+		align-items: center;
+		min-height: 2.1rem;
+		border-radius: var(--radius-pill);
+		padding: 0.32rem 0.68rem;
+		color: var(--color-nav);
+		background: rgba(255, 255, 255, 0.42);
+		text-decoration: none;
+		font-size: 0.86rem;
+		font-weight: 760;
+		white-space: nowrap;
+		transition: background-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+	}
+	.profile-subnav a:hover,
+	.profile-subnav a:focus-visible,
+	.profile-subnav a.is-active {
+		background: var(--color-nav-surface-hover);
+		color: var(--color-nav-active);
+	}
+	.profile-subnav a:focus-visible {
+		outline: 3px solid rgba(31, 122, 69, 0.72);
+		outline-offset: 2px;
 	}
 	.welcome-banner {
 		display: flex;
@@ -2150,7 +2228,11 @@ const profilePerformanceTelemetry = {
 		border-color: var(--color-border-soft);
 		color: var(--color-nav);
 	}
-	.profile-card { position: relative; }
+	.profile-card {
+		position: relative;
+		display: grid;
+		gap: 0.76rem;
+	}
 	.profile-card-actions {
 		position: absolute;
 		top: 0.9rem;
@@ -2211,7 +2293,12 @@ const profilePerformanceTelemetry = {
 	.avatar-fallback { display: grid; place-items: center; background: #ece7dc; font-weight: 700; color: #4f4a40; }
 	.profile-head h1 { margin: 0; font-size: 1.45rem; }
 	.username { margin: 0.15rem 0 0; color: #5d5a53; }
-	.blurb { margin: 0.7rem 0 0; }
+	.blurb {
+		max-width: 76rem;
+		margin: 0.05rem 0 0;
+		font-size: clamp(1rem, 0.92rem + 0.25vw, 1.12rem);
+		line-height: 1.5;
+	}
 	.follow-actions { margin-top: 0.55rem; display: flex; align-items: center; gap: 0.6rem; }
 	.follow-actions button { border: none; border-radius: 999px; padding: 0.35rem 0.8rem; background: #1d1d1d; color: #fff; font: inherit; cursor: pointer; }
 	.follow-actions button[disabled] { opacity: 0.6; cursor: default; }
@@ -2275,7 +2362,13 @@ const profilePerformanceTelemetry = {
 		background: #eef0f3;
 		color: #1f2937;
 	}
-	.meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem 0.8rem; margin-top: 0.7rem; }
+	.meta-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(16rem, 1fr));
+		gap: 0.42rem 1.25rem;
+		max-width: 72rem;
+		margin-top: 0;
+	}
 	.meta-grid p { margin: 0; }
 	.meta-link {
 		color: inherit;
@@ -2289,7 +2382,8 @@ const profilePerformanceTelemetry = {
 	}
 	.genre-list { list-style: none; margin: 0.7rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
 	.genre-list li { list-style: none; }
-	.reading-goal-card {
+	.public-profile-page > .reading-goal-card {
+		grid-column: span 8;
 		border: none;
 		border-radius: 12px;
 		background: var(--color-surface);
@@ -2743,8 +2837,8 @@ const profilePerformanceTelemetry = {
 	.shelf-summary-grid {
 		margin-top: 0.7rem;
 		display: grid;
-		grid-template-columns: repeat(5, minmax(0, 1fr));
-		gap: 0.75rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.65rem;
 	}
 	.shelf-summary-head {
 		display: flex;
@@ -2758,7 +2852,8 @@ const profilePerformanceTelemetry = {
 	.shelf-summary-item-total {
 		grid-column: span 1;
 	}
-	.shelf-card {
+	.public-profile-page > .shelf-card {
+		grid-column: span 4;
 		border: none;
 		background: transparent;
 		border-radius: 0;
@@ -2817,7 +2912,14 @@ const profilePerformanceTelemetry = {
 		line-height: 1;
 		color: #1f2937;
 	}
-	.activity-grid { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.activity-grid {
+		list-style: none;
+		margin: 0.6rem 0 0;
+		padding: 0;
+		display: grid;
+		gap: 0.75rem;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--profile-book-grid-min)), 1fr));
+	}
 	.activity-headline { font-weight: 700; color: #2f2f2f; }
 	.custom-shelves-section .meta {
 		margin-top: 0.2rem;
@@ -2942,14 +3044,28 @@ const profilePerformanceTelemetry = {
 	.custom-shelf-menu-item.danger {
 		color: #7f1d1d;
 	}
-	.custom-shelf-books-section {
-		margin-top: 1.6rem;
-		/* margin-bottom: 1.6rem; */
-	}
-	.currently-reading-section,
+	.custom-shelf-books-section,
 	#want-to-read,
 	#read {
-		margin-top: 1.6rem;
+		grid-column: 1 / -1;
+		margin-top: 0;
+	}
+	.currently-reading-section,
+	#recent-activity,
+	.profile-reviews-section {
+		margin-top: 0;
+	}
+	.public-profile-page > .currently-reading-section {
+		grid-column: 1 / -1;
+	}
+	#recent-activity {
+		grid-column: span 7;
+	}
+	.public-profile-page > .profile-reviews-section {
+		grid-column: span 5;
+	}
+	.profile-review-list {
+		max-width: 58rem;
 	}
 	.custom-shelf-heading-row {
 		display: flex;
@@ -3770,7 +3886,44 @@ const profilePerformanceTelemetry = {
 	}
 	.public-profile-page :global(.shelf-state) { display: none !important; }
 	.status { text-transform: capitalize; }
+	@media (max-width: 1180px) {
+		.public-profile-page {
+			--profile-book-grid-min: 20rem;
+		}
+		.public-profile-page > .reading-goal-card {
+			grid-column: span 7;
+		}
+		.public-profile-page > .shelf-card {
+			grid-column: span 5;
+		}
+		#recent-activity,
+		.public-profile-page > .profile-reviews-section {
+			grid-column: 1 / -1;
+		}
+	}
+	@media (max-width: 940px) {
+		.public-profile-page > .reading-goal-card,
+		.public-profile-page > .shelf-card {
+			grid-column: 1 / -1;
+		}
+		.shelf-summary-grid {
+			grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+		}
+	}
+	@media (max-width: 900px) {
+		.profile-subnav {
+			display: none;
+		}
+	}
 	@media (max-width: 740px) {
+		.public-profile-page {
+			display: grid;
+			grid-template-columns: 1fr;
+			gap: 0.72rem;
+		}
+		.public-profile-page > * {
+			grid-column: 1 / -1;
+		}
 		.meta-grid { grid-template-columns: 1fr; }
 		.inline-profile-form { grid-template-columns: 1fr; }
 		.reading-goal-head,
@@ -3965,8 +4118,40 @@ const profilePerformanceTelemetry = {
 	})();
 	const shelfOrderStorageKey = `dogeared:shelf-order:${String(window.location.pathname || "").toLowerCase()}`;
 	const shelfDropdowns = Array.from(document.querySelectorAll(".shelf-dropdown"));
+	const profileSectionLinks = Array.from(document.querySelectorAll("[data-profile-section-link]"));
 	const feedbackTimers = new WeakMap();
 	initRatingControls();
+
+	function setActiveProfileSection(sectionId) {
+		const normalizedId = String(sectionId || "").replace(/^#/, "").trim();
+		for (const link of profileSectionLinks) {
+			if (!(link instanceof HTMLAnchorElement)) continue;
+			const isActive = link.dataset.profileSectionLink === normalizedId;
+			link.classList.toggle("is-active", isActive);
+			if (isActive) link.setAttribute("aria-current", "location");
+			else link.removeAttribute("aria-current");
+		}
+	}
+
+	function initProfileSectionNavigation() {
+		if (profileSectionLinks.length === 0) return;
+		const sectionIds = profileSectionLinks
+			.map((link) => link instanceof HTMLElement ? String(link.dataset.profileSectionLink || "").trim() : "")
+			.filter(Boolean);
+		const initialId = String(window.location.hash || "").replace(/^#/, "") || sectionIds[0] || "";
+		setActiveProfileSection(initialId);
+		for (const link of profileSectionLinks) {
+			if (!(link instanceof HTMLAnchorElement)) continue;
+			link.addEventListener("click", () => {
+				setActiveProfileSection(link.dataset.profileSectionLink || "");
+			});
+		}
+		window.addEventListener("hashchange", () => {
+			setActiveProfileSection(String(window.location.hash || "").replace(/^#/, ""));
+		});
+	}
+
+	initProfileSectionNavigation();
 
 	function loadStoredShelfSectionOrder() {
 		try {

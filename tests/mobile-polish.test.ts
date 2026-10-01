@@ -119,6 +119,25 @@ test("Home and Discover use the shared wide app canvas", () => {
 	assert.match(discover, /\.discover-grid\s*{[^}]*repeat\(auto-fill, minmax\(min\(100%, var\(--book-grid-min\)\), 1fr\)\)/s);
 });
 
+test("Profile uses the shared wide app canvas with responsive page sections", () => {
+	const profile = read("../src/pages/profile/[username].astro");
+	const overview = read("../docs/product/overview.md");
+
+	assert.doesNotMatch(profile, /\.public-profile-page\s*{[^}]*max-width: 860px;/s);
+	assert.match(profile, /\.public-profile-page\s*{[^}]*max-width: none;/s);
+	assert.match(profile, /\.public-profile-page\s*{[^}]*grid-template-columns: repeat\(12, minmax\(0, 1fr\)\);/s);
+	assert.match(profile, /class="profile-subnav"/);
+	assert.match(profile, /data-profile-section-link=\{link\.id\}/);
+	assert.match(profile, /\.reading-goal-card\s*{[^}]*grid-column: span 8;/s);
+	assert.match(profile, /\.shelf-card\s*{[^}]*grid-column: span 4;/s);
+	assert.match(profile, /\.currently-reading-section\s*{[^}]*grid-column: 1 \/ -1;/s);
+	assert.match(profile, /\.activity-grid\s*{[^}]*repeat\(auto-fill, minmax\(min\(100%, var\(--profile-book-grid-min\)\), 1fr\)\)/s);
+	assert.match(profile, /\.profile-review-list\s*{[^}]*max-width: 58rem;/s);
+	assert.match(profile, /@media \(max-width: 740px\)\s*{[\s\S]*?\.public-profile-page\s*{[^}]*grid-template-columns: 1fr;/s);
+	assert.match(overview, /The Profile page uses the shared wide app canvas/);
+	assert.match(overview, /page-level section navigation is horizontal/);
+});
+
 test("Product Bible documents reusable mobile density patterns", () => {
 	const source = read("../docs/product/overview.md");
 
