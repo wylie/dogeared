@@ -674,7 +674,7 @@ recordPerformanceEventSafe({
 	socialImageAlt={displayName ? `${displayName} on DogEared` : "Authors on DogEared"}
 	structuredData={authorStructuredData}
 >
-	<div slot="right" class="author-page" data-author-id={authorId > 0 ? String(authorId) : ""}>
+	<div slot="right" class="author-page app-page app-page--wide" data-author-id={authorId > 0 ? String(authorId) : ""}>
 		{errorMessage && <p class="error">{errorMessage}</p>}
 
 		<AuthorSection
@@ -1009,7 +1009,7 @@ recordPerformanceEventSafe({
 </script>
 
 <style>
-	.author-page { max-width: 1040px; }
+	.author-page { max-width: none; }
 	.panel { border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1.05rem; }
 	.meta { margin: 0.2rem 0; color: var(--color-text-muted); }
 	.featured-in-section { margin-top: 1rem; }
@@ -1091,7 +1091,7 @@ recordPerformanceEventSafe({
 		font-size: 0.9rem;
 		line-height: 1.4;
 	}
-	.book-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.95rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.book-grid { --book-grid-min: 19rem; list-style: none; margin: 0; padding: 0; display: grid; gap: 0.95rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--book-grid-min)), 1fr)); }
 	.book-card-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
 	.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 	.rating-meta { color: var(--color-text-muted); font-weight: 400; }

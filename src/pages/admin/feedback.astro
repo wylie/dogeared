@@ -232,7 +232,7 @@ function normalizedScreenshots(value: FeedbackReport["screenshots"]) {
 ---
 
 <Layout title="Admin Feedback" sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="admin-feedback-page">
+	<div slot="right" class="admin-feedback-page app-page app-page--wide">
 		<header class="hero">
 			<h1>Feedback</h1>
 			<p>Beta reader feedback, bug reports, diagnostics, screenshots, and private admin workflow notes.</p>
@@ -399,7 +399,7 @@ function normalizedScreenshots(value: FeedbackReport["screenshots"]) {
 
 <style>
 	.admin-feedback-page {
-		max-width: 1040px;
+		max-width: none;
 	}
 	.hero h1,
 	.hero p {

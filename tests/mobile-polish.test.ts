@@ -150,6 +150,60 @@ test("Profile uses the shared wide app canvas with responsive page sections", ()
 	assert.match(overview, /page-level section navigation is horizontal/);
 });
 
+test("application pages use shared width primitives after the top-nav migration", () => {
+	const global = read("../src/assets/global.css");
+	const overview = read("../docs/product/overview.md");
+	const readingLife = read("../src/pages/reading-life.astro");
+	const search = read("../src/pages/search.astro");
+	const books = read("../src/pages/books.astro");
+	const author = read("../src/pages/author/[slug].astro");
+	const collections = read("../src/pages/collections/index.astro");
+	const admin = read("../src/pages/admin.astro");
+	const adminPerformance = read("../src/pages/admin/performance.astro");
+	const notifications = read("../src/pages/notifications.astro");
+	const following = read("../src/pages/following.astro");
+	const journal = read("../src/pages/journal.astro");
+	const settings = read("../src/pages/settings.astro");
+	const privacy = read("../src/pages/privacy.astro");
+	const support = read("../src/pages/support.astro");
+	const mission = read("../src/pages/mission.astro");
+
+	assert.match(global, /\.app-page\s*{[^}]*max-width: var\(--app-page-max, none\);/s);
+	assert.match(global, /\.app-page--wide\s*{[^}]*--app-page-max: none;/s);
+	assert.match(global, /\.app-page--standard\s*{[^}]*--app-page-max: min\(100%, 72rem\);/s);
+	assert.match(global, /\.app-page--reading\s*{[^}]*--app-page-max: min\(100%, 54rem\);/s);
+	assert.match(global, /\.app-page--form\s*{[^}]*--app-page-max: min\(100%, 58rem\);/s);
+	assert.match(global, /\.responsive-book-grid\s*{[^}]*repeat\(auto-fill, minmax\(min\(100%, var\(--book-grid-min\)\), 1fr\)\)/s);
+	assert.match(global, /\.responsive-card-grid\s*{[^}]*repeat\(auto-fit, minmax\(min\(100%, var\(--card-grid-min\)\), 1fr\)\)/s);
+	assert.match(global, /@media \(max-width: 900px\)\s*{[\s\S]*?\.app-page--standard,[\s\S]*?\.app-page--form\s*{[^}]*--app-page-max: none;/s);
+
+	for (const source of [readingLife, search, books, author, collections, admin, adminPerformance]) {
+		assert.match(source, /app-page app-page--wide/);
+	}
+
+	for (const source of [notifications, following, journal]) {
+		assert.match(source, /app-page app-page--standard/);
+		assert.match(source, /max-width: var\(--app-page-max\);/);
+	}
+
+	assert.match(settings, /app-page app-page--form/);
+	assert.match(settings, /max-width: var\(--app-page-max\);/);
+
+	for (const source of [privacy, support, mission]) {
+		assert.match(source, /app-page app-page--reading/);
+		assert.match(source, /max-width: var\(--app-page-max\);/);
+	}
+
+	assert.doesNotMatch(readingLife, /\.reading-life-page\s*{[^}]*max-width: 1040px;/s);
+	assert.doesNotMatch(search, /\.search-page\s*{[^}]*max-width: 900px;/s);
+	assert.doesNotMatch(admin, /\.admin-page\s*{[^}]*max-width: 980px;/s);
+	assert.match(readingLife, /\.current-books ul\s*{[^}]*repeat\(auto-fill, minmax\(min\(100%, 15\.5rem\), 1fr\)\)/s);
+	assert.match(search, /\.search-results\s*{[^}]*repeat\(auto-fill, minmax\(min\(100%, var\(--book-grid-min\)\), 1fr\)\)/s);
+	assert.match(overview, /Application pages choose one of the shared page-width primitives/);
+	assert.match(overview, /`app-page--wide` is for browsing, dashboards, catalog detail, metrics, profile compositions, and admin work surfaces/);
+	assert.match(overview, /`app-page--reading` is for prose-first public or account pages/);
+});
+
 test("Product Bible documents reusable mobile density patterns", () => {
 	const source = read("../docs/product/overview.md");
 

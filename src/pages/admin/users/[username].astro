@@ -124,7 +124,7 @@ const isSelf = !!user?.id && user.id === admin.userId;
 ---
 
 <Layout title={user?.username ? `Admin User: @${user.username}` : "Admin User"} sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="admin-user-detail-page">
+	<div slot="right" class="admin-user-detail-page app-page app-page--wide">
 		<header id="overview" class="hero">
 			<p><a class="back-link" href="/admin/users">Back to users</a></p>
 			<h1>{user?.username ? `@${user.username}` : "User not found"}</h1>
@@ -307,7 +307,7 @@ const isSelf = !!user?.id && user.id === admin.userId;
 </script>
 
 <style>
-	.admin-user-detail-page { max-width: 980px; }
+	.admin-user-detail-page { max-width: none; }
 	.hero h1 { margin: 0.2rem 0 0; }
 	.hero p { margin: 0.35rem 0 0; color: var(--color-text-muted); }
 	.back-link { color: var(--color-nav); font-weight: 700; text-decoration: none; }

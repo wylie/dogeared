@@ -24,7 +24,7 @@ if (existingUsername) {
 ---
 
 <Layout title="Welcome" robots="noindex,nofollow">
-	<div slot="right" class="welcome-page">
+	<div slot="right" class="welcome-page app-page app-page--reading">
 		<section class="welcome-card">
 			<p class="step">Step 1 of 1</p>
 			<p class="eyebrow">Welcome</p>
@@ -43,7 +43,7 @@ if (existingUsername) {
 
 <style>
 	.welcome-page {
-		max-width: 720px;
+		max-width: var(--app-page-max);
 	}
 	.welcome-card {
 		border: var(--border-subtle);

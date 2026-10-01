@@ -55,7 +55,7 @@ const sectionLinks = collection?.books.length ? [
 	socialImageAlt={collection ? `${collection.title} on DogEared` : "DogEared editorial collections"}
 	sectionLinks={sectionLinks}
 >
-	<div slot="right" class="collection-page" data-authenticated={String(!!viewerUserId)} data-collection-id={collection ? String(collection.id) : ""}>
+	<div slot="right" class="collection-page app-page app-page--wide" data-authenticated={String(!!viewerUserId)} data-collection-id={collection ? String(collection.id) : ""}>
 		{errorMessage && <p class="error">{errorMessage}</p>}
 		{collection && (
 			<>
@@ -238,7 +238,7 @@ const sectionLinks = collection?.books.length ? [
 
 <style>
 	.collection-page {
-		max-width: 1040px;
+		max-width: none;
 	}
 	.error,
 	.empty {
@@ -330,7 +330,7 @@ const sectionLinks = collection?.books.length ? [
 		margin: 0;
 		padding: 0;
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 28rem), 1fr));
 		gap: 1rem;
 	}
 	.collection-rank {

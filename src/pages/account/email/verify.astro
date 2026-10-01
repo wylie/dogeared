@@ -173,7 +173,7 @@ if (token) {
 	canonicalUrl="/account/email/verify"
 	robots="noindex,nofollow"
 >
-	<div slot="right" class="verify-page">
+	<div slot="right" class="verify-page app-page app-page--reading">
 		<section class="verify-panel">
 			<h1>{title}</h1>
 			<p class={state === "success" ? "message" : "message message-error"}>{message}</p>
@@ -187,7 +187,7 @@ if (token) {
 
 <style>
 	.verify-page {
-		max-width: 720px;
+		max-width: var(--app-page-max);
 	}
 
 	.verify-panel {

@@ -1418,7 +1418,7 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 ---
 
 <Layout title="Metrics" sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="metrics-page">
+	<div slot="right" class="metrics-page app-page app-page--wide">
 		<header class="metrics-hero">
 			<h1>Explore DogEared data from readers to tastes to places.</h1>
 			{metricsPayload.dataSource === "sample" && metricsPayload.error && (
@@ -3097,7 +3097,7 @@ const metricsPayloadJson = JSON.stringify(metricsPayload)
 </script>
 
 <style>
-	.metrics-page { max-width: 1040px; }
+	.metrics-page { max-width: none; }
 	.metrics-hero { margin-bottom: 1.15rem; }
 	.eyebrow { margin: 0 0 0.35rem; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-subtle); }
 	.metrics-page h1 { margin: 0; line-height: 1.05; font-size: clamp(2rem, 3.8vw, 3.5rem); }

@@ -22,7 +22,7 @@ const formatType = (value: string) => String(value || "unknown").replaceAll("_",
 ---
 
 <Layout title="Admin Notifications" sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="admin-notifications-page">
+	<div slot="right" class="admin-notifications-page app-page app-page--wide">
 		<header class="hero">
 			<nav class="breadcrumbs" aria-label="Breadcrumb">
 				<a href="/admin">Admin</a><span aria-hidden="true">/</span><span>Notifications</span>
@@ -92,7 +92,7 @@ const formatType = (value: string) => String(value || "unknown").replaceAll("_",
 
 <style>
 	.admin-notifications-page {
-		max-width: 980px;
+		max-width: none;
 		display: grid;
 		gap: 1rem;
 	}

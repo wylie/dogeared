@@ -474,7 +474,7 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 ---
 
 <Layout title="Catalog Review Queue" sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="admin-data-health-page">
+	<div slot="right" class="admin-data-health-page app-page app-page--wide">
 		<header id="overview" class="hero">
 			<h1>Catalog Review Queue</h1>
 			<p>An admin inbox of Work and Edition records that need catalog attention.</p>
@@ -833,7 +833,7 @@ const catalogShowingEnd = Math.min(catalogMetadataHealth.pagination.total, catal
 </Layout>
 
 <style>
-	.admin-data-health-page { max-width: 980px; }
+	.admin-data-health-page { max-width: none; }
 	.hero h1 { margin: 0; }
 	.hero p { margin: 0.35rem 0 0; color: var(--color-text-muted); }
 	.warning-list {

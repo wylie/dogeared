@@ -90,7 +90,7 @@ function notificationStyle(note: NotificationRecord) {
 ---
 
 <Layout title="Notifications" sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="notifications-page">
+	<div slot="right" class="notifications-page app-page app-page--standard">
 		<header class="hero">
 			<h1>Notifications</h1>
 			<p>Meaningful updates from your reading community and DogEared. No urgency, no noise.</p>
@@ -170,7 +170,7 @@ function notificationStyle(note: NotificationRecord) {
 
 <style>
 	.notifications-page {
-		max-width: 860px;
+		max-width: var(--app-page-max);
 		display: grid;
 		gap: 1rem;
 	}

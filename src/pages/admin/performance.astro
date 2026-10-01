@@ -59,7 +59,7 @@ const maxBreakdownP95 = Math.max(1, ...breakdownHighlights.map((row) => Number(r
 ---
 
 <Layout title="Admin Performance" sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="performance-page">
+	<div slot="right" class="performance-page app-page app-page--wide">
 		<header class="hero">
 			<nav class="breadcrumbs" aria-label="Breadcrumb">
 				<a href="/admin">Admin</a><span aria-hidden="true">/</span><span>Performance</span>
@@ -341,7 +341,7 @@ const maxBreakdownP95 = Math.max(1, ...breakdownHighlights.map((row) => Number(r
 
 <style>
 	.performance-page {
-		max-width: 1120px;
+		max-width: none;
 		display: grid;
 		gap: 1rem;
 	}

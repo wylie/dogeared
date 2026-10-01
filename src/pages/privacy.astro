@@ -16,7 +16,7 @@ const sectionLinks = [
 	metaDescription="Read the DogEared privacy overview: what reader information is stored, how it is used, and how reader data stays reader-first."
 	canonicalUrl="/privacy"
 >
-	<div slot="right" class="privacy-page">
+	<div slot="right" class="privacy-page app-page app-page--reading">
 		<header class="privacy-hero">
 			<h1>Privacy at DogEared</h1>
 			<p class="lede">
@@ -63,7 +63,7 @@ const sectionLinks = [
 
 <style>
 	.privacy-page {
-		max-width: 820px;
+		max-width: var(--app-page-max);
 	}
 	.privacy-hero {
 		margin-bottom: 1.2rem;

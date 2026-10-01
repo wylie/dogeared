@@ -28,7 +28,7 @@ function releaseAnchor(version: string) {
 	canonicalUrl="/release-notes"
 	structuredData={structuredData}
 >
-	<div slot="right" class="release-notes-page">
+	<div slot="right" class="release-notes-page app-page app-page--reading">
 		<header class="release-hero" id="latest">
 			<p class="eyebrow">Release Notes</p>
 			<h1>What's new in DogEared.</h1>
@@ -83,7 +83,7 @@ function releaseAnchor(version: string) {
 </Layout>
 
 <style>
-	.release-notes-page { max-width: 900px; }
+	.release-notes-page { max-width: var(--app-page-max); }
 	.release-hero { padding: 0.25rem 0 1.35rem; border-bottom: var(--border-subtle); }
 	.eyebrow {
 		margin: 0 0 0.4rem;

@@ -101,7 +101,7 @@ const followersStructuredData = JSON.stringify(buildBreadcrumbList([
 	metaDescription={`Followers of @${profile.username} on DogEared.`}
 	structuredData={followersStructuredData}
 >
-	<div slot="right" class="follow-page">
+	<div slot="right" class="follow-page app-page app-page--standard">
 		<nav class="breadcrumbs" aria-label="Breadcrumb">
 			<a href="/">Home</a>
 			<span aria-hidden="true">/</span>
@@ -158,7 +158,7 @@ const followersStructuredData = JSON.stringify(buildBreadcrumbList([
 </Layout>
 
 <style>
-	.follow-page { max-width: 860px; display: grid; gap: 0.8rem; }
+	.follow-page { max-width: var(--app-page-max); display: grid; gap: 0.8rem; }
 	.breadcrumbs { display: flex; align-items: center; gap: 0.35rem; font-size: 0.95rem; color: var(--color-text-subtle); }
 	.breadcrumbs a { color: var(--color-nav); text-decoration: none; }
 	.breadcrumbs a:hover, .breadcrumbs a:focus-visible { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }

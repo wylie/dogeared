@@ -521,7 +521,7 @@ const relatedStructuredDataPayload = JSON.stringify([
 	robots={relatedRobots}
 	structuredData={relatedStructuredDataPayload}
 >
-	<div slot="right" class="related-page">
+	<div slot="right" class="related-page app-page app-page--wide">
 		<nav class="breadcrumbs" aria-label="Breadcrumb">
 			<a href="/">Home</a>
 			<span aria-hidden="true">/</span>
@@ -760,7 +760,7 @@ const relatedStructuredDataPayload = JSON.stringify([
 </script>
 
 <style>
-	.related-page { max-width: 1040px; }
+	.related-page { max-width: none; }
 	.breadcrumbs {
 		display: flex;
 		gap: 0.35rem;
@@ -793,14 +793,14 @@ const relatedStructuredDataPayload = JSON.stringify([
 	.panel-plain { border: none; background: transparent; padding: 0; border-radius: 0; }
 	.panel-head h2 { margin: 0; }
 	.error { color: #991b1b; }
-	.book-grid { list-style: none; padding: 0; margin: 0.7rem 0 0; display: grid; gap: 0.95rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.book-grid { --book-grid-min: 19rem; list-style: none; padding: 0; margin: 0.7rem 0 0; display: grid; gap: 0.95rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--book-grid-min)), 1fr)); }
 	.meta { margin: 0.2rem 0; font-size: 0.87rem; color: var(--color-text-muted); }
 	.metric-link { color: var(--color-nav); text-decoration: none; font-weight: 600; }
 	.metric-link:hover { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
 	.genre-chips { margin-top: 0.38rem; display: flex; flex-wrap: wrap; gap: 0.35rem; }
 	.genre-chip { font-size: 0.75rem; padding: 0.16rem 0.46rem; }
 	.genre-chip:hover { filter: brightness(0.96); }
-	.author-grid { list-style: none; margin: 0.65rem 0 0; padding: 0; display: grid; gap: 0.6rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.author-grid { list-style: none; margin: 0.65rem 0 0; padding: 0; display: grid; gap: 0.6rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); }
 	.author-card { border: var(--border-subtle); border-radius: var(--radius-md); padding: 0.7rem; background: rgba(255, 255, 255, 0.58); }
 	.author-card h3 { margin: 0; font-size: 0.98rem; line-height: 1.3; }
 	.author-card p { margin: 0.3rem 0 0; color: var(--color-text-muted); font-size: 0.86rem; }

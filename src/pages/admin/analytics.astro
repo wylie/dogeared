@@ -47,7 +47,7 @@ const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...safeArray(
 ---
 
 <Layout title="Admin Analytics" sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="analytics-page">
+	<div slot="right" class="analytics-page app-page app-page--wide">
 		<header class="hero">
 			<nav class="breadcrumbs" aria-label="Breadcrumb">
 				<a href="/admin">Admin</a><span aria-hidden="true">/</span><span>Analytics</span>
@@ -251,7 +251,7 @@ const maxByTable = (rows: Array<{ value: number }>) => Math.max(1, ...safeArray(
 
 <style>
 	.analytics-page {
-		max-width: 1080px;
+		max-width: none;
 		display: grid;
 		gap: 1rem;
 	}

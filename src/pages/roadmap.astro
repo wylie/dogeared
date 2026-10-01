@@ -64,7 +64,7 @@ function headingForSection(id: RoadmapSectionId) {
 	canonicalUrl="/roadmap"
 	structuredData={roadmapStructuredData}
 >
-	<div slot="right" class="roadmap-page">
+	<div slot="right" class="roadmap-page app-page app-page--standard">
 		<header class="roadmap-hero">
 			<div class="version-panel" aria-label="Current DogEared version">
 				<p>Current Version</p>
@@ -170,7 +170,7 @@ function headingForSection(id: RoadmapSectionId) {
 
 <style>
 	.roadmap-page {
-		max-width: 1040px;
+		max-width: var(--app-page-max);
 	}
 	.roadmap-hero {
 		display: grid;

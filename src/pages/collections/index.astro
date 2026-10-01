@@ -28,7 +28,7 @@ const sectionLinks = categories.slice(0, 8).map((category) => ({
 	canonicalUrl="/collections"
 	sectionLinks={sectionLinks}
 >
-	<div slot="right" class="collections-page">
+	<div slot="right" class="collections-page app-page app-page--wide">
 		<header class="collections-hero">
 			<p class="eyebrow">Editorial Collections</p>
 			<h1>Thoughtful paths to your next book.</h1>
@@ -75,7 +75,7 @@ const sectionLinks = categories.slice(0, 8).map((category) => ({
 </Layout>
 
 <style>
-	.collections-page { max-width: 1040px; }
+	.collections-page { max-width: none; }
 	.collections-hero {
 		margin-bottom: 1.4rem;
 	}
@@ -114,7 +114,7 @@ const sectionLinks = categories.slice(0, 8).map((category) => ({
 		margin: 0;
 		padding: 0;
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
 		gap: 1rem;
 	}
 	.collection-card a {

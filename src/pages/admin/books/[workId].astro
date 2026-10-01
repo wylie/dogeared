@@ -274,7 +274,7 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 ---
 
 <Layout title={editor ? `Edit ${editor.work.title}` : "Catalog Editor"} sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="admin-catalog-page">
+	<div slot="right" class="admin-catalog-page app-page app-page--wide">
 		<nav class="breadcrumbs" aria-label="Breadcrumb">
 			<a href="/admin">Admin</a><span aria-hidden="true">/</span><a href="/admin/data-health">Data Health</a><span aria-hidden="true">/</span><span>Catalog Editor</span>
 		</nav>
@@ -682,7 +682,7 @@ const editionTitleIsUseful = !!selectedEdition?.title && selectedEdition.title.t
 </Layout>
 
 <style>
-	.admin-catalog-page { max-width: 980px; min-width: 0; }
+	.admin-catalog-page { max-width: none; min-width: 0; }
 	.breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.35rem; color: var(--color-text-muted); font-size: 0.86rem; }
 	.breadcrumbs a { color: var(--color-nav); font-weight: 700; text-decoration: none; }
 	.hero { margin-top: 0.85rem; display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }

@@ -52,7 +52,7 @@ const backHref = `/admin/performance?period=${period}#slow`;
 ---
 
 <Layout title={`Performance Operation ${detail.id}`} sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="operation-page">
+	<div slot="right" class="operation-page app-page app-page--wide">
 		<header id="summary" class="hero">
 			<nav class="breadcrumbs" aria-label="Breadcrumb">
 				<a href="/admin">Admin</a><span aria-hidden="true">/</span><a href={backHref}>Performance</a><span aria-hidden="true">/</span><span>Operation</span>
@@ -215,7 +215,7 @@ const backHref = `/admin/performance?period=${period}#slow`;
 
 <style>
 	.operation-page {
-		max-width: 1120px;
+		max-width: none;
 		display: grid;
 		gap: 1rem;
 	}

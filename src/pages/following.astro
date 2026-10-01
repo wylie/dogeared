@@ -63,7 +63,7 @@ const sectionLinks = [
 ---
 
 <Layout title="Following" sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="feed-page">
+	<div slot="right" class="feed-page app-page app-page--standard">
 		<header class="feed-header">
 			<h1>Following</h1>
 			<p>Recent shelf activity from readers you follow.</p>
@@ -206,7 +206,7 @@ const sectionLinks = [
 
 <style>
 	.feed-page {
-		max-width: 860px;
+		max-width: var(--app-page-max);
 		display: grid;
 		gap: 0.9rem;
 		min-width: 0;

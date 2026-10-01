@@ -26,7 +26,7 @@ const sectionLinks = [
 ---
 
 <Layout title="Settings" sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="settings-page">
+	<div slot="right" class="settings-page app-page app-page--form">
 		<h1>Settings</h1>
 		<p class="subhead">Manage account setup, privacy, imports, and preferences.</p>
 
@@ -397,7 +397,7 @@ const sectionLinks = [
 
 <style>
 	.settings-page {
-		max-width: 920px;
+		max-width: var(--app-page-max);
 		display: flex;
 		flex-direction: column;
 	}

@@ -50,7 +50,7 @@ const missionStructuredData = JSON.stringify([
 	canonicalUrl="/mission"
 	structuredData={missionStructuredData}
 >
-	<div slot="right" class="mission-page">
+	<div slot="right" class="mission-page app-page app-page--reading">
 		<header class="mission-hero">
 			<h1>A reading life with less noise, more memory, and better taste.</h1>
 			<p class="lede">
@@ -146,7 +146,7 @@ const missionStructuredData = JSON.stringify([
 
 <style>
 	.mission-page {
-		max-width: 860px;
+		max-width: var(--app-page-max);
 	}
 
 	.mission-card {
