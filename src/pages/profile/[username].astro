@@ -2229,6 +2229,10 @@ const profilePerformanceTelemetry = {
 		color: var(--color-nav);
 	}
 	.profile-card {
+		grid-column: 1 / span 8;
+		width: 100%;
+		max-width: 64rem;
+		box-sizing: border-box;
 		position: relative;
 		display: grid;
 		gap: 0.76rem;
@@ -2294,7 +2298,7 @@ const profilePerformanceTelemetry = {
 	.profile-head h1 { margin: 0; font-size: 1.45rem; }
 	.username { margin: 0.15rem 0 0; color: #5d5a53; }
 	.blurb {
-		max-width: 76rem;
+		max-width: 48rem;
 		margin: 0.05rem 0 0;
 		font-size: clamp(1rem, 0.92rem + 0.25vw, 1.12rem);
 		line-height: 1.5;
@@ -2366,7 +2370,7 @@ const profilePerformanceTelemetry = {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(16rem, 1fr));
 		gap: 0.42rem 1.25rem;
-		max-width: 72rem;
+		max-width: 54rem;
 		margin-top: 0;
 	}
 	.meta-grid p { margin: 0; }
@@ -3890,6 +3894,10 @@ const profilePerformanceTelemetry = {
 		.public-profile-page {
 			--profile-book-grid-min: 20rem;
 		}
+		.public-profile-page > .profile-card {
+			grid-column: 1 / -1;
+			max-width: 68rem;
+		}
 		.public-profile-page > .reading-goal-card {
 			grid-column: span 7;
 		}
@@ -3902,9 +3910,11 @@ const profilePerformanceTelemetry = {
 		}
 	}
 	@media (max-width: 940px) {
+		.public-profile-page > .profile-card,
 		.public-profile-page > .reading-goal-card,
 		.public-profile-page > .shelf-card {
 			grid-column: 1 / -1;
+			max-width: none;
 		}
 		.shelf-summary-grid {
 			grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
