@@ -128,19 +128,22 @@ test("Profile uses the shared wide app canvas with responsive page sections", ()
 	assert.match(profile, /\.public-profile-page\s*{[^}]*grid-template-columns: repeat\(12, minmax\(0, 1fr\)\);/s);
 	assert.match(profile, /class="profile-subnav"/);
 	assert.match(profile, /data-profile-section-link=\{link\.id\}/);
-	assert.match(profile, /\.profile-card\s*{[^}]*grid-column: 1 \/ span 8;/s);
-	assert.match(profile, /\.profile-card\s*{[^}]*max-width: 64rem;/s);
+	assert.match(profile, /<section id="about" class="profile-about-grid">/);
+	assert.match(profile, /class="profile-card profile-identity-card"/);
+	assert.match(profile, /class="profile-about-card"/);
+	assert.match(profile, /\.profile-about-grid\s*{[^}]*grid-template-columns: minmax\(0, 0\.4fr\) minmax\(0, 0\.6fr\);/s);
+	assert.match(profile, /\.profile-about-grid\s*{[^}]*align-items: start;/s);
 	assert.match(profile, /\.blurb\s*{[^}]*max-width: 48rem;/s);
-	assert.match(profile, /\.meta-grid\s*{[^}]*max-width: 54rem;/s);
+	assert.match(profile, /\.meta-grid\s*{[^}]*grid-template-columns: 1fr;/s);
 	assert.match(profile, /\.reading-goal-card\s*{[^}]*grid-column: span 8;/s);
 	assert.match(profile, /\.shelf-card\s*{[^}]*grid-column: span 4;/s);
 	assert.match(profile, /\.currently-reading-section\s*{[^}]*grid-column: 1 \/ -1;/s);
 	assert.match(profile, /\.activity-grid\s*{[^}]*repeat\(auto-fill, minmax\(min\(100%, var\(--profile-book-grid-min\)\), 1fr\)\)/s);
 	assert.match(profile, /\.profile-review-list\s*{[^}]*max-width: 58rem;/s);
-	assert.match(profile, /@media \(max-width: 940px\)\s*{[\s\S]*?\.public-profile-page > \.profile-card,[\s\S]*?grid-column: 1 \/ -1;[\s\S]*?max-width: none;/s);
+	assert.match(profile, /@media \(max-width: 1180px\)\s*{[\s\S]*?\.profile-about-grid\s*{[^}]*grid-template-columns: 1fr;/s);
 	assert.match(profile, /@media \(max-width: 740px\)\s*{[\s\S]*?\.public-profile-page\s*{[^}]*grid-template-columns: 1fr;/s);
 	assert.match(overview, /The Profile page uses the shared wide app canvas/);
-	assert.match(overview, /profile identity card is left-aligned and constrained to a readable content width/);
+	assert.match(overview, /top About area is a two-card composition/);
 	assert.match(overview, /page-level section navigation is horizontal/);
 });
 

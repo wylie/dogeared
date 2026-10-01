@@ -126,7 +126,7 @@ test("canonical finished book filter counts one Work per year from finished date
 
 test("profile page renders reading goal between profile card and shelf summary", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
-	const aboutIndex = source.indexOf('<section id="about" class="profile-card">');
+	const aboutIndex = source.indexOf('<section id="about" class="profile-about-grid">');
 	const goalIndex = source.indexOf('<section id="reading-goal" class="reading-goal-card">');
 	const summaryIndex = source.indexOf('<section id="shelf-summary" class="shelf-card">');
 	assert.ok(aboutIndex >= 0);

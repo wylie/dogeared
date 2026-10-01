@@ -1049,215 +1049,222 @@ const profilePerformanceTelemetry = {
 						))}
 					</ul>
 				</nav>
-				<section id="about" class="profile-card">
-					{isOwnerViewer && (
-						<div class="profile-card-actions">
-							<div class="profile-actions-menu-wrap" data-profile-actions-menu>
-								<button
-									type="button"
-									class="profile-actions-menu-trigger"
-									data-action="toggle-profile-actions-menu"
-									aria-expanded="false"
-									aria-label="Profile actions"
-								>
-									<span class="material-icons" aria-hidden="true">more_vert</span>
-								</button>
-								<div class="profile-actions-menu" hidden>
-									<a class="profile-actions-menu-item" href={`/profile/${encodeURIComponent(profile.username)}?edit=1`}>
-										{editMode ? "Editing..." : "Edit Profile"}
-									</a>
-									<a class="profile-actions-menu-item" href="/reading-life">My Reading Life</a>
-									<a class="profile-actions-menu-item" href="/settings">Settings</a>
+				<section id="about" class="profile-about-grid">
+					<div class="profile-card profile-identity-card">
+						{isOwnerViewer && (
+							<div class="profile-card-actions">
+								<div class="profile-actions-menu-wrap" data-profile-actions-menu>
+									<button
+										type="button"
+										class="profile-actions-menu-trigger"
+										data-action="toggle-profile-actions-menu"
+										aria-expanded="false"
+										aria-label="Profile actions"
+									>
+										<span class="material-icons" aria-hidden="true">more_vert</span>
+									</button>
+									<div class="profile-actions-menu" hidden>
+										<a class="profile-actions-menu-item" href={`/profile/${encodeURIComponent(profile.username)}?edit=1`}>
+											{editMode ? "Editing..." : "Edit Profile"}
+										</a>
+										<a class="profile-actions-menu-item" href="/reading-life">My Reading Life</a>
+										<a class="profile-actions-menu-item" href="/settings">Settings</a>
+									</div>
 								</div>
 							</div>
-						</div>
-					)}
-					<div class="profile-head">
-						<div class="avatar-wrap" aria-hidden="true">
-							{profile.avatar ? (
-								<img
-									src={profile.avatar}
-									alt=""
-									class="avatar"
-									loading="lazy"
-									decoding="async"
-									width="64"
-									height="64"
-									onerror="this.outerHTML='<div class=&quot;avatar-fallback&quot; aria-hidden=&quot;true&quot;>@</div>';"
-								/>
-							) : (
-								<div class="avatar-fallback">@</div>
-							)}
-						</div>
-						<div>
-							<h1>{profile.name || `@${profile.username}`}</h1>
-							<p class="username">@{profile.username}</p>
-							<p class="meta">
-								<a class="meta-link" href={`/profile/${encodeURIComponent(profile.username)}/followers`}>Followers: <span id="follow-count-followers">{followState.followersCount}</span></a>
-								{" · "}
-								<a class="meta-link" href="/following">Following: <span id="follow-count-following">{followState.followingCount}</span></a>
-							</p>
-						</div>
-					</div>
-					{followState.canFollow && (
-						<div class="follow-actions">
-							<form method="post" action={`/profile/${encodeURIComponent(profile.username)}`}>
-								<input type="hidden" name="followIntent" value={followState.isViewerFollowing ? "unfollow" : "follow"} />
-								<button
-									id="follow-toggle"
-									type="submit"
-									data-username={profile.username}
-									data-following={String(followState.isViewerFollowing)}
-								>
-									{followState.isViewerFollowing ? "Following" : "Follow"}
-								</button>
-							</form>
-							<p id="follow-feedback" class="meta" hidden></p>
-						</div>
-					)}
-					{isOwnerViewer && editMode ? (
-						<form method="post" action={`/profile/${encodeURIComponent(profile.username)}?edit=1`} class="inline-profile-form">
-							<input type="hidden" name="profileIntent" value="save" />
-							<label>Name<input type="text" name="name" maxlength="80" value={profile.name || ""} required /></label>
-							<label>Username<input type="text" name="username" maxlength="40" value={profile.username ? `@${profile.username}` : ""} required /></label>
-							<input type="hidden" name="avatarUrl" maxlength="500000" value={profile.avatar || ""} />
-							<label>Upload Avatar<input type="file" name="avatarFile" accept="image/*" data-avatar-file /></label>
-							<label>Location<input type="text" name="location" maxlength="80" value={profile.location || ""} /></label>
-							<label>Birth year<input type="number" name="birthYear" min="1900" max="2100" inputmode="numeric" value={profile.birthYear || ""} placeholder="1985" /></label>
-							<label>Reading goal<input type="text" name="readingGoal" maxlength="80" value={profile.readingGoal || ""} /></label>
-							<label>Favorite book<input type="text" name="favoriteBook" maxlength="120" value={profile.favoriteBook || ""} /></label>
-							<label>Favorite author<input type="text" name="favoriteAuthor" maxlength="120" value={profile.favoriteAuthor || ""} /></label>
-							<label class="full-width">Blurb<textarea name="blurb" rows={3} maxlength={400}>{profile.blurb || ""}</textarea></label>
-							<label class="full-width">Genres (comma separated)<input type="text" name="genres" value={profile.genres.join(", ")} /></label>
-							<div class="inline-profile-actions">
-								<button type="submit">Save Profile</button>
-								<a class="secondary" href={`/profile/${encodeURIComponent(profile.username)}`}>Cancel</a>
-							</div>
-						</form>
-					) : (
-						<>
-							{profile.blurb && <p class="blurb">{profile.blurb}</p>}
-							<div class="meta-grid">
-								{profile.location && <p><strong>Location:</strong> {profile.location}</p>}
-								{profile.favoriteBook && (
-									<p>
-										<strong>Favorite book:</strong>{" "}
-										<a class="author-link" href={favoriteBookHref || `/book?title=${encodeURIComponent(profile.favoriteBook)}`}>{profile.favoriteBook}</a>
-									</p>
-								)}
-								{profile.favoriteAuthor && (
-									<p>
-										<strong>Favorite author:</strong>{" "}
-										{favoriteAuthorHref
-											? <a class="author-link" href={favoriteAuthorHref}>{profile.favoriteAuthor}</a>
-											: profile.favoriteAuthor}
-									</p>
+						)}
+						<div class="profile-head">
+							<div class="avatar-wrap" aria-hidden="true">
+								{profile.avatar ? (
+									<img
+										src={profile.avatar}
+										alt=""
+										class="avatar"
+										loading="lazy"
+										decoding="async"
+										width="64"
+										height="64"
+										onerror="this.outerHTML='<div class=&quot;avatar-fallback&quot; aria-hidden=&quot;true&quot;>@</div>';"
+									/>
+								) : (
+									<div class="avatar-fallback">@</div>
 								)}
 							</div>
-							{profile.genres.length > 0 && (
-								<ul class="genre-list">
-									{profile.genres.map((genre) => (
-										<li>
-											<Chip
-												label={genre}
-												className="genre-chip"
-												href={`/related?kind=genre&value=${encodeURIComponent(genre)}`}
-											/>
-										</li>
-									))}
-								</ul>
-							)}
-							{canShowAchievementsInHeader && achievements.length > 0 && (
-								<div id="achievements" class="profile-achievements" aria-labelledby="profile-achievements-title">
-									<div class="profile-achievements-head">
-										<h2 id="profile-achievements-title">Achievements</h2>
-										{isOwnerViewer && !showAchievementsPublic && (
-											<p>Hidden from other readers</p>
-										)}
-									</div>
-									<ul class="profile-achievement-row" aria-label="Earned achievements">
-										{profileAchievementPreview.map((achievement) => (
+							<div>
+								<h1>{profile.name || `@${profile.username}`}</h1>
+								<p class="username">@{profile.username}</p>
+								<p class="meta">
+									<a class="meta-link" href={`/profile/${encodeURIComponent(profile.username)}/followers`}>Followers: <span id="follow-count-followers">{followState.followersCount}</span></a>
+									{" · "}
+									<a class="meta-link" href="/following">Following: <span id="follow-count-following">{followState.followingCount}</span></a>
+								</p>
+							</div>
+						</div>
+						{followState.canFollow && (
+							<div class="follow-actions">
+								<form method="post" action={`/profile/${encodeURIComponent(profile.username)}`}>
+									<input type="hidden" name="followIntent" value={followState.isViewerFollowing ? "unfollow" : "follow"} />
+									<button
+										id="follow-toggle"
+										type="submit"
+										data-username={profile.username}
+										data-following={String(followState.isViewerFollowing)}
+									>
+										{followState.isViewerFollowing ? "Following" : "Follow"}
+									</button>
+								</form>
+								<p id="follow-feedback" class="meta" hidden></p>
+							</div>
+						)}
+						{!(isOwnerViewer && editMode) && (
+							<>
+								<div class="meta-grid">
+									{profile.location && <p><strong>Location</strong><span>{profile.location}</span></p>}
+									{profile.favoriteBook && (
+										<p>
+											<strong>Favorite book</strong>
+											<span><a class="author-link" href={favoriteBookHref || `/book?title=${encodeURIComponent(profile.favoriteBook)}`}>{profile.favoriteBook}</a></span>
+										</p>
+									)}
+									{profile.favoriteAuthor && (
+										<p>
+											<strong>Favorite author</strong>
+											<span>{favoriteAuthorHref
+												? <a class="author-link" href={favoriteAuthorHref}>{profile.favoriteAuthor}</a>
+												: profile.favoriteAuthor}</span>
+										</p>
+									)}
+								</div>
+								{profile.genres.length > 0 && (
+									<ul class="genre-list">
+										{profile.genres.map((genre) => (
 											<li>
-												<details
-													id={achievementAnchor(achievement.id)}
-													class="achievement-badge achievement-badge-compact"
-													style={achievementAccentStyle(achievement.accentColorToken)}
-												>
-													<summary aria-label={`${achievement.title}. ${achievementEarnedLabel(achievement.earnedAt)}.`}>
-														<span class="achievement-art achievement-art-small" aria-hidden="true">
-															<span class="material-icons">{achievement.iconIdentifier}</span>
-														</span>
-														<span class="achievement-copy">
-															<strong>{achievement.title}</strong>
-														</span>
-													</summary>
-													<div class="achievement-popover" role="group" aria-label={`${achievement.title} details`}>
-														<div class="achievement-popover-head">
-															<span class="achievement-art achievement-art-large" aria-hidden="true">
-																<span class="material-icons">{achievement.iconIdentifier}</span>
-															</span>
-															<div>
-																<h3>{achievement.title}</h3>
-																<p>{achievement.description}</p>
-															</div>
-														</div>
-														<p><time datetime={achievement.earnedAt}>{achievementEarnedLabel(achievement.earnedAt)}.</time></p>
-														{achievement.relatedSeriesName && <p>Series: {achievement.relatedSeriesName}</p>}
-														{achievement.relatedBookTitle && <p>Work: {achievement.relatedBookTitle}</p>}
-														<p>{achievement.howEarned}</p>
-													</div>
-												</details>
+												<Chip
+													label={genre}
+													className="genre-chip"
+													href={`/related?kind=genre&value=${encodeURIComponent(genre)}`}
+												/>
 											</li>
 										))}
-										{profileAchievementMore.length > 0 && (
-											<li class="profile-achievements-more-item">
-												<details class="profile-achievements-more">
-													<summary>+{profileAchievementMore.length} more</summary>
-													<div class="profile-achievements-more-panel" role="group" aria-label="More earned achievements">
-														<ul class="profile-achievement-row profile-achievement-row-expanded">
-															{profileAchievementMore.map((achievement) => (
-																<li>
-																	<details
-																		id={achievementAnchor(achievement.id)}
-																		class="achievement-badge achievement-badge-compact"
-																		style={achievementAccentStyle(achievement.accentColorToken)}
-																	>
-																		<summary aria-label={`${achievement.title}. ${achievementEarnedLabel(achievement.earnedAt)}.`}>
-																			<span class="achievement-art achievement-art-small" aria-hidden="true">
-																				<span class="material-icons">{achievement.iconIdentifier}</span>
-																			</span>
-																			<span class="achievement-copy">
-																				<strong>{achievement.title}</strong>
-																			</span>
-																		</summary>
-																		<div class="achievement-popover" role="group" aria-label={`${achievement.title} details`}>
-																			<div class="achievement-popover-head">
-																				<span class="achievement-art achievement-art-large" aria-hidden="true">
+									</ul>
+								)}
+								{canShowAchievementsInHeader && achievements.length > 0 && (
+									<div id="achievements" class="profile-achievements" aria-labelledby="profile-achievements-title">
+										<div class="profile-achievements-head">
+											<h2 id="profile-achievements-title">Achievements</h2>
+											{isOwnerViewer && !showAchievementsPublic && (
+												<p>Hidden from other readers</p>
+											)}
+										</div>
+										<ul class="profile-achievement-row" aria-label="Earned achievements">
+											{profileAchievementPreview.map((achievement) => (
+												<li>
+													<details
+														id={achievementAnchor(achievement.id)}
+														class="achievement-badge achievement-badge-compact"
+														style={achievementAccentStyle(achievement.accentColorToken)}
+													>
+														<summary aria-label={`${achievement.title}. ${achievementEarnedLabel(achievement.earnedAt)}.`}>
+															<span class="achievement-art achievement-art-small" aria-hidden="true">
+																<span class="material-icons">{achievement.iconIdentifier}</span>
+															</span>
+															<span class="achievement-copy">
+																<strong>{achievement.title}</strong>
+															</span>
+														</summary>
+														<div class="achievement-popover" role="group" aria-label={`${achievement.title} details`}>
+															<div class="achievement-popover-head">
+																<span class="achievement-art achievement-art-large" aria-hidden="true">
+																	<span class="material-icons">{achievement.iconIdentifier}</span>
+																</span>
+																<div>
+																	<h3>{achievement.title}</h3>
+																	<p>{achievement.description}</p>
+																</div>
+															</div>
+															<p><time datetime={achievement.earnedAt}>{achievementEarnedLabel(achievement.earnedAt)}.</time></p>
+															{achievement.relatedSeriesName && <p>Series: {achievement.relatedSeriesName}</p>}
+															{achievement.relatedBookTitle && <p>Work: {achievement.relatedBookTitle}</p>}
+															<p>{achievement.howEarned}</p>
+														</div>
+													</details>
+												</li>
+											))}
+											{profileAchievementMore.length > 0 && (
+												<li class="profile-achievements-more-item">
+													<details class="profile-achievements-more">
+														<summary>+{profileAchievementMore.length} more</summary>
+														<div class="profile-achievements-more-panel" role="group" aria-label="More earned achievements">
+															<ul class="profile-achievement-row profile-achievement-row-expanded">
+																{profileAchievementMore.map((achievement) => (
+																	<li>
+																		<details
+																			id={achievementAnchor(achievement.id)}
+																			class="achievement-badge achievement-badge-compact"
+																			style={achievementAccentStyle(achievement.accentColorToken)}
+																		>
+																			<summary aria-label={`${achievement.title}. ${achievementEarnedLabel(achievement.earnedAt)}.`}>
+																				<span class="achievement-art achievement-art-small" aria-hidden="true">
 																					<span class="material-icons">{achievement.iconIdentifier}</span>
 																				</span>
-																				<div>
-																					<h3>{achievement.title}</h3>
-																					<p>{achievement.description}</p>
+																				<span class="achievement-copy">
+																					<strong>{achievement.title}</strong>
+																				</span>
+																			</summary>
+																			<div class="achievement-popover" role="group" aria-label={`${achievement.title} details`}>
+																				<div class="achievement-popover-head">
+																					<span class="achievement-art achievement-art-large" aria-hidden="true">
+																						<span class="material-icons">{achievement.iconIdentifier}</span>
+																					</span>
+																					<div>
+																						<h3>{achievement.title}</h3>
+																						<p>{achievement.description}</p>
+																					</div>
 																				</div>
+																				<p><time datetime={achievement.earnedAt}>{achievementEarnedLabel(achievement.earnedAt)}.</time></p>
+																				{achievement.relatedSeriesName && <p>Series: {achievement.relatedSeriesName}</p>}
+																				{achievement.relatedBookTitle && <p>Work: {achievement.relatedBookTitle}</p>}
+																				<p>{achievement.howEarned}</p>
 																			</div>
-																			<p><time datetime={achievement.earnedAt}>{achievementEarnedLabel(achievement.earnedAt)}.</time></p>
-																			{achievement.relatedSeriesName && <p>Series: {achievement.relatedSeriesName}</p>}
-																			{achievement.relatedBookTitle && <p>Work: {achievement.relatedBookTitle}</p>}
-																			<p>{achievement.howEarned}</p>
-																		</div>
-																	</details>
-																</li>
-															))}
-														</ul>
-													</div>
-												</details>
-											</li>
-										)}
-									</ul>
+																		</details>
+																	</li>
+																))}
+															</ul>
+														</div>
+													</details>
+												</li>
+											)}
+										</ul>
+									</div>
+								)}
+							</>
+						)}
+					</div>
+					<div class="profile-about-card">
+						<h2>About</h2>
+						{isOwnerViewer && editMode ? (
+							<form method="post" action={`/profile/${encodeURIComponent(profile.username)}?edit=1`} class="inline-profile-form">
+								<input type="hidden" name="profileIntent" value="save" />
+								<label>Name<input type="text" name="name" maxlength="80" value={profile.name || ""} required /></label>
+								<label>Username<input type="text" name="username" maxlength="40" value={profile.username ? `@${profile.username}` : ""} required /></label>
+								<input type="hidden" name="avatarUrl" maxlength="500000" value={profile.avatar || ""} />
+								<label>Upload Avatar<input type="file" name="avatarFile" accept="image/*" data-avatar-file /></label>
+								<label>Location<input type="text" name="location" maxlength="80" value={profile.location || ""} /></label>
+								<label>Birth year<input type="number" name="birthYear" min="1900" max="2100" inputmode="numeric" value={profile.birthYear || ""} placeholder="1985" /></label>
+								<label>Reading goal<input type="text" name="readingGoal" maxlength="80" value={profile.readingGoal || ""} /></label>
+								<label>Favorite book<input type="text" name="favoriteBook" maxlength="120" value={profile.favoriteBook || ""} /></label>
+								<label>Favorite author<input type="text" name="favoriteAuthor" maxlength="120" value={profile.favoriteAuthor || ""} /></label>
+								<label class="full-width">Blurb<textarea name="blurb" rows={3} maxlength={400}>{profile.blurb || ""}</textarea></label>
+								<label class="full-width">Genres (comma separated)<input type="text" name="genres" value={profile.genres.join(", ")} /></label>
+								<div class="inline-profile-actions">
+									<button type="submit">Save Profile</button>
+									<a class="secondary" href={`/profile/${encodeURIComponent(profile.username)}`}>Cancel</a>
 								</div>
-							)}
-						</>
-					)}
+							</form>
+						) : (
+							profile.blurb && <p class="blurb">{profile.blurb}</p>
+						)}
+					</div>
 				</section>
 				<section id="reading-goal" class="reading-goal-card">
 					<div class="reading-goal-head">
@@ -2221,21 +2228,37 @@ const profilePerformanceTelemetry = {
 		padding: 0.35rem 0.7rem;
 		cursor: pointer;
 	}
-	.state-card, .profile-card, .shelf-card, .activity-card { border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
+	.state-card, .profile-card, .profile-about-card, .shelf-card, .activity-card { border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: 1rem; }
 	.activity-card-plain { border: none; background: transparent; border-radius: 0; padding: 0; }
 	.owner-edit-link-muted {
 		background: var(--color-nav-surface-hover);
 		border-color: var(--color-border-soft);
 		color: var(--color-nav);
 	}
+	.profile-about-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 0.4fr) minmax(0, 0.6fr);
+		align-items: start;
+		gap: clamp(0.85rem, 1.45vw, 1.35rem);
+	}
 	.profile-card {
-		grid-column: 1 / span 8;
 		width: 100%;
-		max-width: 64rem;
 		box-sizing: border-box;
 		position: relative;
 		display: grid;
 		gap: 0.76rem;
+		align-content: start;
+	}
+	.profile-about-card {
+		display: grid;
+		align-content: start;
+		gap: 0.62rem;
+		min-width: 0;
+	}
+	.profile-about-card h2 {
+		margin: 0;
+		font-size: 1.25rem;
+		line-height: 1.2;
 	}
 	.profile-card-actions {
 		position: absolute;
@@ -2299,7 +2322,7 @@ const profilePerformanceTelemetry = {
 	.username { margin: 0.15rem 0 0; color: #5d5a53; }
 	.blurb {
 		max-width: 48rem;
-		margin: 0.05rem 0 0;
+		margin: 0;
 		font-size: clamp(1rem, 0.92rem + 0.25vw, 1.12rem);
 		line-height: 1.5;
 	}
@@ -2368,12 +2391,26 @@ const profilePerformanceTelemetry = {
 	}
 	.meta-grid {
 		display: grid;
-		grid-template-columns: repeat(2, minmax(16rem, 1fr));
-		gap: 0.42rem 1.25rem;
-		max-width: 54rem;
+		grid-template-columns: 1fr;
+		gap: 0.56rem;
+		max-width: none;
 		margin-top: 0;
 	}
-	.meta-grid p { margin: 0; }
+	.meta-grid p {
+		display: grid;
+		gap: 0.14rem;
+		margin: 0;
+		line-height: 1.32;
+	}
+	.meta-grid strong {
+		color: var(--color-text-subtle);
+		font-size: 0.8rem;
+		line-height: 1.2;
+	}
+	.meta-grid span {
+		min-width: 0;
+		color: var(--color-text);
+	}
 	.meta-link {
 		color: inherit;
 		text-decoration: none;
@@ -3894,9 +3931,8 @@ const profilePerformanceTelemetry = {
 		.public-profile-page {
 			--profile-book-grid-min: 20rem;
 		}
-		.public-profile-page > .profile-card {
-			grid-column: 1 / -1;
-			max-width: 68rem;
+		.profile-about-grid {
+			grid-template-columns: 1fr;
 		}
 		.public-profile-page > .reading-goal-card {
 			grid-column: span 7;
@@ -3910,11 +3946,9 @@ const profilePerformanceTelemetry = {
 		}
 	}
 	@media (max-width: 940px) {
-		.public-profile-page > .profile-card,
 		.public-profile-page > .reading-goal-card,
 		.public-profile-page > .shelf-card {
 			grid-column: 1 / -1;
-			max-width: none;
 		}
 		.shelf-summary-grid {
 			grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
