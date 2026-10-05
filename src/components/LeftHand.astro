@@ -171,22 +171,24 @@ const navMenuTriggerClass = (items: NavItem[]) =>
           </ul>
         </div>
 
-        <ul class="primary-direct-list">
-          {primaryPersonalNavItems.map((item) => (
-            <li id={item.id} data-authenticated-only hidden={!isAuthenticated}>
-              <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
-                <span>{item.label}</span>
-              </a>
-              {showSectionLinks(item) && (
-                <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
-                  {sectionLinks.map((link) => (
-                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
-        </ul>
+        {isAuthenticated && (
+          <ul class="primary-direct-list">
+            {primaryPersonalNavItems.map((item) => (
+              <li id={item.id} data-authenticated-only>
+                <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
+                  <span>{item.label}</span>
+                </a>
+                {showSectionLinks(item) && (
+                  <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
+                    {sectionLinks.map((link) => (
+                      <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
 
         <details class="nav-menu nav-group nav-group-about">
           <summary class={navMenuTriggerClass(aboutNavItems)}>About</summary>
@@ -231,66 +233,68 @@ const navMenuTriggerClass = (items: NavItem[]) =>
           </details>
         )}
 
-        <button id="left-hand-login-item" data-logged-out-only hidden={isAuthenticated || !allowAuthPrompt} type="button" class="nav-text-button hover">Log In</button>
+        {!isAuthenticated && allowAuthPrompt && (
+          <button id="left-hand-login-item" data-logged-out-only type="button" class="nav-text-button hover">Log In</button>
+        )}
       </div>
 
-      <div class="utility-nav-list" aria-label="Account utilities" data-authenticated-only hidden={!isAuthenticated}>
-        <a
-          id={notificationUtilityItem.id}
-          data-authenticated-only
-          hidden={!isAuthenticated}
-          href={navItemHref(notificationUtilityItem)}
-          class={`utility-icon-button ${navItemClass(notificationUtilityItem)}`}
-          aria-current={navItemAriaCurrent(notificationUtilityItem)}
-          aria-label="Notifications"
-          title="Notifications"
-        >
-          <span class="material-icons" aria-hidden="true">notifications</span>
-          <span id="left-hand-notification-badge" class="notification-badge utility-notification-badge" aria-hidden="true" hidden>0</span>
-        </a>
-
-        <a
-          id={profileUtilityItem.id}
-          data-authenticated-only
-          hidden={!isAuthenticated}
-          href={navItemHref(profileUtilityItem)}
-          class={`utility-icon-button ${navItemClass(profileUtilityItem)}`}
-          aria-current={navItemAriaCurrent(profileUtilityItem)}
-          aria-label="View your Profile"
-          title="Profile"
-        >
-          <span class="material-icons" aria-hidden="true">account_circle</span>
-        </a>
-
-        <details class="nav-menu nav-group nav-group-account utility-menu" data-authenticated-only hidden={!isAuthenticated}>
-          <summary
-            id="left-hand-settings-item"
-            class={`${navMenuTriggerClass(accountNavItems)} utility-icon-button`}
-            aria-current={accountNavItems.some((item) => isNavItemActive(item)) ? "page" : undefined}
-            aria-label="Account settings"
-            title="Settings"
+      {isAuthenticated && (
+        <div class="utility-nav-list" aria-label="Account utilities" data-authenticated-only>
+          <a
+            id={notificationUtilityItem.id}
+            data-authenticated-only
+            href={navItemHref(notificationUtilityItem)}
+            class={`utility-icon-button ${navItemClass(notificationUtilityItem)}`}
+            aria-current={navItemAriaCurrent(notificationUtilityItem)}
+            aria-label="Notifications"
+            title="Notifications"
           >
-            <span class="material-icons" aria-hidden="true">settings</span>
-          </summary>
-          <ul>
-            {accountNavItems.map((item) => (
-              <li data-authenticated-only hidden={!isAuthenticated}>
-                <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
-                  <span>{item.label}</span>
-                </a>
-                {showSectionLinks(item) && (
-                  <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
-                    {sectionLinks.map((link) => (
-                      <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
-            <li id="left-hand-logout-item" data-authenticated-only hidden={!isAuthenticated}><button type="button" class="nav-text-button hover">Log Out</button></li>
-          </ul>
-        </details>
-      </div>
+            <span class="material-icons" aria-hidden="true">notifications</span>
+            <span id="left-hand-notification-badge" class="notification-badge utility-notification-badge" aria-hidden="true" hidden>0</span>
+          </a>
+
+          <a
+            id={profileUtilityItem.id}
+            data-authenticated-only
+            href={navItemHref(profileUtilityItem)}
+            class={`utility-icon-button ${navItemClass(profileUtilityItem)}`}
+            aria-current={navItemAriaCurrent(profileUtilityItem)}
+            aria-label="View your Profile"
+            title="Profile"
+          >
+            <span class="material-icons" aria-hidden="true">account_circle</span>
+          </a>
+
+          <details class="nav-menu nav-group nav-group-account utility-menu" data-authenticated-only>
+            <summary
+              id="left-hand-settings-item"
+              class={`${navMenuTriggerClass(accountNavItems)} utility-icon-button`}
+              aria-current={accountNavItems.some((item) => isNavItemActive(item)) ? "page" : undefined}
+              aria-label="Account settings"
+              title="Settings"
+            >
+              <span class="material-icons" aria-hidden="true">settings</span>
+            </summary>
+            <ul>
+              {accountNavItems.map((item) => (
+                <li data-authenticated-only>
+                  <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
+                    <span>{item.label}</span>
+                  </a>
+                  {showSectionLinks(item) && (
+                    <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
+                      {sectionLinks.map((link) => (
+                        <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+              <li id="left-hand-logout-item" data-authenticated-only><button type="button" class="nav-text-button hover">Log Out</button></li>
+            </ul>
+          </details>
+        </div>
+      )}
     </nav>
 
     {sectionLinks.length > 0 && (

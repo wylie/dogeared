@@ -34,6 +34,12 @@ test("signed-in header keeps personal, discovery, and account destinations organ
 	const accountItems = nav.slice(nav.indexOf("const accountNavItems"), nav.indexOf("const footerNavItems"));
 	const utilityItems = nav.slice(nav.indexOf("utility-nav-list"), nav.indexOf("secondary-links-mobile"));
 	assert.match(primaryList, /left-hand-login-item/);
+	assert.match(primaryList, /\{!isAuthenticated && allowAuthPrompt && \(/);
+	assert.doesNotMatch(primaryList, /left-hand-login-item"[^>]*hidden=/);
+	assert.match(nav, /\{isAuthenticated && \(\s*<ul class="primary-direct-list">/);
+	assert.match(nav, /\{isAuthenticated && \(\s*<div class="utility-nav-list"/);
+	assert.doesNotMatch(nav, /left-hand-reading-life-item"[^>]*hidden=/);
+	assert.doesNotMatch(nav, /utility-nav-list"[^>]*hidden=/);
 	assert.match(primaryList, /nav-group-discover/);
 	assert.match(primaryList, /data-split-menu/);
 	assert.match(primaryList, /class=\{`split-nav-link/);
@@ -60,6 +66,7 @@ test("signed-in header keeps personal, discovery, and account destinations organ
 	assert.match(utilityItems, /material-icons[\s\S]*settings/);
 	assert.match(accountItems, /href: "\/settings"/);
 	assert.match(accountMenu, /left-hand-logout-item/);
+	assert.doesNotMatch(accountMenu, /left-hand-logout-item"[^>]*hidden=/);
 	assert.match(accountMenu, /\{item\.label\}/);
 	assert.doesNotMatch(accountMenu, /left-hand-profile-item/);
 	assert.doesNotMatch(accountMenu, /left-hand-journal-item/);

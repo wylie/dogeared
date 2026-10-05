@@ -86,7 +86,8 @@ test("admin operations center includes Founding Reader control surfaces", () => 
 	assert.equal(layout.includes("allowGuidance={allowAuthPrompt}"), true);
 	assert.equal(layout.includes('"/mission"'), false);
 	assert.equal(leftHand.includes("allowAuthPrompt"), true);
-	assert.equal(leftHand.includes("hidden={isAuthenticated || !allowAuthPrompt}"), true);
+	assert.equal(leftHand.includes("{!isAuthenticated && allowAuthPrompt && ("), true);
+	assert.equal(/left-hand-login-item"[^>]*hidden=/.test(leftHand), false);
 	assert.equal(leftHand.includes("{allowAuthPrompt && ("), true);
 	assert.equal(readFileSync("src/components/ReaderGuidance.astro", "utf8").includes("allowGuidance"), true);
 });
