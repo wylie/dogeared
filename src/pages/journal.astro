@@ -130,38 +130,129 @@ const sectionLinks = viewerUserId ? [
 			</section>
 		) : (
 			<div class="journal-layout">
-				<section class="journal-hero" id="journal-search">
-					<div class="journal-hero-head">
-						<div>
-							<p class="journal-eyebrow">Private notebook</p>
-							<h1>Reading Journal</h1>
-							<p>Capture what you are thinking while you read. Search your own notes, tags, books, dates, and moods. Entries are private and never appear on profiles or activity feeds.</p>
+				<div class="journal-main">
+					<section class="journal-hero" id="journal-search">
+						<div class="journal-hero-head">
+							<div>
+								<p class="journal-eyebrow">Private notebook</p>
+								<h1>Reading Journal</h1>
+								<p>Capture what you are thinking while you read. Search your own notes, tags, books, dates, and moods. Entries are private and never appear on profiles or activity feeds.</p>
+							</div>
 						</div>
-					</div>
-					<form class="journal-search-form" action="/journal" method="get">
-						<label class="journal-field" for="journal-query">
-							<span>Search journal</span>
-							<input id="journal-query" type="search" name="q" value={query} placeholder="Notes, tags, books, or moods" />
-						</label>
-						<label class="journal-field" for="journal-book-filter-label">
-							<span>Book</span>
-							<input type="hidden" id="journal-book-filter" name="bookId" value={filterBookId > 0 ? String(filterBookId) : ""} data-book-id-field />
-							<input id="journal-book-filter-label" type="search" value={bookLabelById(filterBookId)} placeholder="All books" list="journal-owned-books" data-book-picker />
-						</label>
-						<label class="journal-field" for="journal-date-filter">
-							<span>Date</span>
-							<input id="journal-date-filter" type="date" name="date" value={filterDate} />
-						</label>
-						<div class="journal-search-actions">
-							<button type="submit" class="journal-button journal-button-primary journal-button-compact">Search</button>
-							{(query || filterBookId || filterDate) && <a class="journal-button journal-button-secondary journal-button-compact" href="/journal">Clear</a>}
+						<form class="journal-search-form" action="/journal" method="get">
+							<label class="journal-field" for="journal-query">
+								<span>Search journal</span>
+								<input id="journal-query" type="search" name="q" value={query} placeholder="Notes, tags, books, or moods" />
+							</label>
+							<label class="journal-field" for="journal-book-filter-label">
+								<span>Book</span>
+								<input type="hidden" id="journal-book-filter" name="bookId" value={filterBookId > 0 ? String(filterBookId) : ""} data-book-id-field />
+								<input id="journal-book-filter-label" type="search" value={bookLabelById(filterBookId)} placeholder="All books" list="journal-owned-books" data-book-picker />
+							</label>
+							<label class="journal-field" for="journal-date-filter">
+								<span>Date</span>
+								<input id="journal-date-filter" type="date" name="date" value={filterDate} />
+							</label>
+							<div class="journal-search-actions">
+								<button type="submit" class="journal-button journal-button-primary journal-button-compact">Search</button>
+								{(query || filterBookId || filterDate) && <a class="journal-button journal-button-secondary journal-button-compact" href="/journal">Clear</a>}
+							</div>
+						</form>
+						<datalist id="journal-owned-books">
+							{ownedBookOptions.map((book) => <option value={bookLabel(book)} data-book-id={String(book.id)} />)}
+						</datalist>
+						<script type="application/json" id="journal-owned-books-data" set:html={JSON.stringify(ownedBookOptions.map((book) => ({ ...book, label: bookLabel(book) })))}></script>
+					</section>
+
+					<section class="journal-results" id="journal-entries">
+						<div class="journal-results-head">
+							<h2>{query || filterBookId || filterDate ? "Filtered Entries" : "Journal Timeline"}</h2>
+							<p>Newest first · page {currentPage.toLocaleString()}</p>
 						</div>
-					</form>
-					<datalist id="journal-owned-books">
-						{ownedBookOptions.map((book) => <option value={bookLabel(book)} data-book-id={String(book.id)} />)}
-					</datalist>
-					<script type="application/json" id="journal-owned-books-data" set:html={JSON.stringify(ownedBookOptions.map((book) => ({ ...book, label: bookLabel(book) })))}></script>
-				</section>
+						{loadError ? (
+							<p class="journal-empty">{loadError}</p>
+						) : entries.length === 0 ? (
+							<div class="journal-empty-state">
+								<h3>{query || filterBookId || filterDate ? "No journal entries matched those filters." : "Start a private record of your reading life."}</h3>
+								<p>{query || filterBookId || filterDate ? "Try clearing the filters or searching for a different phrase." : "Use the Reading Journal for thoughts, favorite quotes, questions, predictions, interesting passages, and small reading moments that do not belong in a public review."}</p>
+								<p>{query || filterBookId || filterDate ? "Your journal remains private even when filtered." : "Entries are private by default and never appear on public profiles, comments, feeds, or recent activity."}</p>
+								<a class="journal-button journal-button-primary journal-button-compact" href="#new-entry">Create your first journal entry</a>
+							</div>
+						) : (
+							<>
+								<ul class="journal-entry-list">
+									{entries.map((entry) => (
+										<li
+											class="journal-entry-card"
+											data-entry-id={String(entry.id || 0)}
+											data-entry-title={entry.entryTitle || ""}
+											data-body={entry.body || ""}
+											data-entry-at={dateTimeInput(entry.entryAt || entry.updatedAt)}
+											data-book-id={String(entry.bookId || "")}
+											data-book-label={entryBookLabel(entry)}
+											data-reading-position-type={entry.readingPositionType || ""}
+											data-reading-position-value={entry.readingPositionValue || ""}
+											data-mood={entry.mood || ""}
+											data-personal-tags={(entry.personalTags || []).join(", ")}
+										>
+											<a class="journal-entry-cover-link" href={bookHref(entry)} aria-label={entry.title ? `Open ${entry.title}` : "Open journal"}>
+												{entry.coverUrl ? <img src={entry.coverUrl} alt="" loading="lazy" decoding="async" width="52" height="76" /> : <span class="journal-cover-placeholder" aria-hidden="true">book</span>}
+											</a>
+											<div class="journal-entry-main">
+												<h3>{entry.entryTitle || entry.title || "Untitled journal entry"}</h3>
+												<dl class="journal-entry-meta">
+													{entry.title && (
+														<div>
+															<dt>Book</dt>
+															<dd><a href={bookHref(entry)}>{entryBookLabel(entry)}</a></dd>
+														</div>
+													)}
+													{formatDate(entry.createdAt || entry.entryAt || entry.updatedAt) && (
+														<div>
+															<dt>Date</dt>
+															<dd>{formatDate(entry.createdAt || entry.entryAt || entry.updatedAt)}</dd>
+														</div>
+													)}
+													{formatReadingPosition(entry.readingPositionType, entry.readingPositionValue) && (
+														<div>
+															<dt>Position</dt>
+															<dd>{formatReadingPosition(entry.readingPositionType, entry.readingPositionValue)}</dd>
+														</div>
+													)}
+													{entry.mood && (
+														<div>
+															<dt>Mood</dt>
+															<dd>{entry.mood}</dd>
+														</div>
+													)}
+												</dl>
+												{excerptFor(entry) && <p class="journal-entry-excerpt">{excerptFor(entry)}</p>}
+												<div class="journal-entry-detail" hidden>
+													<p>{entry.body}</p>
+												</div>
+												{entry.personalTags.length > 0 && <ul class="journal-tags" aria-label="Personal tags">{entry.personalTags.map((tag) => <li>{tag}</li>)}</ul>}
+												<div class="journal-entry-actions">
+													<button type="button" class="journal-button journal-button-secondary journal-button-small" data-action="view-journal-entry" aria-expanded="false">View</button>
+													<button type="button" class="journal-button journal-button-secondary journal-button-small" data-action="edit-journal-entry">Edit</button>
+													<button type="button" class="journal-button journal-button-danger journal-button-small" data-action="delete-journal-entry">Delete</button>
+												</div>
+											</div>
+										</li>
+									))}
+								</ul>
+								{totalPages > 1 && (
+									<Pagination
+										currentPage={currentPage}
+										totalPages={totalPages}
+										previousHref={currentPage > 1 ? pageHref(currentPage - 1) : ""}
+										nextHref={currentPage < totalPages ? pageHref(currentPage + 1) : ""}
+										label="Journal pagination"
+									/>
+								)}
+							</>
+						)}
+					</section>
+				</div>
 
 				<aside class="journal-side-stack">
 					<section class="journal-editor" id="new-entry" data-guided-anchor="journal-entry-form" aria-labelledby="journal-editor-title" tabindex="-1">
@@ -218,95 +309,6 @@ const sectionLinks = viewerUserId ? [
 						</form>
 					</section>
 				</aside>
-
-				<section class="journal-results" id="journal-entries">
-					<div class="journal-results-head">
-						<h2>{query || filterBookId || filterDate ? "Filtered Entries" : "Journal Timeline"}</h2>
-						<p>Newest first · page {currentPage.toLocaleString()}</p>
-					</div>
-					{loadError ? (
-						<p class="journal-empty">{loadError}</p>
-					) : entries.length === 0 ? (
-						<div class="journal-empty-state">
-							<h3>{query || filterBookId || filterDate ? "No journal entries matched those filters." : "Start a private record of your reading life."}</h3>
-							<p>{query || filterBookId || filterDate ? "Try clearing the filters or searching for a different phrase." : "Use the Reading Journal for thoughts, favorite quotes, questions, predictions, interesting passages, and small reading moments that do not belong in a public review."}</p>
-							<p>{query || filterBookId || filterDate ? "Your journal remains private even when filtered." : "Entries are private by default and never appear on public profiles, comments, feeds, or recent activity."}</p>
-							<a class="journal-button journal-button-primary journal-button-compact" href="#new-entry">Create your first journal entry</a>
-						</div>
-					) : (
-						<>
-							<ul class="journal-entry-list">
-								{entries.map((entry) => (
-									<li
-										class="journal-entry-card"
-										data-entry-id={String(entry.id || 0)}
-										data-entry-title={entry.entryTitle || ""}
-										data-body={entry.body || ""}
-										data-entry-at={dateTimeInput(entry.entryAt || entry.updatedAt)}
-										data-book-id={String(entry.bookId || "")}
-										data-book-label={entryBookLabel(entry)}
-										data-reading-position-type={entry.readingPositionType || ""}
-										data-reading-position-value={entry.readingPositionValue || ""}
-										data-mood={entry.mood || ""}
-										data-personal-tags={(entry.personalTags || []).join(", ")}
-									>
-										<a class="journal-entry-cover-link" href={bookHref(entry)} aria-label={entry.title ? `Open ${entry.title}` : "Open journal"}>
-											{entry.coverUrl ? <img src={entry.coverUrl} alt="" loading="lazy" decoding="async" width="52" height="76" /> : <span class="journal-cover-placeholder" aria-hidden="true">book</span>}
-										</a>
-										<div class="journal-entry-main">
-											<h3>{entry.entryTitle || entry.title || "Untitled journal entry"}</h3>
-											<dl class="journal-entry-meta">
-												{entry.title && (
-													<div>
-														<dt>Book</dt>
-														<dd><a href={bookHref(entry)}>{entryBookLabel(entry)}</a></dd>
-													</div>
-												)}
-												{formatDate(entry.createdAt || entry.entryAt || entry.updatedAt) && (
-													<div>
-														<dt>Date</dt>
-														<dd>{formatDate(entry.createdAt || entry.entryAt || entry.updatedAt)}</dd>
-													</div>
-												)}
-												{formatReadingPosition(entry.readingPositionType, entry.readingPositionValue) && (
-													<div>
-														<dt>Position</dt>
-														<dd>{formatReadingPosition(entry.readingPositionType, entry.readingPositionValue)}</dd>
-													</div>
-												)}
-												{entry.mood && (
-													<div>
-														<dt>Mood</dt>
-														<dd>{entry.mood}</dd>
-													</div>
-												)}
-											</dl>
-											{excerptFor(entry) && <p class="journal-entry-excerpt">{excerptFor(entry)}</p>}
-											<div class="journal-entry-detail" hidden>
-												<p>{entry.body}</p>
-											</div>
-											{entry.personalTags.length > 0 && <ul class="journal-tags" aria-label="Personal tags">{entry.personalTags.map((tag) => <li>{tag}</li>)}</ul>}
-											<div class="journal-entry-actions">
-												<button type="button" class="journal-button journal-button-secondary journal-button-small" data-action="view-journal-entry" aria-expanded="false">View</button>
-												<button type="button" class="journal-button journal-button-secondary journal-button-small" data-action="edit-journal-entry">Edit</button>
-												<button type="button" class="journal-button journal-button-danger journal-button-small" data-action="delete-journal-entry">Delete</button>
-											</div>
-										</div>
-									</li>
-								))}
-							</ul>
-							{totalPages > 1 && (
-								<Pagination
-									currentPage={currentPage}
-									totalPages={totalPages}
-									previousHref={currentPage > 1 ? pageHref(currentPage - 1) : ""}
-									nextHref={currentPage < totalPages ? pageHref(currentPage + 1) : ""}
-									label="Journal pagination"
-								/>
-							)}
-						</>
-					)}
-					</section>
 			</div>
 		)}
 	</div>
@@ -320,7 +322,11 @@ const sectionLinks = viewerUserId ? [
 		const mode = document.querySelector("[data-editor-mode]");
 		const editorTitle = document.querySelector("[data-editor-title]");
 		const cancelEdit = document.querySelector("[data-journal-cancel-edit]");
+		const saveButton = document.querySelector("[data-journal-save]");
+		const resetButton = document.querySelector("[data-journal-reset]");
 		const draftKey = "dogeared:journal-page-draft";
+		let isEditing = false;
+		let preservedNewDraft = null;
 		let ownedBooks = [];
 		try {
 			const node = document.getElementById("journal-owned-books-data");
@@ -348,6 +354,7 @@ const sectionLinks = viewerUserId ? [
 			const item = field(name);
 			return [name, item instanceof HTMLInputElement || item instanceof HTMLTextAreaElement || item instanceof HTMLSelectElement ? item.value : ""];
 		}));
+		const hasMeaningfulDraft = (payload = {}) => ["entryTitle", "body", "bookId", "bookLabel", "readingPositionType", "readingPositionValue", "mood", "personalTags"].some((name) => String(payload[name] || "").trim());
 		const writePayload = (payload = {}) => {
 			for (const name of fields) {
 				const item = field(name);
@@ -368,33 +375,55 @@ const sectionLinks = viewerUserId ? [
 			const body = String(readPayload().body || "");
 			if (count instanceof HTMLElement) count.textContent = `${body.length.toLocaleString()} ${body.length === 1 ? "character" : "characters"}`;
 		};
-		const setEditorMode = (isEditing) => {
+		const setEditorMode = (nextIsEditing) => {
+			isEditing = nextIsEditing;
 			if (editorTitle instanceof HTMLElement) editorTitle.textContent = isEditing ? "Edit Entry" : "New Entry";
 			if (mode instanceof HTMLElement) mode.textContent = isEditing ? "Editing entry" : "New entry";
 			if (cancelEdit instanceof HTMLButtonElement) cancelEdit.hidden = !isEditing;
+			if (resetButton instanceof HTMLButtonElement) resetButton.hidden = isEditing;
+			if (saveButton instanceof HTMLButtonElement) saveButton.textContent = isEditing ? "Save changes" : "Save entry";
 		};
-		const resetEditor = (message = "Cleared.") => {
+		const clearNewEntry = (message = "Cleared.") => {
 			writePayload({});
 			try { window.localStorage.removeItem(draftKey); } catch {}
+			preservedNewDraft = null;
 			setEditorMode(false);
 			setStatus(message);
 			updateCount();
 		};
+		const readStoredDraft = () => {
+			try {
+				const raw = window.localStorage.getItem(draftKey);
+				return raw ? JSON.parse(raw) : null;
+			} catch {
+				return null;
+			}
+		};
+		const restoreNewEntryDraft = () => {
+			const draft = preservedNewDraft && hasMeaningfulDraft(preservedNewDraft) ? preservedNewDraft : readStoredDraft();
+			writePayload(draft && hasMeaningfulDraft(draft) ? draft : {});
+			preservedNewDraft = null;
+			setEditorMode(false);
+			updateCount();
+		};
 		const rememberDraft = () => {
+			if (isEditing) {
+				updateCount();
+				setStatus("Editing existing entry.");
+				return;
+			}
 			try { window.localStorage.setItem(draftKey, JSON.stringify(readPayload())); } catch {}
 			updateCount();
 			setStatus("Draft saved on this device.");
 		};
 		try {
-			const raw = window.localStorage.getItem(draftKey);
-			if (raw) {
-				const draft = JSON.parse(raw);
-				if (draft?.body) {
-					writePayload(draft);
-					setStatus("Recovered an unsaved local draft.");
-				}
+			const draft = readStoredDraft();
+			if (draft?.body) {
+				writePayload(draft);
+				setStatus("Recovered an unsaved local draft.");
 			}
 		} catch {}
+		setEditorMode(false);
 		updateCount();
 		form.addEventListener("input", rememberDraft);
 		document.querySelectorAll("[data-book-picker]").forEach((picker) => {
@@ -430,7 +459,9 @@ const sectionLinks = viewerUserId ? [
 				setStatus(String(data?.error || "Failed to save entry."));
 				return;
 			}
-			try { window.localStorage.removeItem(draftKey); } catch {}
+			if (!isEditing) {
+				try { window.localStorage.removeItem(draftKey); } catch {}
+			}
 			try {
 				await fetch("/api/guidance/status", {
 					method: "POST",
@@ -445,11 +476,13 @@ const sectionLinks = viewerUserId ? [
 			setStatus("Saved privately. Refreshing...");
 			window.location.href = "/journal";
 		});
-		document.querySelector("[data-journal-reset]")?.addEventListener("click", () => {
-			resetEditor("Cleared.");
+		resetButton?.addEventListener("click", () => {
+			if (isEditing) return;
+			clearNewEntry("Cleared.");
 		});
 		cancelEdit?.addEventListener("click", () => {
-			resetEditor("Editing canceled.");
+			restoreNewEntryDraft();
+			setStatus("Editing canceled.");
 		});
 		document.addEventListener("click", async (event) => {
 			const target = event.target;
@@ -467,6 +500,7 @@ const sectionLinks = viewerUserId ? [
 				}
 			}
 			if (target.closest('[data-action="edit-journal-entry"]')) {
+				if (!isEditing) preservedNewDraft = readPayload();
 				writePayload(card.dataset);
 				setEditorMode(true);
 				document.getElementById("new-entry")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -498,32 +532,31 @@ const sectionLinks = viewerUserId ? [
 	.journal-layout {
 		display: grid;
 		grid-template-columns: minmax(0, 1.9fr) minmax(20rem, 0.82fr);
-		grid-template-areas:
-			"hero editor"
-			"entries editor";
+		grid-template-areas: "main editor";
 		gap: clamp(0.9rem, 1.8vw, 1.25rem);
 		align-items: start;
 		margin-top: 1rem;
 	}
-	.journal-hero {
-		grid-area: hero;
+	.journal-main {
+		grid-area: main;
+		display: grid;
+		gap: clamp(0.75rem, 1.4vw, 1rem);
 		min-width: 0;
 	}
+	.journal-hero { min-width: 0; }
 	.journal-side-stack {
 		grid-area: editor;
 		position: sticky;
 		top: calc(var(--mobile-sticky-offset, 0px) + 1rem);
 		min-width: 0;
 	}
-	.journal-results {
-		grid-area: entries;
-		min-width: 0;
-	}
+	.journal-results { min-width: 0; }
 	.journal-hero-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: start; }
 	.journal-eyebrow { margin: 0 0 0.25rem; color: var(--color-text-subtle); font-size: 0.78rem; font-weight: 760; text-transform: uppercase; letter-spacing: 0; }
 	.journal-state-card h1, .journal-hero h1, .journal-editor h2, .journal-results h2 { margin: 0 0 0.45rem; }
 	.journal-state-card p, .journal-hero p, .journal-results-head p, .journal-empty, .journal-status, .journal-count { margin: 0; color: var(--color-text-muted); line-height: 1.45; }
 	.primary-link, .journal-button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; border-radius: var(--radius-sm); padding: 0.58rem 0.9rem; font: inherit; font-weight: 760; line-height: 1.1; text-decoration: none; cursor: pointer; box-sizing: border-box; }
+	.journal-button[hidden] { display: none; }
 	.primary-link { border: 1px solid var(--color-primary); background: var(--color-primary); color: #fff; margin-top: 0.9rem; }
 	.primary-link:hover, .primary-link:focus-visible { background: var(--color-primary-hover); border-color: var(--color-primary-hover); color: #fff; }
 	.journal-button-primary { border: 1px solid var(--color-primary); background: var(--color-primary); color: #fff; }
@@ -603,7 +636,8 @@ const sectionLinks = viewerUserId ? [
 	.journal-side-stack .journal-entry-form textarea {
 		min-height: 10rem;
 	}
-	.journal-results-head, .journal-actions, .journal-entry-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+	.journal-results-head, .journal-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+	.journal-entry-actions { display: flex; align-items: center; justify-content: flex-start; gap: 0.45rem; flex-wrap: wrap; margin-top: 0.55rem; }
 	.journal-actions { justify-content: space-between; align-items: center; padding-top: 0.15rem; }
 	.journal-action-buttons { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 	.journal-form-meta { display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap; font-size: 0.9rem; }
@@ -614,8 +648,8 @@ const sectionLinks = viewerUserId ? [
 	.journal-cover-placeholder { display: grid; place-items: center; background: var(--color-chip-topic); color: var(--color-nav); font-family: "Material Icons"; }
 	.journal-entry-main { min-width: 0; }
 	.journal-entry-main h3, .journal-entry-meta, .journal-entry-excerpt { margin: 0 0 0.45rem; }
-	.journal-entry-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.35rem 0.75rem; color: var(--color-text-muted); line-height: 1.35; }
-	.journal-entry-meta div { min-width: 0; }
+	.journal-entry-meta { display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; color: var(--color-text-muted); line-height: 1.35; }
+	.journal-entry-meta div { flex: 0 1 12rem; min-width: 0; }
 	.journal-entry-meta dt { margin: 0; font-size: 0.74rem; font-weight: 760; color: var(--color-text-subtle); text-transform: uppercase; letter-spacing: 0; }
 	.journal-entry-meta dd { margin: 0.08rem 0 0; color: var(--color-text-muted); }
 	.journal-entry-excerpt { color: var(--color-text-muted); line-height: 1.4; }
@@ -632,6 +666,15 @@ const sectionLinks = viewerUserId ? [
 				"hero"
 				"editor"
 				"entries";
+		}
+		.journal-main {
+			display: contents;
+		}
+		.journal-hero {
+			grid-area: hero;
+		}
+		.journal-results {
+			grid-area: entries;
 		}
 		.journal-side-stack {
 			position: static;

@@ -356,7 +356,16 @@ import '../assets/global.css';
 								<ul class="route-skeleton-book-grid">${skeletonBookCard()}${skeletonBookCard()}${skeletonBookCard()}${skeletonBookCard()}</ul>
 							</section>`;
 						}
-						if (route === "/following" || route === "/notifications" || route === "/journal") {
+						if (route === "/journal") {
+							return `<section class="route-skeleton-shell route-skeleton-journal" aria-label="Loading ${escapeHtml(label)}">
+								<div class="route-skeleton-journal-main">
+									<div class="route-skeleton-section">${skeletonLine("36%")}${skeletonLine("88%")}${skeletonLine("72%")}</div>
+									<div class="route-skeleton-section">${skeletonLine("28%")}<ul class="route-skeleton-activity">${skeletonActivityRow()}${skeletonActivityRow()}${skeletonActivityRow()}</ul></div>
+								</div>
+								<div class="route-skeleton-section route-skeleton-journal-composer">${skeletonLine("34%")}${skeletonLine("92%")}${skeletonLine("100%")}${skeletonLine("76%")}${skeletonLine("64%")}</div>
+							</section>`;
+						}
+						if (route === "/following" || route === "/notifications") {
 							return `<section class="route-skeleton-shell route-skeleton-list" aria-label="Loading ${escapeHtml(label)}">
 								${skeletonHeader(label)}
 								<ul class="route-skeleton-activity">${skeletonActivityRow()}${skeletonActivityRow()}${skeletonActivityRow()}${skeletonActivityRow()}</ul>
@@ -760,6 +769,19 @@ import '../assets/global.css';
 		gap: 0.75rem;
 		align-items: start;
 	}
+	.route-skeleton-journal {
+		grid-template-columns: minmax(0, 1.9fr) minmax(20rem, 0.82fr);
+		align-items: start;
+	}
+	.route-skeleton-journal-main {
+		display: grid;
+		gap: 0.75rem;
+		min-width: 0;
+	}
+	.route-skeleton-journal-composer {
+		position: sticky;
+		top: 1rem;
+	}
 	.route-skeleton-reading-life .route-skeleton-book-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
@@ -886,6 +908,7 @@ import '../assets/global.css';
 			min-height: min(620px, calc(100vh - 2rem));
 		}
 		.route-skeleton-reading-life-pair,
+		.route-skeleton-journal,
 		.route-skeleton-stats,
 		.route-skeleton-book-grid {
 			grid-template-columns: 1fr;

@@ -165,6 +165,10 @@ test("journal UI is wired into book, private journal page, navigation, and autos
 	assert.match(journalPage, /Edit Entry/);
 	assert.match(journalPage, /data-journal-cancel-edit hidden/);
 	assert.match(journalPage, /Cancel editing/);
+	assert.match(journalPage, /data-journal-save>Save entry/);
+	assert.match(journalPage, /saveButton\.textContent = isEditing \? "Save changes" : "Save entry"/);
+	assert.match(journalPage, /resetButton\.hidden = isEditing/);
+	assert.match(journalPage, /\.journal-button\[hidden\]\s*{\s*display: none;\s*}/);
 	assert.match(journalPage, /Search journal/);
 	assert.match(journalPage, /<span>Book<\/span>/);
 	assert.match(journalPage, /journal-owned-books/);
@@ -179,17 +183,33 @@ test("journal UI is wired into book, private journal page, navigation, and autos
 	assert.match(journalPage, /data-action="edit-journal-entry"/);
 	assert.match(journalPage, /data-action="delete-journal-entry"/);
 	assert.doesNotMatch(journalPage, /data-action="new-journal-entry"/);
+	assert.match(journalPage, /class="journal-main"/);
 	assert.match(journalPage, /class="journal-side-stack"/);
-	assert.match(journalPage, /grid-template-areas:\s*"hero editor"\s*"entries editor"/);
+	assert.match(journalPage, /grid-template-areas: "main editor"/);
+	assert.match(journalPage, /\.journal-main\s*{[^}]*display: grid;[^}]*gap: clamp\(0\.75rem, 1\.4vw, 1rem\);/s);
 	assert.match(journalPage, /\.journal-side-stack\s*{[^}]*position: sticky;/s);
 	assert.match(journalPage, /grid-template-areas:\s*"hero"\s*"editor"\s*"entries"/);
+	assert.match(journalPage, /\.journal-main\s*{[^}]*display: contents;/s);
+	assert.match(journalPage, /\.journal-entry-actions\s*{[^}]*justify-content: flex-start;/s);
 	assert.match(journalPage, /setEditorMode\(true\)/);
-	assert.match(journalPage, /resetEditor\("Editing canceled\."\)/);
+	assert.match(journalPage, /restoreNewEntryDraft\(\)/);
 	assert.match(journalPage, /<Pagination/);
 	assert.match(journalPage, /countJournalEntries/);
 	assert.doesNotMatch(journalPage, /journal-pagination/);
+	assert.doesNotMatch(journalPage, /"entries editor"/);
 	assert.match(journalPage, /robots="noindex,nofollow"/);
 	assert.match(nav, /Reading Journal/);
 	assert.match(nav, /routeMatches/);
 	assert.match(nav, /showSectionLinks/);
+});
+
+test("journal transition skeleton uses independent journal and composer columns", () => {
+	const layout = readFileSync("src/layouts/Layout.astro", "utf8");
+
+	assert.match(layout, /route === "\/journal"/);
+	assert.match(layout, /route-skeleton-journal-main/);
+	assert.match(layout, /route-skeleton-journal-composer/);
+	assert.match(layout, /\.route-skeleton-journal\s*{[^}]*grid-template-columns: minmax\(0, 1\.9fr\) minmax\(20rem, 0\.82fr\);/s);
+	assert.match(layout, /\.route-skeleton-journal-main\s*{[^}]*display: grid;[^}]*gap: 0\.75rem;/s);
+	assert.match(layout, /@media \(max-width: 900px\)\s*{[\s\S]*?\.route-skeleton-journal,[\s\S]*?grid-template-columns: 1fr;/s);
 });
