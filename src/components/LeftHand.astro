@@ -49,17 +49,14 @@ const navItemAriaCurrent = (item: NavItem) => isNavItemActive(item) ? "page" : u
 const showSectionLinks = (item: NavItem) => isNavItemActive(item) && sectionLinks.length > 0;
 const query = Astro.url.searchParams.get("q") ?? "";
 const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].includes(foundingReaderMode) ? foundingReaderMode : "open";
-const youNavItems: NavItem[] = [
-  { href: "/profile", label: "Profile", id: "left-hand-profile-item", match: "prefix" },
+const discoverNavItems: NavItem[] = [
+  { href: "/discover", label: "Discover" },
+  { href: "/books", label: "Books", match: "prefix", aliases: ["/book"] },
+  { href: "/authors", label: "Authors", match: "prefix", aliases: ["/author"] }
+];
+const primaryPersonalNavItems: NavItem[] = [
   { href: "/reading-life", label: "My Reading Life", id: "left-hand-reading-life-item" },
   { href: "/journal", label: "Reading Journal", id: "left-hand-journal-item" },
-  { href: "/notifications", label: "Notifications", id: "left-hand-notifications-item", className: "notification-nav-link" },
-  { href: "/settings", label: "Settings", id: "left-hand-settings-item" }
-];
-const exploreNavItems: NavItem[] = [
-  { href: "/discover", label: "Discover" },
-  { href: "/books", label: "Books" },
-  { href: "/authors", label: "Authors" },
   { href: "/following", label: "Following", id: "left-hand-following-item" }
 ];
 const aboutNavItems: NavItem[] = [
@@ -81,13 +78,10 @@ const adminNavItems: NavItem[] = [
   { href: "/admin/operations", label: "Operations" },
   { href: "/admin/users", label: "Users", match: "prefix" }
 ];
-const publicPrimaryItems = exploreNavItems.filter((item) => item.href !== "/following");
-const profilePrimaryItems = youNavItems.filter((item) => item.href === "/profile");
-const readingLifeNavItems = youNavItems.filter((item) => item.href === "/reading-life");
-const accountNavItems = youNavItems.filter((item) => item.href === "/settings");
-const moreNavItems = [
-  ...youNavItems.filter((item) => item.href === "/journal" || item.href === "/notifications"),
-  ...exploreNavItems.filter((item) => item.href === "/following")
+const notificationUtilityItem: NavItem = { href: "/notifications", label: "Notifications", id: "left-hand-notifications-item" };
+const profileUtilityItem: NavItem = { href: "/profile", label: "Profile", id: "left-hand-profile-item", match: "prefix" };
+const accountNavItems: NavItem[] = [
+  { href: "/settings", label: "Settings", id: "left-hand-settings-item" }
 ];
 const footerNavItems: NavItem[] = [
   { href: "/privacy", label: "Privacy" },
@@ -143,74 +137,36 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     </form>
 
     <nav id="left-hand-primary-links" class="primary-links" aria-label="Primary navigation">
-      <ul class="primary-direct-list">
-        {publicPrimaryItems.map((item) => (
-          <li>
-            <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>{item.label}</a>
-            {showSectionLinks(item) && (
-              <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-        ))}
-        {profilePrimaryItems.map((item) => (
-          <li id={item.id} data-authenticated-only hidden={!isAuthenticated}>
-            <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
-              <span>{item.label}</span>
-            </a>
-            {showSectionLinks(item) && (
-              <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-        ))}
-        {readingLifeNavItems.map((item) => (
-          <li id={item.id} data-authenticated-only hidden={!isAuthenticated}>
-            <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
-              <span>{item.label}</span>
-            </a>
-            {showSectionLinks(item) && (
-              <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
-                {sectionLinks.map((link) => (
-                  <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                ))}
-              </ul>
-            )}
-          </li>
-        ))}
-        <li id="left-hand-login-item" data-logged-out-only hidden={isAuthenticated || !allowAuthPrompt}><button type="button" class="nav-text-button hover">Log In</button></li>
-      </ul>
-
-      <div class="nav-menu-cluster" aria-label="Secondary navigation">
-        <details class="nav-menu nav-group nav-group-more" data-authenticated-only hidden={!isAuthenticated}>
-          <summary class={navMenuTriggerClass(moreNavItems)}>
-            <span>More</span>
-            <span id="left-hand-more-notification-badge" class="notification-badge nav-trigger-badge" aria-label="0 unread notifications" hidden>0</span>
-          </summary>
+      <div class="nav-destination-cluster">
+        <details class="nav-menu nav-group nav-group-discover">
+          <summary class={navMenuTriggerClass(discoverNavItems)}>Discover</summary>
           <ul>
-            {moreNavItems.map((item) => (
-              <li id={item.id} data-authenticated-only hidden={!isAuthenticated}>
+            {discoverNavItems.map((item) => (
+              <li>
                 <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
                   <span>{item.label}</span>
-                  {item.href === "/notifications" && <span id="left-hand-notification-badge" class="notification-badge" aria-label="0 unread notifications" hidden>0</span>}
                 </a>
-                {showSectionLinks(item) && (
-                  <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
-                    {sectionLinks.map((link) => (
-                      <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
-                    ))}
-                  </ul>
-                )}
               </li>
             ))}
           </ul>
         </details>
+
+        <ul class="primary-direct-list">
+          {primaryPersonalNavItems.map((item) => (
+            <li id={item.id} data-authenticated-only hidden={!isAuthenticated}>
+              <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
+                <span>{item.label}</span>
+              </a>
+              {showSectionLinks(item) && (
+                <ul class="section-links-nested" aria-label={item.sectionAriaLabel}>
+                  {sectionLinks.map((link) => (
+                    <li><a href={`#${link.id}`} class="hover" data-section-link={link.id}>{link.label}</a></li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ul>
 
         <details class="nav-menu nav-group nav-group-about">
           <summary class={navMenuTriggerClass(aboutNavItems)}>About</summary>
@@ -255,11 +211,50 @@ const navMenuTriggerClass = (items: NavItem[]) =>
           </details>
         )}
 
-        <details class="nav-menu nav-group nav-group-account" data-authenticated-only hidden={!isAuthenticated}>
-          <summary class={navMenuTriggerClass(accountNavItems)}>Account</summary>
+        <button id="left-hand-login-item" data-logged-out-only hidden={isAuthenticated || !allowAuthPrompt} type="button" class="nav-text-button hover">Log In</button>
+      </div>
+
+      <div class="utility-nav-list" aria-label="Account utilities" data-authenticated-only hidden={!isAuthenticated}>
+        <a
+          id={notificationUtilityItem.id}
+          data-authenticated-only
+          hidden={!isAuthenticated}
+          href={navItemHref(notificationUtilityItem)}
+          class={`utility-icon-button ${navItemClass(notificationUtilityItem)}`}
+          aria-current={navItemAriaCurrent(notificationUtilityItem)}
+          aria-label="Notifications"
+          title="Notifications"
+        >
+          <span class="material-icons" aria-hidden="true">notifications</span>
+          <span id="left-hand-notification-badge" class="notification-badge utility-notification-badge" aria-hidden="true" hidden>0</span>
+        </a>
+
+        <a
+          id={profileUtilityItem.id}
+          data-authenticated-only
+          hidden={!isAuthenticated}
+          href={navItemHref(profileUtilityItem)}
+          class={`utility-icon-button ${navItemClass(profileUtilityItem)}`}
+          aria-current={navItemAriaCurrent(profileUtilityItem)}
+          aria-label="View your Profile"
+          title="Profile"
+        >
+          <span class="material-icons" aria-hidden="true">account_circle</span>
+        </a>
+
+        <details class="nav-menu nav-group nav-group-account utility-menu" data-authenticated-only hidden={!isAuthenticated}>
+          <summary
+            id="left-hand-settings-item"
+            class={`${navMenuTriggerClass(accountNavItems)} utility-icon-button`}
+            aria-current={accountNavItems.some((item) => isNavItemActive(item)) ? "page" : undefined}
+            aria-label="Account settings"
+            title="Settings"
+          >
+            <span class="material-icons" aria-hidden="true">settings</span>
+          </summary>
           <ul>
             {accountNavItems.map((item) => (
-              <li id={item.id} data-authenticated-only hidden={!isAuthenticated}>
+              <li data-authenticated-only hidden={!isAuthenticated}>
                 <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
                   <span>{item.label}</span>
                 </a>
@@ -373,13 +368,12 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: 0.32rem;
+    gap: clamp(0.55rem, 1.3vw, 1rem);
     min-width: 0;
     overflow: visible;
   }
 
   .primary-direct-list,
-  .nav-menu-cluster,
   .nav-group > ul,
   .header-footer-nav ul,
   .secondary-links-mobile {
@@ -388,8 +382,9 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     padding: 0;
   }
 
+  .nav-destination-cluster,
   .primary-direct-list,
-  .nav-menu-cluster {
+  .utility-nav-list {
     display: flex;
     flex-wrap: nowrap;
     justify-content: flex-end;
@@ -398,12 +393,19 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     min-width: 0;
   }
 
-  .primary-direct-list {
+  .nav-destination-cluster {
     flex: 0 1 auto;
   }
 
-  .nav-menu-cluster {
+  .primary-direct-list {
     flex: 0 0 auto;
+  }
+
+  .utility-nav-list {
+    flex: 0 0 auto;
+    gap: 0.18rem;
+    padding-left: clamp(0.35rem, 0.9vw, 0.65rem);
+    margin-left: clamp(0.1rem, 0.5vw, 0.35rem);
   }
 
   .nav-group {
@@ -433,6 +435,10 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     min-width: 15rem;
     max-height: min(70vh, 32rem);
     overflow: auto;
+  }
+
+  .utility-menu > ul {
+    min-width: 10rem;
   }
 
   .secondary-links-mobile {
@@ -512,6 +518,21 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     white-space: nowrap;
   }
 
+  .utility-icon-button {
+    position: relative;
+    justify-content: center;
+    width: 2.1rem;
+    min-width: 2.1rem;
+    min-height: 2.1rem;
+    padding: 0;
+    gap: 0;
+  }
+
+  .utility-icon-button .material-icons {
+    font-size: 1.22rem;
+    line-height: 1;
+  }
+
   .nav-menu > ul a,
   .nav-menu > ul .nav-text-button {
     justify-content: flex-start;
@@ -537,9 +558,9 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     line-height: 1;
   }
 
-  .notification-nav-link {
-    justify-content: flex-start;
-    gap: 0.5rem;
+  .utility-menu > .nav-menu-trigger::after {
+    content: none;
+    margin-left: 0;
   }
 
   .notification-badge {
@@ -558,11 +579,16 @@ const navMenuTriggerClass = (items: NavItem[]) =>
   .notification-badge[hidden] {
     display: none;
   }
-  .nav-trigger-badge {
-    min-width: 1.05rem;
-    height: 1.05rem;
-    font-size: 0.64rem;
-    padding: 0 0.22rem;
+  .utility-notification-badge {
+    position: absolute;
+    top: 0.14rem;
+    right: 0.05rem;
+    min-width: 0.92rem;
+    height: 0.92rem;
+    border: 1px solid rgba(255, 255, 255, 0.92);
+    font-size: 0.58rem;
+    padding: 0 0.18rem;
+    box-shadow: 0 1px 4px rgba(31, 122, 69, 0.22);
   }
 
   a.active,
@@ -583,10 +609,19 @@ const navMenuTriggerClass = (items: NavItem[]) =>
   .hover:hover,
   .hover:focus-visible,
   .nav-menu-trigger:hover,
+  .utility-icon-button:hover,
+  .utility-icon-button:focus-visible,
   .nav-menu-trigger:focus-visible {
     color: var(--color-nav-hover);
     text-decoration: none;
     background: var(--color-nav-surface-hover);
+  }
+
+  .primary-links a:focus-visible,
+  .primary-links .nav-text-button:focus-visible,
+  .nav-menu-trigger:focus-visible {
+    outline: 3px solid rgba(31, 122, 69, 0.34);
+    outline-offset: 2px;
   }
 
   .nav-text-button {
@@ -830,8 +865,9 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       display: none;
     }
 
+    .nav-destination-cluster,
     .primary-direct-list,
-    .nav-menu-cluster {
+    .utility-nav-list {
       flex: 0 0 auto;
     }
 
@@ -912,13 +948,20 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
     #left-hand-nav .primary-links::-webkit-scrollbar { display: none; }
 
+    #left-hand-nav .nav-destination-cluster,
     #left-hand-nav .primary-direct-list,
-    #left-hand-nav .nav-menu-cluster {
+    #left-hand-nav .utility-nav-list {
       display: flex;
       flex: 0 0 auto;
       flex-wrap: nowrap;
       align-items: center;
       gap: var(--mobile-primary-nav-gap);
+    }
+
+    #left-hand-nav .utility-nav-list {
+      gap: 0.28rem;
+      padding-left: 0;
+      margin-left: 0;
     }
 
     #left-hand-nav .primary-links .nav-group {
@@ -965,6 +1008,14 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       white-space: nowrap;
     }
 
+    #left-hand-nav .utility-icon-button {
+      width: 2.12rem;
+      min-width: 2.12rem;
+      min-height: 2.12rem;
+      padding: 0;
+      justify-content: center;
+    }
+
     #left-hand-nav .primary-links a.active {
       background: var(--color-nav-surface);
       color: var(--color-nav-active);
@@ -972,12 +1023,10 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       border-left: 0;
     }
 
-    #left-hand-nav .primary-links .notification-nav-link {
-      justify-content: flex-start;
-    }
-
     #left-hand-nav .primary-links a.hover:hover,
     #left-hand-nav .primary-links .nav-text-button.hover:hover,
+    #left-hand-nav .utility-icon-button:hover,
+    #left-hand-nav .utility-icon-button:focus-visible,
     #left-hand-nav .nav-menu-trigger:hover,
     #left-hand-nav .primary-links a:focus-visible,
     #left-hand-nav .primary-links .nav-text-button:focus-visible,
@@ -1109,13 +1158,19 @@ const navMenuTriggerClass = (items: NavItem[]) =>
   const foundingReaderMode = String(leftHandNav?.dataset.foundingReaderMode || "open");
   const leftHandPrimaryLinks = document.getElementById("left-hand-primary-links");
   const leftHandLoginItem = document.getElementById("left-hand-login-item");
-  const leftHandLoginButton = leftHandLoginItem?.querySelector("button");
+  const leftHandLoginButton = leftHandLoginItem instanceof HTMLButtonElement
+    ? leftHandLoginItem
+    : leftHandLoginItem?.querySelector("button");
   const leftHandFollowingItem = document.getElementById("left-hand-following-item");
   const leftHandProfileItem = document.getElementById("left-hand-profile-item");
-  const leftHandProfileLink = leftHandProfileItem?.querySelector("a");
+  const leftHandProfileLink = leftHandProfileItem instanceof HTMLAnchorElement
+    ? leftHandProfileItem
+    : leftHandProfileItem?.querySelector("a");
   const leftHandNotificationsItem = document.getElementById("left-hand-notifications-item");
+  const leftHandNotificationsLink = leftHandNotificationsItem instanceof HTMLAnchorElement
+    ? leftHandNotificationsItem
+    : leftHandNotificationsItem?.querySelector("a");
   const leftHandNotificationBadge = document.getElementById("left-hand-notification-badge");
-  const leftHandMoreNotificationBadge = document.getElementById("left-hand-more-notification-badge");
   const leftHandSettingsItem = document.getElementById("left-hand-settings-item");
   const leftHandLogoutItem = document.getElementById("left-hand-logout-item");
   const leftHandLogoutButton = leftHandLogoutItem?.querySelector("button");
@@ -1236,17 +1291,21 @@ const navMenuTriggerClass = (items: NavItem[]) =>
   }
 
   async function syncNotificationCount(authenticated) {
-    const notificationBadges = [leftHandNotificationBadge, leftHandMoreNotificationBadge]
+    const notificationBadges = [leftHandNotificationBadge]
       .filter((badge) => badge instanceof HTMLElement);
-    if (notificationBadges.length === 0) return;
     const updateBadges = (unreadCount) => {
       const label = `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}`;
+      if (leftHandNotificationsLink instanceof HTMLAnchorElement) {
+        leftHandNotificationsLink.setAttribute("aria-label", unreadCount > 0 ? `Notifications, ${label}` : "Notifications");
+        leftHandNotificationsLink.title = unreadCount > 0 ? `Notifications (${unreadCount > 99 ? "99+" : unreadCount})` : "Notifications";
+      }
       for (const badge of notificationBadges) {
         badge.hidden = unreadCount <= 0;
         badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
         badge.setAttribute("aria-label", label);
       }
     };
+    if (notificationBadges.length === 0 && !(leftHandNotificationsLink instanceof HTMLAnchorElement)) return;
     if (!authenticated) {
       updateBadges(0);
       return;
@@ -1513,10 +1572,15 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       ? event.detail
       : {};
     const unreadCount = Math.max(0, Number((detail as { unreadCount?: unknown }).unreadCount || 0));
+    const label = `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}`;
+    if (leftHandNotificationsLink instanceof HTMLAnchorElement) {
+      leftHandNotificationsLink.setAttribute("aria-label", unreadCount > 0 ? `Notifications, ${label}` : "Notifications");
+      leftHandNotificationsLink.title = unreadCount > 0 ? `Notifications (${unreadCount > 99 ? "99+" : unreadCount})` : "Notifications";
+    }
     if (leftHandNotificationBadge instanceof HTMLElement) {
       leftHandNotificationBadge.hidden = unreadCount <= 0;
       leftHandNotificationBadge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
-      leftHandNotificationBadge.setAttribute("aria-label", `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}`);
+      leftHandNotificationBadge.setAttribute("aria-label", label);
     }
   }, { signal });
   void syncLeftHandAuthState();
