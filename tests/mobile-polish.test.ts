@@ -177,11 +177,11 @@ test("application pages use shared width primitives after the top-nav migration"
 	assert.match(global, /\.responsive-card-grid\s*{[^}]*repeat\(auto-fit, minmax\(min\(100%, var\(--card-grid-min\)\), 1fr\)\)/s);
 	assert.match(global, /@media \(max-width: 900px\)\s*{[\s\S]*?\.app-page--standard,[\s\S]*?\.app-page--form\s*{[^}]*--app-page-max: none;/s);
 
-	for (const source of [readingLife, search, books, author, collections, admin, adminPerformance]) {
+	for (const source of [readingLife, search, books, author, collections, admin, adminPerformance, following, journal, mission]) {
 		assert.match(source, /app-page app-page--wide/);
 	}
 
-	for (const source of [notifications, following, journal]) {
+	for (const source of [notifications]) {
 		assert.match(source, /app-page app-page--standard/);
 		assert.match(source, /max-width: var\(--app-page-max\);/);
 	}
@@ -189,7 +189,7 @@ test("application pages use shared width primitives after the top-nav migration"
 	assert.match(settings, /app-page app-page--form/);
 	assert.match(settings, /max-width: var\(--app-page-max\);/);
 
-	for (const source of [privacy, support, mission]) {
+	for (const source of [privacy, support]) {
 		assert.match(source, /app-page app-page--reading/);
 		assert.match(source, /max-width: var\(--app-page-max\);/);
 	}
@@ -200,7 +200,7 @@ test("application pages use shared width primitives after the top-nav migration"
 	assert.match(readingLife, /\.current-books ul\s*{[^}]*repeat\(auto-fill, minmax\(min\(100%, 15\.5rem\), 1fr\)\)/s);
 	assert.match(search, /\.search-results\s*{[^}]*repeat\(auto-fill, minmax\(min\(100%, var\(--book-grid-min\)\), 1fr\)\)/s);
 	assert.match(overview, /Application pages choose one of the shared page-width primitives/);
-	assert.match(overview, /`app-page--wide` is for browsing, dashboards, catalog detail, metrics, profile compositions, and admin work surfaces/);
+	assert.match(overview, /`app-page--wide` is for browsing, dashboards, catalog detail, metrics, profile compositions, reader workspaces, community grids, mission-style pages, and admin work surfaces/);
 	assert.match(overview, /`app-page--reading` is for prose-first public or account pages/);
 });
 

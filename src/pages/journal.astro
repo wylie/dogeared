@@ -117,7 +117,7 @@ const sectionLinks = viewerUserId ? [
 ---
 
 <Layout title="Reading Journal" sectionLinks={sectionLinks} metaDescription="Search and write your private DogEared reading journal." canonicalUrl="/journal" robots="noindex,nofollow">
-	<div slot="right" class="journal-page app-page app-page--standard">
+	<div slot="right" class="journal-page app-page app-page--wide">
 		<nav class="breadcrumbs" aria-label="Breadcrumb">
 			<a href="/">Home</a><span aria-hidden="true">/</span><span>Reading Journal</span>
 		</nav>
@@ -129,7 +129,7 @@ const sectionLinks = viewerUserId ? [
 				<a class="primary-link" href={`/?next=${encodeURIComponent("/journal")}`}>Log in</a>
 			</section>
 		) : (
-			<>
+			<div class="journal-layout">
 				<section class="journal-hero" id="journal-search">
 					<div class="journal-hero-head">
 						<div>
@@ -164,15 +164,16 @@ const sectionLinks = viewerUserId ? [
 					<script type="application/json" id="journal-owned-books-data" set:html={JSON.stringify(ownedBookOptions.map((book) => ({ ...book, label: bookLabel(book) })))}></script>
 				</section>
 
-				<section class="journal-editor" id="new-entry" data-guided-anchor="journal-entry-form" aria-labelledby="journal-editor-title" tabindex="-1">
-					<div class="journal-results-head">
-						<div>
-							<p class="journal-eyebrow">Private entry</p>
-							<h2 id="journal-editor-title">New Entry</h2>
+				<div class="journal-main-stack">
+					<section class="journal-editor" id="new-entry" data-guided-anchor="journal-entry-form" aria-labelledby="journal-editor-title" tabindex="-1">
+						<div class="journal-results-head">
+							<div>
+								<p class="journal-eyebrow">Private entry</p>
+								<h2 id="journal-editor-title">New Entry</h2>
+							</div>
+							<p data-editor-mode>New entry</p>
 						</div>
-						<p data-editor-mode>New entry</p>
-					</div>
-					<form class="journal-entry-form" data-journal-entry-form>
+						<form class="journal-entry-form" data-journal-entry-form>
 						<input type="hidden" name="id" value="" />
 						<div class="journal-grid-two">
 							<label><span>Title <em>optional</em></span><input type="text" name="entryTitle" maxlength="160" placeholder="A thought to remember" /></label>
@@ -214,10 +215,10 @@ const sectionLinks = viewerUserId ? [
 								<p class="journal-count" data-journal-count>0 characters</p>
 							</div>
 						</div>
-					</form>
-				</section>
+						</form>
+					</section>
 
-				<section class="journal-results" id="journal-entries">
+					<section class="journal-results" id="journal-entries">
 					<div class="journal-results-head">
 						<h2>{query || filterBookId || filterDate ? "Filtered Entries" : "Journal Timeline"}</h2>
 						<p>Newest first · page {currentPage.toLocaleString()}</p>
@@ -304,8 +305,9 @@ const sectionLinks = viewerUserId ? [
 							)}
 						</>
 					)}
-				</section>
-			</>
+					</section>
+				</div>
+			</div>
 		)}
 	</div>
 </Layout>
@@ -480,7 +482,27 @@ const sectionLinks = viewerUserId ? [
 	.breadcrumbs a, .journal-entry-meta a { color: var(--color-nav); text-decoration: none; }
 	.breadcrumbs a:hover, .journal-entry-meta a:hover { color: var(--color-nav-hover); text-decoration: underline; text-underline-offset: 2px; }
 	.journal-state-card, .journal-hero, .journal-editor, .journal-results { border: var(--border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-raised); padding: clamp(0.9rem, 2vw, 1.2rem); }
-	.journal-hero, .journal-editor, .journal-results { margin-top: 1rem; }
+	.journal-layout {
+		display: grid;
+		grid-template-columns: minmax(0, 1.85fr) minmax(18rem, 0.72fr);
+		gap: clamp(0.9rem, 1.8vw, 1.25rem);
+		align-items: start;
+		margin-top: 1rem;
+	}
+	.journal-main-stack {
+		grid-column: 1;
+		grid-row: 1;
+		display: grid;
+		gap: 1rem;
+		min-width: 0;
+	}
+	.journal-hero {
+		grid-column: 2;
+		grid-row: 1;
+		position: sticky;
+		top: calc(var(--mobile-sticky-offset, 0px) + 1rem);
+		min-width: 0;
+	}
 	.journal-hero-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: start; }
 	.journal-eyebrow { margin: 0 0 0.25rem; color: var(--color-text-subtle); font-size: 0.78rem; font-weight: 760; text-transform: uppercase; letter-spacing: 0; }
 	.journal-state-card h1, .journal-hero h1, .journal-editor h2, .journal-results h2 { margin: 0 0 0.45rem; }
@@ -502,6 +524,9 @@ const sectionLinks = viewerUserId ? [
 		grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.72fr) minmax(145px, 0.42fr) auto;
 		gap: 0.75rem;
 		align-items: end;
+	}
+	.journal-layout .journal-search-form {
+		grid-template-columns: 1fr;
 	}
 	.journal-field {
 		display: grid;
@@ -554,6 +579,10 @@ const sectionLinks = viewerUserId ? [
 		align-items: end;
 		justify-content: flex-end;
 	}
+	.journal-layout .journal-search-actions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 	.journal-search-form .journal-button {
 		min-height: 44px;
 		align-self: end;
@@ -580,10 +609,30 @@ const sectionLinks = viewerUserId ? [
 	.journal-empty-state p { margin: 0.3rem 0; color: var(--color-text-muted); line-height: 1.45; }
 	.journal-tags { list-style: none; display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0; margin: 0.45rem 0; }
 	.journal-tags li { border-radius: 999px; background: var(--color-chip-topic); color: var(--color-nav); padding: 0.18rem 0.5rem; font-size: 0.78rem; font-weight: 760; }
+	@media (max-width: 980px) {
+		.journal-layout {
+			grid-template-columns: 1fr;
+		}
+		.journal-hero,
+		.journal-main-stack {
+			grid-column: 1;
+			grid-row: auto;
+		}
+		.journal-hero {
+			position: static;
+		}
+		.journal-layout .journal-search-form {
+			grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.72fr) minmax(145px, 0.42fr) auto;
+		}
+		.journal-layout .journal-search-actions {
+			display: flex;
+		}
+	}
 	@media (max-width: 680px) {
 		.journal-hero-head { grid-template-columns: 1fr; gap: 0.7rem; }
-		.journal-search-form, .journal-grid-two, .position-row { grid-template-columns: 1fr; }
-		.journal-search-actions { display: grid; grid-template-columns: 1fr 1fr; }
+		.journal-search-form, .journal-layout .journal-search-form, .journal-grid-two, .position-row { grid-template-columns: 1fr; }
+		.journal-search-actions,
+		.journal-layout .journal-search-actions { display: grid; grid-template-columns: 1fr 1fr; }
 		.journal-search-actions .journal-button, .journal-hero-head .journal-button { width: 100%; }
 		.journal-actions, .journal-action-buttons, .journal-form-meta { align-items: stretch; flex-direction: column; }
 		.journal-actions { gap: 0.65rem; }

@@ -38,6 +38,7 @@ test("signed-in header keeps personal, discovery, and account destinations organ
 	assert.match(primaryList, /data-split-menu/);
 	assert.match(primaryList, /class=\{`split-nav-link/);
 	assert.match(primaryList, /aria-label="Open Discover menu"/);
+	assert.match(primaryList, /aria-haspopup="menu"/);
 	assert.match(primaryList, /discoverMenuItems\.map/);
 	assert.doesNotMatch(primaryList, /discoverNavItems\.map/);
 	assert.match(primaryList, /primaryPersonalNavItems/);
@@ -65,6 +66,9 @@ test("signed-in header keeps personal, discovery, and account destinations organ
 	assert.doesNotMatch(accountMenu, /left-hand-notifications-item/);
 	assert.doesNotMatch(primaryList, /left-hand-profile-item/);
 	assert.doesNotMatch(primaryList, /left-hand-notifications-item/);
+	assert.match(nav, /\.nav-group > ul\.split-menu-list\[hidden\]\s*{\s*display: none;/);
+	assert.match(nav, /document\.addEventListener\("astro:before-swap", \(\) => \{\s*closeSplitMenus\(\);/);
+	assert.match(nav, /document\.addEventListener\("astro:page-load", \(\) => \{\s*closeSplitMenus\(\);/);
 });
 
 test("profile stays focused on reader identity and current reading state", () => {

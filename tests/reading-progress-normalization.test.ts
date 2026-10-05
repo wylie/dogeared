@@ -136,6 +136,16 @@ test("profile progress feedback collapses when no message is visible", () => {
 	assert.doesNotMatch(hiddenFeedbackStyle, /visibility\s*:\s*hidden/);
 });
 
+test("profile exposes stable progress editor anchors for home deep links", () => {
+	const profile = readFileSync("src/pages/profile/[username].astro", "utf8");
+
+	assert.match(profile, /id=\{`progress-\$\{item\.bookId\}`\}/);
+	assert.match(profile, /scroll-margin-top: calc\(var\(--mobile-sticky-offset, 0px\) \+ 5\.5rem\);/);
+	assert.equal(profile.includes("const progressHashPattern = /^progress-[0-9]+$/;"), true);
+	assert.match(profile, /document\.getElementById\(hash\) \|\| document\.getElementById\("currently-reading"\)/);
+	assert.match(profile, /onDogearedPageLoad\("profile-progress-anchor"/);
+});
+
 test("profile progress updater uses shared canonical progress normalization", () => {
 	const source = readFileSync("src/pages/profile/[username].astro", "utf8");
 	assert.equal(source.includes('import { normalizeProgressUpdateInput } from "../../lib/readingProgress.ts";'), true);

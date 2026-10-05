@@ -36,10 +36,14 @@ test("home hero can show an authenticated Continue Reading companion", () => {
 	assert.match(source, /continue-reading-panel/);
 	assert.match(source, /Continue Reading/);
 	assert.match(source, /session\?\.userId[\s\S]+user_reading_progress_event/);
+	assert.match(source, /join app_user au on au\.id = ub\.user_id/);
 	assert.match(source, /order by latest_progress\.recorded_at desc nulls last, ub\.updated_at desc nulls last, ub\.first_added_at desc nulls last, b\.id asc/);
 	assert.match(source, /limit 1/);
 	assert.match(source, /resolvedCatalogCoverUrl/);
-	assert.match(source, /href: `\/book\?bookId=\$\{encodeURIComponent\(String\(bookId\)\)\}#reading-journal`/);
+	assert.match(source, /const profileProgressHref = username && bookId > 0/);
+	assert.match(source, /`\/profile\/\$\{encodeURIComponent\(username\)\}#progress-\$\{encodeURIComponent\(String\(bookId\)\)\}`/);
+	assert.match(source, /: "\/profile#currently-reading"/);
+	assert.match(source, /href: profileProgressHref/);
 	assert.match(source, /progressLabel\(currentPage, totalPages\)/);
 	assert.match(source, /continueReadingBook &&/);
 	assert.doesNotMatch(panelSource, /ShelfDropdown/);

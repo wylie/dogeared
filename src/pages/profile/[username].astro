@@ -1846,7 +1846,7 @@ const profilePerformanceTelemetry = {
 												);
 											})()}
 											{isOwnerViewer && (
-												<div class="progress-inline">
+												<div class="progress-inline" id={`progress-${item.bookId}`} tabindex="-1">
 													<label class="progress-inline-label" for={`progress-inline-${item.bookId}`}>Update progress</label>
 													<div class="progress-inline-controls">
 														<label class="progress-format-label">
@@ -3389,6 +3389,8 @@ const profilePerformanceTelemetry = {
 	}
 	.progress-inline {
 		margin-top: 0.28rem;
+		border-radius: var(--radius-sm);
+		scroll-margin-top: calc(var(--mobile-sticky-offset, 0px) + 5.5rem);
 	}
 	.momentum-panel {
 		margin-top: 0.55rem;
@@ -3542,6 +3544,13 @@ const profilePerformanceTelemetry = {
 		border-radius: var(--radius-sm);
 		background: rgba(255, 255, 255, 0.56);
 		box-sizing: border-box;
+		transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+	}
+	.progress-inline:target .progress-inline-controls,
+	.progress-inline[data-progress-highlight="true"] .progress-inline-controls {
+		border-color: rgba(31, 122, 69, 0.48);
+		background: rgba(238, 246, 234, 0.72);
+		box-shadow: 0 0 0 3px rgba(31, 122, 69, 0.12);
 	}
 	.progress-format-label {
 		grid-area: format;
@@ -6221,6 +6230,52 @@ const profilePerformanceTelemetry = {
 	}
 	applyShelfSectionOrderToDom(shelfSectionOrder);
 	syncLeftNavShelfOrder(shelfSectionOrder);
+</script>
+<script type="module">
+	import { onDogearedPageLoad } from "../../lib/pageLifecycle.ts";
+
+	onDogearedPageLoad("profile-progress-anchor", () => {
+		let highlightTimer = 0;
+		let scrollTimer = 0;
+		const progressHashPattern = /^progress-[0-9]+$/;
+
+		const resolveTarget = () => {
+			const hash = decodeURIComponent(String(window.location.hash || "").replace(/^#/, ""));
+			if (!progressHashPattern.test(hash)) return null;
+			return document.getElementById(hash) || document.getElementById("currently-reading");
+		};
+
+		const clearHighlight = () => {
+			if (highlightTimer) window.clearTimeout(highlightTimer);
+			for (const node of Array.from(document.querySelectorAll("[data-progress-highlight]"))) {
+				if (node instanceof HTMLElement) node.removeAttribute("data-progress-highlight");
+			}
+		};
+
+		const scrollToProgressTarget = () => {
+			const target = resolveTarget();
+			if (!(target instanceof HTMLElement)) return;
+			window.requestAnimationFrame(() => {
+				target.scrollIntoView({ block: "start", inline: "nearest" });
+				clearHighlight();
+				if (target.classList.contains("progress-inline")) {
+					target.dataset.progressHighlight = "true";
+					highlightTimer = window.setTimeout(() => {
+						target.removeAttribute("data-progress-highlight");
+					}, 1800);
+				}
+			});
+		};
+
+		scrollTimer = window.setTimeout(scrollToProgressTarget, 0);
+		window.addEventListener("hashchange", scrollToProgressTarget);
+
+		return () => {
+			window.clearTimeout(scrollTimer);
+			window.removeEventListener("hashchange", scrollToProgressTarget);
+			clearHighlight();
+		};
+	});
 </script>
 <script type="module">
 	const page = document.querySelector(".public-profile-page");

@@ -153,6 +153,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
             type="button"
             class={`split-menu-button${discoverMenuActive ? " active" : ""}`}
             aria-label="Open Discover menu"
+            aria-haspopup="menu"
             aria-expanded="false"
             aria-controls="left-hand-discover-menu"
             data-split-menu-trigger
@@ -455,7 +456,8 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     display: grid;
     gap: 0.12rem;
   }
-  .split-menu-list[hidden] {
+  .split-menu-list[hidden],
+  .nav-group > ul.split-menu-list[hidden] {
     display: none;
   }
 
@@ -569,9 +571,15 @@ const navMenuTriggerClass = (items: NavItem[]) =>
   }
 
   .split-menu-button span {
+    display: inline-block;
     color: var(--color-text-subtle);
     font-size: 0.7rem;
     line-height: 1;
+    transition: transform 140ms ease;
+  }
+
+  .split-menu-button[aria-expanded="true"] span {
+    transform: rotate(180deg);
   }
 
   .utility-icon-button {
@@ -1617,6 +1625,14 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     for (const menu of Array.from(leftHandNav.querySelectorAll("details[open]"))) {
       if (menu instanceof HTMLDetailsElement) menu.open = false;
     }
+    closeSplitMenus();
+  }, { signal });
+
+  document.addEventListener("astro:before-swap", () => {
+    closeSplitMenus();
+  }, { signal });
+
+  document.addEventListener("astro:page-load", () => {
     closeSplitMenus();
   }, { signal });
 

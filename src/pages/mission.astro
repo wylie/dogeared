@@ -50,7 +50,7 @@ const missionStructuredData = JSON.stringify([
 	canonicalUrl="/mission"
 	structuredData={missionStructuredData}
 >
-	<div slot="right" class="mission-page app-page app-page--reading">
+	<div slot="right" class="mission-page app-page app-page--wide">
 		<header class="mission-hero">
 			<h1>A reading life with less noise, more memory, and better taste.</h1>
 			<p class="lede">
@@ -59,88 +59,90 @@ const missionStructuredData = JSON.stringify([
 			</p>
 		</header>
 
-		<section id="why" class="mission-section mission-card">
-			<h2>Why DogEared</h2>
-			<p>
-				Most reading tools are good at collecting data and much worse at helping someone stay close to the reason
-				they read in the first place. DogEared is meant to feel smaller, calmer, and more personal than that.
-			</p>
-			<p>
-				It should be easy to remember what moved you, what you want to read next, and how your taste is changing
-				over time. That is the job. Everything else is secondary.
-			</p>
-			<p>
-				DogEared does not use an algorithmic feed to decide what books you should care about. It shows you books
-				that other readers on DogEared are actually reading, saving, and finishing.
-			</p>
-		</section>
+		<div class="mission-content-grid">
+			<section id="why" class="mission-section mission-card">
+				<h2>Why DogEared</h2>
+				<p>
+					Most reading tools are good at collecting data and much worse at helping someone stay close to the reason
+					they read in the first place. DogEared is meant to feel smaller, calmer, and more personal than that.
+				</p>
+				<p>
+					It should be easy to remember what moved you, what you want to read next, and how your taste is changing
+					over time. That is the job. Everything else is secondary.
+				</p>
+				<p>
+					DogEared does not use an algorithmic feed to decide what books you should care about. It shows you books
+					that other readers on DogEared are actually reading, saving, and finishing.
+				</p>
+			</section>
 
-		<section id="broken" class="mission-section mission-card">
-			<h2>What Feels Broken Elsewhere</h2>
-			<p>
-				Too many platforms are built to optimize engagement instead of usefulness. They push volume over reflection,
-				rank visibility over taste, and turn reading into something performative.
-			</p>
-			<p>
-				Books do not need more churn around them. Readers do not need more pressure to brand themselves. A reading
-				product should help people notice, remember, choose, and return.
-			</p>
-		</section>
+			<section id="broken" class="mission-section mission-card">
+				<h2>What Feels Broken Elsewhere</h2>
+				<p>
+					Too many platforms are built to optimize engagement instead of usefulness. They push volume over reflection,
+					rank visibility over taste, and turn reading into something performative.
+				</p>
+				<p>
+					Books do not need more churn around them. Readers do not need more pressure to brand themselves. A reading
+					product should help people notice, remember, choose, and return.
+				</p>
+			</section>
 
-		<section id="principles" class="mission-section mission-card">
-			<h2>Principles</h2>
-			<ul class="principles">
-				<li>
-					<strong>Transparency matters.</strong> Readers should understand why they are seeing a book, how the product
-					works, and what data is being used.
-				</li>
-				<li>
-					<strong>Privacy is part of the product.</strong> DogEared should respect reader data, keep collection narrow,
-					and avoid treating personal reading history like ad inventory.
-				</li>
-				<li>
-					<strong>Your data belongs to you.</strong> The books you save, the progress you track, and the profile you build
-					should stay under your control.
-				</li>
-				<li>
-					<strong>Reader first.</strong> The product should serve the person reading, not an advertiser, growth loop,
-					or recommendation engine.
-				</li>
-				<li>
-					<strong>Useful over addictive.</strong> A tool can be quiet and still be valuable. The goal is return value,
-					not compulsion.
-				</li>
-				<li>
-					<strong>Simplicity matters.</strong> The interface should stay legible, respectful, and easy to live with.
-				</li>
-				<li>
-					<strong>Accessibility is non-negotiable.</strong> DogEared should use semantic, keyboard-friendly, screen-reader-friendly patterns so every reader can use the product with dignity.
-				</li>
-				<li>
-					<strong>Taste is personal.</strong> Discovery should widen possibility, not flatten everyone into the same feed.
-				</li>
-				<li>
-					<strong>Discovery should come from readers.</strong> DogEared should surface what real readers here are picking
-					up and enjoying, not what an opaque recommendation algorithm decides to push.
-				</li>
-				<li>
-					<strong>Books are for everyone.</strong> No gatekeeping, no prestige performance, no assumption that one kind
-					of reader matters more than another.
-				</li>
-			</ul>
-		</section>
+			<section id="principles" class="mission-section mission-card mission-principles-card">
+				<h2>Principles</h2>
+				<ul class="principles">
+					<li>
+						<strong>Transparency matters.</strong> Readers should understand why they are seeing a book, how the product
+						works, and what data is being used.
+					</li>
+					<li>
+						<strong>Privacy is part of the product.</strong> DogEared should respect reader data, keep collection narrow,
+						and avoid treating personal reading history like ad inventory.
+					</li>
+					<li>
+						<strong>Your data belongs to you.</strong> The books you save, the progress you track, and the profile you build
+						should stay under your control.
+					</li>
+					<li>
+						<strong>Reader first.</strong> The product should serve the person reading, not an advertiser, growth loop,
+						or recommendation engine.
+					</li>
+					<li>
+						<strong>Useful over addictive.</strong> A tool can be quiet and still be valuable. The goal is return value,
+						not compulsion.
+					</li>
+					<li>
+						<strong>Simplicity matters.</strong> The interface should stay legible, respectful, and easy to live with.
+					</li>
+					<li>
+						<strong>Accessibility is non-negotiable.</strong> DogEared should use semantic, keyboard-friendly, screen-reader-friendly patterns so every reader can use the product with dignity.
+					</li>
+					<li>
+						<strong>Taste is personal.</strong> Discovery should widen possibility, not flatten everyone into the same feed.
+					</li>
+					<li>
+						<strong>Discovery should come from readers.</strong> DogEared should surface what real readers here are picking
+						up and enjoying, not what an opaque recommendation algorithm decides to push.
+					</li>
+					<li>
+						<strong>Books are for everyone.</strong> No gatekeeping, no prestige performance, no assumption that one kind
+						of reader matters more than another.
+					</li>
+				</ul>
+			</section>
 
-		<section id="vision" class="mission-section mission-card">
-			<h2>Long-Term Vision</h2>
-			<p>
-				DogEared should become a trustworthy home base for readers: part notebook, part shelf, part discovery tool.
-				Not massive, not loud, not trying to dominate your time.
-			</p>
-			<p>
-				If it succeeds, it will not be because it kept people scrolling. It will be because it helped them build a
-				richer relationship with books and made that process feel more thoughtful, more generous, and more their own.
-			</p>
-		</section>
+			<section id="vision" class="mission-section mission-card">
+				<h2>Long-Term Vision</h2>
+				<p>
+					DogEared should become a trustworthy home base for readers: part notebook, part shelf, part discovery tool.
+					Not massive, not loud, not trying to dominate your time.
+				</p>
+				<p>
+					If it succeeds, it will not be because it kept people scrolling. It will be because it helped them build a
+					richer relationship with books and made that process feel more thoughtful, more generous, and more their own.
+				</p>
+			</section>
+		</div>
 	</div>
 </Layout>
 
@@ -151,12 +153,13 @@ const missionStructuredData = JSON.stringify([
 
 	.mission-card {
 		background: var(--color-surface);
-		border-radius: 16px;
+		border-radius: var(--radius-lg);
 		padding: 1.1rem 1.2rem;
 	}
 
 	.mission-hero {
-		margin-bottom: 1.5rem;
+		margin-bottom: 1.2rem;
+		max-width: 64rem;
 	}
 
 	.eyebrow {
@@ -172,6 +175,7 @@ const missionStructuredData = JSON.stringify([
 		margin: 0;
 		line-height: 1.02;
 		font-size: clamp(2.2rem, 4vw, 3.9rem);
+		max-width: 16ch;
 	}
 
 	.lede {
@@ -182,9 +186,22 @@ const missionStructuredData = JSON.stringify([
 		color: #4d4d4d;
 	}
 
+	.mission-content-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1.45fr) minmax(18rem, 0.82fr);
+		gap: clamp(0.9rem, 1.8vw, 1.25rem);
+		align-items: start;
+	}
+
 	.mission-section {
-		margin-top: 1.6rem;
-		max-width: 50rem;
+		margin-top: 0;
+		min-width: 0;
+		max-width: none;
+	}
+
+	.mission-principles-card {
+		grid-column: 2;
+		grid-row: 1 / span 3;
 	}
 
 	.mission-section h2 {
@@ -193,6 +210,7 @@ const missionStructuredData = JSON.stringify([
 
 	.mission-section p {
 		margin: 0.55rem 0 0;
+		max-width: 66ch;
 		line-height: 1.65;
 		color: #353535;
 	}
@@ -204,8 +222,22 @@ const missionStructuredData = JSON.stringify([
 
 	.principles li {
 		margin: 0.55rem 0;
+		max-width: 46ch;
 		line-height: 1.55;
 		color: #353535;
+	}
+
+	@media (max-width: 980px) {
+		.mission-content-grid {
+			grid-template-columns: 1fr;
+		}
+		.mission-principles-card {
+			grid-column: auto;
+			grid-row: auto;
+		}
+		.principles li {
+			max-width: 66ch;
+		}
 	}
 
 	@media (max-width: 860px) {

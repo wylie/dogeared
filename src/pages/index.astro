@@ -37,6 +37,7 @@ function renderStars(value: number) {
 
 type ContinueReadingRow = {
 	book_id: number;
+	username: string;
 	title: string;
 	primary_author: string;
 	book_cover_url: string;
@@ -147,6 +148,7 @@ try {
 			? timedSsr("continue reading", () => sql<ContinueReadingRow[]>`
 				select
 					b.id as book_id,
+					coalesce(nullif(trim(au.username), ''), '') as username,
 					b.title,
 					b.primary_author,
 					coalesce(nullif(trim(b.cover_url), ''), '') as book_cover_url,
@@ -159,6 +161,7 @@ try {
 					coalesce(ub.first_added_at::text, ub.updated_at::text) as first_added_at
 				from user_book ub
 				join book b on b.id = ub.book_id
+				join app_user au on au.id = ub.user_id
 				left join book_work bw on bw.id = b.work_id
 				left join lateral (
 					select case
@@ -211,6 +214,10 @@ try {
 		const bookId = Math.max(0, Number(currentBook.book_id || 0) || 0);
 		const currentPage = Math.max(0, Number(currentBook.current_page || 0) || 0);
 		const totalPages = Math.max(0, Number(currentBook.total_pages || 0) || 0);
+		const username = String(currentBook.username || "").trim();
+		const profileProgressHref = username && bookId > 0
+			? `/profile/${encodeURIComponent(username)}#progress-${encodeURIComponent(String(bookId))}`
+			: "/profile#currently-reading";
 		continueReadingBook = {
 			bookId,
 			title: String(currentBook.title || "Untitled book").trim() || "Untitled book",
@@ -224,7 +231,7 @@ try {
 			totalPages,
 			progressPercent: progressPercent(currentPage, totalPages),
 			progressLabel: progressLabel(currentPage, totalPages),
-			href: `/book?bookId=${encodeURIComponent(String(bookId))}#reading-journal`
+			href: profileProgressHref
 		};
 	}
 	if (session?.userId && (sections.length > 0 || featuredCollections.length > 0 || (recommendedSection?.books.length || 0) > 0)) {

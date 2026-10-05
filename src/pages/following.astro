@@ -63,7 +63,7 @@ const sectionLinks = [
 ---
 
 <Layout title="Following" sectionLinks={sectionLinks} robots="noindex,nofollow">
-	<div slot="right" class="feed-page app-page app-page--standard">
+	<div slot="right" class="feed-page app-page app-page--wide">
 		<header class="feed-header">
 			<h1>Following</h1>
 			<p>Recent shelf activity from readers you follow.</p>
@@ -115,7 +115,7 @@ const sectionLinks = [
 						<p>Your followed readers have not posted recent activity yet. Follow a few more readers or check back after your next reading update.</p>
 					</div>
 				) : (
-					<ul class="activity-grid">
+					<ul class="activity-grid responsive-book-grid">
 						{activity.map((item) => (
 							<BookCard
 								title={item.title}
@@ -250,6 +250,22 @@ const sectionLinks = [
 		color: #444;
 		overflow-wrap: anywhere;
 	}
+	.people-strip {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 18rem));
+		gap: 0.75rem;
+		justify-content: start;
+		align-items: stretch;
+	}
+	.feed-page :global(.people-strip-card) {
+		min-width: 0;
+	}
+	.feed-page :global(.people-strip-card p) {
+		overflow-wrap: anywhere;
+	}
 	.feed-activity h2 {
 		margin-bottom: 0.6rem;
 	}
@@ -262,7 +278,8 @@ const sectionLinks = [
 		gap: 0.75rem;
 	}
 	.activity-grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
+		--book-grid-min: 18.5rem;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--book-grid-min)), 1fr));
 		align-items: stretch;
 		row-gap: 0.75rem;
 		column-gap: 0.75rem;
@@ -523,17 +540,15 @@ const sectionLinks = [
 	.following-management-grid {
 		list-style: none;
 		margin: 0;
-		padding: 0 0 0.2rem;
-		display: flex;
-		flex-wrap: nowrap;
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
 		gap: 0.75rem;
-		overflow-x: auto;
 		max-width: 100%;
-		scroll-snap-type: x proximity;
+		align-items: stretch;
 	}
 	.following-management-card {
-		flex: 0 0 min(255px, 82vw);
-		max-width: min(255px, 82vw);
+		max-width: none;
 		min-height: 220px;
 	}
 	@media (max-width: 740px) {
