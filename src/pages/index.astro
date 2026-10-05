@@ -10,6 +10,7 @@ import { formatPublishedLabel, resolvePublicHomeSections, type BrowseSection } f
 import { loadFeaturedCollections, type CollectionDetail } from "../lib/collections";
 import { loadRecommendedForUser, loadPopularFallbackRecommendations, type RecommendationSection } from "../lib/recommendations";
 import { loadGuidedTourStatus } from "../lib/guidedTour";
+import { resolvedCatalogCoverUrl } from "../lib/catalogCovers";
 
 export const prerender = false;
 const shouldProfileHome = import.meta.env.DEV;
@@ -34,6 +35,48 @@ function renderStars(value: number) {
 	return Array.from({ length: 5 }, (_, index) => (index < rounded ? "★" : "☆")).join("");
 }
 
+type ContinueReadingRow = {
+	book_id: number;
+	title: string;
+	primary_author: string;
+	book_cover_url: string;
+	edition_cover_url: string;
+	work_cover_url: string;
+	current_page: number;
+	total_pages: number;
+	progress_updated_at: string | null;
+	shelf_updated_at: string;
+	first_added_at: string;
+};
+
+type ContinueReadingBook = {
+	bookId: number;
+	title: string;
+	author: string;
+	thumbnail: string;
+	currentPage: number;
+	totalPages: number;
+	progressPercent: number;
+	progressLabel: string;
+	href: string;
+};
+
+function progressPercent(currentPage: unknown, totalPages: unknown) {
+	const current = Math.max(0, Number(currentPage || 0) || 0);
+	const total = Math.max(0, Number(totalPages || 0) || 0);
+	if (total <= 0) return 0;
+	return Math.max(0, Math.min(100, Math.round((current / total) * 100)));
+}
+
+function progressLabel(currentPage: unknown, totalPages: unknown) {
+	const current = Math.max(0, Number(currentPage || 0) || 0);
+	const total = Math.max(0, Number(totalPages || 0) || 0);
+	const percent = progressPercent(current, total);
+	if (total > 0 && percent > 0) return `${percent}% read`;
+	if (current > 0) return `Page ${current}`;
+	return "Progress not recorded yet";
+}
+
 let session: Awaited<ReturnType<typeof resolveUserBySession>> = null;
 try {
 	session = await timedSsr("session", () => resolveUserBySession(Astro.request));
@@ -52,6 +95,7 @@ type ShelfIdea = {
 let sections: BrowseSection[] = [];
 let featuredCollections: CollectionDetail[] = [];
 let recommendedSection: RecommendationSection | null = null;
+let continueReadingBook: ContinueReadingBook | null = null;
 let errorMessage = "";
 let viewerStatusByBookId = new Map<number, "want_to_read" | "reading" | "finished">();
 let viewerRatingByBookId = new Map<number, number>();
@@ -93,13 +137,96 @@ const shelfIdeas: ShelfIdea[] = [
 
 try {
 	const sql = getNeonSql();
-	[sections, featuredCollections, recommendedSection] = await Promise.all([
+	const [homeSections, homeCollections, homeRecommendations, continueReadingRows] = await Promise.all([
 		resolvePublicHomeSections({ onTiming: logHomeTiming }),
 		loadFeaturedCollections(sql, 2).catch(() => []),
 		session?.userId
 			? loadRecommendedForUser(sql, session.userId, 8).catch(() => null)
-			: loadPopularFallbackRecommendations(sql, 8).catch(() => null)
+			: loadPopularFallbackRecommendations(sql, 8).catch(() => null),
+		session?.userId
+			? timedSsr("continue reading", () => sql<ContinueReadingRow[]>`
+				select
+					b.id as book_id,
+					b.title,
+					b.primary_author,
+					coalesce(nullif(trim(b.cover_url), ''), '') as book_cover_url,
+					coalesce(nullif(trim(edition_cover.cover_url), ''), '') as edition_cover_url,
+					coalesce(nullif(trim(bw.preferred_cover_url), ''), '') as work_cover_url,
+					coalesce(ub.current_page, 0)::int as current_page,
+					coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages,
+					latest_progress.recorded_at::text as progress_updated_at,
+					ub.updated_at::text as shelf_updated_at,
+					coalesce(ub.first_added_at::text, ub.updated_at::text) as first_added_at
+				from user_book ub
+				join book b on b.id = ub.book_id
+				left join book_work bw on bw.id = b.work_id
+				left join lateral (
+					select case
+						when coalesce(bw.metadata->>'preferredEditionId', bw.metadata->>'preferred_edition_id', '') ~ '^[0-9]+$'
+							then coalesce(bw.metadata->>'preferredEditionId', bw.metadata->>'preferred_edition_id')::bigint
+						else 0::bigint
+					end as edition_id
+				) preferred_edition on true
+				left join lateral (
+					select be.cover_url
+					from book_edition be
+					where be.work_id = coalesce(bw.id, b.work_id)
+						and nullif(trim(be.cover_url), '') is not null
+						and (
+							(ub.edition_id is not null and be.id = ub.edition_id)
+							or (ub.edition_id is null and be.book_id = b.id)
+							or (ub.edition_id is null and preferred_edition.edition_id > 0 and be.id = preferred_edition.edition_id)
+						)
+					order by
+						case
+							when ub.edition_id is not null and be.id = ub.edition_id then 0
+							when ub.edition_id is null and be.book_id = b.id then 1
+							when ub.edition_id is null and preferred_edition.edition_id > 0 and be.id = preferred_edition.edition_id then 2
+							else 9
+						end,
+						be.updated_at desc,
+						be.id desc
+					limit 1
+				) edition_cover on true
+				left join lateral (
+					select pe.recorded_at
+					from user_reading_progress_event pe
+					where pe.user_id = ub.user_id
+						and pe.book_id = ub.book_id
+					order by pe.recorded_at desc, pe.id desc
+					limit 1
+				) latest_progress on true
+				where ub.user_id = ${session.userId}::uuid
+					and ub.status = 'reading'
+				order by latest_progress.recorded_at desc nulls last, ub.updated_at desc nulls last, ub.first_added_at desc nulls last, b.id asc
+				limit 1
+			`).catch(() => [])
+			: Promise.resolve([] as ContinueReadingRow[])
 	]);
+	sections = homeSections;
+	featuredCollections = homeCollections;
+	recommendedSection = homeRecommendations;
+	const currentBook = continueReadingRows[0];
+	if (currentBook) {
+		const bookId = Math.max(0, Number(currentBook.book_id || 0) || 0);
+		const currentPage = Math.max(0, Number(currentBook.current_page || 0) || 0);
+		const totalPages = Math.max(0, Number(currentBook.total_pages || 0) || 0);
+		continueReadingBook = {
+			bookId,
+			title: String(currentBook.title || "Untitled book").trim() || "Untitled book",
+			author: String(currentBook.primary_author || "Unknown author").trim() || "Unknown author",
+			thumbnail: resolvedCatalogCoverUrl({
+				editionCoverUrl: currentBook.edition_cover_url,
+				legacyBookCoverUrl: currentBook.book_cover_url,
+				workCoverUrl: currentBook.work_cover_url
+			}),
+			currentPage,
+			totalPages,
+			progressPercent: progressPercent(currentPage, totalPages),
+			progressLabel: progressLabel(currentPage, totalPages),
+			href: `/book?bookId=${encodeURIComponent(String(bookId))}#reading-journal`
+		};
+	}
 	if (session?.userId && (sections.length > 0 || featuredCollections.length > 0 || (recommendedSection?.books.length || 0) > 0)) {
 		const bookIds = Array.from(new Set(
 			[
@@ -189,10 +316,44 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 	canonicalUrl="/"
 >
 	<div slot="right" class="browse-page app-page app-page--wide" id="browse-page" data-authenticated={String(isAuthenticated)}>
-		<header class="intro" data-guided-anchor="home-intro">
-			<h1><span>Find your next book.</span><span>Keep your reading life your own.</span></h1>
-			<p class="subhead">Browse popular shelves, save what matters, and build your reading history without the noise.</p>
-		</header>
+		<section class={`home-hero${continueReadingBook ? " has-continue-reading" : ""}`}>
+			<header class="intro" data-guided-anchor="home-intro">
+				<h1><span>Find your next book.</span><span>Keep your reading life your own.</span></h1>
+				<p class="subhead">Browse popular shelves, save what matters, and build your reading history without the noise.</p>
+				{!errorMessage && sections.length > 0 && (
+					<nav class="home-jump-links" aria-label="Jump to discovery sections">
+						{sections.map((section) => (
+							<a href={`#${section.id}`}>{section.title}</a>
+						))}
+					</nav>
+				)}
+			</header>
+			{continueReadingBook && (
+				<aside class="continue-reading-panel" aria-labelledby="continue-reading-title">
+					<p class="continue-reading-eyebrow" id="continue-reading-title">Continue Reading</p>
+					<div class="continue-reading-book">
+						<a class="continue-reading-cover-link" href={continueReadingBook.href} aria-label={`Continue reading ${continueReadingBook.title}`}>
+							{continueReadingBook.thumbnail ? (
+								<img src={continueReadingBook.thumbnail} alt="" loading="lazy" decoding="async" width="76" height="114" />
+							) : (
+								<span class="continue-reading-cover-placeholder" aria-hidden="true">menu_book</span>
+							)}
+						</a>
+						<div class="continue-reading-copy">
+							<h2><a href={continueReadingBook.href}>{continueReadingBook.title}</a></h2>
+							<p class="continue-reading-author">{continueReadingBook.author}</p>
+							<div class="continue-reading-progress" aria-label={continueReadingBook.totalPages > 0 ? `${continueReadingBook.currentPage} of ${continueReadingBook.totalPages} pages` : continueReadingBook.progressLabel}>
+								<span>{continueReadingBook.progressLabel}</span>
+								<div class="continue-reading-progress-track" aria-hidden="true">
+									<span style={`width: ${continueReadingBook.progressPercent}%`}></span>
+								</div>
+							</div>
+							<a class="continue-reading-action" href={continueReadingBook.href}>Continue reading <span aria-hidden="true">→</span></a>
+						</div>
+					</div>
+				</aside>
+			)}
+		</section>
 		{shouldShowWelcome && (
 			<section class="onboarding-welcome" data-onboarding-welcome aria-labelledby="onboarding-welcome-title">
 				<div>
@@ -245,14 +406,6 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 				</div>
 			</section>
 		)}
-		{!errorMessage && sections.length > 0 && (
-			<nav class="home-jump-links" aria-label="Jump to discovery sections">
-				{sections.map((section) => (
-					<a href={`#${section.id}`}>{section.title}</a>
-				))}
-			</nav>
-		)}
-
 		{errorMessage && <p class="error">{errorMessage}</p>}
 		{!errorMessage && sections.length === 0 && (
 			<p class="empty">
@@ -535,8 +688,21 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		max-width: 100%;
 	}
 
+	.home-hero {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: clamp(1rem, 2.2vw, 1.8rem);
+		align-items: center;
+		margin-bottom: 1.55rem;
+		min-width: 0;
+	}
+
+	.home-hero.has-continue-reading {
+		grid-template-columns: minmax(0, 1.25fr) minmax(17rem, 0.88fr);
+	}
+
 	.intro {
-		margin-bottom: 2.15rem;
+		margin-bottom: 0;
 		min-width: 0;
 		max-width: 58rem;
 	}
@@ -544,7 +710,7 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		display: flex;
 		flex-wrap: nowrap;
 		gap: 0.45rem;
-		margin: -0.1rem 0 1.2rem;
+		margin: 2rem 0 0;
 		overflow-x: auto;
 		overflow-y: hidden;
 		white-space: nowrap;
@@ -613,6 +779,113 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 		max-width: 44rem;
 		font-size: 1.06rem;
 		line-height: 1.55;
+	}
+
+	.continue-reading-panel {
+		justify-self: stretch;
+		align-self: center;
+		border: var(--border-subtle);
+		border-radius: var(--radius-lg);
+		background: rgba(255, 255, 255, 0.68);
+		box-shadow: var(--shadow-xs);
+		padding: clamp(0.9rem, 1.8vw, 1.1rem);
+		min-width: 0;
+	}
+	.continue-reading-eyebrow {
+		margin: 0 0 0.62rem;
+		color: var(--color-text-subtle);
+		font-size: 0.76rem;
+		font-weight: 780;
+		letter-spacing: 0;
+		text-transform: uppercase;
+	}
+	.continue-reading-book {
+		display: grid;
+		grid-template-columns: 76px minmax(0, 1fr);
+		gap: 0.85rem;
+		align-items: start;
+	}
+	.continue-reading-cover-link,
+	.continue-reading-cover-link img,
+	.continue-reading-cover-placeholder {
+		width: 76px;
+		aspect-ratio: 2 / 3;
+		border-radius: var(--radius-sm);
+	}
+	.continue-reading-cover-link {
+		display: block;
+		background: var(--color-chip-topic);
+		overflow: hidden;
+		box-shadow: 0 7px 18px rgba(29, 49, 64, 0.12);
+	}
+	.continue-reading-cover-link img {
+		display: block;
+		object-fit: cover;
+	}
+	.continue-reading-cover-placeholder {
+		display: grid;
+		place-items: center;
+		font-family: "Material Icons";
+		font-size: 1.35rem;
+		color: var(--color-nav);
+	}
+	.continue-reading-copy {
+		min-width: 0;
+	}
+	.continue-reading-copy h2 {
+		margin: 0;
+		font-size: clamp(1rem, 1.45vw, 1.18rem);
+		line-height: 1.16;
+		font-weight: 760;
+	}
+	.continue-reading-copy h2 a,
+	.continue-reading-action {
+		color: var(--color-nav);
+		text-decoration: none;
+	}
+	.continue-reading-copy h2 a:hover,
+	.continue-reading-copy h2 a:focus-visible,
+	.continue-reading-action:hover,
+	.continue-reading-action:focus-visible {
+		color: var(--color-nav-hover);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.continue-reading-author {
+		margin: 0.28rem 0 0;
+		color: var(--color-text-muted);
+		font-size: 0.9rem;
+		font-weight: 650;
+		line-height: 1.3;
+	}
+	.continue-reading-progress {
+		display: grid;
+		gap: 0.34rem;
+		margin-top: 0.7rem;
+		color: var(--color-text);
+		font-size: 0.86rem;
+		font-weight: 760;
+	}
+	.continue-reading-progress-track {
+		width: 100%;
+		height: 0.46rem;
+		border-radius: var(--radius-pill);
+		background: rgba(87, 117, 144, 0.16);
+		overflow: hidden;
+	}
+	.continue-reading-progress-track span {
+		display: block;
+		height: 100%;
+		border-radius: inherit;
+		background: var(--color-primary);
+	}
+	.continue-reading-action {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.24rem;
+		margin-top: 0.72rem;
+		font-size: 0.88rem;
+		font-weight: 780;
 	}
 
 	.error {
@@ -1277,12 +1550,18 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			max-width: 100%;
 			overflow-x: clip;
 		}
+		.home-hero,
+		.home-hero.has-continue-reading {
+			grid-template-columns: 1fr;
+			gap: 0.85rem;
+			margin-bottom: 1.05rem;
+		}
 		.intro {
-			margin-bottom: 1.15rem;
+			margin-bottom: 0;
 		}
 		.home-jump-links {
 			gap: 0.32rem;
-			margin: -0.15rem 0 0.65rem;
+			margin: 0.85rem 0 0;
 			padding: 0.26rem 0 0.34rem;
 			--home-jump-links-offset: 32px;
 		}
@@ -1308,6 +1587,19 @@ logHomeTiming("total-before-render", performance.now() - homeSsrStarted);
 			font-size: 0.95rem;
 			line-height: 1.38;
 			max-width: 36ch;
+		}
+		.continue-reading-panel {
+			width: min(100%, 28rem);
+			padding: 0.82rem;
+		}
+		.continue-reading-book {
+			grid-template-columns: 58px minmax(0, 1fr);
+			gap: 0.7rem;
+		}
+		.continue-reading-cover-link,
+		.continue-reading-cover-link img,
+		.continue-reading-cover-placeholder {
+			width: 58px;
 		}
 		.browse-section,
 		.recommended-section,

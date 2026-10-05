@@ -53,9 +53,9 @@ test("mobile primary header navigation uses natural item sizing with a consisten
 	assert.match(source, /#left-hand-nav \.nav-destination-cluster,\s*#left-hand-nav \.primary-direct-list,\s*#left-hand-nav \.utility-nav-list\s*{[^}]*flex: 0 0 auto;/s);
 	assert.match(source, /#left-hand-nav \.nav-destination-cluster,\s*#left-hand-nav \.primary-direct-list,\s*#left-hand-nav \.utility-nav-list\s*{[^}]*flex-wrap: nowrap;/s);
 	assert.match(source, /#left-hand-nav \.nav-destination-cluster,\s*#left-hand-nav \.primary-direct-list,\s*#left-hand-nav \.utility-nav-list\s*{[^}]*gap: var\(--mobile-primary-nav-gap\);/s);
-	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger\s*{[^}]*width: auto;/s);
-	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger\s*{[^}]*padding: 0\.38rem 0\.44rem;/s);
-	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger\s*{[^}]*white-space: nowrap;/s);
+	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger,\s*#left-hand-nav \.split-menu-button\s*{[^}]*width: auto;/s);
+	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger,\s*#left-hand-nav \.split-menu-button\s*{[^}]*padding: 0\.38rem 0\.44rem;/s);
+	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger,\s*#left-hand-nav \.split-menu-button\s*{[^}]*white-space: nowrap;/s);
 	assert.match(source, /#left-hand-nav \.utility-icon-button\s*{[^}]*justify-content: center;/s);
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*overflow-x: auto;/s);
 	assert.match(source, /scrollActivePrimaryNavIntoView/);

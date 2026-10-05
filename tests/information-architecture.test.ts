@@ -8,12 +8,16 @@ test("signed-in header keeps personal, discovery, and account destinations organ
 	assert.match(nav, /const routeMatches/);
 	assert.match(nav, /const adminNavItems/);
 	assert.doesNotMatch(nav, /const is[A-Z][A-Za-z]+Page/);
-	const discoverItems = nav.slice(nav.indexOf("const discoverNavItems"), nav.indexOf("const primaryPersonalNavItems"));
+	const discoverItems = nav.slice(nav.indexOf("const discoverLinkItem"), nav.indexOf("const primaryPersonalNavItems"));
+	assert.match(discoverItems, /const discoverLinkItem/);
+	assert.match(discoverItems, /const discoverMenuItems/);
+	assert.match(discoverItems, /const discoverNavItems/);
 	assert.match(discoverItems, /\/discover/);
 	assert.match(discoverItems, /\/books/);
 	assert.match(discoverItems, /\/authors/);
 	assert.match(discoverItems, /aliases: \["\/book"\]/);
 	assert.match(discoverItems, /aliases: \["\/author"\]/);
+	assert.ok(discoverItems.indexOf('href: "/discover"') < discoverItems.indexOf("const discoverMenuItems"));
 
 	const personalItems = nav.slice(nav.indexOf("const primaryPersonalNavItems"), nav.indexOf("const aboutNavItems"));
 	assert.ok(personalItems.indexOf("left-hand-reading-life-item") < personalItems.indexOf("left-hand-journal-item"));
@@ -31,7 +35,11 @@ test("signed-in header keeps personal, discovery, and account destinations organ
 	const utilityItems = nav.slice(nav.indexOf("utility-nav-list"), nav.indexOf("secondary-links-mobile"));
 	assert.match(primaryList, /left-hand-login-item/);
 	assert.match(primaryList, /nav-group-discover/);
-	assert.match(primaryList, /discoverNavItems/);
+	assert.match(primaryList, /data-split-menu/);
+	assert.match(primaryList, /class=\{`split-nav-link/);
+	assert.match(primaryList, /aria-label="Open Discover menu"/);
+	assert.match(primaryList, /discoverMenuItems\.map/);
+	assert.doesNotMatch(primaryList, /discoverNavItems\.map/);
 	assert.match(primaryList, /primaryPersonalNavItems/);
 	assert.match(primaryList, /nav-group-about/);
 	assert.doesNotMatch(nav, /nav-group-explore/);
@@ -57,8 +65,6 @@ test("signed-in header keeps personal, discovery, and account destinations organ
 	assert.doesNotMatch(accountMenu, /left-hand-notifications-item/);
 	assert.doesNotMatch(primaryList, /left-hand-profile-item/);
 	assert.doesNotMatch(primaryList, /left-hand-notifications-item/);
-	assert.doesNotMatch(primaryList, />Books<\/a>/);
-	assert.doesNotMatch(primaryList, />Authors<\/a>/);
 });
 
 test("profile stays focused on reader identity and current reading state", () => {
@@ -114,7 +120,8 @@ test("product documentation records the reorganized responsibilities", () => {
 	assert.match(overview, /What was I thinking while reading\?/);
 	assert.match(overview, /one responsive top navigation/);
 	assert.match(overview, /site-container/);
-	assert.match(overview, /Discover menu groups Discover, Books, and Authors/);
+	assert.match(overview, /Discover is a split control/);
+	assert.match(overview, /child menu for Books and Authors/);
 	assert.match(overview, /Notifications, Profile, and Settings move into a compact utility cluster/);
 	assert.match(features, /Reading Journal is private notebook space/);
 	assert.match(routes, /\/reading-timeline[\s\S]+redirect/i);

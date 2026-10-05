@@ -49,11 +49,14 @@ const navItemAriaCurrent = (item: NavItem) => isNavItemActive(item) ? "page" : u
 const showSectionLinks = (item: NavItem) => isNavItemActive(item) && sectionLinks.length > 0;
 const query = Astro.url.searchParams.get("q") ?? "";
 const normalizedFoundingReaderMode = ["open", "waitlist", "invite_only"].includes(foundingReaderMode) ? foundingReaderMode : "open";
-const discoverNavItems: NavItem[] = [
-  { href: "/discover", label: "Discover" },
+const discoverLinkItem: NavItem = { href: "/discover", label: "Discover" };
+const discoverMenuItems: NavItem[] = [
   { href: "/books", label: "Books", match: "prefix", aliases: ["/book"] },
   { href: "/authors", label: "Authors", match: "prefix", aliases: ["/author"] }
 ];
+const discoverNavItems: NavItem[] = [discoverLinkItem, ...discoverMenuItems];
+const discoverMenuActive = discoverMenuItems.some((item) => isNavItemActive(item));
+const discoverGroupActive = discoverNavItems.some((item) => isNavItemActive(item));
 const primaryPersonalNavItems: NavItem[] = [
   { href: "/reading-life", label: "My Reading Life", id: "left-hand-reading-life-item" },
   { href: "/journal", label: "Reading Journal", id: "left-hand-journal-item" },
@@ -138,10 +141,26 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
     <nav id="left-hand-primary-links" class="primary-links" aria-label="Primary navigation">
       <div class="nav-destination-cluster">
-        <details class="nav-menu nav-group nav-group-discover">
-          <summary class={navMenuTriggerClass(discoverNavItems)}>Discover</summary>
-          <ul>
-            {discoverNavItems.map((item) => (
+        <div class={`split-nav-group nav-group nav-group-discover${discoverGroupActive ? " active" : ""}`} data-split-menu>
+          <a
+            href={navItemHref(discoverLinkItem)}
+            class={`split-nav-link ${navItemClass(discoverLinkItem)}`}
+            aria-current={navItemAriaCurrent(discoverLinkItem)}
+          >
+            <span>{discoverLinkItem.label}</span>
+          </a>
+          <button
+            type="button"
+            class={`split-menu-button${discoverMenuActive ? " active" : ""}`}
+            aria-label="Open Discover menu"
+            aria-expanded="false"
+            aria-controls="left-hand-discover-menu"
+            data-split-menu-trigger
+          >
+            <span aria-hidden="true">▾</span>
+          </button>
+          <ul id="left-hand-discover-menu" class="split-menu-list" data-split-menu-list hidden>
+            {discoverMenuItems.map((item) => (
               <li>
                 <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
                   <span>{item.label}</span>
@@ -149,7 +168,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
               </li>
             ))}
           </ul>
-        </details>
+        </div>
 
         <ul class="primary-direct-list">
           {primaryPersonalNavItems.map((item) => (
@@ -375,6 +394,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
   .primary-direct-list,
   .nav-group > ul,
+  .split-menu-list,
   .header-footer-nav ul,
   .secondary-links-mobile {
     list-style-type: none;
@@ -417,7 +437,8 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     gap: 0.12rem;
   }
 
-  .nav-menu > ul {
+  .nav-menu > ul,
+  .split-menu-list {
     position: absolute;
     top: calc(100% + 0.45rem);
     right: 0;
@@ -429,6 +450,13 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     border-radius: var(--radius-md);
     background: rgba(255, 255, 255, 0.98);
     box-shadow: var(--shadow-popover);
+  }
+  .split-menu-list {
+    display: grid;
+    gap: 0.12rem;
+  }
+  .split-menu-list[hidden] {
+    display: none;
   }
 
   .nav-group-admin > ul {
@@ -507,7 +535,8 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
   .primary-links a,
   .primary-links .nav-text-button,
-  .nav-menu-trigger {
+  .nav-menu-trigger,
+  .split-menu-button {
     display: inline-flex;
     align-items: center;
     min-height: 2.08rem;
@@ -516,6 +545,33 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     line-height: 1.2;
     border-radius: var(--radius-pill);
     white-space: nowrap;
+  }
+
+  .split-nav-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.04rem;
+  }
+
+  .split-nav-link {
+    padding-right: 0.34rem;
+  }
+
+  .split-menu-button {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--color-nav);
+    font: inherit;
+    padding-left: 0.22rem;
+    padding-right: 0.42rem;
+    cursor: pointer;
+  }
+
+  .split-menu-button span {
+    color: var(--color-text-subtle);
+    font-size: 0.7rem;
+    line-height: 1;
   }
 
   .utility-icon-button {
@@ -534,6 +590,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
   }
 
   .nav-menu > ul a,
+  .split-menu-list a,
   .nav-menu > ul .nav-text-button {
     justify-content: flex-start;
     width: 100%;
@@ -592,13 +649,17 @@ const navMenuTriggerClass = (items: NavItem[]) =>
   }
 
   a.active,
-  .nav-menu-trigger.active {
+  .nav-menu-trigger.active,
+  .split-menu-button.active {
     background: var(--color-nav-surface);
     color: var(--color-nav-active);
     text-decoration: none;
     cursor: default;
     border-left: 0;
     font-weight: 700;
+  }
+  .split-menu-button.active {
+    cursor: pointer;
   }
   .section-links-nested a.section-active {
     color: var(--color-nav-active);
@@ -609,6 +670,8 @@ const navMenuTriggerClass = (items: NavItem[]) =>
   .hover:hover,
   .hover:focus-visible,
   .nav-menu-trigger:hover,
+  .split-menu-button:hover,
+  .split-menu-button:focus-visible,
   .utility-icon-button:hover,
   .utility-icon-button:focus-visible,
   .nav-menu-trigger:focus-visible {
@@ -619,7 +682,8 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
   .primary-links a:focus-visible,
   .primary-links .nav-text-button:focus-visible,
-  .nav-menu-trigger:focus-visible {
+  .nav-menu-trigger:focus-visible,
+  .split-menu-button:focus-visible {
     outline: 3px solid rgba(31, 122, 69, 0.34);
     outline-offset: 2px;
   }
@@ -993,7 +1057,8 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
     #left-hand-nav .primary-links a,
     #left-hand-nav .primary-links .nav-text-button,
-    #left-hand-nav .nav-menu-trigger {
+    #left-hand-nav .nav-menu-trigger,
+    #left-hand-nav .split-menu-button {
       display: inline-flex;
       flex: 0 0 auto;
       align-items: center;
@@ -1022,21 +1087,31 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       text-decoration: none;
       border-left: 0;
     }
+    #left-hand-nav .split-menu-button.active {
+      background: var(--color-nav-surface);
+      color: var(--color-nav-active);
+      text-decoration: none;
+      border-left: 0;
+    }
 
     #left-hand-nav .primary-links a.hover:hover,
     #left-hand-nav .primary-links .nav-text-button.hover:hover,
     #left-hand-nav .utility-icon-button:hover,
     #left-hand-nav .utility-icon-button:focus-visible,
+    #left-hand-nav .split-menu-button:hover,
+    #left-hand-nav .split-menu-button:focus-visible,
     #left-hand-nav .nav-menu-trigger:hover,
     #left-hand-nav .primary-links a:focus-visible,
     #left-hand-nav .primary-links .nav-text-button:focus-visible,
-    #left-hand-nav .nav-menu-trigger:focus-visible {
+    #left-hand-nav .nav-menu-trigger:focus-visible,
+    #left-hand-nav .split-menu-button:focus-visible {
       text-decoration: none;
       background: var(--color-nav-surface-hover);
       color: var(--color-nav-hover);
     }
 
-    #left-hand-nav .nav-menu > ul {
+    #left-hand-nav .nav-menu > ul,
+    #left-hand-nav .split-menu-list {
       top: calc(100% + 0.35rem);
       left: 0;
       right: auto;
@@ -1185,6 +1260,9 @@ const navMenuTriggerClass = (items: NavItem[]) =>
   const leftHandSearchInput = document.getElementById("left-hand-search");
   const leftHandSearchStatus = leftHandNav?.querySelector("[data-search-submit-status]");
   const leftHandSearchClear = leftHandNav?.querySelector("[data-search-clear]");
+  const splitMenus = leftHandNav
+    ? Array.from(leftHandNav.querySelectorAll("[data-split-menu]"))
+    : [];
   const authenticatedOnlyItems = leftHandNav
     ? Array.from(leftHandNav.querySelectorAll("[data-authenticated-only]"))
     : [];
@@ -1227,6 +1305,46 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     if (leftHandSecondaryLinks instanceof HTMLElement) {
       window.sessionStorage.setItem(NAV_SCROLL_KEY_SECONDARY, String(Math.max(0, Math.round(leftHandSecondaryLinks.scrollLeft || 0))));
     }
+  }
+
+  function splitMenuParts(menu) {
+    if (!(menu instanceof HTMLElement)) return null;
+    const trigger = menu.querySelector("[data-split-menu-trigger]");
+    const list = menu.querySelector("[data-split-menu-list]");
+    if (!(trigger instanceof HTMLButtonElement) || !(list instanceof HTMLElement)) return null;
+    return { menu, trigger, list };
+  }
+
+  function closeSplitMenus(options = {}) {
+    const restoreFocus = !!options.restoreFocus;
+    let focusTarget = null;
+    for (const menu of splitMenus) {
+      const parts = splitMenuParts(menu);
+      if (!parts) continue;
+      const wasOpen = parts.trigger.getAttribute("aria-expanded") === "true";
+      parts.list.hidden = true;
+      parts.trigger.setAttribute("aria-expanded", "false");
+      if (wasOpen && !focusTarget) focusTarget = parts.trigger;
+    }
+    if (restoreFocus && focusTarget instanceof HTMLElement) {
+      focusTarget.focus();
+    }
+  }
+
+  function openSplitMenu(menu) {
+    const parts = splitMenuParts(menu);
+    if (!parts) return;
+    closeSplitMenus();
+    parts.list.hidden = false;
+    parts.trigger.setAttribute("aria-expanded", "true");
+  }
+
+  function toggleSplitMenu(menu) {
+    const parts = splitMenuParts(menu);
+    if (!parts) return;
+    const isOpen = parts.trigger.getAttribute("aria-expanded") === "true";
+    if (isOpen) closeSplitMenus({ restoreFocus: false });
+    else openSplitMenu(menu);
   }
 
   // Safari can clip fixed overlays when nested inside sticky/scroll containers.
@@ -1364,10 +1482,28 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     }
   }, { signal });
 
+  for (const menu of splitMenus) {
+    const parts = splitMenuParts(menu);
+    if (!parts) continue;
+    parts.trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleSplitMenu(menu);
+    }, { signal });
+  }
+
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (leftHandLoginModal instanceof HTMLElement && !leftHandLoginModal.hidden) {
       closeLoginModal();
+      return;
+    }
+    const hasOpenSplitMenu = splitMenus.some((menu) => {
+      const parts = splitMenuParts(menu);
+      return !!parts && parts.trigger.getAttribute("aria-expanded") === "true";
+    });
+    if (hasOpenSplitMenu) {
+      closeSplitMenus({ restoreFocus: true });
       return;
     }
     if (leftHandNav instanceof HTMLElement) {
@@ -1460,10 +1596,12 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     if (!target.closest("a,button")) return;
+    if (target.closest("[data-split-menu-trigger]")) return;
     if (!(leftHandNav instanceof HTMLElement)) return;
     for (const menu of Array.from(leftHandNav.querySelectorAll("details[open]"))) {
       if (menu instanceof HTMLDetailsElement) menu.open = false;
     }
+    closeSplitMenus();
     persistNavScrollPosition();
     updateMobileStickyOffset();
   }, { signal });
@@ -1479,6 +1617,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     for (const menu of Array.from(leftHandNav.querySelectorAll("details[open]"))) {
       if (menu instanceof HTMLDetailsElement) menu.open = false;
     }
+    closeSplitMenus();
   }, { signal });
 
   leftHandPrimaryLinks?.addEventListener("scroll", () => {

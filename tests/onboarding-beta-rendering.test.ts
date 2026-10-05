@@ -28,6 +28,26 @@ test("home empty state is actionable", () => {
 	assert.equal(source.includes("Start by searching for a favorite book"), true);
 });
 
+test("home hero can show an authenticated Continue Reading companion", () => {
+	const source = readFileSync("src/pages/index.astro", "utf8");
+	const panelSource = source.slice(source.indexOf("continue-reading-panel"), source.indexOf("recommended-for-you"));
+
+	assert.match(source, /class=\{`home-hero\$\{continueReadingBook \? " has-continue-reading" : ""\}`\}/);
+	assert.match(source, /continue-reading-panel/);
+	assert.match(source, /Continue Reading/);
+	assert.match(source, /session\?\.userId[\s\S]+user_reading_progress_event/);
+	assert.match(source, /order by latest_progress\.recorded_at desc nulls last, ub\.updated_at desc nulls last, ub\.first_added_at desc nulls last, b\.id asc/);
+	assert.match(source, /limit 1/);
+	assert.match(source, /resolvedCatalogCoverUrl/);
+	assert.match(source, /href: `\/book\?bookId=\$\{encodeURIComponent\(String\(bookId\)\)\}#reading-journal`/);
+	assert.match(source, /progressLabel\(currentPage, totalPages\)/);
+	assert.match(source, /continueReadingBook &&/);
+	assert.doesNotMatch(panelSource, /ShelfDropdown/);
+	assert.doesNotMatch(panelSource, /BookCard/);
+	assert.match(source, /\.home-hero\.has-continue-reading\s*{[^}]*grid-template-columns: minmax\(0, 1\.25fr\) minmax\(17rem, 0\.88fr\);/s);
+	assert.match(source, /@media \(max-width: 860px\)\s*{[\s\S]*?\.home-hero,\s*\.home-hero\.has-continue-reading\s*{[^}]*grid-template-columns: 1fr;/s);
+});
+
 test("search page empty states are actionable", () => {
 	const source = readFileSync("src/pages/search.astro", "utf8");
 	const leftHandSource = readFileSync("src/components/LeftHand.astro", "utf8");
