@@ -36,8 +36,15 @@ test("home hero can show an authenticated Continue Reading companion", () => {
 	assert.match(source, /continue-reading-panel/);
 	assert.match(source, /Continue Reading/);
 	assert.match(source, /session\?\.userId[\s\S]+user_reading_progress_event/);
+	assert.match(source, /current_reading as materialized/);
+	assert.match(source, /latest_progress_book as/);
+	assert.match(source, /fallback_book as/);
 	assert.match(source, /join app_user au on au\.id = ub\.user_id/);
-	assert.match(source, /order by latest_progress\.recorded_at desc nulls last, ub\.updated_at desc nulls last, ub\.first_added_at desc nulls last, b\.id asc/);
+	assert.match(source, /and ub\.status = 'reading'/);
+	assert.match(source, /join current_reading cr on cr\.book_id = pe\.book_id/);
+	assert.match(source, /order by pe\.recorded_at desc nulls last, pe\.id desc/);
+	assert.match(source, /where not exists \(select 1 from latest_progress_book\)/);
+	assert.match(source, /order by cr\.first_added_at desc nulls last, cr\.shelf_updated_at desc nulls last, cr\.book_id asc/);
 	assert.match(source, /limit 1/);
 	assert.match(source, /resolvedCatalogCoverUrl/);
 	assert.match(source, /const profileProgressHref = username && bookId > 0/);

@@ -146,62 +146,102 @@ try {
 			: loadPopularFallbackRecommendations(sql, 8).catch(() => null),
 		session?.userId
 			? timedSsr("continue reading", () => sql<ContinueReadingRow[]>`
-				select
-					b.id as book_id,
-					coalesce(nullif(trim(au.username), ''), '') as username,
-					b.title,
-					b.primary_author,
-					coalesce(nullif(trim(b.cover_url), ''), '') as book_cover_url,
-					coalesce(nullif(trim(edition_cover.cover_url), ''), '') as edition_cover_url,
-					coalesce(nullif(trim(bw.preferred_cover_url), ''), '') as work_cover_url,
-					coalesce(ub.current_page, 0)::int as current_page,
-					coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages,
-					latest_progress.recorded_at::text as progress_updated_at,
-					ub.updated_at::text as shelf_updated_at,
-					coalesce(ub.first_added_at::text, ub.updated_at::text) as first_added_at
-				from user_book ub
-				join book b on b.id = ub.book_id
-				join app_user au on au.id = ub.user_id
-				left join book_work bw on bw.id = b.work_id
-				left join lateral (
-					select case
-						when coalesce(bw.metadata->>'preferredEditionId', bw.metadata->>'preferred_edition_id', '') ~ '^[0-9]+$'
-							then coalesce(bw.metadata->>'preferredEditionId', bw.metadata->>'preferred_edition_id')::bigint
-						else 0::bigint
-					end as edition_id
-				) preferred_edition on true
-				left join lateral (
-					select be.cover_url
-					from book_edition be
-					where be.work_id = coalesce(bw.id, b.work_id)
-						and nullif(trim(be.cover_url), '') is not null
-						and (
-							(ub.edition_id is not null and be.id = ub.edition_id)
-							or (ub.edition_id is null and be.book_id = b.id)
-							or (ub.edition_id is null and preferred_edition.edition_id > 0 and be.id = preferred_edition.edition_id)
-						)
-					order by
-						case
-							when ub.edition_id is not null and be.id = ub.edition_id then 0
-							when ub.edition_id is null and be.book_id = b.id then 1
-							when ub.edition_id is null and preferred_edition.edition_id > 0 and be.id = preferred_edition.edition_id then 2
-							else 9
-						end,
-						be.updated_at desc,
-						be.id desc
-					limit 1
-				) edition_cover on true
-				left join lateral (
-					select pe.recorded_at
+				with current_reading as materialized (
+					select
+						b.id as book_id,
+						coalesce(nullif(trim(au.username), ''), '') as username,
+						b.title,
+						b.primary_author,
+						coalesce(nullif(trim(b.cover_url), ''), '') as book_cover_url,
+						coalesce(nullif(trim(edition_cover.cover_url), ''), '') as edition_cover_url,
+						coalesce(nullif(trim(bw.preferred_cover_url), ''), '') as work_cover_url,
+						coalesce(ub.current_page, 0)::int as current_page,
+						coalesce(nullif(ub.total_pages, 0), nullif(b.page_count, 0), 0)::int as total_pages,
+						ub.updated_at as shelf_updated_at,
+						coalesce(ub.first_added_at, ub.updated_at) as first_added_at
+					from user_book ub
+					join book b on b.id = ub.book_id
+					join app_user au on au.id = ub.user_id
+					left join book_work bw on bw.id = b.work_id
+					left join lateral (
+						select case
+							when coalesce(bw.metadata->>'preferredEditionId', bw.metadata->>'preferred_edition_id', '') ~ '^[0-9]+$'
+								then coalesce(bw.metadata->>'preferredEditionId', bw.metadata->>'preferred_edition_id')::bigint
+							else 0::bigint
+						end as edition_id
+					) preferred_edition on true
+					left join lateral (
+						select be.cover_url
+						from book_edition be
+						where be.work_id = coalesce(bw.id, b.work_id)
+							and nullif(trim(be.cover_url), '') is not null
+							and (
+								(ub.edition_id is not null and be.id = ub.edition_id)
+								or (ub.edition_id is null and be.book_id = b.id)
+								or (ub.edition_id is null and preferred_edition.edition_id > 0 and be.id = preferred_edition.edition_id)
+							)
+						order by
+							case
+								when ub.edition_id is not null and be.id = ub.edition_id then 0
+								when ub.edition_id is null and be.book_id = b.id then 1
+								when ub.edition_id is null and preferred_edition.edition_id > 0 and be.id = preferred_edition.edition_id then 2
+								else 9
+							end,
+							be.updated_at desc,
+							be.id desc
+						limit 1
+					) edition_cover on true
+					where ub.user_id = ${session.userId}::uuid
+						and ub.status = 'reading'
+				),
+				latest_progress_book as (
+					select
+						cr.*,
+						pe.recorded_at as progress_updated_at
 					from user_reading_progress_event pe
-					where pe.user_id = ub.user_id
-						and pe.book_id = ub.book_id
-					order by pe.recorded_at desc, pe.id desc
+					join current_reading cr on cr.book_id = pe.book_id
+					where pe.user_id = ${session.userId}::uuid
+					order by pe.recorded_at desc nulls last, pe.id desc
 					limit 1
-				) latest_progress on true
-				where ub.user_id = ${session.userId}::uuid
-					and ub.status = 'reading'
-				order by latest_progress.recorded_at desc nulls last, ub.updated_at desc nulls last, ub.first_added_at desc nulls last, b.id asc
+				),
+				fallback_book as (
+					select
+						cr.*,
+						null::timestamptz as progress_updated_at
+					from current_reading cr
+					where not exists (select 1 from latest_progress_book)
+					order by cr.first_added_at desc nulls last, cr.shelf_updated_at desc nulls last, cr.book_id asc
+					limit 1
+				)
+				select
+					book_id,
+					username,
+					title,
+					primary_author,
+					book_cover_url,
+					edition_cover_url,
+					work_cover_url,
+					current_page,
+					total_pages,
+					progress_updated_at::text as progress_updated_at,
+					shelf_updated_at::text as shelf_updated_at,
+					first_added_at::text as first_added_at
+				from latest_progress_book
+				union all
+				select
+					book_id,
+					username,
+					title,
+					primary_author,
+					book_cover_url,
+					edition_cover_url,
+					work_cover_url,
+					current_page,
+					total_pages,
+					progress_updated_at::text as progress_updated_at,
+					shelf_updated_at::text as shelf_updated_at,
+					first_added_at::text as first_added_at
+				from fallback_book
 				limit 1
 			`).catch(() => [])
 			: Promise.resolve([] as ContinueReadingRow[])

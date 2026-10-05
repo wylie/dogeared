@@ -161,6 +161,10 @@ test("journal UI is wired into book, private journal page, navigation, and autos
 	assert.match(journalPage, /Search your own notes/);
 	assert.match(journalPage, /New Entry/);
 	assert.match(journalPage, /data-journal-entry-form/);
+	assert.match(journalPage, /data-editor-title/);
+	assert.match(journalPage, /Edit Entry/);
+	assert.match(journalPage, /data-journal-cancel-edit hidden/);
+	assert.match(journalPage, /Cancel editing/);
 	assert.match(journalPage, /Search journal/);
 	assert.match(journalPage, /<span>Book<\/span>/);
 	assert.match(journalPage, /journal-owned-books/);
@@ -174,6 +178,13 @@ test("journal UI is wired into book, private journal page, navigation, and autos
 	assert.match(journalPage, /data-action="view-journal-entry"/);
 	assert.match(journalPage, /data-action="edit-journal-entry"/);
 	assert.match(journalPage, /data-action="delete-journal-entry"/);
+	assert.doesNotMatch(journalPage, /data-action="new-journal-entry"/);
+	assert.match(journalPage, /class="journal-side-stack"/);
+	assert.match(journalPage, /grid-template-areas:\s*"hero editor"\s*"entries editor"/);
+	assert.match(journalPage, /\.journal-side-stack\s*{[^}]*position: sticky;/s);
+	assert.match(journalPage, /grid-template-areas:\s*"hero"\s*"editor"\s*"entries"/);
+	assert.match(journalPage, /setEditorMode\(true\)/);
+	assert.match(journalPage, /resetEditor\("Editing canceled\."\)/);
 	assert.match(journalPage, /<Pagination/);
 	assert.match(journalPage, /countJournalEntries/);
 	assert.doesNotMatch(journalPage, /journal-pagination/);

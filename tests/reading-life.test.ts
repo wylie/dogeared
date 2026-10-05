@@ -322,11 +322,28 @@ test("My Reading Life refreshes visible annual summary and timeline after readin
 	assert.match(refreshScript, /dogeared:reading-data-changed/);
 	assert.match(refreshScript, /fetch\(window\.location\.href/);
 	assert.match(refreshScript, /"X-Dogeared-Partial": "reading-life-summary"/);
-	assert.match(refreshScript, /\["overview", "timeline", "reading-activity"\]/);
+	assert.match(refreshScript, /\["overview", "reading-goal", "formats", "current-books", "timeline", "reading-activity"\]/);
 	assert.match(refreshScript, /current\.replaceWith\(next\)/);
 	assert.match(refreshScript, /dogeared:reading-data-changed-at/);
 	assert.match(refreshScript, /BroadcastChannel\("dogeared:reading-data"\)/);
 	assert.doesNotMatch(refreshScript, /window\.location\.reload/);
+});
+
+test("My Reading Life uses a composed wide layout instead of one oversized overview slab", () => {
+	const source = readFileSync("src/pages/reading-life.astro", "utf8");
+
+	assert.match(source, /class="reading-life-top-grid"/);
+	assert.match(source, /class="panel overview-panel"/);
+	assert.match(source, /class="overview-primary-grid"/);
+	assert.match(source, /class="overview-secondary-grid"/);
+	assert.match(source, /id="reading-goal" class="panel reading-goal-summary"/);
+	assert.match(source, /id="formats" class="panel formats-panel"/);
+	assert.match(source, /id="current-books" class="panel current-books-section"/);
+	assert.match(source, /\.reading-life-top-grid\s*{[^}]*grid-template-columns: minmax\(0, 1\.75fr\) minmax\(18rem, 0\.9fr\);/s);
+	assert.match(source, /\.overview-panel\s*{[^}]*grid-row: 1 \/ span 2;/s);
+	assert.match(source, /\.reading-goal-summary,\s*\.formats-panel\s*{[^}]*grid-column: 2;/s);
+	assert.match(source, /@media \(max-width: 980px\)\s*{[\s\S]*?\.reading-life-top-grid\s*{[^}]*grid-template-columns: 1fr;/s);
+	assert.doesNotMatch(source, /class="goal-strip"/);
 });
 
 test("Reading Calendar days expose accessible summaries and anchored tooltip behavior", () => {
