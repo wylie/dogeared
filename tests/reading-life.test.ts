@@ -331,19 +331,44 @@ test("My Reading Life refreshes visible annual summary and timeline after readin
 
 test("My Reading Life uses a composed wide layout instead of one oversized overview slab", () => {
 	const source = readFileSync("src/pages/reading-life.astro", "utf8");
+	const thisYearIndex = source.indexOf("reading-life-group-this-year");
+	const rightNowIndex = source.indexOf("reading-life-group-right-now");
+	const howYouReadIndex = source.indexOf("reading-life-group-how-you-read");
+	const historyIndex = source.indexOf("reading-life-group-history");
+	const readingActivityIndex = source.indexOf('id="reading-activity"');
+	const formatsIndex = source.indexOf('id="formats"');
+	const timelineIndex = source.indexOf('id="timeline"');
 
-	assert.match(source, /class="reading-life-top-grid"/);
+	assert.ok(thisYearIndex > -1);
+	assert.ok(rightNowIndex > thisYearIndex);
+	assert.ok(howYouReadIndex > rightNowIndex);
+	assert.ok(historyIndex > howYouReadIndex);
 	assert.match(source, /class="panel overview-panel"/);
 	assert.match(source, /class="overview-primary-grid"/);
 	assert.match(source, /class="overview-secondary-grid"/);
 	assert.match(source, /id="reading-goal" class="panel reading-goal-summary"/);
 	assert.match(source, /id="formats" class="panel formats-panel"/);
 	assert.match(source, /id="current-books" class="panel current-books-section"/);
-	assert.match(source, /\.reading-life-top-grid\s*{[^}]*grid-template-columns: minmax\(0, 1\.75fr\) minmax\(18rem, 0\.9fr\);/s);
-	assert.match(source, /\.overview-panel\s*{[^}]*grid-row: 1 \/ span 2;/s);
-	assert.match(source, /\.reading-goal-summary,\s*\.formats-panel\s*{[^}]*grid-column: 2;/s);
-	assert.match(source, /@media \(max-width: 980px\)\s*{[\s\S]*?\.reading-life-top-grid\s*{[^}]*grid-template-columns: 1fr;/s);
+	assert.ok(readingActivityIndex > howYouReadIndex);
+	assert.ok(formatsIndex > readingActivityIndex);
+	assert.ok(formatsIndex < historyIndex);
+	assert.ok(timelineIndex > historyIndex);
+	assert.match(source, /\.reading-life-pair\s*{[^}]*grid-template-columns: minmax\(0, 2fr\) minmax\(18rem, 1fr\);/s);
+	assert.match(source, /@media \(max-width: 980px\)\s*{[\s\S]*?\.reading-life-pair\s*{[^}]*grid-template-columns: 1fr;/s);
+	assert.match(source, /<dt>Remaining<\/dt>\s*<dd>\{readingLife\.overview\.goalProgress\.remaining\.toLocaleString\(\)\}<\/dd>/);
+	assert.doesNotMatch(source, /class="reading-life-top-grid"/);
+	assert.doesNotMatch(source, /\.overview-panel\s*{[^}]*grid-row: 1 \/ span 2;/s);
+	assert.doesNotMatch(source, /<dt>Status<\/dt>/);
 	assert.doesNotMatch(source, /class="goal-strip"/);
+});
+
+test("My Reading Life transition skeleton mirrors semantic layout groups", () => {
+	const source = readFileSync("src/layouts/Layout.astro", "utf8");
+
+	assert.match(source, /route-skeleton-reading-life-pair/);
+	assert.match(source, /\.route-skeleton-reading-life-pair\s*{[^}]*grid-template-columns: minmax\(0, 2fr\) minmax\(18rem, 1fr\);/s);
+	assert.match(source, /\.route-skeleton-reading-life \.route-skeleton-book-grid\s*{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/s);
+	assert.match(source, /@media \(max-width: 900px\)\s*{[\s\S]*?\.route-skeleton-reading-life \.route-skeleton-book-grid\s*{[^}]*grid-template-columns: 1fr;/s);
 });
 
 test("Reading Calendar days expose accessible summaries and anchored tooltip behavior", () => {

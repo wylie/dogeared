@@ -338,8 +338,16 @@ import '../assets/global.css';
 						if (route === "/reading-life") {
 							return `<section class="route-skeleton-shell route-skeleton-reading-life" aria-label="Loading ${escapeHtml(label)}">
 								${skeletonHeader(label)}
-								<div class="route-skeleton-stats">${skeletonStat()}${skeletonStat()}${skeletonStat()}${skeletonStat()}</div>
-								<div class="route-skeleton-chart">${skeletonLine("82%")}${skeletonLine("68%")}${skeletonLine("74%")}</div>
+								<div class="route-skeleton-reading-life-pair">
+									<div class="route-skeleton-section">${skeletonLine("24%")}${skeletonStat()}${skeletonStat()}${skeletonStat()}${skeletonStat()}</div>
+									<div class="route-skeleton-section">${skeletonLine("38%")}${skeletonLine("92%")}${skeletonLine("76%")}${skeletonLine("58%")}</div>
+								</div>
+								<div class="route-skeleton-section">${skeletonLine("18%")}<ul class="route-skeleton-book-grid">${skeletonBookCard()}${skeletonBookCard()}${skeletonBookCard()}</ul></div>
+								<div class="route-skeleton-reading-life-pair">
+									<div class="route-skeleton-chart">${skeletonLine("82%")}${skeletonLine("68%")}${skeletonLine("74%")}</div>
+									<div class="route-skeleton-section">${skeletonLine("42%")}${skeletonLine("88%")}${skeletonLine("70%")}</div>
+								</div>
+								<div class="route-skeleton-section">${skeletonLine("20%")}${skeletonLine("100%")}${skeletonLine("92%")}</div>
 							</section>`;
 						}
 						if (route === "/discover" || route === "/books") {
@@ -746,6 +754,15 @@ import '../assets/global.css';
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 0.65rem;
 	}
+	.route-skeleton-reading-life-pair {
+		display: grid;
+		grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+		gap: 0.75rem;
+		align-items: start;
+	}
+	.route-skeleton-reading-life .route-skeleton-book-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
 	.route-skeleton-stat {
 		min-height: 72px;
 		padding: 0.75rem;
@@ -868,8 +885,12 @@ import '../assets/global.css';
 		.route-skeleton-shell {
 			min-height: min(620px, calc(100vh - 2rem));
 		}
+		.route-skeleton-reading-life-pair,
 		.route-skeleton-stats,
 		.route-skeleton-book-grid {
+			grid-template-columns: 1fr;
+		}
+		.route-skeleton-reading-life .route-skeleton-book-grid {
 			grid-template-columns: 1fr;
 		}
 	}
