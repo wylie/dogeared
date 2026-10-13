@@ -123,6 +123,9 @@ const navMenuTriggerClass = (items: NavItem[]) =>
           </a>
         </h2>
       </div>
+      <button type="button" class="mobile-menu-toggle" aria-label="Open navigation" title="Navigation" aria-expanded="false" aria-controls="left-hand-destinations">
+        <span class="material-icons" aria-hidden="true">menu</span>
+      </button>
     </div>
 
     <form action="/search" method="get" data-search-form class="global-search-form">
@@ -140,7 +143,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     </form>
 
     <nav id="left-hand-primary-links" class="primary-links" aria-label="Primary navigation">
-      <div class="nav-destination-cluster">
+      <div id="left-hand-destinations" class="nav-destination-cluster">
         <div class={`split-nav-group nav-group nav-group-discover${discoverGroupActive ? " active" : ""}`} data-split-menu>
           <div class="split-nav-heading">
             <a
@@ -1051,11 +1054,17 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
     #left-hand-nav .nav-destination-cluster {
       display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-start;
-      align-items: flex-start;
-      gap: 0.25rem 0.5rem;
+      flex-wrap: nowrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.25rem 0;
       min-width: 0;
+      width: 100%;
+    }
+
+    #left-hand-nav .nav-destination-cluster:has(.nav-menu[open]),
+    #left-hand-nav .nav-destination-cluster:has(.split-menu-list:not([hidden])) {
+      flex-wrap: wrap;
     }
 
     #left-hand-nav .nav-destination-cluster > .nav-group {
@@ -1070,10 +1079,10 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     #left-hand-nav .primary-direct-list > li,
     #left-hand-nav .nav-destination-cluster > .nav-menu > summary,
     #left-hand-nav .nav-destination-cluster > .nav-text-button {
-      flex: 0 1 auto;
+      flex: 0 0 auto;
       min-width: 0;
       max-width: 100%;
-      order: var(--mobile-nav-order, 0);
+      order: 0;
     }
 
     #left-hand-nav .utility-nav-list {
@@ -1121,12 +1130,12 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       border-radius: var(--radius-sm);
       width: auto;
       min-height: 44px;
-      padding: 0.5rem 0.5rem;
-      font-size: 0.95rem;
+      padding: 0.5rem 0.1rem;
+      font-size: 0.875rem;
       line-height: 1.25;
       text-decoration: none;
       color: var(--color-nav);
-      white-space: normal;
+      white-space: nowrap;
       text-align: left;
     }
 
@@ -1144,10 +1153,11 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
     #left-hand-nav .nav-menu-trigger {
       justify-content: flex-start;
+      gap: 0.15rem;
     }
 
     #left-hand-nav .nav-menu-trigger::after {
-      margin-left: 0.25rem;
+      margin-left: 0;
     }
 
     #left-hand-nav .utility-icon-button {
@@ -1224,15 +1234,13 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       box-sizing: border-box;
       margin: 0;
       padding: 0 0 0 0.65rem;
-      order: var(--mobile-nav-order, 1);
+      order: 1;
     }
 
     #left-hand-nav .split-menu-list[hidden],
     #left-hand-nav .nav-group > ul.split-menu-list[hidden],
     #left-hand-nav .nav-menu:not([open]) > ul,
-    #left-hand-nav .nav-destination-cluster .nav-menu:not([open]) > ul,
-    #left-hand-nav .nav-destination-cluster[data-layout-measuring] .nav-menu > ul,
-    #left-hand-nav .nav-destination-cluster[data-layout-measuring] .split-menu-list {
+    #left-hand-nav .nav-destination-cluster .nav-menu:not([open]) > ul {
       display: none;
     }
 
@@ -1340,6 +1348,62 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     #left-hand-nav .header-footer a {
       min-height: 32px;
     }
+
+    @media (max-width: 499px) {
+      #left-hand-nav .brand-row {
+        justify-content: space-between;
+      }
+
+      #left-hand-nav .mobile-menu-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border: 0;
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--color-nav);
+        cursor: pointer;
+      }
+
+      #left-hand-nav .nav-destination-cluster {
+        display: none;
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      #left-hand-nav[data-compact-nav-open] .nav-destination-cluster {
+        display: flex;
+      }
+
+      #left-hand-nav .split-nav-heading,
+      #left-hand-nav .primary-direct-list > li,
+      #left-hand-nav .nav-destination-cluster > .nav-menu > summary,
+      #left-hand-nav .nav-destination-cluster > .nav-text-button {
+        width: 100%;
+        order: var(--compact-nav-order, 0);
+      }
+
+      #left-hand-nav .split-nav-link {
+        flex: 1;
+      }
+
+      #left-hand-nav .primary-links .nav-destination-cluster a,
+      #left-hand-nav .nav-destination-cluster .nav-menu-trigger,
+      #left-hand-nav .nav-destination-cluster > .nav-text-button {
+        padding-inline: 0.5rem;
+        font-size: 0.95rem;
+      }
+
+      #left-hand-nav .primary-links .nav-destination-cluster .nav-menu > ul,
+      #left-hand-nav .primary-links .nav-destination-cluster .split-menu-list {
+        flex: 0 0 auto;
+        width: 100%;
+        order: var(--compact-nav-order, 1);
+      }
+    }
   }
 </style>
 
@@ -1355,6 +1419,9 @@ const navMenuTriggerClass = (items: NavItem[]) =>
   const allowAuthPrompt = leftHandNav?.dataset.authPrompt === "true";
   const foundingReaderMode = String(leftHandNav?.dataset.foundingReaderMode || "open");
   const leftHandPrimaryLinks = document.getElementById("left-hand-primary-links");
+  const primaryDestinations = document.getElementById("left-hand-destinations");
+  const compactNavToggle = leftHandNav?.querySelector(".mobile-menu-toggle");
+  const compactNavQuery = window.matchMedia("(max-width: 499px)");
   const leftHandLoginItem = document.getElementById("left-hand-login-item");
   const leftHandLoginButton = leftHandLoginItem instanceof HTMLButtonElement
     ? leftHandLoginItem
@@ -1449,6 +1516,35 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     if (typeof window === "undefined") return;
     window.requestAnimationFrame(updateMobileStickyOffset);
   }
+
+  function setCompactNavOpen(open) {
+    if (!(leftHandNav instanceof HTMLElement) || !(compactNavToggle instanceof HTMLButtonElement)) return;
+    leftHandNav.toggleAttribute("data-compact-nav-open", open);
+    compactNavToggle.setAttribute("aria-expanded", String(open));
+    compactNavToggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+    const icon = compactNavToggle.querySelector(".material-icons");
+    if (icon) icon.textContent = open ? "close" : "menu";
+    scheduleMobileStickyOffsetUpdate();
+  }
+
+  compactNavToggle?.addEventListener("click", () => {
+    const open = compactNavToggle.getAttribute("aria-expanded") !== "true";
+    setCompactNavOpen(open);
+    if (!open) {
+      closeSplitMenus();
+      closeDetailsMenus();
+    }
+  }, { signal });
+
+  compactNavQuery.addEventListener("change", () => {
+    const focusedInNav = primaryDestinations?.contains(document.activeElement);
+    setCompactNavOpen(false);
+    if (compactNavQuery.matches) {
+      closeSplitMenus();
+      closeDetailsMenus();
+      if (focusedInNav && compactNavToggle instanceof HTMLElement) compactNavToggle.focus();
+    }
+  }, { signal });
 
   function detailsMenuParts(menu) {
     if (!(menu instanceof HTMLDetailsElement)) return null;
@@ -1687,8 +1783,17 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       return;
     }
     if (leftHandNav instanceof HTMLElement) {
-      for (const menu of Array.from(leftHandNav.querySelectorAll("details[open]"))) {
+      const openMenus = Array.from(leftHandNav.querySelectorAll("details[open]"));
+      for (const menu of openMenus) {
         if (menu instanceof HTMLDetailsElement) menu.open = false;
+      }
+      if (openMenus.length) {
+        openMenus[0].querySelector("summary")?.focus();
+        return;
+      }
+      if (compactNavQuery.matches && leftHandNav.hasAttribute("data-compact-nav-open")) {
+        setCompactNavOpen(false);
+        if (compactNavToggle instanceof HTMLElement) compactNavToggle.focus();
       }
     }
   }, { signal });
@@ -1782,6 +1887,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       if (menu instanceof HTMLDetailsElement) menu.open = false;
     }
     closeSplitMenus();
+    if (compactNavQuery.matches) setCompactNavOpen(false);
     persistNavScrollPosition();
     updateMobileStickyOffset();
   }, { signal });
@@ -1798,6 +1904,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       if (menu instanceof HTMLDetailsElement) menu.open = false;
     }
     closeSplitMenus();
+    if (compactNavQuery.matches) setCompactNavOpen(false);
   }, { signal });
 
   document.addEventListener("astro:before-swap", () => {
@@ -1816,47 +1923,20 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     persistNavScrollPosition();
   }, { passive: true, signal });
 
-  function layoutMobileNavSubmenus() {
-    if (!(leftHandNav instanceof HTMLElement) || !isMobilePrimaryNav()) return;
-    const cluster = leftHandNav.querySelector(".nav-destination-cluster");
-    if (!(cluster instanceof HTMLElement)) return;
-    const items = Array.from(cluster.querySelectorAll(
+  if (primaryDestinations instanceof HTMLElement) {
+    const items = Array.from(primaryDestinations.querySelectorAll(
       ".split-nav-heading, .primary-direct-list > li, :scope > .nav-menu > summary, :scope > .nav-text-button"
     )).filter((item): item is HTMLElement => item instanceof HTMLElement);
-    const scrollTop = leftHandNav.scrollTop;
-    const focusedElement = document.activeElement;
-
-    // Measure the natural wrapped rows before inserting a full-width submenu.
-    cluster.setAttribute("data-layout-measuring", "");
-    try {
-      items.forEach((item, index) => item.style.setProperty("--mobile-nav-order", String(index * 2)));
-      const rows = items.map((item) => item.getClientRects().length ? item.getBoundingClientRect().top : null);
-      items.forEach((item, index) => {
-        const menu = item.classList.contains("split-nav-heading")
-          ? item.parentElement
-          : item.tagName === "SUMMARY" ? item.parentElement : null;
-        const list = menu?.querySelector(":scope > ul");
-        if (!(list instanceof HTMLElement) || rows[index] === null) return;
-        let lastInRow = index;
-        for (let next = index + 1; next < items.length; next += 1) {
-          if (rows[next] === null) continue;
-          if (Math.abs(rows[next] - rows[index]) > 1) break;
-          lastInRow = next;
-        }
-        list.style.setProperty("--mobile-nav-order", String(lastInRow * 2 + 1));
-      });
-    } finally {
-      cluster.removeAttribute("data-layout-measuring");
-      leftHandNav.scrollTop = scrollTop;
-      if (focusedElement instanceof HTMLElement && document.activeElement !== focusedElement) {
-        focusedElement.focus({ preventScroll: true });
-      }
-    }
+    items.forEach((item, index) => {
+      item.style.setProperty("--compact-nav-order", String(index * 2));
+      const menu = item.classList.contains("split-nav-heading") || item.tagName === "SUMMARY" ? item.parentElement : null;
+      const list = menu?.querySelector(":scope > ul");
+      if (list instanceof HTMLElement) list.style.setProperty("--compact-nav-order", String(index * 2 + 1));
+    });
   }
 
   function updateMobileStickyOffset() {
     if (!(leftHandNav instanceof HTMLElement)) return;
-    layoutMobileNavSubmenus();
     const isMobile = window.matchMedia("(max-width: 900px)").matches;
     const overlap = isMobile ? 12 : 0;
     const offset = isMobile ? Math.max(0, Math.ceil(leftHandNav.getBoundingClientRect().height) - overlap) : 0;

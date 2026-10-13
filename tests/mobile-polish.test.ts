@@ -40,7 +40,7 @@ test("mobile header footer wraps into subdued metadata below search", () => {
 	assert.match(layout, /@media \(max-width: 900px\)\s*{[\s\S]*?\.content-column\s*{[^}]*padding-block: 1\.15rem 1\.5rem;/s);
 });
 
-test("mobile navigation wraps content-sized items with full-row inline submenus", () => {
+test("mobile navigation uses one primary row and an explicit narrow-phone menu", () => {
 	const source = read("../src/components/LeftHand.astro");
 
 	assert.match(source, /#left-hand-nav\s*{[^}]*overflow-y: auto;/s);
@@ -52,15 +52,20 @@ test("mobile navigation wraps content-sized items with full-row inline submenus"
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*overflow: visible;/s);
 	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*column-gap: 1rem;/s);
 	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*justify-content: space-(between|around|evenly);/s);
-	assert.match(source, /#left-hand-nav \.nav-destination-cluster\s*{[^}]*display: flex;[^}]*flex-wrap: wrap;/s);
+	assert.match(source, /#left-hand-nav \.nav-destination-cluster\s*{[^}]*display: flex;[^}]*flex-wrap: nowrap;[^}]*justify-content: space-between;/s);
 	assert.match(source, /#left-hand-nav \.primary-direct-list\s*{[^}]*display: contents;/s);
 	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger,\s*#left-hand-nav \.split-menu-button\s*{[^}]*width: auto;[^}]*min-height: 44px;/s);
 	assert.match(source, /#left-hand-nav \.split-nav-heading\s*{[^}]*display: inline-flex;/s);
 	assert.match(source, /#left-hand-nav \.split-menu-button\s*{[^}]*width: 44px;/s);
 	assert.match(source, /#left-hand-nav \.nav-menu-trigger\s*{[^}]*justify-content: flex-start;/s);
 	assert.match(source, /#left-hand-nav \.primary-links \.nav-destination-cluster \.nav-menu > ul,\s*#left-hand-nav \.primary-links \.nav-destination-cluster \.split-menu-list\s*{[^}]*flex: 1 0 100%;/s);
-	assert.match(source, /function layoutMobileNavSubmenus\(\)/);
-	assert.match(source, /list\.style\.setProperty\("--mobile-nav-order", String\(lastInRow \* 2 \+ 1\)\)/);
+	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger,\s*#left-hand-nav \.split-menu-button\s*{[^}]*font-size: 0\.875rem;[^}]*white-space: nowrap;/s);
+	assert.match(source, /@media \(max-width: 499px\)/);
+	assert.match(source, /class="mobile-menu-toggle"[^>]*aria-expanded="false"[^>]*aria-controls="left-hand-destinations"/s);
+	assert.match(source, /#left-hand-nav\[data-compact-nav-open\] \.nav-destination-cluster\s*{[^}]*display: flex;/s);
+	assert.match(source, /function setCompactNavOpen\(open\)/);
+	assert.match(source, /compactNavToggle\.setAttribute\("aria-expanded", String\(open\)\)/);
+	assert.match(source, /list\.style\.setProperty\("--compact-nav-order", String\(index \* 2 \+ 1\)\)/);
 	assert.match(source, /#left-hand-nav \.utility-icon-button\s*{[^}]*width: 44px;[^}]*min-height: 44px;/s);
 	assert.match(source, /#left-hand-nav \.utility-nav-list\s*{[^}]*border-top: var\(--border-subtle\);/s);
 	assert.match(source, /#left-hand-nav \.utility-menu\[open\]::details-content\s*{[^}]*display: contents;/s);
@@ -70,7 +75,7 @@ test("mobile navigation wraps content-sized items with full-row inline submenus"
 	assert.match(source, /#left-hand-nav \.utility-icon-button\s*{[^}]*justify-content: center;/s);
 	assert.match(source, /#left-hand-nav \.nav-menu > ul,\s*#left-hand-nav \.split-menu-list\s*{[^}]*position: static;/s);
 	assert.match(source, /#left-hand-nav \.nav-menu > ul,\s*#left-hand-nav \.split-menu-list\s*{[^}]*box-shadow: none;/s);
-	assert.match(source, /#left-hand-nav \.nav-destination-cluster\[data-layout-measuring\] \.split-menu-list\s*{[^}]*display: none;/s);
+	assert.match(source, /#left-hand-nav \.nav-destination-cluster \.nav-menu:not\(\[open\]\) > ul\s*{[^}]*display: none;/s);
 	assert.match(source, /aria-controls="left-hand-about-menu"/);
 	assert.match(source, /function syncDetailsMenuState/);
 	assert.match(source, /closeDetailsMenus\(\{ except: menu \}\);/);
