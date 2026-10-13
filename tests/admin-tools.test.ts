@@ -21,7 +21,7 @@ test("admin navigation is rendered only for admin sessions", () => {
 	assert.equal(nav.includes("isAdmin = false"), true);
 	assert.equal(nav.includes("{isAdmin && ("), true);
 	assert.equal(nav.includes("nav-group-admin"), true);
-	assert.match(nav, /<summary class=\{navMenuTriggerClass\(adminNavItems\)\}>Admin<\/summary>/);
+	assert.match(nav, /<summary class=\{navMenuTriggerClass\(adminNavItems\)\} aria-expanded="false" aria-controls="left-hand-admin-menu">Admin<\/summary>/);
 	assert.equal(nav.includes("Dashboard"), true);
 	assert.equal(nav.includes("/admin/analytics"), true);
 	assert.equal(nav.includes("/admin/notifications"), true);

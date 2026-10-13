@@ -110,7 +110,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
           <a href="/" class="special-font">
             <img
               src="/logo-96.png"
-              sizes="(max-width: 900px) 55px, 50px"
+              sizes="(max-width: 900px) 32px, 50px"
               alt=""
               class="title-logo"
               aria-hidden="true"
@@ -191,8 +191,8 @@ const navMenuTriggerClass = (items: NavItem[]) =>
         )}
 
         <details class="nav-menu nav-group nav-group-about">
-          <summary class={navMenuTriggerClass(aboutNavItems)}>About</summary>
-          <ul>
+          <summary class={navMenuTriggerClass(aboutNavItems)} aria-expanded="false" aria-controls="left-hand-about-menu">About</summary>
+          <ul id="left-hand-about-menu">
             {aboutNavItems.map((item) => (
               <li>
                 <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
@@ -215,8 +215,8 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
         {isAdmin && (
         <details class="nav-menu nav-group nav-group-admin">
-          <summary class={navMenuTriggerClass(adminNavItems)}>Admin</summary>
-            <ul>
+          <summary class={navMenuTriggerClass(adminNavItems)} aria-expanded="false" aria-controls="left-hand-admin-menu">Admin</summary>
+            <ul id="left-hand-admin-menu">
               {adminNavItems.map((item) => (
                 <li id={item.id}>
                   <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>{item.label}</a>
@@ -270,12 +270,14 @@ const navMenuTriggerClass = (items: NavItem[]) =>
               id="left-hand-settings-item"
               class={`${navMenuTriggerClass(accountNavItems)} utility-icon-button`}
               aria-current={accountNavItems.some((item) => isNavItemActive(item)) ? "page" : undefined}
+              aria-expanded="false"
+              aria-controls="left-hand-account-menu"
               aria-label="Account settings"
               title="Settings"
             >
               <span class="material-icons" aria-hidden="true">settings</span>
             </summary>
-            <ul>
+            <ul id="left-hand-account-menu">
               {accountNavItems.map((item) => (
                 <li data-authenticated-only>
                   <a href={navItemHref(item)} class={navItemClass(item)} aria-current={navItemAriaCurrent(item)}>
@@ -625,6 +627,12 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     color: var(--color-text-subtle);
     font-size: 0.7rem;
     line-height: 1;
+    display: inline-block;
+    transition: transform 140ms ease;
+  }
+
+  .nav-menu[open] > .nav-menu-trigger::after {
+    transform: rotate(180deg);
   }
 
   .utility-menu > .nav-menu-trigger::after {
@@ -956,6 +964,8 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     #left-hand-nav {
       padding: 0.58rem 0 0.5rem;
       overflow-x: clip;
+      overflow-y: auto;
+      max-height: 100dvh;
     }
 
     .app-header-inner {
@@ -963,32 +973,41 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       grid-template-areas:
         "brand"
         "links"
+        "search"
+        "footer";
+      gap: 0.5rem;
+      align-items: start;
+    }
+
+    .app-header-inner:has(.secondary-links-mobile) {
+      grid-template-areas:
+        "brand"
+        "links"
         "secondary"
         "search"
         "footer";
-      gap: 0.45rem;
     }
 
     .brand-row {
       grid-area: brand;
-      min-height: 48px;
+      min-height: 40px;
       display: flex;
       align-items: center;
     }
 
     #left-hand-nav h2 a.special-font {
-      font-size: clamp(2.1rem, 9.2vw, 2.6rem);
+      font-size: 1.75rem;
       gap: 0.4rem;
     }
 
     #left-hand-nav h2 a.special-font .title-logo {
-      width: clamp(34px, 10vw, 52px);
-      height: clamp(34px, 10vw, 52px);
+      width: 32px;
+      height: 32px;
     }
 
     #left-hand-nav .global-search-form {
       grid-area: search;
-      margin: 0.1rem 0 0.15rem;
+      margin: 0;
     }
 
     #left-hand-nav .search-input-wrap {
@@ -997,53 +1016,61 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
     #left-hand-nav input[type="search"] {
       margin-top: 0;
+      min-height: 44px;
       padding: 0.4rem calc(var(--search-clear-control-space) + var(--search-spinner-control-space) + 0.55rem) 0.4rem 0.8rem;
       border: var(--border-strong);
     }
 
     #left-hand-nav .primary-links {
-      --mobile-primary-nav-gap: 0.9rem;
-      display: flex;
-      flex-wrap: nowrap;
-      justify-content: flex-start;
+      --mobile-primary-nav-gap: 0;
+      display: grid;
+      justify-content: stretch;
       gap: var(--mobile-primary-nav-gap);
       border-top: none;
       margin-top: 0;
-      padding: 0 0 0.5rem;
+      padding: 0;
       grid-area: links;
-      align-items: center;
+      align-items: stretch;
       min-width: 0;
       width: 100%;
       max-width: 100%;
-      overflow-x: auto;
-      overflow-y: hidden;
-      scrollbar-width: none;
-      -webkit-overflow-scrolling: touch;
-      white-space: nowrap;
+      overflow: visible;
+      white-space: normal;
     }
 
-    #left-hand-nav .primary-links::-webkit-scrollbar { display: none; }
+    #left-hand-nav .primary-links::-webkit-scrollbar {
+      display: none;
+    }
 
     #left-hand-nav .nav-destination-cluster,
-    #left-hand-nav .primary-direct-list,
-    #left-hand-nav .utility-nav-list {
-      display: flex;
-      flex: 0 0 auto;
-      flex-wrap: nowrap;
-      align-items: center;
+    #left-hand-nav .primary-direct-list {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      justify-content: stretch;
+      flex: 0 1 auto;
+      align-items: stretch;
       gap: var(--mobile-primary-nav-gap);
+      width: 100%;
+      min-width: 0;
     }
 
     #left-hand-nav .utility-nav-list {
-      gap: 0.28rem;
-      padding-left: 0;
-      margin-left: 0;
+      display: grid;
+      grid-template-columns: 44px 44px minmax(44px, 1fr);
+      flex: 0 1 auto;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.5rem 0 0;
+      margin: 0.5rem 0 0;
+      border-top: var(--border-subtle);
     }
 
     #left-hand-nav .primary-links .nav-group {
-      display: flex;
-      flex: 0 0 auto;
+      display: grid;
+      flex: 0 1 auto;
       min-width: 0;
+      width: 100%;
     }
 
     #left-hand-nav .primary-links .nav-group-title {
@@ -1051,19 +1078,18 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     }
 
     #left-hand-nav .primary-links .nav-group > ul {
-      display: flex;
-      flex: 0 0 auto;
-      flex-wrap: nowrap;
-      align-items: center;
-      gap: var(--mobile-primary-nav-gap);
+      display: grid;
+      flex: 0 1 auto;
+      align-items: stretch;
+      gap: 0;
       padding: 0;
       margin: 0;
       list-style: none;
     }
 
     #left-hand-nav .primary-links .nav-group > ul > li {
-      flex: 0 0 auto;
-      width: auto;
+      flex: 0 1 auto;
+      width: 100%;
       margin: 0;
     }
 
@@ -1072,25 +1098,65 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     #left-hand-nav .nav-menu-trigger,
     #left-hand-nav .split-menu-button {
       display: inline-flex;
-      flex: 0 0 auto;
+      flex: 0 1 auto;
       align-items: center;
       border: none;
       background: transparent;
-      border-radius: var(--radius-pill);
-      width: auto;
-      padding: 0.38rem 0.44rem;
+      border-radius: var(--radius-sm);
+      width: 100%;
+      min-height: 44px;
+      padding: 0.5rem 0.5rem;
+      font-size: 0.95rem;
       line-height: 1.25;
       text-decoration: none;
       color: var(--color-nav);
-      white-space: nowrap;
+      white-space: normal;
+      text-align: left;
+    }
+
+    #left-hand-nav .split-nav-group {
+      grid-template-columns: minmax(0, 1fr) 44px;
+      gap: 0;
+      align-items: start;
+    }
+
+    #left-hand-nav .split-menu-button {
+      justify-content: center;
+    }
+
+    #left-hand-nav .nav-menu-trigger {
+      justify-content: space-between;
+    }
+
+    #left-hand-nav .nav-menu-trigger::after {
+      width: 28px;
+      text-align: center;
+      margin-left: auto;
+      flex: 0 0 28px;
+    }
+
+    #left-hand-nav .split-menu-list {
+      grid-column: 1 / -1;
     }
 
     #left-hand-nav .utility-icon-button {
-      width: 2.12rem;
-      min-width: 2.12rem;
-      min-height: 2.12rem;
+      width: 44px;
+      min-width: 44px;
+      min-height: 44px;
       padding: 0;
       justify-content: center;
+    }
+
+    #left-hand-nav .utility-nav-list .utility-menu {
+      display: contents;
+    }
+
+    #left-hand-nav .utility-menu[open]::details-content {
+      display: contents;
+    }
+
+    #left-hand-nav .utility-menu > ul {
+      grid-column: 1 / -1;
     }
 
     #left-hand-nav .primary-links a.active {
@@ -1124,10 +1190,36 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
     #left-hand-nav .nav-menu > ul,
     #left-hand-nav .split-menu-list {
-      top: calc(100% + 0.35rem);
-      left: 0;
-      right: auto;
-      min-width: 12rem;
+      position: static;
+      z-index: auto;
+      min-width: 0;
+      max-width: none;
+      width: auto;
+      margin: 0 0 0.25rem 0.5rem;
+      padding: 0 0 0 0.65rem;
+      border: 0;
+      border-left: 1px solid var(--color-border-soft);
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      gap: 0;
+      max-height: none;
+      overflow: visible;
+    }
+
+    #left-hand-nav .split-menu-list[hidden],
+    #left-hand-nav .nav-group > ul.split-menu-list[hidden],
+    #left-hand-nav .nav-menu:not([open]) > ul {
+      display: none;
+    }
+
+    #left-hand-nav .nav-menu > ul a,
+    #left-hand-nav .split-menu-list a,
+    #left-hand-nav .nav-menu > ul .nav-text-button {
+      min-height: 44px;
+      padding: 0.4rem 0.5rem;
+      font-size: 0.9rem;
+      white-space: normal;
     }
 
     #left-hand-nav .section-links-nested {
@@ -1139,10 +1231,10 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       display: flex;
       flex-wrap: nowrap;
       column-gap: 0.85rem;
-      row-gap: 0.45rem;
+      row-gap: 0;
       list-style: none;
-      margin: 0.15rem 0 0;
-      padding: 0.6rem 0 0.35rem;
+      margin: 0;
+      padding: 0.25rem 0 0;
       border-top: var(--border-subtle);
       align-items: center;
       min-width: 0;
@@ -1174,7 +1266,9 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       text-decoration: none;
       color: var(--color-nav);
       line-height: 1.25;
-      padding: 0.34rem 0.2rem;
+      min-height: 44px;
+      padding: 0.3rem 0.2rem;
+      font-size: 0.85rem;
       border-radius: var(--radius-pill);
     }
 
@@ -1187,47 +1281,45 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     #left-hand-nav .header-footer {
       display: block;
       grid-area: footer;
-      margin-top: 0.22rem;
-      padding: 0.28rem 0 0;
+      margin-top: 0;
+      padding: 0;
       min-width: 0;
       max-width: 100%;
-      overflow-x: auto;
-      overflow-y: hidden;
-      white-space: nowrap;
-      scrollbar-width: none;
-      -webkit-overflow-scrolling: touch;
-      font-size: 0.76rem;
-    }
-
-    #left-hand-nav .header-footer::-webkit-scrollbar {
-      display: none;
+      white-space: normal;
+      font-size: 0.72rem;
+      line-height: 1.4;
     }
 
     #left-hand-nav .header-footer-nav ul {
-      display: flex;
-      flex-wrap: nowrap;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, max-content));
+      justify-content: start;
       align-items: center;
-      gap: clamp(0.45rem, 3vw, 0.9rem);
-      min-width: max-content;
+      gap: 0.1rem 1rem;
+      min-width: 0;
       width: 100%;
     }
 
     #left-hand-nav .header-footer-nav ul li {
       width: unset;
+      min-width: 0;
+    }
+
+    #left-hand-nav .header-footer-nav ul li:nth-child(n + 3) {
+      grid-column: 1 / -1;
     }
 
     #left-hand-nav .header-footer a,
     #left-hand-nav .header-footer span {
-      min-height: 32px;
+      min-height: 0;
       align-items: center;
-      white-space: nowrap;
+      white-space: normal;
+      color: var(--color-text-subtle);
+      overflow-wrap: anywhere;
     }
-  }
 
-  @media (max-width: 680px) {
-    #left-hand-nav h2 a.special-font {
-      font-size: clamp(2.1rem, 9.2vw, 2.6rem);
+    #left-hand-nav .header-footer a {
+      min-height: 32px;
     }
   }
 </style>
@@ -1274,6 +1366,9 @@ const navMenuTriggerClass = (items: NavItem[]) =>
   const leftHandSearchClear = leftHandNav?.querySelector("[data-search-clear]");
   const splitMenus = leftHandNav
     ? Array.from(leftHandNav.querySelectorAll("[data-split-menu]"))
+    : [];
+  const detailsMenus = leftHandNav
+    ? Array.from(leftHandNav.querySelectorAll("details.nav-menu"))
     : [];
   const authenticatedOnlyItems = leftHandNav
     ? Array.from(leftHandNav.querySelectorAll("[data-authenticated-only]"))
@@ -1327,9 +1422,46 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     return { menu, trigger, list };
   }
 
+  function isMobilePrimaryNav() {
+    return typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches;
+  }
+
+  function scheduleMobileStickyOffsetUpdate() {
+    if (typeof window === "undefined") return;
+    window.requestAnimationFrame(updateMobileStickyOffset);
+  }
+
+  function detailsMenuParts(menu) {
+    if (!(menu instanceof HTMLDetailsElement)) return null;
+    const trigger = menu.querySelector("summary");
+    const list = menu.querySelector(":scope > ul");
+    if (!(trigger instanceof HTMLElement) || !(list instanceof HTMLElement)) return null;
+    return { menu, trigger, list };
+  }
+
+  function syncDetailsMenuState(menu) {
+    const parts = detailsMenuParts(menu);
+    if (!parts) return;
+    parts.trigger.setAttribute("aria-expanded", String(parts.menu.open));
+    if (parts.list.id) parts.trigger.setAttribute("aria-controls", parts.list.id);
+  }
+
+  function closeDetailsMenus(options = {}) {
+    const except = options.except instanceof HTMLDetailsElement ? options.except : null;
+    let changed = false;
+    for (const menu of detailsMenus) {
+      if (!(menu instanceof HTMLDetailsElement) || menu === except || !menu.open) continue;
+      menu.open = false;
+      syncDetailsMenuState(menu);
+      changed = true;
+    }
+    if (changed) scheduleMobileStickyOffsetUpdate();
+  }
+
   function closeSplitMenus(options = {}) {
     const restoreFocus = !!options.restoreFocus;
     let focusTarget = null;
+    let changed = false;
     for (const menu of splitMenus) {
       const parts = splitMenuParts(menu);
       if (!parts) continue;
@@ -1337,18 +1469,22 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       parts.list.hidden = true;
       parts.trigger.setAttribute("aria-expanded", "false");
       if (wasOpen && !focusTarget) focusTarget = parts.trigger;
+      changed = changed || wasOpen;
     }
     if (restoreFocus && focusTarget instanceof HTMLElement) {
       focusTarget.focus();
     }
+    if (changed) scheduleMobileStickyOffsetUpdate();
   }
 
   function openSplitMenu(menu) {
     const parts = splitMenuParts(menu);
     if (!parts) return;
     closeSplitMenus();
+    if (isMobilePrimaryNav()) closeDetailsMenus();
     parts.list.hidden = false;
     parts.trigger.setAttribute("aria-expanded", "true");
+    scheduleMobileStickyOffsetUpdate();
   }
 
   function toggleSplitMenu(menu) {
@@ -1357,6 +1493,19 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     const isOpen = parts.trigger.getAttribute("aria-expanded") === "true";
     if (isOpen) closeSplitMenus({ restoreFocus: false });
     else openSplitMenu(menu);
+  }
+
+  for (const menu of detailsMenus) {
+    if (!(menu instanceof HTMLDetailsElement)) continue;
+    syncDetailsMenuState(menu);
+    menu.addEventListener("toggle", () => {
+      syncDetailsMenuState(menu);
+      if (menu.open && isMobilePrimaryNav()) {
+        closeSplitMenus();
+        closeDetailsMenus({ except: menu });
+      }
+      scheduleMobileStickyOffsetUpdate();
+    }, { signal });
   }
 
   // Safari can clip fixed overlays when nested inside sticky/scroll containers.
