@@ -1055,9 +1055,9 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     #left-hand-nav .nav-destination-cluster {
       display: flex;
       flex-wrap: nowrap;
-      justify-content: space-between;
+      justify-content: flex-start;
       align-items: center;
-      gap: 0.25rem 0;
+      gap: 0.25rem 0.75rem;
       min-width: 0;
       width: 100%;
     }
@@ -1130,7 +1130,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       border-radius: var(--radius-sm);
       width: auto;
       min-height: 44px;
-      padding: 0.5rem 0.1rem;
+      padding: 0.5rem 0;
       font-size: 0.875rem;
       line-height: 1.25;
       text-decoration: none;
@@ -1141,19 +1141,19 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
     #left-hand-nav .split-nav-heading {
       display: inline-flex;
-      gap: 0;
+      gap: 0.125rem;
       align-items: center;
     }
 
     #left-hand-nav .split-menu-button {
-      flex: 0 0 44px;
-      width: 44px;
+      flex: 0 0 24px;
+      width: 24px;
       justify-content: center;
     }
 
     #left-hand-nav .nav-menu-trigger {
       justify-content: flex-start;
-      gap: 0.15rem;
+      gap: 0.125rem;
     }
 
     #left-hand-nav .nav-menu-trigger::after {
@@ -1349,6 +1349,18 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       min-height: 32px;
     }
 
+    @media (max-width: 529px) {
+      #left-hand-nav .nav-destination-cluster {
+        column-gap: 0.625rem;
+      }
+    }
+
+    @media (max-width: 515px) {
+      #left-hand-nav .nav-destination-cluster {
+        column-gap: 0.4375rem;
+      }
+    }
+
     @media (max-width: 499px) {
       #left-hand-nav .brand-row {
         justify-content: space-between;
@@ -1388,6 +1400,11 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
       #left-hand-nav .split-nav-link {
         flex: 1;
+      }
+
+      #left-hand-nav .split-menu-button {
+        flex-basis: 44px;
+        width: 44px;
       }
 
       #left-hand-nav .primary-links .nav-destination-cluster a,

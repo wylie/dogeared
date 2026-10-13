@@ -52,11 +52,16 @@ test("mobile navigation uses one primary row and an explicit narrow-phone menu",
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*overflow: visible;/s);
 	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*column-gap: 1rem;/s);
 	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*justify-content: space-(between|around|evenly);/s);
-	assert.match(source, /#left-hand-nav \.nav-destination-cluster\s*{[^}]*display: flex;[^}]*flex-wrap: nowrap;[^}]*justify-content: space-between;/s);
+	assert.match(source, /#left-hand-nav \.nav-destination-cluster\s*{[^}]*display: flex;[^}]*flex-wrap: nowrap;[^}]*justify-content: flex-start;[^}]*gap: 0\.25rem 0\.75rem;/s);
+	assert.doesNotMatch(source, /#left-hand-nav \.nav-destination-cluster\s*{[^}]*justify-content: space-between;/s);
+	assert.match(source, /@media \(max-width: 529px\)\s*{[\s\S]*?column-gap: 0\.625rem;/s);
+	assert.match(source, /@media \(max-width: 515px\)\s*{[\s\S]*?column-gap: 0\.4375rem;/s);
 	assert.match(source, /#left-hand-nav \.primary-direct-list\s*{[^}]*display: contents;/s);
 	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger,\s*#left-hand-nav \.split-menu-button\s*{[^}]*width: auto;[^}]*min-height: 44px;/s);
 	assert.match(source, /#left-hand-nav \.split-nav-heading\s*{[^}]*display: inline-flex;/s);
-	assert.match(source, /#left-hand-nav \.split-menu-button\s*{[^}]*width: 44px;/s);
+	assert.match(source, /#left-hand-nav \.split-menu-button\s*{[^}]*width: 24px;/s);
+	assert.match(source, /#left-hand-nav \.split-nav-heading\s*{[^}]*gap: 0\.125rem;/s);
+	assert.match(source, /#left-hand-nav \.nav-menu-trigger\s*{[^}]*gap: 0\.125rem;/s);
 	assert.match(source, /#left-hand-nav \.nav-menu-trigger\s*{[^}]*justify-content: flex-start;/s);
 	assert.match(source, /#left-hand-nav \.primary-links \.nav-destination-cluster \.nav-menu > ul,\s*#left-hand-nav \.primary-links \.nav-destination-cluster \.split-menu-list\s*{[^}]*flex: 1 0 100%;/s);
 	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger,\s*#left-hand-nav \.split-menu-button\s*{[^}]*font-size: 0\.875rem;[^}]*white-space: nowrap;/s);
