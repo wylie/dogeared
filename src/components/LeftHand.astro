@@ -142,24 +142,26 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     <nav id="left-hand-primary-links" class="primary-links" aria-label="Primary navigation">
       <div class="nav-destination-cluster">
         <div class={`split-nav-group nav-group nav-group-discover${discoverGroupActive ? " active" : ""}`} data-split-menu>
-          <a
-            href={navItemHref(discoverLinkItem)}
-            class={`split-nav-link ${navItemClass(discoverLinkItem)}`}
-            aria-current={navItemAriaCurrent(discoverLinkItem)}
-          >
-            <span>{discoverLinkItem.label}</span>
-          </a>
-          <button
-            type="button"
-            class={`split-menu-button${discoverMenuActive ? " active" : ""}`}
-            aria-label="Open Discover menu"
-            aria-haspopup="menu"
-            aria-expanded="false"
-            aria-controls="left-hand-discover-menu"
-            data-split-menu-trigger
-          >
-            <span aria-hidden="true">▾</span>
-          </button>
+          <div class="split-nav-heading">
+            <a
+              href={navItemHref(discoverLinkItem)}
+              class={`split-nav-link ${navItemClass(discoverLinkItem)}`}
+              aria-current={navItemAriaCurrent(discoverLinkItem)}
+            >
+              <span>{discoverLinkItem.label}</span>
+            </a>
+            <button
+              type="button"
+              class={`split-menu-button${discoverMenuActive ? " active" : ""}`}
+              aria-label="Open Discover menu"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-controls="left-hand-discover-menu"
+              data-split-menu-trigger
+            >
+              <span aria-hidden="true">▾</span>
+            </button>
+          </div>
           <ul id="left-hand-discover-menu" class="split-menu-list" data-split-menu-list hidden>
             {discoverMenuItems.map((item) => (
               <li>
@@ -555,7 +557,8 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     white-space: nowrap;
   }
 
-  .split-nav-group {
+  .split-nav-group,
+  .split-nav-heading {
     display: inline-flex;
     align-items: center;
     gap: 0.04rem;
@@ -1022,7 +1025,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     }
 
     #left-hand-nav .primary-links {
-      --mobile-primary-nav-gap: 0;
+      --mobile-primary-nav-gap: 0.25rem;
       display: grid;
       justify-content: stretch;
       gap: var(--mobile-primary-nav-gap);
@@ -1042,16 +1045,35 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       display: none;
     }
 
-    #left-hand-nav .nav-destination-cluster,
     #left-hand-nav .primary-direct-list {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      justify-content: stretch;
-      flex: 0 1 auto;
-      align-items: stretch;
-      gap: var(--mobile-primary-nav-gap);
-      width: 100%;
+      display: contents;
+    }
+
+    #left-hand-nav .nav-destination-cluster {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      align-items: flex-start;
+      gap: 0.25rem 0.5rem;
       min-width: 0;
+    }
+
+    #left-hand-nav .nav-destination-cluster > .nav-group {
+      display: contents;
+    }
+
+    #left-hand-nav .nav-destination-cluster .nav-menu::details-content {
+      display: contents;
+    }
+
+    #left-hand-nav .split-nav-heading,
+    #left-hand-nav .primary-direct-list > li,
+    #left-hand-nav .nav-destination-cluster > .nav-menu > summary,
+    #left-hand-nav .nav-destination-cluster > .nav-text-button {
+      flex: 0 1 auto;
+      min-width: 0;
+      max-width: 100%;
+      order: var(--mobile-nav-order, 0);
     }
 
     #left-hand-nav .utility-nav-list {
@@ -1066,22 +1088,16 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       border-top: var(--border-subtle);
     }
 
-    #left-hand-nav .primary-links .nav-group {
-      display: grid;
-      flex: 0 1 auto;
-      min-width: 0;
-      width: 100%;
-    }
-
     #left-hand-nav .primary-links .nav-group-title {
       display: none;
     }
 
     #left-hand-nav .primary-links .nav-group > ul {
-      display: grid;
+      display: flex;
+      flex-wrap: wrap;
       flex: 0 1 auto;
       align-items: stretch;
-      gap: 0;
+      gap: 0.25rem 0.5rem;
       padding: 0;
       margin: 0;
       list-style: none;
@@ -1089,7 +1105,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
 
     #left-hand-nav .primary-links .nav-group > ul > li {
       flex: 0 1 auto;
-      width: 100%;
+      width: auto;
       margin: 0;
     }
 
@@ -1103,7 +1119,7 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       border: none;
       background: transparent;
       border-radius: var(--radius-sm);
-      width: 100%;
+      width: auto;
       min-height: 44px;
       padding: 0.5rem 0.5rem;
       font-size: 0.95rem;
@@ -1114,29 +1130,24 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       text-align: left;
     }
 
-    #left-hand-nav .split-nav-group {
-      grid-template-columns: minmax(0, 1fr) 44px;
+    #left-hand-nav .split-nav-heading {
+      display: inline-flex;
       gap: 0;
-      align-items: start;
+      align-items: center;
     }
 
     #left-hand-nav .split-menu-button {
+      flex: 0 0 44px;
+      width: 44px;
       justify-content: center;
     }
 
     #left-hand-nav .nav-menu-trigger {
-      justify-content: space-between;
+      justify-content: flex-start;
     }
 
     #left-hand-nav .nav-menu-trigger::after {
-      width: 28px;
-      text-align: center;
-      margin-left: auto;
-      flex: 0 0 28px;
-    }
-
-    #left-hand-nav .split-menu-list {
-      grid-column: 1 / -1;
+      margin-left: 0.25rem;
     }
 
     #left-hand-nav .utility-icon-button {
@@ -1207,9 +1218,21 @@ const navMenuTriggerClass = (items: NavItem[]) =>
       overflow: visible;
     }
 
+    #left-hand-nav .primary-links .nav-destination-cluster .nav-menu > ul,
+    #left-hand-nav .primary-links .nav-destination-cluster .split-menu-list {
+      flex: 1 0 100%;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0 0 0 0.65rem;
+      order: var(--mobile-nav-order, 1);
+    }
+
     #left-hand-nav .split-menu-list[hidden],
     #left-hand-nav .nav-group > ul.split-menu-list[hidden],
-    #left-hand-nav .nav-menu:not([open]) > ul {
+    #left-hand-nav .nav-menu:not([open]) > ul,
+    #left-hand-nav .nav-destination-cluster .nav-menu:not([open]) > ul,
+    #left-hand-nav .nav-destination-cluster[data-layout-measuring] .nav-menu > ul,
+    #left-hand-nav .nav-destination-cluster[data-layout-measuring] .split-menu-list {
       display: none;
     }
 
@@ -1291,9 +1314,9 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     }
 
     #left-hand-nav .header-footer-nav ul {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, max-content));
-      justify-content: start;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-start;
       align-items: center;
       gap: 0.1rem 1rem;
       min-width: 0;
@@ -1303,10 +1326,6 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     #left-hand-nav .header-footer-nav ul li {
       width: unset;
       min-width: 0;
-    }
-
-    #left-hand-nav .header-footer-nav ul li:nth-child(n + 3) {
-      grid-column: 1 / -1;
     }
 
     #left-hand-nav .header-footer a,
@@ -1797,8 +1816,47 @@ const navMenuTriggerClass = (items: NavItem[]) =>
     persistNavScrollPosition();
   }, { passive: true, signal });
 
+  function layoutMobileNavSubmenus() {
+    if (!(leftHandNav instanceof HTMLElement) || !isMobilePrimaryNav()) return;
+    const cluster = leftHandNav.querySelector(".nav-destination-cluster");
+    if (!(cluster instanceof HTMLElement)) return;
+    const items = Array.from(cluster.querySelectorAll(
+      ".split-nav-heading, .primary-direct-list > li, :scope > .nav-menu > summary, :scope > .nav-text-button"
+    )).filter((item): item is HTMLElement => item instanceof HTMLElement);
+    const scrollTop = leftHandNav.scrollTop;
+    const focusedElement = document.activeElement;
+
+    // Measure the natural wrapped rows before inserting a full-width submenu.
+    cluster.setAttribute("data-layout-measuring", "");
+    try {
+      items.forEach((item, index) => item.style.setProperty("--mobile-nav-order", String(index * 2)));
+      const rows = items.map((item) => item.getClientRects().length ? item.getBoundingClientRect().top : null);
+      items.forEach((item, index) => {
+        const menu = item.classList.contains("split-nav-heading")
+          ? item.parentElement
+          : item.tagName === "SUMMARY" ? item.parentElement : null;
+        const list = menu?.querySelector(":scope > ul");
+        if (!(list instanceof HTMLElement) || rows[index] === null) return;
+        let lastInRow = index;
+        for (let next = index + 1; next < items.length; next += 1) {
+          if (rows[next] === null) continue;
+          if (Math.abs(rows[next] - rows[index]) > 1) break;
+          lastInRow = next;
+        }
+        list.style.setProperty("--mobile-nav-order", String(lastInRow * 2 + 1));
+      });
+    } finally {
+      cluster.removeAttribute("data-layout-measuring");
+      leftHandNav.scrollTop = scrollTop;
+      if (focusedElement instanceof HTMLElement && document.activeElement !== focusedElement) {
+        focusedElement.focus({ preventScroll: true });
+      }
+    }
+  }
+
   function updateMobileStickyOffset() {
     if (!(leftHandNav instanceof HTMLElement)) return;
+    layoutMobileNavSubmenus();
     const isMobile = window.matchMedia("(max-width: 900px)").matches;
     const overlap = isMobile ? 12 : 0;
     const offset = isMobile ? Math.max(0, Math.ceil(leftHandNav.getBoundingClientRect().height) - overlap) : 0;
@@ -1810,6 +1868,9 @@ const navMenuTriggerClass = (items: NavItem[]) =>
   window.addEventListener("pageshow", restoreNavScrollPosition, { signal });
   window.addEventListener("resize", updateMobileStickyOffset, { signal });
   window.addEventListener("load", updateMobileStickyOffset, { signal });
+  document.fonts.ready.then(() => {
+    if (!signal.aborted) scheduleMobileStickyOffsetUpdate();
+  });
 
   const sectionNavLinks = Array.from(document.querySelectorAll("[data-section-link]"));
   const sectionTargets = sectionNavLinks

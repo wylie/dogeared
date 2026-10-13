@@ -33,31 +33,34 @@ test("mobile header footer wraps into subdued metadata below search", () => {
 	assert.doesNotMatch(layout, /grid-template-columns: minmax\(238px, 24%\) minmax\(0, 1fr\);/);
 	assert.match(source, /#left-hand-nav \.header-footer\s*{[^}]*white-space: normal;/s);
 	assert.match(source, /#left-hand-nav \.header-footer\s*{[^}]*font-size: 0\.72rem;/s);
-	assert.match(source, /#left-hand-nav \.header-footer-nav ul\s*{[^}]*display: grid;/s);
-	assert.match(source, /#left-hand-nav \.header-footer-nav ul li:nth-child\(n \+ 3\)\s*{[^}]*grid-column: 1 \/ -1;/s);
+	assert.match(source, /#left-hand-nav \.header-footer-nav ul\s*{[^}]*display: flex;[^}]*flex-wrap: wrap;/s);
+	assert.doesNotMatch(source, /#left-hand-nav \.header-footer-nav ul li:nth-child\(n \+ 3\)/);
 	assert.doesNotMatch(source, /#left-hand-nav \.header-footer\s*{[^}]*overflow-x: auto;/s);
 	assert.match(layout, /<main id="main-content" class="site-container content-column"/);
 	assert.match(layout, /@media \(max-width: 900px\)\s*{[\s\S]*?\.content-column\s*{[^}]*padding-block: 1\.15rem 1\.5rem;/s);
 });
 
-test("mobile primary header navigation expands nested menus inline", () => {
+test("mobile navigation wraps content-sized items with full-row inline submenus", () => {
 	const source = read("../src/components/LeftHand.astro");
 
 	assert.match(source, /#left-hand-nav\s*{[^}]*overflow-y: auto;/s);
 	assert.match(source, /#left-hand-nav\s*{[^}]*max-height: 100dvh;/s);
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*display: grid;/s);
-	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*--mobile-primary-nav-gap: 0;/s);
+	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*--mobile-primary-nav-gap: 0\.25rem;/s);
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*justify-content: stretch;/s);
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*gap: var\(--mobile-primary-nav-gap\);/s);
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*overflow: visible;/s);
 	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*column-gap: 1rem;/s);
 	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*justify-content: space-(between|around|evenly);/s);
-	assert.match(source, /#left-hand-nav \.nav-destination-cluster,\s*#left-hand-nav \.primary-direct-list\s*{[^}]*display: grid;/s);
-	assert.match(source, /#left-hand-nav \.nav-destination-cluster,\s*#left-hand-nav \.primary-direct-list\s*{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*justify-content: stretch;/s);
-	assert.match(source, /#left-hand-nav \.nav-destination-cluster,\s*#left-hand-nav \.primary-direct-list\s*{[^}]*width: 100%;/s);
-	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger,\s*#left-hand-nav \.split-menu-button\s*{[^}]*width: 100%;[^}]*min-height: 44px;/s);
-	assert.match(source, /#left-hand-nav \.split-nav-group\s*{[^}]*grid-template-columns: minmax\(0, 1fr\) 44px;/s);
-	assert.match(source, /#left-hand-nav \.nav-menu-trigger\s*{[^}]*justify-content: space-between;/s);
+	assert.match(source, /#left-hand-nav \.nav-destination-cluster\s*{[^}]*display: flex;[^}]*flex-wrap: wrap;/s);
+	assert.match(source, /#left-hand-nav \.primary-direct-list\s*{[^}]*display: contents;/s);
+	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger,\s*#left-hand-nav \.split-menu-button\s*{[^}]*width: auto;[^}]*min-height: 44px;/s);
+	assert.match(source, /#left-hand-nav \.split-nav-heading\s*{[^}]*display: inline-flex;/s);
+	assert.match(source, /#left-hand-nav \.split-menu-button\s*{[^}]*width: 44px;/s);
+	assert.match(source, /#left-hand-nav \.nav-menu-trigger\s*{[^}]*justify-content: flex-start;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.nav-destination-cluster \.nav-menu > ul,\s*#left-hand-nav \.primary-links \.nav-destination-cluster \.split-menu-list\s*{[^}]*flex: 1 0 100%;/s);
+	assert.match(source, /function layoutMobileNavSubmenus\(\)/);
+	assert.match(source, /list\.style\.setProperty\("--mobile-nav-order", String\(lastInRow \* 2 \+ 1\)\)/);
 	assert.match(source, /#left-hand-nav \.utility-icon-button\s*{[^}]*width: 44px;[^}]*min-height: 44px;/s);
 	assert.match(source, /#left-hand-nav \.utility-nav-list\s*{[^}]*border-top: var\(--border-subtle\);/s);
 	assert.match(source, /#left-hand-nav \.utility-menu\[open\]::details-content\s*{[^}]*display: contents;/s);
@@ -67,7 +70,7 @@ test("mobile primary header navigation expands nested menus inline", () => {
 	assert.match(source, /#left-hand-nav \.utility-icon-button\s*{[^}]*justify-content: center;/s);
 	assert.match(source, /#left-hand-nav \.nav-menu > ul,\s*#left-hand-nav \.split-menu-list\s*{[^}]*position: static;/s);
 	assert.match(source, /#left-hand-nav \.nav-menu > ul,\s*#left-hand-nav \.split-menu-list\s*{[^}]*box-shadow: none;/s);
-	assert.match(source, /#left-hand-nav \.split-menu-list\[hidden\],\s*#left-hand-nav \.nav-group > ul\.split-menu-list\[hidden\],\s*#left-hand-nav \.nav-menu:not\(\[open\]\) > ul\s*{[^}]*display: none;/s);
+	assert.match(source, /#left-hand-nav \.nav-destination-cluster\[data-layout-measuring\] \.split-menu-list\s*{[^}]*display: none;/s);
 	assert.match(source, /aria-controls="left-hand-about-menu"/);
 	assert.match(source, /function syncDetailsMenuState/);
 	assert.match(source, /closeDetailsMenus\(\{ except: menu \}\);/);
