@@ -40,7 +40,7 @@ test("mobile header footer wraps into subdued metadata below search", () => {
 	assert.match(layout, /@media \(max-width: 900px\)\s*{[\s\S]*?\.content-column\s*{[^}]*padding-block: 1\.15rem 1\.5rem;/s);
 });
 
-test("mobile navigation uses one primary row and an explicit narrow-phone menu", () => {
+test("mobile navigation has generous gaps, horizontal scrolling, and inline submenus", () => {
 	const source = read("../src/components/LeftHand.astro");
 
 	assert.match(source, /#left-hand-nav\s*{[^}]*overflow-y: auto;/s);
@@ -52,25 +52,25 @@ test("mobile navigation uses one primary row and an explicit narrow-phone menu",
 	assert.match(source, /#left-hand-nav \.primary-links\s*{[^}]*overflow: visible;/s);
 	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*column-gap: 1rem;/s);
 	assert.doesNotMatch(source, /#left-hand-nav \.primary-links\s*{[^}]*justify-content: space-(between|around|evenly);/s);
-	assert.match(source, /#left-hand-nav \.nav-destination-cluster\s*{[^}]*display: flex;[^}]*flex-wrap: nowrap;[^}]*justify-content: flex-start;[^}]*gap: 0\.25rem 0\.75rem;/s);
+	assert.match(source, /#left-hand-nav \.nav-destination-cluster\s*{[^}]*display: flex;[^}]*flex-wrap: nowrap;[^}]*justify-content: flex-start;[^}]*gap: 1\.5rem;/s);
 	assert.doesNotMatch(source, /#left-hand-nav \.nav-destination-cluster\s*{[^}]*justify-content: space-between;/s);
-	assert.match(source, /@media \(max-width: 529px\)\s*{[\s\S]*?column-gap: 0\.625rem;/s);
-	assert.match(source, /@media \(max-width: 515px\)\s*{[\s\S]*?column-gap: 0\.4375rem;/s);
+	assert.match(source, /#left-hand-nav \.nav-destination-cluster\s*{[^}]*overflow-x: auto;[^}]*scrollbar-width: none;[^}]*-webkit-overflow-scrolling: touch;/s);
+	assert.match(source, /#left-hand-nav \.nav-destination-cluster::-webkit-scrollbar\s*{[^}]*display: none;/s);
+	assert.match(source, /@media \(min-width: 640px\)\s*{[\s\S]*?column-gap: 1\.75rem;/s);
 	assert.match(source, /#left-hand-nav \.primary-direct-list\s*{[^}]*display: contents;/s);
 	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger,\s*#left-hand-nav \.split-menu-button\s*{[^}]*width: auto;[^}]*min-height: 44px;/s);
 	assert.match(source, /#left-hand-nav \.split-nav-heading\s*{[^}]*display: inline-flex;/s);
 	assert.match(source, /#left-hand-nav \.split-menu-button\s*{[^}]*width: 24px;/s);
-	assert.match(source, /#left-hand-nav \.split-nav-heading\s*{[^}]*gap: 0\.125rem;/s);
-	assert.match(source, /#left-hand-nav \.nav-menu-trigger\s*{[^}]*gap: 0\.125rem;/s);
-	assert.match(source, /#left-hand-nav \.nav-menu-trigger\s*{[^}]*justify-content: flex-start;/s);
-	assert.match(source, /#left-hand-nav \.primary-links \.nav-destination-cluster \.nav-menu > ul,\s*#left-hand-nav \.primary-links \.nav-destination-cluster \.split-menu-list\s*{[^}]*flex: 1 0 100%;/s);
+	assert.match(source, /#left-hand-nav \.split-nav-heading\s*{[^}]*gap: 0\.25rem;/s);
+	assert.match(source, /#left-hand-nav \.nav-destination-cluster \.nav-menu-trigger\s*{[^}]*gap: 0\.25rem;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.mobile-primary-submenus > ul\s*{[^}]*width: 100%;/s);
 	assert.match(source, /#left-hand-nav \.primary-links a,\s*#left-hand-nav \.primary-links \.nav-text-button,\s*#left-hand-nav \.nav-menu-trigger,\s*#left-hand-nav \.split-menu-button\s*{[^}]*font-size: 0\.875rem;[^}]*white-space: nowrap;/s);
-	assert.match(source, /@media \(max-width: 499px\)/);
-	assert.match(source, /class="mobile-menu-toggle"[^>]*aria-expanded="false"[^>]*aria-controls="left-hand-destinations"/s);
-	assert.match(source, /#left-hand-nav\[data-compact-nav-open\] \.nav-destination-cluster\s*{[^}]*display: flex;/s);
-	assert.match(source, /function setCompactNavOpen\(open\)/);
-	assert.match(source, /compactNavToggle\.setAttribute\("aria-expanded", String\(open\)\)/);
-	assert.match(source, /list\.style\.setProperty\("--compact-nav-order", String\(index \* 2 \+ 1\)\)/);
+	assert.doesNotMatch(source, /compactNav|mobile-menu-toggle|compact-nav-order/);
+	assert.match(source, /<div class="mobile-primary-submenus" data-primary-submenus><\/div>/);
+	assert.match(source, /function syncPrimarySubmenuLayout\(\)/);
+	assert.match(source, /const parent = isMobilePrimaryNav\(\) \? primarySubmenus : menu;/);
+	assert.match(source, /parent\.appendChild\(parts\.list\)/);
+	assert.match(source, /parts\.list\.hidden = !parts\.menu\.open/);
 	assert.match(source, /#left-hand-nav \.utility-icon-button\s*{[^}]*width: 44px;[^}]*min-height: 44px;/s);
 	assert.match(source, /#left-hand-nav \.utility-nav-list\s*{[^}]*border-top: var\(--border-subtle\);/s);
 	assert.match(source, /#left-hand-nav \.utility-menu\[open\]::details-content\s*{[^}]*display: contents;/s);
@@ -78,9 +78,8 @@ test("mobile navigation uses one primary row and an explicit narrow-phone menu",
 	assert.match(source, /#left-hand-nav h2 a.special-font\s*{[^}]*font-size: 1\.75rem;/s);
 	assert.match(source, /#left-hand-nav h2 a.special-font \.title-logo\s*{[^}]*width: 32px;[^}]*height: 32px;/s);
 	assert.match(source, /#left-hand-nav \.utility-icon-button\s*{[^}]*justify-content: center;/s);
-	assert.match(source, /#left-hand-nav \.nav-menu > ul,\s*#left-hand-nav \.split-menu-list\s*{[^}]*position: static;/s);
-	assert.match(source, /#left-hand-nav \.nav-menu > ul,\s*#left-hand-nav \.split-menu-list\s*{[^}]*box-shadow: none;/s);
-	assert.match(source, /#left-hand-nav \.nav-destination-cluster \.nav-menu:not\(\[open\]\) > ul\s*{[^}]*display: none;/s);
+	assert.match(source, /#left-hand-nav \.mobile-primary-submenus > ul\s*{[^}]*position: static;/s);
+	assert.match(source, /#left-hand-nav \.primary-links \.mobile-primary-submenus > ul\[hidden\]\s*{[^}]*display: none;/s);
 	assert.match(source, /aria-controls="left-hand-about-menu"/);
 	assert.match(source, /function syncDetailsMenuState/);
 	assert.match(source, /closeDetailsMenus\(\{ except: menu \}\);/);
